@@ -1,8 +1,15 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Editor from "@monaco-editor/react"
+import { marked } from "marked"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
 import "../monaco-setup"
+
+type MdMode = "edit" | "split" | "preview"
+function isMarkdown(name: string): boolean {
+    const ext = name.split(".").pop()?.toLowerCase()
+    return ext === "md" || ext === "markdown"
+}
 import type { DirEntry } from "../../../preload/index"
 
 interface OpenFile {
@@ -127,8 +134,21 @@ export function EditorPanel(): JSX.Element {
     const [activePath, setActivePath] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [sent, setSent] = useState(false)
+    const [mdMode, setMdMode] = useState<MdMode>("split")
 
     const active = files.find((f) => f.path === activePath) ?? null
+    const md = active ? isMarkdown(active.name) : false
+
+    const stats = useMemo(() => {
+        if (!active) return { words: 0, minutes: 0 }
+        const words = active.content.trim().split(/\s+/).filter(Boolean).length
+        return { words, minutes: Math.max(1, Math.round(words / 200)) }
+    }, [active])
+
+    const previewHtml = useMemo(
+        () => (active && md ? (marked.parse(active.content) as string) : ""),
+        [active, md]
+    )
 
     const sendActiveToClaude = (): void => {
         if (!active || !activeProject) return
@@ -230,48 +250,76 @@ export function EditorPanel(): JSX.Element {
                             </div>
                         ))}
                         </div>
+                        {md && (
+                            <div className="md-controls">
+                                <span className="md-stats">
+                                    {stats.words} words · {stats.minutes} min
+                                </span>
+                                <div className="md-modes">
+                                    {(["edit", "split", "preview"] as MdMode[]).map((m) => (
+                                        <span
+                                            key={m}
+                                            className={mdMode === m ? "active" : ""}
+                                            onClick={() => setMdMode(m)}
+                                        >
+                                            {m[0].toUpperCase() + m.slice(1)}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <button
                             className="send-claude"
                             onClick={sendActiveToClaude}
                             disabled={!active || !lastClaude}
                             title={
                                 lastClaude
-                                    ? "Send @path of this file to the last-focused Claude session"
-                                    : "No Claude session yet — start one with + Claude"
+                                    ? "Send @path of this file to the last-focused agent session"
+                                    : "No agent session yet — start one first"
                             }
                         >
-                            {sent ? "Sent ✓" : "→ Claude"}
+                            {sent ? "Sent ✓" : "→ Agent"}
                         </button>
                     </div>
                 )}
                 {active ? (
-                    <div className="editor-host">
-                        <Editor
-                            theme="devdeck"
-                            path={active.path}
-                            language={langFor(active.name)}
-                            value={active.content}
-                            onChange={(v) => updateContent(active.path, v ?? "")}
-                            onMount={(editor, monaco) => {
-                                editor.addCommand(
-                                    monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-                                    () => saveRef.current()
-                                )
-                            }}
-                            options={{
-                                fontFamily: '"Cascadia Mono", Consolas, monospace',
-                                fontSize: editorSettings.fontSize,
-                                minimap: { enabled: editorSettings.minimap },
-                                wordWrap: editorSettings.wordWrap ? "on" : "off",
-                                smoothScrolling: true,
-                                scrollBeyondLastLine: false,
-                                renderWhitespace: "none",
-                                tabSize: editorSettings.tabSize,
-                                automaticLayout: true,
-                                padding: { top: 10 },
-                                guides: { indentation: false }
-                            }}
-                        />
+                    <div className={"editor-host" + (md ? " md-host mode-" + mdMode : "")}>
+                        {!(md && mdMode === "preview") && (
+                            <div className="editor-slot">
+                                <Editor
+                                    theme="devdeck"
+                                    path={active.path}
+                                    language={langFor(active.name)}
+                                    value={active.content}
+                                    onChange={(v) => updateContent(active.path, v ?? "")}
+                                    onMount={(editor, monaco) => {
+                                        editor.addCommand(
+                                            monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                                            () => saveRef.current()
+                                        )
+                                    }}
+                                    options={{
+                                        fontFamily: '"Cascadia Mono", Consolas, monospace',
+                                        fontSize: editorSettings.fontSize,
+                                        minimap: { enabled: editorSettings.minimap },
+                                        wordWrap: editorSettings.wordWrap ? "on" : "off",
+                                        smoothScrolling: true,
+                                        scrollBeyondLastLine: false,
+                                        renderWhitespace: "none",
+                                        tabSize: editorSettings.tabSize,
+                                        automaticLayout: true,
+                                        padding: { top: 10 },
+                                        guides: { indentation: false }
+                                    }}
+                                />
+                            </div>
+                        )}
+                        {md && mdMode !== "edit" && (
+                            <div
+                                className="md-preview"
+                                dangerouslySetInnerHTML={{ __html: previewHtml }}
+                            />
+                        )}
                     </div>
                 ) : (
                     <div className="empty-state">
