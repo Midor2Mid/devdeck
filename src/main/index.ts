@@ -5,6 +5,7 @@ import * as projects from "./projects"
 import { httpSend } from "./http"
 import * as files from "./files"
 import { loadWorkspace, saveWorkspace } from "./workspace"
+import * as db from "./db"
 
 let mainWindow: BrowserWindow | null = null
 
@@ -53,6 +54,15 @@ function registerIpc(): void {
     // --- API client ---
     ipcMain.handle("http:send", (_e, req) => httpSend(req))
 
+    // --- Database ---
+    ipcMain.handle("db:list", (_e, projectId: string) => db.listConnections(projectId))
+    ipcMain.handle("db:save", (_e, input) => db.saveConnection(input))
+    ipcMain.handle("db:remove", (_e, id: string) => db.removeConnection(id))
+    ipcMain.handle("db:test", (_e, input) => db.testConnection(input))
+    ipcMain.handle("db:query", (_e, { profileId, sql }) => db.runQuery(profileId, sql))
+    ipcMain.handle("db:tables", (_e, profileId: string) => db.listTables(profileId))
+    ipcMain.on("db:disconnect", (_e, profileId: string) => db.disconnect(profileId))
+
     // --- Files (editor) ---
     ipcMain.handle("fs:readDir", (_e, dir: string) => files.readDir(dir))
     ipcMain.handle("fs:read", (_e, path: string) => files.readFileText(path))
@@ -69,5 +79,6 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
     ptyMgr.killAll()
+    db.closeAll()
     if (process.platform !== "darwin") app.quit()
 })

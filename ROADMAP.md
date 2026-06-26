@@ -39,6 +39,13 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [ ] Send via main process; show status, timing, headers, pretty body
 - [ ] Per-project request history + saved requests (collections)
 
+## Milestone 3.5 — Database panel ✅ (2026-06-27, partial)
+
+- [x] Per-project saved connections (PostgreSQL, MySQL) with encrypted passwords (`safeStorage`)
+- [x] Connect / test, list tables, run SQL (Monaco editor, Ctrl+Enter), results grid
+- [ ] SQLite via WASM driver (deferred — native `better-sqlite3` needs a C++ compiler this machine lacks)
+- [ ] Query history / saved queries per connection
+
 ## Milestone 4 — Network debugging
 
 - [ ] Local HTTP proxy to capture requests/responses
@@ -62,7 +69,6 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - **MCP** server management; **AI** settings
 - Configurable shell per terminal/project (pwsh / cmd / Git Bash / WSL) — PowerShell stays default
 - Embedded **Browser** panel (preview + simple devtools)
-- **Database panel** — per-project saved connections (Postgres/MySQL/SQLite first), SQL query editor, calm results grid. Sibling to the API client; keep it simple, not a DBeaver clone.
 - Wabi-sabi **light "washi paper" theme** + theme switching
 - Cross-platform (macOS/Linux) polish
 - Snippets / saved command runner per project
@@ -80,3 +86,5 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 | 2026-06-27 | Verified `@lydell/node-pty` loads under Electron's ABI | Headless Electron smoke test spawned a shell with no rebuild/compiler — confirms the prebuilt-binary bet before building UI on it. |
 | 2026-06-27 | Pty sessions own a replay buffer; panes don't kill on unmount | Lets a pane detach/re-attach (splits, tab/project switches) without losing the session — main keeps the pty + ~256 KB tail, replayed to the new xterm. Kill is explicit only. |
 | 2026-06-27 | Split layout = binary tree, terminal-mgmt keys are `Ctrl+Shift+…` | Tree keeps split/close/collapse simple and serializable for persistence. `Ctrl+Shift` combos (captured before xterm) avoid clobbering shell keys like Ctrl+C/Ctrl+W. |
+| 2026-06-27 | DB panel ships Postgres + MySQL first; SQLite deferred | `pg`/`mysql2` are pure-JS (no compiler); `better-sqlite3` is native and won't build without MSVC. SQLite will use a WASM driver later to stay compiler-free. |
+| 2026-06-27 | DB passwords encrypted at rest via Electron `safeStorage` (DPAPI) | Avoid plaintext credentials on disk; passwords are never sent back to the renderer (only referenced by connection id). |

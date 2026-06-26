@@ -42,6 +42,32 @@ export interface HttpResponse {
     error?: string
 }
 
+export type DbKind = "postgres" | "mysql"
+export interface ConnProfile {
+    id: string
+    projectId: string
+    name: string
+    kind: DbKind
+    host: string
+    port: number
+    database: string
+    user: string
+    ssl?: boolean
+}
+export interface ConnInput extends Omit<ConnProfile, "id"> {
+    id?: string
+    password?: string
+}
+export interface QueryResult {
+    ok: boolean
+    columns?: string[]
+    rows?: Record<string, unknown>[]
+    rowCount?: number
+    command?: string
+    timeMs: number
+    error?: string
+}
+
 const api = {
     pty: {
         create: (opts: PtyCreateOpts): void => ipcRenderer.send("pty:create", opts),
@@ -73,6 +99,18 @@ const api = {
     },
     http: {
         send: (req: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke("http:send", req)
+    },
+    db: {
+        list: (projectId: string): Promise<ConnProfile[]> =>
+            ipcRenderer.invoke("db:list", projectId),
+        save: (input: ConnInput): Promise<ConnProfile[]> => ipcRenderer.invoke("db:save", input),
+        remove: (id: string): Promise<void> => ipcRenderer.invoke("db:remove", id),
+        test: (input: ConnInput): Promise<QueryResult> => ipcRenderer.invoke("db:test", input),
+        query: (profileId: string, sql: string): Promise<QueryResult> =>
+            ipcRenderer.invoke("db:query", { profileId, sql }),
+        tables: (profileId: string): Promise<string[]> =>
+            ipcRenderer.invoke("db:tables", profileId),
+        disconnect: (profileId: string): void => ipcRenderer.send("db:disconnect", profileId)
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),

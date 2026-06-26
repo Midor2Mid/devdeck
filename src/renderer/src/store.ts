@@ -12,7 +12,7 @@ import {
 } from "./layout"
 
 export type TermKind = "shell" | "claude"
-export type MainView = "terminal" | "editor" | "api"
+export type MainView = "terminal" | "editor" | "api" | "database"
 
 export interface Tab {
     id: string

@@ -5,11 +5,13 @@ import { Sidebar } from "./components/Sidebar"
 import { TerminalView } from "./components/TerminalView"
 import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
+import { DbPanel } from "./components/DbPanel"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
     { key: "editor", label: "Editor" },
-    { key: "api", label: "API" }
+    { key: "api", label: "API" },
+    { key: "database", label: "Database" }
 ]
 
 export function App(): JSX.Element {
@@ -68,6 +70,12 @@ export function App(): JSX.Element {
                                 style={{ display: view === "api" ? "flex" : "none" }}
                             >
                                 <ApiPanel />
+                            </div>
+                            <div
+                                className="panel"
+                                style={{ display: view === "database" ? "flex" : "none" }}
+                            >
+                                <DbPanel />
                             </div>
                         </div>
                     </div>

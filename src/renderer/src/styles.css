@@ -592,6 +592,219 @@ select:focus {
     background: var(--bg-3);
 }
 
+/* ---------- Database panel ---------- */
+.db-panel {
+    height: 100%;
+    width: 100%;
+}
+.db-sidebar {
+    height: 100%;
+    background: var(--bg);
+    border-right: 1px solid var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+.db-conn-list {
+    padding: 2px 8px;
+}
+.db-conn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--muted);
+}
+.db-conn:hover {
+    background: var(--bg-2);
+    color: var(--text);
+}
+.db-conn.active {
+    background: var(--bg-2);
+    color: var(--text);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+.db-conn-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.db-conn-edit {
+    opacity: 0;
+    color: var(--faint);
+    font-size: 11px;
+}
+.db-conn:hover .db-conn-edit {
+    opacity: 1;
+}
+.db-conn-edit:hover {
+    color: var(--accent-soft);
+}
+.db-table-list {
+    padding: 2px 8px 12px;
+    overflow-y: auto;
+}
+.db-table {
+    padding: 4px 9px 4px 22px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.db-table:hover {
+    background: var(--bg-2);
+    color: var(--text);
+}
+.db-main {
+    height: 100%;
+    background: var(--bg-2);
+}
+.db-query {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.db-query-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg);
+}
+.db-editor-host {
+    flex: 1;
+    min-height: 0;
+    background: var(--bg-3);
+}
+.db-results {
+    height: 100%;
+    background: var(--bg-3);
+    border-top: 1px solid var(--border-soft);
+    overflow: hidden;
+}
+.grid-wrap {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.grid-meta {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border-soft);
+}
+.grid-scroll {
+    flex: 1;
+    overflow: auto;
+}
+.result-grid {
+    border-collapse: collapse;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    width: max-content;
+    min-width: 100%;
+}
+.result-grid th,
+.result-grid td {
+    border: 1px solid var(--border-soft);
+    padding: 4px 10px;
+    text-align: left;
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.result-grid th {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    color: var(--accent-soft);
+    font-weight: 600;
+    z-index: 1;
+}
+.result-grid td {
+    color: var(--text);
+}
+.result-grid .rownum {
+    color: var(--faint);
+    background: var(--bg);
+    text-align: right;
+    position: sticky;
+    left: 0;
+}
+.result-grid .null-cell {
+    color: var(--faint);
+    font-style: italic;
+}
+
+/* ---------- Modal (connection form) ---------- */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 9, 8, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+.modal {
+    width: 420px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+.modal-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+}
+.form-grid {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 9px 12px;
+    align-items: center;
+}
+.form-grid label {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: right;
+}
+.form-grid .checkbox {
+    width: 16px;
+    height: 16px;
+    justify-self: start;
+    accent-color: var(--accent);
+}
+.test-msg {
+    margin-top: 12px;
+    font-size: 12px;
+}
+.test-msg.ok {
+    color: var(--ok);
+}
+.test-msg.err {
+    color: var(--danger);
+}
+.modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+}
+.modal-actions .spacer {
+    flex: 1;
+}
+
 /* Allotment theming — quiet sash */
 .allotment-module_splitView__L-yRc {
     --separator-border: var(--border-soft);
