@@ -4,6 +4,7 @@ import { useSettings } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { paneRegistry } from "../paneRegistry"
 import { SplitView } from "./SplitView"
+import { PromptComposer } from "./PromptComposer"
 
 export function TerminalView(): JSX.Element {
     const projects = useStore((s) => s.projects)
@@ -24,6 +25,7 @@ export function TerminalView(): JSX.Element {
     const [findOpen, setFindOpen] = useState(false)
     const [query, setQuery] = useState("")
     const [menuOpen, setMenuOpen] = useState(false)
+    const [composerOpen, setComposerOpen] = useState(false)
     const findInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = projects.find((p) => p.id === activeId)
@@ -59,7 +61,8 @@ export function TerminalView(): JSX.Element {
                 Minus: () => s.splitActive("col", SHELL),
                 BracketRight: () => s.cycleTab(1),
                 BracketLeft: () => s.cycleTab(-1),
-                KeyF: () => setFindOpen((v) => !v)
+                KeyF: () => setFindOpen((v) => !v),
+                KeyP: () => setComposerOpen((v) => !v)
             }
             const action = map[e.code]
             if (action) {
@@ -230,6 +233,13 @@ export function TerminalView(): JSX.Element {
                     >
                         ⌕
                     </button>
+                    <button
+                        className={"icon-action" + (composerOpen ? " on" : "")}
+                        onClick={() => setComposerOpen((v) => !v)}
+                        title="Prompt composer (Ctrl+Shift+P)"
+                    >
+                        ✎
+                    </button>
                 </div>
             </div>
 
@@ -275,6 +285,7 @@ export function TerminalView(): JSX.Element {
                     )}
                 </div>
             </div>
+            {composerOpen && <PromptComposer onClose={() => setComposerOpen(false)} />}
         </div>
     )
 }

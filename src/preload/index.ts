@@ -148,6 +148,7 @@ const api = {
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),
+        allFiles: (root: string): Promise<string[]> => ipcRenderer.invoke("fs:allFiles", root),
         read: (path: string): Promise<string> => ipcRenderer.invoke("fs:read", path),
         write: (path: string, content: string): Promise<void> =>
             ipcRenderer.invoke("fs:write", { path, content })

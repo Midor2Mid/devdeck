@@ -112,6 +112,7 @@ function registerIpc(): void {
 
     // --- Files (editor) ---
     ipcMain.handle("fs:readDir", (_e, dir: string) => files.readDir(dir))
+    ipcMain.handle("fs:allFiles", (_e, root: string) => files.allFiles(root))
     ipcMain.handle("fs:read", (_e, path: string) => files.readFileText(path))
     ipcMain.handle("fs:write", (_e, { path, content }) => files.writeFileText(path, content))
 }

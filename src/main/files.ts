@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync, statSync } from "fs"
+import { readdirSync, readFileSync, writeFileSync, statSync, type Dirent } from "fs"
 import { join } from "path"
 
 export interface DirEntry {
@@ -39,6 +39,32 @@ export function readDir(dir: string): DirEntry[] {
 
 // Guard against opening huge / binary files in the lightweight editor.
 const MAX_BYTES = 2 * 1024 * 1024
+
+// Flat list of project-relative file paths (forward slashes) for @-mention
+// autocomplete. Skips IGNORE dirs and caps the count to stay responsive.
+export function allFiles(root: string, max = 4000): string[] {
+    const out: string[] = []
+    const walk = (dir: string, rel: string): void => {
+        if (out.length >= max) return
+        let entries: Dirent[]
+        try {
+            entries = readdirSync(dir, { withFileTypes: true })
+        } catch {
+            return
+        }
+        for (const e of entries) {
+            if (IGNORE.has(e.name)) continue
+            const childRel = rel ? rel + "/" + e.name : e.name
+            if (e.isDirectory()) walk(join(dir, e.name), childRel)
+            else {
+                out.push(childRel)
+                if (out.length >= max) return
+            }
+        }
+    }
+    walk(root, "")
+    return out
+}
 
 export function readFileText(path: string): string {
     const size = statSync(path).size
