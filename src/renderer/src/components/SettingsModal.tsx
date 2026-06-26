@@ -1,16 +1,118 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import QRCode from "qrcode"
 import { useSettings, DEFAULT_ACCENT, type ShellKind } from "../settings"
+import type { ServerStatus } from "../../../preload/index"
 
-type Section = "appearance" | "terminal" | "editor" | "claude" | "shortcuts" | "about"
+type Section =
+    | "appearance"
+    | "terminal"
+    | "editor"
+    | "claude"
+    | "remote"
+    | "shortcuts"
+    | "about"
 
 const SECTIONS: { key: Section; label: string }[] = [
     { key: "appearance", label: "Appearance" },
     { key: "terminal", label: "Terminal" },
     { key: "editor", label: "Editor" },
     { key: "claude", label: "Claude" },
+    { key: "remote", label: "Remote (Mobile)" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
 ]
+
+function RemoteSection(): JSX.Element {
+    const remote = useSettings((s) => s.remote)
+    const setRemote = useSettings((s) => s.setRemote)
+    const regenerateToken = useSettings((s) => s.regenerateToken)
+    const [status, setStatus] = useState<ServerStatus | null>(null)
+    const [qr, setQr] = useState<string>("")
+
+    const host = status?.tailscale[0] ?? status?.lan[0] ?? ""
+    const url = host ? `http://${host}:${remote.port}/?token=${remote.token}` : ""
+
+    useEffect(() => {
+        let on = true
+        const tick = (): void => {
+            window.api.server.status().then((s) => on && setStatus(s))
+        }
+        tick()
+        const iv = setInterval(tick, 2000)
+        return () => {
+            on = false
+            clearInterval(iv)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (url) QRCode.toDataURL(url, { margin: 1, width: 190 }).then(setQr)
+        else setQr("")
+    }, [url])
+
+    return (
+        <div className="settings-section">
+            <h3>Remote access (mobile)</h3>
+            <div className="setting-row">
+                <label>Enable</label>
+                <input
+                    type="checkbox"
+                    className="checkbox"
+                    checked={remote.enabled}
+                    onChange={(e) => setRemote({ enabled: e.target.checked })}
+                />
+            </div>
+            <div className="setting-row">
+                <label>Port</label>
+                <input
+                    type="number"
+                    value={remote.port}
+                    onChange={(e) => setRemote({ port: Number(e.target.value) })}
+                />
+            </div>
+            <div className="setting-row">
+                <label>Access token</label>
+                <div className="accent-controls">
+                    <code className="token">{remote.token || "(generated when enabled)"}</code>
+                    <button onClick={regenerateToken}>Regenerate</button>
+                </div>
+            </div>
+
+            {remote.enabled && (
+                <div className="remote-connect">
+                    <div className="remote-status">
+                        Server: {status?.running ? "running" : "stopped"}
+                        {status?.tailscale.length ? " · Tailscale detected" : ""}
+                    </div>
+                    {url ? (
+                        <div className="remote-url-block">
+                            {qr && <img className="qr" src={qr} alt="connect QR" />}
+                            <div>
+                                <div className="muted small">Open on your phone:</div>
+                                <code className="token url">{url}</code>
+                                {status && status.tailscale.length === 0 && (
+                                    <div className="settings-hint">
+                                        No Tailscale address found — this URL is LAN-only (same
+                                        Wi-Fi). Install Tailscale on this PC and your phone to
+                                        reach it from anywhere.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="muted small">Detecting network address…</div>
+                    )}
+                </div>
+            )}
+
+            <p className="settings-hint">
+                ⚠ A remote terminal can run commands on this machine. Keep the token private,
+                prefer Tailscale (never expose the port publicly), and turn this off when not
+                needed.
+            </p>
+        </div>
+    )
+}
 
 const ACCENT_PRESETS = ["#b8895c", "#8c9a68", "#7fa0a0", "#a98ba5", "#c4855d", "#9a8c98"]
 
@@ -241,6 +343,8 @@ export function SettingsModal(): JSX.Element {
                             </p>
                         </div>
                     )}
+
+                    {section === "remote" && <RemoteSection />}
 
                     {section === "shortcuts" && (
                         <div className="settings-section">

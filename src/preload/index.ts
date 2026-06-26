@@ -68,6 +68,19 @@ export interface QueryResult {
     timeMs: number
     error?: string
 }
+export interface RemoteSession {
+    termId: string
+    projectId: string
+    projectName: string
+    tabName: string
+    kind: "shell" | "claude"
+    status: "working" | "idle" | "attention"
+}
+export interface ServerStatus {
+    running: boolean
+    tailscale: string[]
+    lan: string[]
+}
 
 const api = {
     pty: {
@@ -101,6 +114,22 @@ const api = {
     settings: {
         load: (): Promise<unknown> => ipcRenderer.invoke("settings:load"),
         save: (data: unknown): void => ipcRenderer.send("settings:save", data)
+    },
+    server: {
+        start: (cfg: { port: number; token: string }): Promise<boolean> =>
+            ipcRenderer.invoke("server:start", cfg),
+        stop: (): Promise<boolean> => ipcRenderer.invoke("server:stop"),
+        status: (): Promise<ServerStatus> => ipcRenderer.invoke("server:status")
+    },
+    mobile: {
+        syncSessions: (sessions: RemoteSession[]): void =>
+            ipcRenderer.send("mobile:sessions", sessions),
+        onNew: (cb: (p: { projectId: string; kind: "shell" | "claude" }) => void): (() => void) => {
+            const handler = (_e: unknown, p: { projectId: string; kind: "shell" | "claude" }): void =>
+                cb(p)
+            ipcRenderer.on("mobile:new", handler)
+            return () => ipcRenderer.removeListener("mobile:new", handler)
+        }
     },
     http: {
         send: (req: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke("http:send", req)

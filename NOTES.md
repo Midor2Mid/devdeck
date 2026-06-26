@@ -15,6 +15,10 @@ Kickoff decisions (via questions):
 
 After Milestone 1 shipped: chose to pursue *all four* next-step directions over time (terminal polish, Monaco editor, API depth, deeper Claude). Keep PowerShell as the default shell.
 
+> "If possible I would like to connect the app with my mobile device so that I can use it from mobile anywhere, anytime" — me, 2026-06-27
+
+Mobile scoping (via questions): chose **terminals-first** mobile client + **Tailscale** for remote reach (over LAN-only or public tunnel). → Shipped Milestone 7: token-guarded server, mobile web terminal, off by default. Security stance: remote terminal = RCE surface, so token required + prefer Tailscale (no public exposure).
+
 ### Design north star — wabi-sabi
 The ultimate goal is **ease of use + Japanese wabi-sabi aesthetics**: simplicity, calm, restraint, natural/imperfect beauty, generous quiet space. Concretely for the UI:
 - Palette: warm sumi-ink darks + kinari (unbleached) off-white text; **one** restrained earthy accent (clay/amber), moss + clay only for session dots. No vibrant blues/purples, no neon.

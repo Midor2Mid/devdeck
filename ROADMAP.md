@@ -46,6 +46,16 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [ ] SQLite via WASM driver (deferred — native `better-sqlite3` needs a C++ compiler this machine lacks)
 - [ ] Query history / saved queries per connection
 
+## Milestone 7 — Remote / mobile access ✅ (2026-06-27, terminals-first)
+
+- [x] Multi-client pty (event bus + per-client buffer replay) so a phone can attach to live sessions
+- [x] Token-guarded HTTP + WebSocket server in the main process (off by default)
+- [x] Self-contained mobile web client (xterm served from node_modules): session list, attach, live output, input + quick keys, start a Claude session remotely
+- [x] Settings → Remote: enable, port, token (regen), Tailscale/LAN URL + QR
+- [x] Verified end-to-end headlessly (auth 401/reject, session broadcast, shell output over WS)
+- Reach from anywhere: **Tailscale** (private, recommended) — bind is 0.0.0.0 but token-gated
+- [ ] Later: TLS option, full-UI mobile client, push notification on attention
+
 ## Milestone 4 — Network debugging
 
 - [ ] Local HTTP proxy to capture requests/responses
@@ -102,3 +112,4 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 | 2026-06-27 | DB panel ships Postgres + MySQL first; SQLite deferred | `pg`/`mysql2` are pure-JS (no compiler); `better-sqlite3` is native and won't build without MSVC. SQLite will use a WASM driver later to stay compiler-free. |
 | 2026-06-27 | DB passwords encrypted at rest via Electron `safeStorage` (DPAPI) | Avoid plaintext credentials on disk; passwords are never sent back to the renderer (only referenced by connection id). |
 | 2026-06-27 | Claude status from activity + bell, not output parsing | Coupling to Claude CLI's text output is fragile (NOTES risk). Output-activity (working/idle) and the bell char `\x07` (attention) are format-independent and intentional signals. Visibility-aware so viewing a session clears attention and buffer-replay doesn't false-trigger. |
+| 2026-06-27 | Mobile access = terminals-first + Tailscale; pty made multi-client | A remote terminal is RCE surface, so: off by default, token required, prefer Tailscale (no public exposure). Pty refactored to an event bus + per-client buffer replay so phone + desktop attach to the same sessions. Session metadata stays in the renderer and is synced to the server. |

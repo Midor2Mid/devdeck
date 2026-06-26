@@ -7,6 +7,8 @@ import * as files from "./files"
 import { loadWorkspace, saveWorkspace } from "./workspace"
 import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
+import * as server from "./server"
+import type { RemoteSession, ServerDeps } from "./server"
 
 let mainWindow: BrowserWindow | null = null
 
@@ -37,7 +39,19 @@ function createWindow(): void {
 
 function registerIpc(): void {
     // --- Terminals (fire-and-forget streaming) ---
-    ipcMain.on("pty:create", (e, opts) => ptyMgr.createPty(e.sender, opts))
+    // Broadcast all pty output to the window; the WS server subscribes separately.
+    ptyMgr.ptyEvents.on("data", (d) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("pty:data", d)
+    })
+    ptyMgr.ptyEvents.on("exit", (d) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("pty:exit", d)
+    })
+    ipcMain.on("pty:create", (e, opts) => {
+        ptyMgr.createPty(opts)
+        // Replay the buffer to the requesting window (per-client re-attach).
+        const buf = ptyMgr.getBuffer(opts.id)
+        if (buf && !e.sender.isDestroyed()) e.sender.send("pty:data", { id: opts.id, data: buf })
+    })
     ipcMain.on("pty:input", (_e, { id, data }) => ptyMgr.writePty(id, data))
     ipcMain.on("pty:resize", (_e, { id, cols, rows }) => ptyMgr.resizePty(id, cols, rows))
     ipcMain.on("pty:kill", (_e, { id }) => ptyMgr.killPty(id))
@@ -58,6 +72,34 @@ function registerIpc(): void {
 
     // --- API client ---
     ipcMain.handle("http:send", (_e, req) => httpSend(req))
+
+    // --- Remote / mobile server ---
+    // Session metadata lives in the renderer; it pushes a snapshot here, and the
+    // server reads that snapshot + relays new-session requests back to the renderer.
+    let latestSessions: RemoteSession[] = []
+    const serverDeps: ServerDeps = {
+        getSessions: () => latestSessions,
+        requestNewSession: (projectId, kind) => {
+            if (mainWindow && !mainWindow.isDestroyed())
+                mainWindow.webContents.send("mobile:new", { projectId, kind })
+        }
+    }
+    ipcMain.on("mobile:sessions", (_e, sessions: RemoteSession[]) => {
+        latestSessions = sessions
+        if (server.isRunning()) server.broadcastSessions(serverDeps)
+    })
+    ipcMain.handle("server:start", (_e, cfg) => {
+        server.start(cfg, serverDeps)
+        return server.isRunning()
+    })
+    ipcMain.handle("server:stop", () => {
+        server.stop()
+        return false
+    })
+    ipcMain.handle("server:status", () => ({
+        running: server.isRunning(),
+        ...server.localAddresses()
+    }))
 
     // --- Database ---
     ipcMain.handle("db:list", (_e, projectId: string) => db.listConnections(projectId))
@@ -85,5 +127,6 @@ app.whenReady().then(() => {
 app.on("window-all-closed", () => {
     ptyMgr.killAll()
     db.closeAll()
+    server.stop()
     if (process.platform !== "darwin") app.quit()
 })

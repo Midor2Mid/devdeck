@@ -1,26 +1,28 @@
 import * as nodePty from "@lydell/node-pty"
-import type { WebContents } from "electron"
+import { EventEmitter } from "events"
 
 interface Session {
     proc: nodePty.IPty
-    /** Rolling tail of output, replayed when a new xterm re-attaches to this id. */
+    /** Rolling tail of output, replayed when a client attaches to this id. */
     buffer: string
 }
 
-// One live pty per terminal id. Sessions live here in the main process so they
-// survive the renderer unmounting a pane (project/tab/split changes). A pane is
-// free to detach and re-attach; on re-attach we replay the buffer so the fresh
-// xterm shows recent scrollback. Sessions are only ended by an explicit kill.
+// One live pty per terminal id, in the main process. Output is broadcast via
+// `ptyEvents` so multiple transports (the Electron window AND remote/mobile
+// WebSocket clients) can stream the same session. Each transport replays the
+// buffer itself on attach via getBuffer(). Sessions end only on explicit kill.
 const sessions = new Map<string, Session>()
 
-const BUFFER_CAP = 256 * 1024 // ~256 KB of recent output kept for replay
+/** Emits "data" {id,data} and "exit" {id,exitCode}. */
+export const ptyEvents = new EventEmitter()
+ptyEvents.setMaxListeners(50)
+
+const BUFFER_CAP = 256 * 1024
 
 export interface CreateOpts {
     id: string
     cwd?: string
-    /** A command to auto-run once the shell is ready (e.g. "claude"). */
     initialCommand?: string
-    /** Shell to launch; falls back to the platform default when omitted. */
     shell?: { file: string; args: string[] }
     cols?: number
     rows?: number
@@ -28,22 +30,22 @@ export interface CreateOpts {
 
 function defaultShell(): { file: string; args: string[] } {
     if (process.platform === "win32") {
-        // PowerShell is the user's primary shell.
         return { file: "powershell.exe", args: ["-NoLogo"] }
     }
     return { file: process.env.SHELL || "/bin/bash", args: [] }
 }
 
-export function createPty(sender: WebContents, opts: CreateOpts): void {
+export function hasSession(id: string): boolean {
+    return sessions.has(id)
+}
+
+export function getBuffer(id: string): string {
+    return sessions.get(id)?.buffer ?? ""
+}
+
+export function createPty(opts: CreateOpts): void {
     const { id } = opts
-    const existing = sessions.get(id)
-    if (existing) {
-        // Re-attach: replay buffered output into the (new) xterm instance.
-        if (!sender.isDestroyed() && existing.buffer) {
-            sender.send("pty:data", { id, data: existing.buffer })
-        }
-        return
-    }
+    if (sessions.has(id)) return
 
     const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
     const proc = nodePty.spawn(file, args, {
@@ -61,20 +63,19 @@ export function createPty(sender: WebContents, opts: CreateOpts): void {
         if (session.buffer.length > BUFFER_CAP) {
             session.buffer = session.buffer.slice(-BUFFER_CAP)
         }
-        if (!sender.isDestroyed()) sender.send("pty:data", { id, data })
+        ptyEvents.emit("data", { id, data })
     })
     proc.onExit(({ exitCode }) => {
         sessions.delete(id)
-        if (!sender.isDestroyed()) sender.send("pty:exit", { id, exitCode })
+        ptyEvents.emit("exit", { id, exitCode })
     })
 
     if (opts.initialCommand) {
-        // Give the shell a moment to print its prompt before injecting the command.
         setTimeout(() => {
             try {
                 proc.write(opts.initialCommand + "\r")
             } catch {
-                // session may already be gone; ignore
+                /* session may already be gone */
             }
         }, 500)
     }
@@ -89,7 +90,7 @@ export function resizePty(id: string, cols: number, rows: number): void {
     try {
         sessions.get(id)?.proc.resize(cols, rows)
     } catch {
-        // resize can race with exit; ignore
+        /* resize can race with exit */
     }
 }
 
@@ -99,7 +100,7 @@ export function killPty(id: string): void {
     try {
         session.proc.kill()
     } catch {
-        // already dead
+        /* already dead */
     }
     sessions.delete(id)
 }
@@ -109,7 +110,7 @@ export function killAll(): void {
         try {
             session.proc.kill()
         } catch {
-            // ignore
+            /* ignore */
         }
     }
     sessions.clear()

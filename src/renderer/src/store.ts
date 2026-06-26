@@ -30,6 +30,10 @@ export interface ClaudeSession {
     status: ClaudeStatus
 }
 
+export interface AnySession extends ClaudeSession {
+    kind: TermKind
+}
+
 /** The serializable slice persisted to workspace.json. */
 interface Persisted {
     termKinds: Record<string, TermKind>
@@ -57,8 +61,10 @@ interface AppState extends Persisted {
     claudeStatus: Record<string, ClaudeStatus>
     lastClaudeTermId: string | null
     claudeSessions: () => ClaudeSession[]
+    allSessions: () => AnySession[]
     sendToClaude: (text: string) => boolean
     jumpToTerm: (termId: string) => void
+    newTabIn: (projectId: string, kind: TermKind, initialCommand?: string) => void
 
     // Terminal selectors
     tabsFor: (projectId: string) => Tab[]
@@ -261,6 +267,36 @@ export const useStore = create<AppState>((set, get) => {
                 }
             }
             return out
+        },
+
+        allSessions: () => {
+            const s = get()
+            const out: AnySession[] = []
+            for (const [pid, tabs] of Object.entries(s.tabsByProject)) {
+                const project = s.projects.find((p) => p.id === pid)
+                for (const tab of tabs) {
+                    for (const termId of collectLeaves(tab.root)) {
+                        const kind = s.termKinds[termId] ?? "shell"
+                        out.push({
+                            termId,
+                            projectId: pid,
+                            projectName: project?.name ?? "—",
+                            tabName: tab.name,
+                            kind,
+                            status: kind === "claude" ? (s.claudeStatus[termId] ?? "idle") : "idle"
+                        })
+                    }
+                }
+            }
+            return out
+        },
+
+        newTabIn: (projectId, kind, initialCommand) => {
+            // Switch the desktop to this project so the pane mounts and the pty
+            // actually spawns (otherwise a backgrounded session can't be attached).
+            set({ activeId: projectId })
+            window.api.projects.setActive(projectId)
+            get().newTab(kind, initialCommand)
         },
 
         sendToClaude: (text) => {

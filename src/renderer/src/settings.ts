@@ -23,6 +23,17 @@ export interface AppSettings {
     appearance: {
         accent: string
     }
+    remote: {
+        enabled: boolean
+        port: number
+        token: string
+    }
+}
+
+function generateToken(): string {
+    const bytes = new Uint8Array(24)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")
 }
 
 export const DEFAULT_ACCENT = "#b8895c"
@@ -47,6 +58,11 @@ const DEFAULTS: AppSettings = {
     },
     appearance: {
         accent: DEFAULT_ACCENT
+    },
+    remote: {
+        enabled: false,
+        port: 7420,
+        token: ""
     }
 }
 
@@ -57,6 +73,8 @@ interface SettingsState extends AppSettings {
     setEditor: (patch: Partial<AppSettings["editor"]>) => void
     setClaude: (patch: Partial<AppSettings["claude"]>) => void
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
+    setRemote: (patch: Partial<AppSettings["remote"]>) => void
+    regenerateToken: () => void
     resetAll: () => void
     openSettings: () => void
     closeSettings: () => void
@@ -72,8 +90,15 @@ export function applyAccent(hex: string): void {
 
 export const useSettings = create<SettingsState>((set, get) => {
     const persist = (): void => {
-        const { terminal, editor, claude, appearance } = get()
-        window.api.settings.save({ terminal, editor, claude, appearance })
+        const { terminal, editor, claude, appearance, remote } = get()
+        window.api.settings.save({ terminal, editor, claude, appearance, remote })
+    }
+
+    // Reflect the remote config into the actual server (start/stop).
+    const applyServer = (): void => {
+        const { enabled, port, token } = get().remote
+        if (enabled && token) window.api.server.start({ port, token })
+        else window.api.server.stop()
     }
 
     return {
@@ -87,10 +112,12 @@ export const useSettings = create<SettingsState>((set, get) => {
                     terminal: { ...DEFAULTS.terminal, ...raw.terminal },
                     editor: { ...DEFAULTS.editor, ...raw.editor },
                     claude: { ...DEFAULTS.claude, ...raw.claude },
-                    appearance: { ...DEFAULTS.appearance, ...raw.appearance }
+                    appearance: { ...DEFAULTS.appearance, ...raw.appearance },
+                    remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
             }
             applyAccent(get().appearance.accent)
+            applyServer()
         },
 
         setTerminal: (patch) => {
@@ -110,9 +137,25 @@ export const useSettings = create<SettingsState>((set, get) => {
             applyAccent(get().appearance.accent)
             persist()
         },
+        setRemote: (patch) => {
+            set((s) => {
+                const remote = { ...s.remote, ...patch }
+                // Auto-generate a token the first time remote access is enabled.
+                if (remote.enabled && !remote.token) remote.token = generateToken()
+                return { remote }
+            })
+            applyServer()
+            persist()
+        },
+        regenerateToken: () => {
+            set((s) => ({ remote: { ...s.remote, token: generateToken() } }))
+            applyServer()
+            persist()
+        },
         resetAll: () => {
             set({ ...DEFAULTS })
             applyAccent(DEFAULTS.appearance.accent)
+            applyServer()
             persist()
         },
 
