@@ -26,11 +26,12 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 
 **Definition of done for the MVP:** I can add my real projects, switch between them with one click (no manual `cd`), and run several terminals — including parallel Claude CLI sessions — side by side, labeled. It's good enough to replace Windows Terminal for a day.
 
-## Milestone 2 — Editor panel
+## Milestone 2 — Editor panel ✅ (2026-06-27)
 
-- [ ] File tree for the active project
-- [ ] Monaco editor: open, edit, save files
-- [ ] Tabs for open files; dirty indicators
+- [x] File tree for the active project
+- [x] Monaco editor: open, edit, save files (syntax highlighting, per-file undo)
+- [x] Tabs for open files; dirty indicators
+- [x] Monaco workers bundled locally (offline; no CDN) + wabi-sabi editor theme
 
 ## Milestone 3 — API client panel (Postman-lite)
 

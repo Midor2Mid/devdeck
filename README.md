@@ -39,7 +39,7 @@ npm run build      # bundle main + preload + renderer into out/
 - **Rename tabs** — double-click a tab to rename it.
 - **In-terminal find** — ⌕ / Ctrl+Shift+F to search the focused terminal.
 - **API client** — Postman-style request builder (runs in the main process, no CORS limits).
-- **Editor** — file tree + open/save (lightweight; Monaco in Milestone 2).
+- **Editor** — Monaco-powered: file tree, multi-file tabs, syntax highlighting, dirty indicators, Ctrl+S to save.
 
 ### Terminal keyboard shortcuts
 
