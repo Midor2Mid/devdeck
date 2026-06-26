@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useStore } from "../store"
+import { useStore, SHELL } from "../store"
 import { useSettings } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { paneRegistry } from "../paneRegistry"
@@ -10,24 +10,27 @@ export function TerminalView(): JSX.Element {
     const activeId = useStore((s) => s.activeId)
     const tabsByProject = useStore((s) => s.tabsByProject)
     const activeTabByProject = useStore((s) => s.activeTabByProject)
-    const kindOf = useStore((s) => s.kindOf)
-    const claudeStatus = useStore((s) => s.claudeStatus)
+    const agentOf = useStore((s) => s.agentOf)
+    const agentStatus = useStore((s) => s.agentStatus)
     const newTab = useStore((s) => s.newTab)
     const splitActive = useStore((s) => s.splitActive)
     const closePane = useStore((s) => s.closePane)
     const renameTab = useStore((s) => s.renameTab)
     const setActiveTab = useStore((s) => s.setActiveTab)
+    const agents = useSettings((s) => s.agents)
 
     const [editingId, setEditingId] = useState<string | null>(null)
     const [draft, setDraft] = useState("")
     const [findOpen, setFindOpen] = useState(false)
     const [query, setQuery] = useState("")
+    const [menuOpen, setMenuOpen] = useState(false)
     const findInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = projects.find((p) => p.id === activeId)
     const tabs = activeId ? tabsByProject[activeId] ?? [] : []
     const activeTabId = activeId ? activeTabByProject[activeId] : undefined
     const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
+    const primaryAgent = agents[0]
 
     const runFind = (forward: boolean): void => {
         const s = useStore.getState()
@@ -39,24 +42,21 @@ export function TerminalView(): JSX.Element {
         else handle?.search.findPrevious(query)
     }
 
-    // Terminal-scoped keyboard shortcuts (Ctrl+Shift+…), captured before xterm.
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
             const s = useStore.getState()
             if (s.view !== "terminal" || !s.activeId) return
-
             if (findOpen && e.key === "Escape") {
                 setFindOpen(false)
                 return
             }
             if (!(e.ctrlKey && e.shiftKey)) return
-
             const map: Record<string, () => void> = {
-                KeyT: () => s.newTab("shell"),
-                Enter: () => s.newTab("claude"),
+                KeyT: () => s.newTab(SHELL),
+                Enter: () => s.newTab(useSettings.getState().agents[0]?.id ?? "claude"),
                 KeyW: () => s.closeActivePane(),
-                Backslash: () => s.splitActive("row", "shell"),
-                Minus: () => s.splitActive("col", "shell"),
+                Backslash: () => s.splitActive("row", SHELL),
+                Minus: () => s.splitActive("col", SHELL),
                 BracketRight: () => s.cycleTab(1),
                 BracketLeft: () => s.cycleTab(-1),
                 KeyF: () => setFindOpen((v) => !v)
@@ -95,13 +95,12 @@ export function TerminalView(): JSX.Element {
             <div className="term-tabbar">
                 <div className="term-tabs">
                     {tabs.map((tab) => {
-                        const kind = kindOf(firstLeaf(tab.root))
                         const isActive = tab.id === activeTab?.id
-                        // Tab status = worst status among its Claude panes.
-                        const claudeLeaves = collectLeaves(tab.root).filter(
-                            (id) => kindOf(id) === "claude"
+                        const agentLeaves = collectLeaves(tab.root).filter(
+                            (id) => agentOf(id) !== SHELL
                         )
-                        const statuses = claudeLeaves.map((id) => claudeStatus[id] ?? "idle")
+                        const statuses = agentLeaves.map((id) => agentStatus[id] ?? "idle")
+                        const anyAgent = agentLeaves.length > 0
                         const tabStatus = statuses.includes("attention")
                             ? "attention"
                             : statuses.includes("working")
@@ -121,8 +120,7 @@ export function TerminalView(): JSX.Element {
                                 <span
                                     className={
                                         "tab-dot " +
-                                        kind +
-                                        (kind === "claude" ? " status-" + tabStatus : "")
+                                        (anyAgent ? "claude status-" + tabStatus : "shell")
                                     }
                                 />
                                 {editingId === tab.id ? (
@@ -146,7 +144,6 @@ export function TerminalView(): JSX.Element {
                                     title="Close"
                                     onClick={(e) => {
                                         e.stopPropagation()
-                                        // Close every pane in this tab.
                                         ;[...new Set(collectLeaves(tab.root))].forEach(closePane)
                                     }}
                                 >
@@ -157,37 +154,71 @@ export function TerminalView(): JSX.Element {
                     })}
                 </div>
                 <div className="term-actions">
-                    <button onClick={() => newTab("shell")} title="New shell tab (Ctrl+Shift+T)">
+                    <button onClick={() => newTab(SHELL)} title="New shell tab (Ctrl+Shift+T)">
                         + Terminal
                     </button>
-                    <button
-                        className="accent"
-                        onClick={() => newTab("claude")}
-                        title="New Claude session (Ctrl+Shift+Enter)"
-                    >
-                        + Claude
-                    </button>
-                    <button
-                        className="icon-action"
-                        onClick={() => {
-                            const c = useSettings.getState().claude
-                            newTab("claude", `${c.command} ${c.continueArgs}`)
-                        }}
-                        title="Resume last Claude conversation (claude --continue)"
-                    >
-                        ↻
-                    </button>
+                    {primaryAgent && (
+                        <button
+                            className="accent"
+                            onClick={() => newTab(primaryAgent.id)}
+                            title={`New ${primaryAgent.name} session (Ctrl+Shift+Enter)`}
+                        >
+                            + {primaryAgent.name}
+                        </button>
+                    )}
+                    <div className="agent-menu-wrap">
+                        <button
+                            className="icon-action"
+                            onClick={() => setMenuOpen((v) => !v)}
+                            title="Other agents…"
+                        >
+                            ▾
+                        </button>
+                        {menuOpen && (
+                            <>
+                                <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />
+                                <div className="agent-menu">
+                                    {agents.map((a) => (
+                                        <div key={a.id} className="agent-menu-row">
+                                            <span
+                                                className="agent-menu-name"
+                                                onClick={() => {
+                                                    newTab(a.id)
+                                                    setMenuOpen(false)
+                                                }}
+                                            >
+                                                <span className="agent-badge">{a.badge}</span>
+                                                {a.name}
+                                            </span>
+                                            {a.resumeArgs && (
+                                                <span
+                                                    className="agent-menu-resume"
+                                                    title={`Resume (${a.command} ${a.resumeArgs})`}
+                                                    onClick={() => {
+                                                        newTab(a.id, `${a.command} ${a.resumeArgs}`)
+                                                        setMenuOpen(false)
+                                                    }}
+                                                >
+                                                    ↻
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
                     <span className="action-sep" />
                     <button
                         className="icon-action"
-                        onClick={() => splitActive("row", "shell")}
+                        onClick={() => splitActive("row", SHELL)}
                         title="Split right (Ctrl+Shift+\\)"
                     >
                         ⇆
                     </button>
                     <button
                         className="icon-action"
-                        onClick={() => splitActive("col", "shell")}
+                        onClick={() => splitActive("col", SHELL)}
                         title="Split down (Ctrl+Shift+-)"
                     >
                         ⇅
@@ -231,8 +262,8 @@ export function TerminalView(): JSX.Element {
                         <div className="empty-state">
                             <p>No terminals yet in {activeProject.name}.</p>
                             <p className="muted">
-                                <b>+ Terminal</b> for a shell, <b>+ Claude</b> for a Claude
-                                session. Split with the ⇆ / ⇅ buttons.
+                                <b>+ Terminal</b> for a shell, <b>+ {primaryAgent?.name ?? "agent"}</b>{" "}
+                                for an AI session. Split with the ⇆ / ⇅ buttons.
                             </p>
                         </div>
                     ) : (

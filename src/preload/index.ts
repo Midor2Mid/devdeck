@@ -73,7 +73,8 @@ export interface RemoteSession {
     projectId: string
     projectName: string
     tabName: string
-    kind: "shell" | "claude"
+    badge: string
+    isAgent: boolean
     status: "working" | "idle" | "attention"
 }
 export interface ServerStatus {
@@ -124,9 +125,8 @@ const api = {
     mobile: {
         syncSessions: (sessions: RemoteSession[]): void =>
             ipcRenderer.send("mobile:sessions", sessions),
-        onNew: (cb: (p: { projectId: string; kind: "shell" | "claude" }) => void): (() => void) => {
-            const handler = (_e: unknown, p: { projectId: string; kind: "shell" | "claude" }): void =>
-                cb(p)
+        onNew: (cb: (p: { projectId: string }) => void): (() => void) => {
+            const handler = (_e: unknown, p: { projectId: string }): void => cb(p)
             ipcRenderer.on("mobile:new", handler)
             return () => ipcRenderer.removeListener("mobile:new", handler)
         }

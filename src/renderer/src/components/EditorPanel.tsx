@@ -120,8 +120,8 @@ function FileTree({
 
 export function EditorPanel(): JSX.Element {
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
-    const sendToClaude = useStore((s) => s.sendToClaude)
-    const lastClaude = useStore((s) => s.lastClaudeTermId)
+    const sendToClaude = useStore((s) => s.sendToAgent)
+    const lastClaude = useStore((s) => s.lastAgentTermId)
     const editorSettings = useSettings((s) => s.editor)
     const [files, setFiles] = useState<OpenFile[]>([])
     const [activePath, setActivePath] = useState<string | null>(null)

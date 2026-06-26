@@ -7,7 +7,7 @@ type Section =
     | "appearance"
     | "terminal"
     | "editor"
-    | "claude"
+    | "agents"
     | "remote"
     | "shortcuts"
     | "about"
@@ -16,11 +16,82 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "appearance", label: "Appearance" },
     { key: "terminal", label: "Terminal" },
     { key: "editor", label: "Editor" },
-    { key: "claude", label: "Claude" },
+    { key: "agents", label: "Agents" },
     { key: "remote", label: "Remote (Mobile)" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
 ]
+
+function AgentsSection(): JSX.Element {
+    const agents = useSettings((s) => s.agents)
+    const setAgents = useSettings((s) => s.setAgents)
+    const agentIdleMs = useSettings((s) => s.agentIdleMs)
+    const setAgentIdleMs = useSettings((s) => s.setAgentIdleMs)
+
+    const update = (i: number, patch: Record<string, string>): void => {
+        setAgents(agents.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
+    }
+    const remove = (i: number): void => setAgents(agents.filter((_, idx) => idx !== i))
+    const add = (): void =>
+        setAgents([
+            ...agents,
+            { id: crypto.randomUUID(), name: "New agent", command: "", resumeArgs: "", badge: "AGENT" }
+        ])
+
+    return (
+        <div className="settings-section">
+            <h3>AI agents</h3>
+            <div className="agents-head">
+                <span>Name</span>
+                <span>Command</span>
+                <span>Resume</span>
+                <span>Badge</span>
+                <span />
+            </div>
+            {agents.map((a, i) => (
+                <div key={a.id} className="agent-edit-row">
+                    <input value={a.name} onChange={(e) => update(i, { name: e.target.value })} />
+                    <input
+                        value={a.command}
+                        placeholder="claude"
+                        onChange={(e) => update(i, { command: e.target.value })}
+                    />
+                    <input
+                        value={a.resumeArgs}
+                        placeholder="--continue"
+                        onChange={(e) => update(i, { resumeArgs: e.target.value })}
+                    />
+                    <input
+                        value={a.badge}
+                        onChange={(e) => update(i, { badge: e.target.value.toUpperCase() })}
+                    />
+                    <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                        ×
+                    </button>
+                </div>
+            ))}
+            <button onClick={add} style={{ marginTop: 8 }}>
+                + Add agent
+            </button>
+            <div className="setting-row" style={{ marginTop: 18 }}>
+                <label>Idle → attention (ms)</label>
+                <input
+                    type="number"
+                    min={300}
+                    max={5000}
+                    step={100}
+                    value={agentIdleMs}
+                    onChange={(e) => setAgentIdleMs(Number(e.target.value))}
+                />
+            </div>
+            <p className="settings-hint">
+                Each agent is a CLI launched in a terminal. The first agent is the one-click{" "}
+                <b>+</b> button; the rest are in the ▾ menu. "Resume" runs <code>command +
+                resume args</code>. Badges show on sessions in the sidebar &amp; mobile.
+            </p>
+        </div>
+    )
+}
 
 function RemoteSection(): JSX.Element {
     const remote = useSettings((s) => s.remote)
@@ -304,45 +375,7 @@ export function SettingsModal(): JSX.Element {
                         </div>
                     )}
 
-                    {section === "claude" && (
-                        <div className="settings-section">
-                            <h3>Claude</h3>
-                            <div className="setting-row">
-                                <label>Command</label>
-                                <input
-                                    value={s.claude.command}
-                                    onChange={(e) => s.setClaude({ command: e.target.value })}
-                                />
-                            </div>
-                            <div className="setting-row">
-                                <label>Resume args</label>
-                                <input
-                                    value={s.claude.continueArgs}
-                                    onChange={(e) =>
-                                        s.setClaude({ continueArgs: e.target.value })
-                                    }
-                                />
-                            </div>
-                            <div className="setting-row">
-                                <label>Idle → attention (ms)</label>
-                                <input
-                                    type="number"
-                                    min={300}
-                                    max={5000}
-                                    step={100}
-                                    value={s.claude.attentionIdleMs}
-                                    onChange={(e) =>
-                                        s.setClaude({ attentionIdleMs: Number(e.target.value) })
-                                    }
-                                />
-                            </div>
-                            <p className="settings-hint">
-                                "Command" is what the <b>+ Claude</b> button runs; resume runs
-                                "command + resume args". Idle time controls how quickly a quiet
-                                session is marked idle.
-                            </p>
-                        </div>
-                    )}
+                    {section === "agents" && <AgentsSection />}
 
                     {section === "remote" && <RemoteSection />}
 

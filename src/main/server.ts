@@ -10,7 +10,8 @@ export interface RemoteSession {
     projectId: string
     projectName: string
     tabName: string
-    kind: "shell" | "claude"
+    badge: string
+    isAgent: boolean
     status: "working" | "idle" | "attention"
 }
 
@@ -21,7 +22,7 @@ export interface ServerConfig {
 
 export interface ServerDeps {
     getSessions: () => RemoteSession[]
-    requestNewSession: (projectId: string, kind: "shell" | "claude") => void
+    requestNewSession: (projectId: string) => void
 }
 
 interface Client extends WebSocket {
@@ -134,11 +135,7 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
                     resizePty(id, Number(msg.cols), Number(msg.rows))
                     break
                 case "new":
-                    if (typeof msg.projectId === "string")
-                        deps.requestNewSession(
-                            msg.projectId,
-                            msg.kind === "claude" ? "claude" : "shell"
-                        )
+                    if (typeof msg.projectId === "string") deps.requestNewSession(msg.projectId)
                     break
                 case "list":
                     send(ws, { t: "sessions", sessions: deps.getSessions() })
@@ -203,11 +200,12 @@ const CLIENT_HTML = `<!doctype html>
   .proj{font-size:11px;letter-spacing:1px;color:var(--mu);margin:14px 6px 6px}
   .sess{display:flex;align-items:center;gap:10px;padding:14px;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px;background:var(--bg2)}
   .dot{width:9px;height:9px;border-radius:50%;flex:none}
-  .dot.shell{background:var(--moss)} .dot.claude{background:var(--clay)}
+  .dot.shell{background:var(--moss)} .dot.agent{background:var(--clay)}
   .dot.attention{background:var(--ac);box-shadow:0 0 0 3px rgba(184,137,92,.25)}
   .dot.idle{opacity:.4} .dot.working{animation:p 1.2s infinite}
   @keyframes p{0%,100%{opacity:.4}50%{opacity:1}}
   .sess .meta{flex:1} .sess .st{font-size:11px;color:var(--mu)}
+  .badge{font-size:9px;letter-spacing:1px;color:var(--clay);border:1px solid var(--bd);border-radius:5px;padding:2px 6px}
   .new{color:var(--clay);border-color:var(--clay)!important}
   #term-view{flex:1;display:none;flex-direction:column;min-height:0}
   #term{flex:1;min-height:0;background:var(--bg3);padding:6px}
@@ -280,14 +278,17 @@ const CLIENT_HTML = `<!doctype html>
       var p=byProj[pid];
       html+='<div class="proj">'+esc(p.name).toUpperCase()+'</div>';
       p.items.forEach(function(s){
-        html+='<div class="sess" data-id="'+s.termId+'"><span class="dot '+s.kind+' '+s.status+'"></span>'+
-          '<div class="meta"><div>'+esc(s.tabName)+'</div><div class="st">'+s.kind+' · '+s.status+'</div></div></div>';
+        var kindClass = s.isAgent ? 'agent' : 'shell';
+        var label = s.isAgent ? (s.badge||'AGENT') : 'shell';
+        html+='<div class="sess" data-id="'+s.termId+'"><span class="dot '+kindClass+' '+s.status+'"></span>'+
+          '<div class="meta"><div>'+esc(s.tabName)+'</div><div class="st">'+esc(label)+' · '+s.status+'</div></div>'+
+          (s.isAgent?'<span class="badge">'+esc(s.badge||'')+'</span>':'')+'</div>';
       });
-      html+='<div class="sess new" data-new="'+pid+'"><span class="dot claude"></span><div class="meta">+ New Claude session</div></div>';
+      html+='<div class="sess new" data-new="'+pid+'"><span class="dot agent"></span><div class="meta">+ New agent session</div></div>';
     });
     listEl.innerHTML=html;
     [].forEach.call(listEl.querySelectorAll('.sess[data-id]'),function(el){ el.onclick=function(){ openTerm(el.getAttribute('data-id')); }; });
-    [].forEach.call(listEl.querySelectorAll('.sess[data-new]'),function(el){ el.onclick=function(){ sendMsg({t:'new',projectId:el.getAttribute('data-new'),kind:'claude'}); }; });
+    [].forEach.call(listEl.querySelectorAll('.sess[data-new]'),function(el){ el.onclick=function(){ sendMsg({t:'new',projectId:el.getAttribute('data-new')}); }; });
   }
 
   function fit(){

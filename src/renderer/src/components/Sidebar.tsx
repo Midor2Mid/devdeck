@@ -1,39 +1,48 @@
 import { useMemo } from "react"
-import { useStore, type ClaudeSession } from "../store"
+import { useStore, SHELL, type AgentStatus } from "../store"
 import { useSettings } from "../settings"
 import { collectLeaves } from "../layout"
+
+interface SessionRow {
+    termId: string
+    projectName: string
+    tabName: string
+    badge: string
+    status: AgentStatus
+}
 
 export function Sidebar(): JSX.Element {
     const { projects, activeId, addProject, removeProject, setActiveProject } = useStore()
     const openSettings = useSettings((s) => s.openSettings)
+    const agents = useSettings((s) => s.agents)
 
-    // Build the cross-project Claude session list from raw slices (so this
-    // re-renders on status/layout changes without a new-array selector pitfall).
     const tabsByProject = useStore((s) => s.tabsByProject)
-    const termKinds = useStore((s) => s.termKinds)
-    const claudeStatus = useStore((s) => s.claudeStatus)
+    const termAgents = useStore((s) => s.termAgents)
+    const agentStatus = useStore((s) => s.agentStatus)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
 
-    const sessions = useMemo<ClaudeSession[]>(() => {
-        const out: ClaudeSession[] = []
+    const sessions = useMemo<SessionRow[]>(() => {
+        const badgeOf = (id: string): string =>
+            agents.find((a) => a.id === id)?.badge ?? id.toUpperCase()
+        const out: SessionRow[] = []
         for (const [pid, tabs] of Object.entries(tabsByProject)) {
             const project = projects.find((p) => p.id === pid)
             for (const tab of tabs) {
                 for (const termId of collectLeaves(tab.root)) {
-                    if (termKinds[termId] === "claude") {
-                        out.push({
-                            termId,
-                            projectId: pid,
-                            projectName: project?.name ?? "—",
-                            tabName: tab.name,
-                            status: claudeStatus[termId] ?? "idle"
-                        })
-                    }
+                    const agentId = termAgents[termId] ?? SHELL
+                    if (agentId === SHELL) continue
+                    out.push({
+                        termId,
+                        projectName: project?.name ?? "—",
+                        tabName: tab.name,
+                        badge: badgeOf(agentId),
+                        status: agentStatus[termId] ?? "idle"
+                    })
                 }
             }
         }
         return out
-    }, [tabsByProject, termKinds, claudeStatus, projects])
+    }, [tabsByProject, termAgents, agentStatus, projects, agents])
 
     const attention = sessions.filter((s) => s.status === "attention").length
 
@@ -84,7 +93,7 @@ export function Sidebar(): JSX.Element {
             </div>
 
             <div className="sidebar-section-title claude-title">
-                <span>CLAUDE SESSIONS</span>
+                <span>AGENT SESSIONS</span>
                 {attention > 0 && (
                     <span className="attention-badge" title={`${attention} need attention`}>
                         {attention}
@@ -96,7 +105,7 @@ export function Sidebar(): JSX.Element {
                     <div className="muted sidebar-empty">
                         None running.
                         <br />
-                        Start one with <b>+ Claude</b>.
+                        Start one with <b>+ {agents[0]?.name ?? "agent"}</b>.
                     </div>
                 ) : (
                     sessions.map((s) => (
@@ -111,6 +120,7 @@ export function Sidebar(): JSX.Element {
                                 <span className="claude-session-tab">{s.tabName}</span>
                                 <span className="claude-session-project">{s.projectName}</span>
                             </span>
+                            <span className="agent-badge sm">{s.badge}</span>
                             {s.status === "attention" && <span className="claude-attn">!</span>}
                         </div>
                     ))

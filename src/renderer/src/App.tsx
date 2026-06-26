@@ -24,10 +24,10 @@ export function App(): JSX.Element {
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
     const tabsByProject = useStore((s) => s.tabsByProject)
-    const claudeStatus = useStore((s) => s.claudeStatus)
-    const termKinds = useStore((s) => s.termKinds)
+    const agentStatus = useStore((s) => s.agentStatus)
+    const termAgents = useStore((s) => s.termAgents)
     const projects = useStore((s) => s.projects)
-    const allSessions = useStore((s) => s.allSessions)
+    const sessions = useStore((s) => s.sessions)
     const newTabIn = useStore((s) => s.newTabIn)
 
     useEffect(() => {
@@ -36,11 +36,13 @@ export function App(): JSX.Element {
     }, [init, loadSettings])
 
     useEffect(() => {
-        window.api.mobile.syncSessions(allSessions())
-    }, [tabsByProject, claudeStatus, termKinds, projects, allSessions])
+        window.api.mobile.syncSessions(sessions())
+    }, [tabsByProject, agentStatus, termAgents, projects, sessions])
 
     useEffect(() => {
-        return window.api.mobile.onNew(({ projectId, kind }) => newTabIn(projectId, kind))
+        return window.api.mobile.onNew(({ projectId }) =>
+            newTabIn(projectId, useSettings.getState().agents[0]?.id ?? "claude")
+        )
     }, [newTabIn])
 
     return (

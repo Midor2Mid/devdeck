@@ -2,6 +2,15 @@ import { create } from "zustand"
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
 
+/** A launchable AI CLI agent (Claude, Codex, Gemini, custom…). */
+export interface AgentPreset {
+    id: string
+    name: string
+    command: string
+    resumeArgs: string
+    badge: string
+}
+
 export interface AppSettings {
     terminal: {
         shell: ShellKind
@@ -15,11 +24,8 @@ export interface AppSettings {
         wordWrap: boolean
         minimap: boolean
     }
-    claude: {
-        command: string
-        continueArgs: string
-        attentionIdleMs: number
-    }
+    agents: AgentPreset[]
+    agentIdleMs: number
     appearance: {
         accent: string
     }
@@ -51,11 +57,12 @@ const DEFAULTS: AppSettings = {
         wordWrap: false,
         minimap: false
     },
-    claude: {
-        command: "claude",
-        continueArgs: "--continue",
-        attentionIdleMs: 1000
-    },
+    agents: [
+        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE" },
+        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX" },
+        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI" }
+    ],
+    agentIdleMs: 1000,
     appearance: {
         accent: DEFAULT_ACCENT
     },
@@ -71,7 +78,9 @@ interface SettingsState extends AppSettings {
     load: () => Promise<void>
     setTerminal: (patch: Partial<AppSettings["terminal"]>) => void
     setEditor: (patch: Partial<AppSettings["editor"]>) => void
-    setClaude: (patch: Partial<AppSettings["claude"]>) => void
+    setAgents: (agents: AgentPreset[]) => void
+    setAgentIdleMs: (ms: number) => void
+    agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
     regenerateToken: () => void
@@ -90,8 +99,8 @@ export function applyAccent(hex: string): void {
 
 export const useSettings = create<SettingsState>((set, get) => {
     const persist = (): void => {
-        const { terminal, editor, claude, appearance, remote } = get()
-        window.api.settings.save({ terminal, editor, claude, appearance, remote })
+        const { terminal, editor, agents, agentIdleMs, appearance, remote } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, appearance, remote })
     }
 
     // Reflect the remote config into the actual server (start/stop).
@@ -111,7 +120,8 @@ export const useSettings = create<SettingsState>((set, get) => {
                 set({
                     terminal: { ...DEFAULTS.terminal, ...raw.terminal },
                     editor: { ...DEFAULTS.editor, ...raw.editor },
-                    claude: { ...DEFAULTS.claude, ...raw.claude },
+                    agents: raw.agents?.length ? raw.agents : DEFAULTS.agents,
+                    agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
@@ -128,10 +138,15 @@ export const useSettings = create<SettingsState>((set, get) => {
             set((s) => ({ editor: { ...s.editor, ...patch } }))
             persist()
         },
-        setClaude: (patch) => {
-            set((s) => ({ claude: { ...s.claude, ...patch } }))
+        setAgents: (agents) => {
+            set({ agents })
             persist()
         },
+        setAgentIdleMs: (ms) => {
+            set({ agentIdleMs: ms })
+            persist()
+        },
+        agentById: (id) => get().agents.find((a) => a.id === id),
         setAppearance: (patch) => {
             set((s) => ({ appearance: { ...s.appearance, ...patch } }))
             applyAccent(get().appearance.accent)

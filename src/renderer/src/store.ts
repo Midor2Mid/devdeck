@@ -12,9 +12,10 @@ import {
     hasLeaf
 } from "./layout"
 
-export type TermKind = "shell" | "claude"
+/** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
+export const SHELL = "shell"
 export type MainView = "terminal" | "editor" | "api" | "database"
-export type ClaudeStatus = "working" | "idle" | "attention"
+export type AgentStatus = "working" | "idle" | "attention"
 
 export interface Tab {
     id: string
@@ -22,21 +23,20 @@ export interface Tab {
     root: LayoutNode
 }
 
-export interface ClaudeSession {
+export interface AnySession {
     termId: string
     projectId: string
     projectName: string
     tabName: string
-    status: ClaudeStatus
-}
-
-export interface AnySession extends ClaudeSession {
-    kind: TermKind
+    agentId: string
+    badge: string
+    isAgent: boolean
+    status: AgentStatus
 }
 
 /** The serializable slice persisted to workspace.json. */
 interface Persisted {
-    termKinds: Record<string, TermKind>
+    termAgents: Record<string, string>
     termInit: Record<string, string>
     tabsByProject: Record<string, Tab[]>
     activeTabByProject: Record<string, string | undefined>
@@ -44,7 +44,6 @@ interface Persisted {
 }
 
 interface AppState extends Persisted {
-    // Projects
     projects: Project[]
     activeId: string | null
     init: () => Promise<void>
@@ -53,28 +52,25 @@ interface AppState extends Persisted {
     setActiveProject: (id: string) => Promise<void>
     activeProject: () => Project | undefined
 
-    // Main view
     view: MainView
     setView: (view: MainView) => void
 
-    // Claude session awareness (runtime-only, not persisted)
-    claudeStatus: Record<string, ClaudeStatus>
-    lastClaudeTermId: string | null
-    claudeSessions: () => ClaudeSession[]
-    allSessions: () => AnySession[]
-    sendToClaude: (text: string) => boolean
+    // Agent session awareness (runtime-only)
+    agentStatus: Record<string, AgentStatus>
+    lastAgentTermId: string | null
+    sessions: () => AnySession[]
+    agentSessions: () => AnySession[]
+    sendToAgent: (text: string) => boolean
     jumpToTerm: (termId: string) => void
-    newTabIn: (projectId: string, kind: TermKind, initialCommand?: string) => void
+    newTabIn: (projectId: string, agentId: string, initialCommand?: string) => void
 
-    // Terminal selectors
     tabsFor: (projectId: string) => Tab[]
     activeTab: (projectId: string) => Tab | undefined
     activePane: (projectId: string) => string | undefined
-    kindOf: (termId: string) => TermKind
+    agentOf: (termId: string) => string
 
-    // Terminal actions
-    newTab: (kind: TermKind, initialCommand?: string) => void
-    splitActive: (dir: SplitDir, kind: TermKind) => void
+    newTab: (agentId: string, initialCommand?: string) => void
+    splitActive: (dir: SplitDir, agentId: string) => void
     closePane: (termId: string) => void
     closeActivePane: () => void
     renameTab: (projectId: string, tabId: string, name: string) => void
@@ -87,15 +83,23 @@ function newId(): string {
     return crypto.randomUUID()
 }
 
-// Idle-debounce timers per claude session (module scope; renderer-lifetime).
 const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let dataSubscribed = false
+
+function isAgentId(agentId: string): boolean {
+    return !!agentId && agentId !== SHELL
+}
+
+function badgeFor(agentId: string): string {
+    if (!isAgentId(agentId)) return ""
+    return useSettings.getState().agentById(agentId)?.badge ?? agentId.toUpperCase()
+}
 
 export const useStore = create<AppState>((set, get) => {
     const persist = (): void => {
         const s = get()
         window.api.workspace.save({
-            termKinds: s.termKinds,
+            termAgents: s.termAgents,
             termInit: s.termInit,
             tabsByProject: s.tabsByProject,
             activeTabByProject: s.activeTabByProject,
@@ -103,21 +107,19 @@ export const useStore = create<AppState>((set, get) => {
         } satisfies Persisted)
     }
 
-    const setStatus = (termId: string, status: ClaudeStatus): void => {
-        if (get().claudeStatus[termId] === status) return
-        set((s) => ({ claudeStatus: { ...s.claudeStatus, [termId]: status } }))
+    const setStatus = (termId: string, status: AgentStatus): void => {
+        if (get().agentStatus[termId] === status) return
+        set((s) => ({ agentStatus: { ...s.agentStatus, [termId]: status } }))
     }
 
-    // Acknowledge a session becoming visible: it's the last-focused Claude, and
-    // any pending "attention" is cleared.
     const ack = (termId?: string): void => {
-        if (!termId || get().kindOf(termId) !== "claude") return
+        if (!termId || !isAgentId(get().agentOf(termId))) return
         set((s) => ({
-            lastClaudeTermId: termId,
-            claudeStatus:
-                s.claudeStatus[termId] === "attention"
-                    ? { ...s.claudeStatus, [termId]: "idle" }
-                    : s.claudeStatus
+            lastAgentTermId: termId,
+            agentStatus:
+                s.agentStatus[termId] === "attention"
+                    ? { ...s.agentStatus, [termId]: "idle" }
+                    : s.agentStatus
         }))
     }
 
@@ -126,27 +128,23 @@ export const useStore = create<AppState>((set, get) => {
         return s.view === "terminal" && !!s.activeId && s.activePaneByProject[s.activeId] === termId
     }
 
-    // Format-independent status: bell => attention (for hidden sessions),
-    // any output => working, then idle after a quiet period.
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
-        if (get().kindOf(id) !== "claude") return
+        if (!isAgentId(get().agentOf(id))) return
         const visible = isVisible(id)
         if (data.includes("\x07") && !visible) {
             setStatus(id, "attention")
             return
         }
-        if (get().claudeStatus[id] !== "attention" || visible) {
-            setStatus(id, "working")
-        }
+        if (get().agentStatus[id] !== "attention" || visible) setStatus(id, "working")
         const existing = idleTimers.get(id)
         if (existing) clearTimeout(existing)
         idleTimers.set(
             id,
             setTimeout(
                 () => {
-                    if (get().claudeStatus[id] === "working") setStatus(id, "idle")
+                    if (get().agentStatus[id] === "working") setStatus(id, "idle")
                 },
-                useSettings.getState().claude.attentionIdleMs
+                useSettings.getState().agentIdleMs
             )
         )
     }
@@ -156,30 +154,58 @@ export const useStore = create<AppState>((set, get) => {
         if (t) clearTimeout(t)
         idleTimers.delete(termId)
         set((s) => {
-            if (!(termId in s.claudeStatus) && !(termId in s.termInit)) return {}
-            const claudeStatus = { ...s.claudeStatus }
-            delete claudeStatus[termId]
+            const agentStatus = { ...s.agentStatus }
+            delete agentStatus[termId]
             const termInit = { ...s.termInit }
             delete termInit[termId]
+            const termAgents = { ...s.termAgents }
+            delete termAgents[termId]
             return {
-                claudeStatus,
+                agentStatus,
                 termInit,
-                lastClaudeTermId: s.lastClaudeTermId === termId ? null : s.lastClaudeTermId
+                termAgents,
+                lastAgentTermId: s.lastAgentTermId === termId ? null : s.lastAgentTermId
             }
         })
+    }
+
+    const buildSessions = (agentsOnly: boolean): AnySession[] => {
+        const s = get()
+        const out: AnySession[] = []
+        for (const [pid, tabs] of Object.entries(s.tabsByProject)) {
+            const project = s.projects.find((p) => p.id === pid)
+            for (const tab of tabs) {
+                for (const termId of collectLeaves(tab.root)) {
+                    const agentId = s.termAgents[termId] ?? SHELL
+                    const agent = isAgentId(agentId)
+                    if (agentsOnly && !agent) continue
+                    out.push({
+                        termId,
+                        projectId: pid,
+                        projectName: project?.name ?? "—",
+                        tabName: tab.name,
+                        agentId,
+                        badge: badgeFor(agentId),
+                        isAgent: agent,
+                        status: agent ? (s.agentStatus[termId] ?? "idle") : "idle"
+                    })
+                }
+            }
+        }
+        return out
     }
 
     return {
         projects: [],
         activeId: null,
-        termKinds: {},
+        termAgents: {},
         termInit: {},
         tabsByProject: {},
         activeTabByProject: {},
         activePaneByProject: {},
         view: "terminal",
-        claudeStatus: {},
-        lastClaudeTermId: null,
+        agentStatus: {},
+        lastAgentTermId: null,
 
         init: async () => {
             if (!dataSubscribed) {
@@ -190,11 +216,12 @@ export const useStore = create<AppState>((set, get) => {
                 window.api.projects.list(),
                 window.api.workspace.load()
             ])
-            const w = (ws as Partial<Persisted> | null) ?? {}
+            const w = (ws as (Partial<Persisted> & { termKinds?: Record<string, string> }) | null) ?? {}
             set({
                 projects: store.projects,
                 activeId: store.activeId,
-                termKinds: w.termKinds ?? {},
+                // Migrate the old termKinds → termAgents if present.
+                termAgents: w.termAgents ?? w.termKinds ?? {},
                 termInit: w.termInit ?? {},
                 tabsByProject: w.tabsByProject ?? {},
                 activeTabByProject: w.activeTabByProject ?? {},
@@ -242,65 +269,14 @@ export const useStore = create<AppState>((set, get) => {
 
         setView: (view) => {
             set({ view })
-            if (view === "terminal" && get().activeId) {
-                ack(get().activePaneByProject[get().activeId as string])
-            }
+            if (view === "terminal" && get().activeId) ack(get().activePaneByProject[get().activeId as string])
         },
 
-        claudeSessions: () => {
-            const s = get()
-            const out: ClaudeSession[] = []
-            for (const [pid, tabs] of Object.entries(s.tabsByProject)) {
-                const project = s.projects.find((p) => p.id === pid)
-                for (const tab of tabs) {
-                    for (const termId of collectLeaves(tab.root)) {
-                        if (s.termKinds[termId] === "claude") {
-                            out.push({
-                                termId,
-                                projectId: pid,
-                                projectName: project?.name ?? "—",
-                                tabName: tab.name,
-                                status: s.claudeStatus[termId] ?? "idle"
-                            })
-                        }
-                    }
-                }
-            }
-            return out
-        },
+        sessions: () => buildSessions(false),
+        agentSessions: () => buildSessions(true),
 
-        allSessions: () => {
-            const s = get()
-            const out: AnySession[] = []
-            for (const [pid, tabs] of Object.entries(s.tabsByProject)) {
-                const project = s.projects.find((p) => p.id === pid)
-                for (const tab of tabs) {
-                    for (const termId of collectLeaves(tab.root)) {
-                        const kind = s.termKinds[termId] ?? "shell"
-                        out.push({
-                            termId,
-                            projectId: pid,
-                            projectName: project?.name ?? "—",
-                            tabName: tab.name,
-                            kind,
-                            status: kind === "claude" ? (s.claudeStatus[termId] ?? "idle") : "idle"
-                        })
-                    }
-                }
-            }
-            return out
-        },
-
-        newTabIn: (projectId, kind, initialCommand) => {
-            // Switch the desktop to this project so the pane mounts and the pty
-            // actually spawns (otherwise a backgrounded session can't be attached).
-            set({ activeId: projectId })
-            window.api.projects.setActive(projectId)
-            get().newTab(kind, initialCommand)
-        },
-
-        sendToClaude: (text) => {
-            const id = get().lastClaudeTermId
+        sendToAgent: (text) => {
+            const id = get().lastAgentTermId
             if (!id) return false
             window.api.pty.input(id, text)
             return true
@@ -324,6 +300,12 @@ export const useStore = create<AppState>((set, get) => {
             }
         },
 
+        newTabIn: (projectId, agentId, initialCommand) => {
+            set({ activeId: projectId })
+            window.api.projects.setActive(projectId)
+            get().newTab(agentId, initialCommand)
+        },
+
         tabsFor: (projectId) => get().tabsByProject[projectId] ?? [],
         activeTab: (projectId) => {
             const tabs = get().tabsByProject[projectId] ?? []
@@ -331,41 +313,39 @@ export const useStore = create<AppState>((set, get) => {
             return tabs.find((t) => t.id === activeId) ?? tabs[0]
         },
         activePane: (projectId) => get().activePaneByProject[projectId],
-        kindOf: (termId) => get().termKinds[termId] ?? "shell",
+        agentOf: (termId) => get().termAgents[termId] ?? SHELL,
 
-        newTab: (kind, initialCommand) => {
+        newTab: (agentId, initialCommand) => {
             const projectId = get().activeId
             if (!projectId) return
             const termId = newId()
             const tabId = newId()
             const count = (get().tabsByProject[projectId] ?? []).length + 1
-            const init =
-                kind === "claude"
-                    ? (initialCommand ?? useSettings.getState().claude.command)
-                    : undefined
-            const tab: Tab = {
-                id: tabId,
-                name: `${kind === "claude" ? "claude" : "shell"} ${count}`,
-                root: leaf(termId)
-            }
+            const preset = isAgentId(agentId) ? useSettings.getState().agentById(agentId) : undefined
+            const label = preset ? preset.name.toLowerCase() : "shell"
+            const init = isAgentId(agentId)
+                ? (initialCommand ?? preset?.command ?? agentId)
+                : undefined
+            const tab: Tab = { id: tabId, name: `${label} ${count}`, root: leaf(termId) }
             set((s) => ({
-                termKinds: { ...s.termKinds, [termId]: kind },
+                termAgents: { ...s.termAgents, [termId]: agentId },
                 termInit: init ? { ...s.termInit, [termId]: init } : s.termInit,
-                claudeStatus:
-                    kind === "claude" ? { ...s.claudeStatus, [termId]: "working" } : s.claudeStatus,
+                agentStatus: isAgentId(agentId)
+                    ? { ...s.agentStatus, [termId]: "working" }
+                    : s.agentStatus,
                 tabsByProject: {
                     ...s.tabsByProject,
                     [projectId]: [...(s.tabsByProject[projectId] ?? []), tab]
                 },
                 activeTabByProject: { ...s.activeTabByProject, [projectId]: tabId },
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: termId },
-                lastClaudeTermId: kind === "claude" ? termId : s.lastClaudeTermId,
+                lastAgentTermId: isAgentId(agentId) ? termId : s.lastAgentTermId,
                 view: "terminal"
             }))
             persist()
         },
 
-        splitActive: (dir, kind) => {
+        splitActive: (dir, agentId) => {
             const s = get()
             const projectId = s.activeId
             if (!projectId) return
@@ -373,23 +353,22 @@ export const useStore = create<AppState>((set, get) => {
             if (!tab) return
             const target = s.activePane(projectId) ?? firstLeaf(tab.root)
             const newTermId = newId()
+            const preset = isAgentId(agentId) ? useSettings.getState().agentById(agentId) : undefined
             const root = splitLeaf(tab.root, target, dir, newTermId)
             const tabs = (s.tabsByProject[projectId] ?? []).map((t) =>
                 t.id === tab.id ? { ...t, root } : t
             )
             set({
-                termKinds: { ...s.termKinds, [newTermId]: kind },
-                termInit:
-                    kind === "claude"
-                        ? { ...s.termInit, [newTermId]: useSettings.getState().claude.command }
-                        : s.termInit,
-                claudeStatus:
-                    kind === "claude"
-                        ? { ...s.claudeStatus, [newTermId]: "working" }
-                        : s.claudeStatus,
+                termAgents: { ...s.termAgents, [newTermId]: agentId },
+                termInit: preset
+                    ? { ...s.termInit, [newTermId]: preset.command }
+                    : s.termInit,
+                agentStatus: isAgentId(agentId)
+                    ? { ...s.agentStatus, [newTermId]: "working" }
+                    : s.agentStatus,
                 tabsByProject: { ...s.tabsByProject, [projectId]: tabs },
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: newTermId },
-                lastClaudeTermId: kind === "claude" ? newTermId : s.lastClaudeTermId
+                lastAgentTermId: isAgentId(agentId) ? newTermId : s.lastAgentTermId
             })
             persist()
         },

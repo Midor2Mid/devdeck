@@ -32,7 +32,20 @@ The shared screenshot shows the cockpit shape I'm picturing — a clean Settings
 - **Git** — multi-account, per-account PAT (GitHub/GitLab), custom SSH command, token verification ("this token belongs to …"), linked/pinned projects per account.
 - **SSH**, **Remote**, **MCP** (Model Context Protocol servers), **AI**, **Browser**, **IDE**, **File Tree**, **Shortcuts**, **Notifications**, **Appearance/Layout**, **License**, **Dependencies**, **About**.
 - Takeaway: a real **Settings hub** + **per-project Git identity** are high-value later additions; the all-in-one vision clearly includes Git account management, SSH, and MCP.
-- (A reference video was also shared; couldn't extract frames — ask me what it showed if it matters for design.)
+### Reference VIDEO (extracted frames 2026-06-27) — "1DevTool v1.26"
+The shared screen recording is a real, polished app (**"1DevTool"**) that is almost exactly DevDeck's vision. Confirmed/new features observed:
+- **Project groups** — projects nested under named groups (Mobile Apps, 1DevTool, StoicSoft, 1MarketingTool, 1AI Vault), each project a colored dot. Searchable.
+- **Split sidebar** — PROJECTS (top) + FILES tree (bottom) for the active project, each with its own search.
+- **Markdown editor** with Edit / Split / **Preview** modes + live word-count, reading-time, heading-count. Renders headings nicely.
+- **File tabs incl. image previews** (png tabs alongside .md/.ts).
+- **Multi-agent CLI sessions** — not just Claude: runs **OpenAI Codex** too. Terminal sub-sidebar lists sessions with a **type badge** (CLAUDE / CUSTOM / BASH). So "session = any agent CLI with a label".
+- **Agent Input composer** — a rich prompt box (not raw terminal typing): formatting toolbar, **@mention** (files/projects), **/command**, a mode selector ("Lowkey"), token count, Clear all, Send. Inserts e.g. `+ai-memory-saver` references. This is the standout — a far richer version of our "send to Claude".
+- **Rich status bar** — git branch + "Review N changes", Remote count, Runtime, Docker, Ports, Env, CPU/mem %, theme, zoom, Settings, version.
+- **Top workspace tabs** — Templates, Tasks, Notes, Draw (extra modes).
+- **Editor-area AI bar** — AI, Session, Prompts, Memory, Skills, AI Diff.
+- **Layout presets**, **Commands** palette, right **activity bar**, **Deploy** button.
+
+→ Wabi-sabi lens: adopt the *depth* (AI-CLI-first: multi-agent sessions + prompt composer + project groups) but resist the *surface sprawl* (Notes/Tasks/Draw/activity-bar) unless each earns its place. Frames saved during session in scratchpad.
 
 ## Ideas
 

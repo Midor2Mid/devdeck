@@ -79,9 +79,9 @@ function registerIpc(): void {
     let latestSessions: RemoteSession[] = []
     const serverDeps: ServerDeps = {
         getSessions: () => latestSessions,
-        requestNewSession: (projectId, kind) => {
+        requestNewSession: (projectId) => {
             if (mainWindow && !mainWindow.isDestroyed())
-                mainWindow.webContents.send("mobile:new", { projectId, kind })
+                mainWindow.webContents.send("mobile:new", { projectId })
         }
     }
     ipcMain.on("mobile:sessions", (_e, sessions: RemoteSession[]) => {
