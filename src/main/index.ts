@@ -9,6 +9,7 @@ import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
+import { gitStatus } from "./git"
 
 let mainWindow: BrowserWindow | null = null
 
@@ -114,6 +115,9 @@ function registerIpc(): void {
     // --- Files (editor) ---
     ipcMain.handle("fs:readDir", (_e, dir: string) => files.readDir(dir))
     ipcMain.handle("fs:allFiles", (_e, root: string) => files.allFiles(root))
+
+    // --- Git ---
+    ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))
     ipcMain.handle("fs:read", (_e, path: string) => files.readFileText(path))
     ipcMain.handle("fs:write", (_e, { path, content }) => files.writeFileText(path, content))
 }

@@ -81,6 +81,17 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
   - Claude: command, resume args, idle→attention timing
 - [ ] Later sections: Git multi-account, SSH, Remote (mobile access), MCP, AI, light theme
 
+## Milestone 8 — 1DevTool-inspired depth ✅ (2026-06-27)
+
+From studying the 1DevTool reference (video + 1devtool.com):
+- [x] **Multi-agent sessions** — agent presets (Claude/Codex/Gemini/custom) with type badges; generalized from Claude-only
+- [x] **Prompt composer** — rich prompt box with `@file` mentions → focused agent (Ctrl+Shift+P)
+- [x] **Project groups** — collapsible named groups in the sidebar
+- [x] **Project switcher** — Ctrl+K launchpad grid (search, live counts, keyboard nav)
+- [x] **Markdown preview** — Edit/Split/Preview + word count
+- [x] **Status bar** — git branch + change count, attention, remote, project
+- [ ] Later (from reference): agent pipelines (chain agents), embedded browser, image-preview tabs, AI diff, activity feed, more DB engines
+
 ## Later / maybe (parking lot)
 
 - Command palette (Ctrl+P) for projects/files/actions

@@ -83,6 +83,11 @@ export interface ServerStatus {
     tailscale: string[]
     lan: string[]
 }
+export interface GitStatus {
+    isRepo: boolean
+    branch: string
+    changes: number
+}
 
 const api = {
     pty: {
@@ -155,6 +160,9 @@ const api = {
         read: (path: string): Promise<string> => ipcRenderer.invoke("fs:read", path),
         write: (path: string, content: string): Promise<void> =>
             ipcRenderer.invoke("fs:write", { path, content })
+    },
+    git: {
+        status: (cwd: string): Promise<GitStatus> => ipcRenderer.invoke("git:status", cwd)
     }
 }
 

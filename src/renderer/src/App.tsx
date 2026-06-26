@@ -9,6 +9,7 @@ import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
+import { StatusBar } from "./components/StatusBar"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -64,6 +65,7 @@ export function App(): JSX.Element {
 
     return (
         <div className="app">
+            <div className="app-body">
             <Allotment proportionalLayout={false}>
                 <Allotment.Pane minSize={180} preferredSize={240} maxSize={420}>
                     <Sidebar />
@@ -121,6 +123,8 @@ export function App(): JSX.Element {
                     </div>
                 </Allotment.Pane>
             </Allotment>
+            </div>
+            <StatusBar />
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
         </div>
