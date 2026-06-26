@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import Editor from "@monaco-editor/react"
 import { useStore } from "../store"
+import "../monaco-setup"
 import type { DirEntry } from "../../../preload/index"
 
 interface OpenFile {
@@ -7,6 +9,50 @@ interface OpenFile {
     name: string
     content: string
     dirty: boolean
+}
+
+// File extension → Monaco language id.
+const LANG: Record<string, string> = {
+    ts: "typescript",
+    tsx: "typescript",
+    js: "javascript",
+    jsx: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    json: "json",
+    css: "css",
+    scss: "scss",
+    less: "less",
+    html: "html",
+    htm: "html",
+    md: "markdown",
+    markdown: "markdown",
+    py: "python",
+    go: "go",
+    rs: "rust",
+    java: "java",
+    c: "c",
+    h: "cpp",
+    cpp: "cpp",
+    cc: "cpp",
+    cs: "csharp",
+    php: "php",
+    rb: "ruby",
+    sh: "shell",
+    bash: "shell",
+    ps1: "powershell",
+    yml: "yaml",
+    yaml: "yaml",
+    xml: "xml",
+    sql: "sql",
+    toml: "ini",
+    ini: "ini",
+    dockerfile: "dockerfile"
+}
+
+function langFor(name: string): string {
+    const ext = name.split(".").pop()?.toLowerCase() ?? ""
+    return LANG[ext] ?? "plaintext"
 }
 
 function FileTree({
@@ -35,7 +81,8 @@ function FileTree({
     const toggle = (path: string): void => {
         setExpanded((prev) => {
             const next = new Set(prev)
-            next.has(path) ? next.delete(path) : next.add(path)
+            if (next.has(path)) next.delete(path)
+            else next.add(path)
             return next
         })
     }
@@ -46,9 +93,7 @@ function FileTree({
                 entry.isDir ? (
                     <div key={entry.path}>
                         <div className="tree-row dir" onClick={() => toggle(entry.path)}>
-                            <span className="caret">
-                                {expanded.has(entry.path) ? "▾" : "▸"}
-                            </span>
+                            <span className="caret">{expanded.has(entry.path) ? "▾" : "▸"}</span>
                             {entry.name}
                         </div>
                         {expanded.has(entry.path) && (
@@ -74,23 +119,55 @@ function FileTree({
 
 export function EditorPanel(): JSX.Element {
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
-    const [file, setFile] = useState<OpenFile | null>(null)
+    const [files, setFiles] = useState<OpenFile[]>([])
+    const [activePath, setActivePath] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
+
+    const active = files.find((f) => f.path === activePath) ?? null
+
+    // Keep a ref to the latest save fn so Monaco's Ctrl+S command isn't stale.
+    const saveRef = useRef<() => void>(() => undefined)
 
     const open = async (entry: DirEntry): Promise<void> => {
         setError(null)
+        if (files.some((f) => f.path === entry.path)) {
+            setActivePath(entry.path)
+            return
+        }
         try {
             const content = await window.api.fs.read(entry.path)
-            setFile({ path: entry.path, name: entry.name, content, dirty: false })
+            setFiles((prev) => [...prev, { path: entry.path, name: entry.name, content, dirty: false }])
+            setActivePath(entry.path)
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e))
         }
     }
 
-    const save = async (): Promise<void> => {
-        if (!file) return
+    const updateContent = (path: string, value: string): void => {
+        setFiles((prev) =>
+            prev.map((f) => (f.path === path ? { ...f, content: value, dirty: true } : f))
+        )
+    }
+
+    const save = async (path: string): Promise<void> => {
+        const file = files.find((f) => f.path === path)
+        if (!file || !file.dirty) return
         await window.api.fs.write(file.path, file.content)
-        setFile({ ...file, dirty: false })
+        setFiles((prev) => prev.map((f) => (f.path === path ? { ...f, dirty: false } : f)))
+    }
+
+    const closeFile = (path: string): void => {
+        setFiles((prev) => {
+            const next = prev.filter((f) => f.path !== path)
+            if (activePath === path) {
+                setActivePath(next[next.length - 1]?.path ?? null)
+            }
+            return next
+        })
+    }
+
+    saveRef.current = () => {
+        if (activePath) void save(activePath)
     }
 
     if (!activeProject) {
@@ -109,46 +186,64 @@ export function EditorPanel(): JSX.Element {
             </div>
             <div className="editor-main">
                 {error && <div className="resp-error">{error}</div>}
-                {file ? (
-                    <>
-                        <div className="editor-filebar">
-                            <span>
-                                {file.name}
-                                {file.dirty ? " ●" : ""}
-                            </span>
-                            <button
-                                className="accent"
-                                onClick={save}
-                                disabled={!file.dirty}
-                                title="Save (Ctrl+S)"
+                {files.length > 0 && (
+                    <div className="editor-tabs">
+                        {files.map((f) => (
+                            <div
+                                key={f.path}
+                                className={"editor-tab" + (f.path === activePath ? " active" : "")}
+                                onClick={() => setActivePath(f.path)}
+                                title={f.path}
                             >
-                                Save
-                            </button>
-                        </div>
-                        <textarea
-                            className="editor-textarea"
-                            spellCheck={false}
-                            value={file.content}
-                            onChange={(e) =>
-                                setFile({ ...file, content: e.target.value, dirty: true })
-                            }
-                            onKeyDown={(e) => {
-                                if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-                                    e.preventDefault()
-                                    save()
-                                }
+                                <span className="editor-tab-name">{f.name}</span>
+                                <span className="editor-tab-state">
+                                    {f.dirty ? "●" : ""}
+                                    <span
+                                        className="tab-close"
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            closeFile(f.path)
+                                        }}
+                                    >
+                                        ×
+                                    </span>
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {active ? (
+                    <div className="editor-host">
+                        <Editor
+                            theme="devdeck"
+                            path={active.path}
+                            language={langFor(active.name)}
+                            value={active.content}
+                            onChange={(v) => updateContent(active.path, v ?? "")}
+                            onMount={(editor, monaco) => {
+                                editor.addCommand(
+                                    monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                                    () => saveRef.current()
+                                )
+                            }}
+                            options={{
+                                fontFamily: '"Cascadia Mono", Consolas, monospace',
+                                fontSize: 13,
+                                minimap: { enabled: false },
+                                smoothScrolling: true,
+                                scrollBeyondLastLine: false,
+                                renderWhitespace: "none",
+                                tabSize: 4,
+                                automaticLayout: true,
+                                padding: { top: 10 },
+                                guides: { indentation: false }
                             }}
                         />
-                    </>
+                    </div>
                 ) : (
                     <div className="empty-state">
-                        <p className="muted">
-                            Select a file from the tree to edit it.
-                        </p>
-                        <p className="muted small">
-                            Lightweight editor for now — Monaco (syntax highlighting,
-                            IntelliSense) lands in Milestone 2.
-                        </p>
+                        <p className="muted">Select a file from the tree to edit it.</p>
+                        <p className="muted small">Ctrl+S to save · syntax highlighting via Monaco.</p>
                     </div>
                 )}
             </div>

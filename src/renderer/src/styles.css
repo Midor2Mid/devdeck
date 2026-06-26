@@ -552,24 +552,44 @@ select:focus {
     flex-direction: column;
     min-width: 0;
 }
-.editor-filebar {
+.editor-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border-soft);
+    padding: 4px 8px 0;
+    overflow-x: auto;
+}
+.editor-tab {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border-soft);
-    background: var(--bg);
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 7px 7px 0 0;
+    cursor: pointer;
+    white-space: nowrap;
+    color: var(--muted);
+    transition: background 0.15s ease, color 0.15s ease;
 }
-.editor-textarea {
-    flex: 1;
-    border: none;
-    border-radius: 0;
-    resize: none;
-    font-family: "Cascadia Mono", Consolas, monospace;
-    font-size: 13px;
-    line-height: 1.6;
+.editor-tab:hover {
+    background: var(--bg-2);
+    color: var(--text);
+}
+.editor-tab.active {
     background: var(--bg-3);
-    padding: 12px 14px;
+    color: var(--text);
+}
+.editor-tab-state {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--accent);
+    font-size: 10px;
+}
+.editor-host {
+    flex: 1;
+    min-height: 0;
+    background: var(--bg-3);
 }
 
 /* Allotment theming — quiet sash */
