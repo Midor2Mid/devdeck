@@ -119,11 +119,27 @@ function FileTree({
 
 export function EditorPanel(): JSX.Element {
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
+    const sendToClaude = useStore((s) => s.sendToClaude)
+    const lastClaude = useStore((s) => s.lastClaudeTermId)
     const [files, setFiles] = useState<OpenFile[]>([])
     const [activePath, setActivePath] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [sent, setSent] = useState(false)
 
     const active = files.find((f) => f.path === activePath) ?? null
+
+    const sendActiveToClaude = (): void => {
+        if (!active || !activeProject) return
+        const rel = active.path.startsWith(activeProject.path)
+            ? active.path.slice(activeProject.path.length).replace(/^[\\/]/, "")
+            : active.path
+        // Claude Code references files with @path (forward slashes).
+        const ok = sendToClaude("@" + rel.replace(/\\/g, "/") + " ")
+        if (ok) {
+            setSent(true)
+            setTimeout(() => setSent(false), 1500)
+        }
+    }
 
     // Keep a ref to the latest save fn so Monaco's Ctrl+S command isn't stale.
     const saveRef = useRef<() => void>(() => undefined)
@@ -188,6 +204,7 @@ export function EditorPanel(): JSX.Element {
                 {error && <div className="resp-error">{error}</div>}
                 {files.length > 0 && (
                     <div className="editor-tabs">
+                        <div className="editor-tabs-scroll">
                         {files.map((f) => (
                             <div
                                 key={f.path}
@@ -210,6 +227,19 @@ export function EditorPanel(): JSX.Element {
                                 </span>
                             </div>
                         ))}
+                        </div>
+                        <button
+                            className="send-claude"
+                            onClick={sendActiveToClaude}
+                            disabled={!active || !lastClaude}
+                            title={
+                                lastClaude
+                                    ? "Send @path of this file to the last-focused Claude session"
+                                    : "No Claude session yet — start one with + Claude"
+                            }
+                        >
+                            {sent ? "Sent ✓" : "→ Claude"}
+                        </button>
                     </div>
                 )}
                 {active ? (

@@ -3,11 +3,11 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { SearchAddon } from "@xterm/addon-search"
 import { paneRegistry } from "../paneRegistry"
-import type { TermKind } from "../store"
 
 interface Props {
     termId: string
-    kind: TermKind
+    /** Command auto-run once the shell is ready (e.g. "claude"); undefined = plain shell. */
+    initialCommand?: string
     cwd: string
     focused: boolean
     onFocus: (termId: string) => void
@@ -19,7 +19,7 @@ interface Props {
  * exists). On unmount it detaches but does NOT kill the pty — the session lives
  * on so it survives split/tab/project switches. Killing is explicit (close).
  */
-export function TerminalPane({ termId, kind, cwd, focused, onFocus }: Props): JSX.Element {
+export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: Props): JSX.Element {
     const containerRef = useRef<HTMLDivElement>(null)
     const termRef = useRef<Terminal | null>(null)
     const fitRef = useRef<FitAddon | null>(null)
@@ -98,7 +98,7 @@ export function TerminalPane({ termId, kind, cwd, focused, onFocus }: Props): JS
             window.api.pty.create({
                 id: termId,
                 cwd,
-                initialCommand: kind === "claude" ? "claude" : undefined,
+                initialCommand,
                 cols: term.cols,
                 rows: term.rows
             })

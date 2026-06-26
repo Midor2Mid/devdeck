@@ -17,14 +17,16 @@ interface Props {
 /** Recursively renders a tab's layout tree: leaves are terminals, splits nest Allotment. */
 export function SplitView({ node, projectId, cwd }: Props): JSX.Element {
     const activePane = useStore((s) => s.activePaneByProject[projectId])
-    const kindOf = useStore((s) => s.kindOf)
+    const initialCommand = useStore((s) =>
+        node.kind === "leaf" ? s.termInit[node.termId] : undefined
+    )
     const focusPane = useStore((s) => s.focusPane)
 
     if (node.kind === "leaf") {
         return (
             <TerminalPane
                 termId={node.termId}
-                kind={kindOf(node.termId)}
+                initialCommand={initialCommand}
                 cwd={cwd}
                 focused={node.termId === activePane}
                 onFocus={(id) => focusPane(projectId, id)}

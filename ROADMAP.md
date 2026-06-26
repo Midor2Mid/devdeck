@@ -52,11 +52,14 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [ ] Request list + inspector (headers, timing, payloads)
 - [ ] Filter by project / host
 
-## Milestone 5 — Deeper Claude CLI integration
+## Milestone 5 — Deeper Claude CLI integration ✅ (2026-06-27, core)
 
-- [ ] Session registry: track Claude sessions per project, label/rename, quick-resume
-- [ ] Surface status from CLI output where format is stable (running / awaiting input / done)
-- [ ] Cross-pane actions (e.g. send a file path or API response into a Claude session)
+- [x] Session registry: all Claude sessions across projects in the sidebar, status + click-to-jump
+- [x] Status without parsing output — activity (working/idle) + terminal bell (attention); visibility-aware
+- [x] Tab-level status dots; attention badge
+- [x] Quick-resume (`claude --continue`)
+- [x] Cross-pane action: send a file's `@path` from the editor into the last-focused Claude session
+- [ ] Later: send API response / DB result into a session; rename sessions independently of tabs
 
 ## Later / maybe (parking lot)
 
@@ -88,3 +91,4 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 | 2026-06-27 | Split layout = binary tree, terminal-mgmt keys are `Ctrl+Shift+…` | Tree keeps split/close/collapse simple and serializable for persistence. `Ctrl+Shift` combos (captured before xterm) avoid clobbering shell keys like Ctrl+C/Ctrl+W. |
 | 2026-06-27 | DB panel ships Postgres + MySQL first; SQLite deferred | `pg`/`mysql2` are pure-JS (no compiler); `better-sqlite3` is native and won't build without MSVC. SQLite will use a WASM driver later to stay compiler-free. |
 | 2026-06-27 | DB passwords encrypted at rest via Electron `safeStorage` (DPAPI) | Avoid plaintext credentials on disk; passwords are never sent back to the renderer (only referenced by connection id). |
+| 2026-06-27 | Claude status from activity + bell, not output parsing | Coupling to Claude CLI's text output is fragile (NOTES risk). Output-activity (working/idle) and the bell char `\x07` (attention) are format-independent and intentional signals. Visibility-aware so viewing a session clears attention and buffer-replay doesn't false-trigger. |

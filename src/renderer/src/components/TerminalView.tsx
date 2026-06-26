@@ -10,6 +10,7 @@ export function TerminalView(): JSX.Element {
     const tabsByProject = useStore((s) => s.tabsByProject)
     const activeTabByProject = useStore((s) => s.activeTabByProject)
     const kindOf = useStore((s) => s.kindOf)
+    const claudeStatus = useStore((s) => s.claudeStatus)
     const newTab = useStore((s) => s.newTab)
     const splitActive = useStore((s) => s.splitActive)
     const closePane = useStore((s) => s.closePane)
@@ -95,6 +96,16 @@ export function TerminalView(): JSX.Element {
                     {tabs.map((tab) => {
                         const kind = kindOf(firstLeaf(tab.root))
                         const isActive = tab.id === activeTab?.id
+                        // Tab status = worst status among its Claude panes.
+                        const claudeLeaves = collectLeaves(tab.root).filter(
+                            (id) => kindOf(id) === "claude"
+                        )
+                        const statuses = claudeLeaves.map((id) => claudeStatus[id] ?? "idle")
+                        const tabStatus = statuses.includes("attention")
+                            ? "attention"
+                            : statuses.includes("working")
+                              ? "working"
+                              : "idle"
                         return (
                             <div
                                 key={tab.id}
@@ -106,7 +117,13 @@ export function TerminalView(): JSX.Element {
                                 }}
                                 title="Double-click to rename"
                             >
-                                <span className={"tab-dot " + kind} />
+                                <span
+                                    className={
+                                        "tab-dot " +
+                                        kind +
+                                        (kind === "claude" ? " status-" + tabStatus : "")
+                                    }
+                                />
                                 {editingId === tab.id ? (
                                     <input
                                         className="tab-rename"
@@ -148,6 +165,13 @@ export function TerminalView(): JSX.Element {
                         title="New Claude session (Ctrl+Shift+Enter)"
                     >
                         + Claude
+                    </button>
+                    <button
+                        className="icon-action"
+                        onClick={() => newTab("claude", "claude --continue")}
+                        title="Resume last Claude conversation (claude --continue)"
+                    >
+                        ↻
                     </button>
                     <span className="action-sep" />
                     <button

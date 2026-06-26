@@ -33,7 +33,9 @@ npm run build      # bundle main + preload + renderer into out/
 - **Projects sidebar** — add a folder as a project, switch the active project with one click. Persisted across restarts.
 - **Multi-terminal** — real shells via xterm.js + pty, tabbed, each spawned in the active project's directory.
 - **Split panes** — split any terminal right (⇆) or down (⇅) to see multiple terminals at once; close panes and the layout collapses cleanly.
-- **One-click Claude session** — `+ Claude` spawns a terminal running `claude` in the active project.
+- **One-click Claude session** — `+ Claude` spawns a terminal running `claude` in the active project; `↻` resumes the last conversation (`claude --continue`).
+- **Claude session awareness** — every Claude session (across all projects) is listed in the sidebar with live status (working / idle / **needs attention**), an attention badge, and click-to-jump. Status is inferred from output activity + the terminal bell — no fragile output parsing.
+- **Send file → Claude** — from the editor, send the current file's `@path` into the last-focused Claude session.
 - **Sessions survive switches** — switching project/tab/pane keeps every pty running; panes re-attach and replay recent output (no lost work). Sessions end only when you close them.
 - **Layout persists** — your tabs and split layout per project are restored on relaunch (as fresh shells/Claude sessions in the same arrangement).
 - **Rename tabs** — double-click a tab to rename it.
