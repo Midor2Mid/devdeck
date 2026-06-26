@@ -1,9 +1,11 @@
 import { useMemo } from "react"
 import { useStore, type ClaudeSession } from "../store"
+import { useSettings } from "../settings"
 import { collectLeaves } from "../layout"
 
 export function Sidebar(): JSX.Element {
     const { projects, activeId, addProject, removeProject, setActiveProject } = useStore()
+    const openSettings = useSettings((s) => s.openSettings)
 
     // Build the cross-project Claude session list from raw slices (so this
     // re-renders on status/layout changes without a new-array selector pitfall).
@@ -39,6 +41,9 @@ export function Sidebar(): JSX.Element {
         <div className="sidebar">
             <div className="sidebar-header">
                 <span className="brand">DevDeck</span>
+                <button className="gear-btn" title="Settings" onClick={openSettings}>
+                    ⚙
+                </button>
             </div>
 
             <div className="sidebar-section-title">

@@ -61,16 +61,26 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Cross-pane action: send a file's `@path` from the editor into the last-focused Claude session
 - [ ] Later: send API response / DB result into a session; rename sessions independently of tabs
 
+## Milestone 6 — Settings hub ✅ (2026-06-27)
+
+- [x] Left-nav modal (reference-style): Appearance, Terminal, Editor, Claude, Shortcuts, About
+- [x] Persisted to `settings.json`; wired to real behavior:
+  - Appearance: accent color (single wabi-sabi accent, applied to CSS vars)
+  - Terminal: default shell (PowerShell / cmd / Git Bash / WSL / custom) + font family/size (live)
+  - Editor: font size, tab size, word wrap, minimap
+  - Claude: command, resume args, idle→attention timing
+- [ ] Later sections: Git multi-account, SSH, Remote (mobile access), MCP, AI, light theme
+
 ## Later / maybe (parking lot)
 
 - Command palette (Ctrl+P) for projects/files/actions
 - Split terminals (not just tabs) within a project
 - Restore terminal layout across app restarts (which tabs, which were Claude)
-- **Settings hub** (left-nav like the reference: Appearance, Layout, Terminal, Editor/IDE, Git, SSH, Remote, MCP, AI, Shortcuts, Notifications, About)
-- **Git multi-account** — per-account PAT (GitHub/GitLab), custom SSH command, token verification, per-project Git identity / pinned accounts
-- **SSH** profiles + remote project folders
-- **MCP** server management; **AI** settings
-- Configurable shell per terminal/project (pwsh / cmd / Git Bash / WSL) — PowerShell stays default
+- **Git multi-account** — per-account PAT (GitHub/GitLab), custom SSH command, token verification, per-project Git identity / pinned accounts (new Settings section)
+- **SSH** profiles + remote project folders (new Settings section)
+- **Remote / mobile access** — reach DevDeck from a phone (see NOTES; security-sensitive, needs design)
+- **MCP** server management; **AI** settings (new Settings sections)
+- Per-terminal/per-project shell override (default shell is now configurable)
 - Embedded **Browser** panel (preview + simple devtools)
 - Wabi-sabi **light "washi paper" theme** + theme switching
 - Cross-platform (macOS/Linux) polish

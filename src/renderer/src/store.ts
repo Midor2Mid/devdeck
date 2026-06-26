@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { Project } from "../../preload/index"
+import { useSettings } from "./settings"
 import {
     type LayoutNode,
     type SplitDir,
@@ -135,9 +136,12 @@ export const useStore = create<AppState>((set, get) => {
         if (existing) clearTimeout(existing)
         idleTimers.set(
             id,
-            setTimeout(() => {
-                if (get().claudeStatus[id] === "working") setStatus(id, "idle")
-            }, 1000)
+            setTimeout(
+                () => {
+                    if (get().claudeStatus[id] === "working") setStatus(id, "idle")
+                },
+                useSettings.getState().claude.attentionIdleMs
+            )
         )
     }
 
@@ -299,7 +303,10 @@ export const useStore = create<AppState>((set, get) => {
             const termId = newId()
             const tabId = newId()
             const count = (get().tabsByProject[projectId] ?? []).length + 1
-            const init = kind === "claude" ? (initialCommand ?? "claude") : undefined
+            const init =
+                kind === "claude"
+                    ? (initialCommand ?? useSettings.getState().claude.command)
+                    : undefined
             const tab: Tab = {
                 id: tabId,
                 name: `${kind === "claude" ? "claude" : "shell"} ${count}`,
@@ -336,7 +343,10 @@ export const useStore = create<AppState>((set, get) => {
             )
             set({
                 termKinds: { ...s.termKinds, [newTermId]: kind },
-                termInit: kind === "claude" ? { ...s.termInit, [newTermId]: "claude" } : s.termInit,
+                termInit:
+                    kind === "claude"
+                        ? { ...s.termInit, [newTermId]: useSettings.getState().claude.command }
+                        : s.termInit,
                 claudeStatus:
                     kind === "claude"
                         ? { ...s.claudeStatus, [newTermId]: "working" }

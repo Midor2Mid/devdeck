@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { SearchAddon } from "@xterm/addon-search"
 import { paneRegistry } from "../paneRegistry"
+import { useSettings } from "../settings"
 
 interface Props {
     termId: string
@@ -23,14 +24,16 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const containerRef = useRef<HTMLDivElement>(null)
     const termRef = useRef<Terminal | null>(null)
     const fitRef = useRef<FitAddon | null>(null)
+    const fontFamily = useSettings((s) => s.terminal.fontFamily)
+    const fontSize = useSettings((s) => s.terminal.fontSize)
 
     useEffect(() => {
         const container = containerRef.current
         if (!container) return
 
         const term = new Terminal({
-            fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace',
-            fontSize: 13,
+            fontFamily: useSettings.getState().terminal.fontFamily,
+            fontSize: useSettings.getState().terminal.fontSize,
             cursorBlink: true,
             allowProposedApi: true,
             // Wabi-sabi "sumi & kinari" palette — warm, low-contrast, calm.
@@ -99,6 +102,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 id: termId,
                 cwd,
                 initialCommand,
+                shell: useSettings.getState().resolveShell(),
                 cols: term.cols,
                 rows: term.rows
             })
@@ -118,6 +122,21 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    // Live-apply font changes from settings.
+    useEffect(() => {
+        const term = termRef.current
+        const fit = fitRef.current
+        if (!term) return
+        term.options.fontFamily = fontFamily
+        term.options.fontSize = fontSize
+        try {
+            fit?.fit()
+            window.api.pty.resize(termId, term.cols, term.rows)
+        } catch {
+            /* noop */
+        }
+    }, [fontFamily, fontSize, termId])
 
     // Focus the xterm when this pane becomes the active one.
     useEffect(() => {

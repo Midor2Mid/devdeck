@@ -20,6 +20,8 @@ export interface CreateOpts {
     cwd?: string
     /** A command to auto-run once the shell is ready (e.g. "claude"). */
     initialCommand?: string
+    /** Shell to launch; falls back to the platform default when omitted. */
+    shell?: { file: string; args: string[] }
     cols?: number
     rows?: number
 }
@@ -43,7 +45,7 @@ export function createPty(sender: WebContents, opts: CreateOpts): void {
         return
     }
 
-    const { file, args } = defaultShell()
+    const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
     const proc = nodePty.spawn(file, args, {
         name: "xterm-color",
         cwd: opts.cwd || process.env.USERPROFILE || process.cwd(),

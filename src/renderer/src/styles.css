@@ -115,6 +115,20 @@ select:focus {
 }
 .sidebar-header {
     padding: 18px 18px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.gear-btn {
+    border: none;
+    color: var(--muted);
+    font-size: 15px;
+    padding: 2px 4px;
+    line-height: 1;
+}
+.gear-btn:hover {
+    color: var(--accent-soft);
+    background: transparent;
 }
 .brand {
     font-weight: 500;
@@ -907,6 +921,137 @@ select:focus {
 }
 .modal-actions .spacer {
     flex: 1;
+}
+
+/* ---------- Settings modal ---------- */
+.settings-modal {
+    width: 720px;
+    max-width: 92vw;
+    height: 560px;
+    max-height: 88vh;
+    padding: 0;
+    display: flex;
+    overflow: hidden;
+}
+.settings-nav {
+    width: 168px;
+    flex: none;
+    background: var(--bg);
+    border-right: 1px solid var(--border-soft);
+    padding: 14px 8px;
+    overflow-y: auto;
+}
+.settings-nav-title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--faint);
+    padding: 4px 10px 12px;
+}
+.settings-nav-item {
+    padding: 8px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    color: var(--muted);
+}
+.settings-nav-item:hover {
+    background: var(--bg-2);
+    color: var(--text);
+}
+.settings-nav-item.active {
+    background: var(--bg-2);
+    color: var(--text);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+.settings-content {
+    flex: 1;
+    position: relative;
+    padding: 22px 26px;
+    overflow-y: auto;
+}
+.settings-close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    border: none;
+    font-size: 18px;
+    color: var(--muted);
+    padding: 0 4px;
+}
+.settings-close:hover {
+    color: var(--danger);
+    background: transparent;
+}
+.settings-section h3 {
+    margin: 0 0 18px;
+    font-size: 15px;
+    font-weight: 600;
+}
+.setting-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.setting-row > label {
+    color: var(--muted);
+    font-size: 12px;
+}
+.setting-row .checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    justify-self: start;
+}
+.settings-hint {
+    color: var(--faint);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: 18px;
+    max-width: 440px;
+}
+.accent-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.accent-controls input[type="color"] {
+    width: 40px;
+    height: 28px;
+    padding: 2px;
+    background: var(--bg-3);
+    cursor: pointer;
+}
+.swatches {
+    display: flex;
+    gap: 6px;
+}
+.swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.swatch:hover {
+    transform: scale(1.12);
+}
+.shortcuts-table {
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.shortcuts-table td {
+    padding: 5px 18px 5px 0;
+    color: var(--muted);
+}
+.shortcuts-table kbd {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    color: var(--text);
+    font-size: 11px;
 }
 
 /* Allotment theming — quiet sash */

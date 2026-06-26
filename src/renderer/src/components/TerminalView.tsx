@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore } from "../store"
+import { useSettings } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { paneRegistry } from "../paneRegistry"
 import { SplitView } from "./SplitView"
@@ -168,7 +169,10 @@ export function TerminalView(): JSX.Element {
                     </button>
                     <button
                         className="icon-action"
-                        onClick={() => newTab("claude", "claude --continue")}
+                        onClick={() => {
+                            const c = useSettings.getState().claude
+                            newTab("claude", `${c.command} ${c.continueArgs}`)
+                        }}
                         title="Resume last Claude conversation (claude --continue)"
                     >
                         ↻

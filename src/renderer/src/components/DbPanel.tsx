@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import Editor from "@monaco-editor/react"
 import { Allotment } from "allotment"
 import { useStore } from "../store"
+import { useSettings } from "../settings"
 import "../monaco-setup"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
@@ -189,6 +190,7 @@ export function DbPanel(): JSX.Element {
     const [result, setResult] = useState<QueryResult | null>(null)
     const [running, setRunning] = useState(false)
     const runRef = useRef<() => void>(() => undefined)
+    const editorFontSize = useSettings((s) => s.editor.fontSize)
 
     const projectId = activeProject?.id
 
@@ -380,7 +382,7 @@ export function DbPanel(): JSX.Element {
                                                 options={{
                                                     fontFamily:
                                                         '"Cascadia Mono", Consolas, monospace',
-                                                    fontSize: 13,
+                                                    fontSize: editorFontSize,
                                                     minimap: { enabled: false },
                                                     scrollBeyondLastLine: false,
                                                     automaticLayout: true,

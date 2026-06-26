@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import Editor from "@monaco-editor/react"
 import { useStore } from "../store"
+import { useSettings } from "../settings"
 import "../monaco-setup"
 import type { DirEntry } from "../../../preload/index"
 
@@ -121,6 +122,7 @@ export function EditorPanel(): JSX.Element {
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
     const sendToClaude = useStore((s) => s.sendToClaude)
     const lastClaude = useStore((s) => s.lastClaudeTermId)
+    const editorSettings = useSettings((s) => s.editor)
     const [files, setFiles] = useState<OpenFile[]>([])
     const [activePath, setActivePath] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -258,12 +260,13 @@ export function EditorPanel(): JSX.Element {
                             }}
                             options={{
                                 fontFamily: '"Cascadia Mono", Consolas, monospace',
-                                fontSize: 13,
-                                minimap: { enabled: false },
+                                fontSize: editorSettings.fontSize,
+                                minimap: { enabled: editorSettings.minimap },
+                                wordWrap: editorSettings.wordWrap ? "on" : "off",
                                 smoothScrolling: true,
                                 scrollBeyondLastLine: false,
                                 renderWhitespace: "none",
-                                tabSize: 4,
+                                tabSize: editorSettings.tabSize,
                                 automaticLayout: true,
                                 padding: { top: 10 },
                                 guides: { indentation: false }

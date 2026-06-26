@@ -1,11 +1,13 @@
 import { useEffect } from "react"
 import { Allotment } from "allotment"
 import { useStore, type MainView } from "./store"
+import { useSettings } from "./settings"
 import { Sidebar } from "./components/Sidebar"
 import { TerminalView } from "./components/TerminalView"
 import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
+import { SettingsModal } from "./components/SettingsModal"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -16,11 +18,14 @@ const VIEWS: { key: MainView; label: string }[] = [
 
 export function App(): JSX.Element {
     const { init, view, setView, activeProject } = useStore()
+    const loadSettings = useSettings((s) => s.load)
+    const settingsOpen = useSettings((s) => s.settingsOpen)
     const project = activeProject()
 
     useEffect(() => {
         init()
-    }, [init])
+        loadSettings()
+    }, [init, loadSettings])
 
     return (
         <div className="app">
@@ -81,6 +86,7 @@ export function App(): JSX.Element {
                     </div>
                 </Allotment.Pane>
             </Allotment>
+            {settingsOpen && <SettingsModal />}
         </div>
     )
 }

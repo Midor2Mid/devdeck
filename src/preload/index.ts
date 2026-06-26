@@ -23,6 +23,7 @@ export interface PtyCreateOpts {
     id: string
     cwd?: string
     initialCommand?: string
+    shell?: { file: string; args: string[] }
     cols?: number
     rows?: number
 }
@@ -96,6 +97,10 @@ const api = {
     workspace: {
         load: (): Promise<unknown> => ipcRenderer.invoke("workspace:load"),
         save: (data: unknown): void => ipcRenderer.send("workspace:save", data)
+    },
+    settings: {
+        load: (): Promise<unknown> => ipcRenderer.invoke("settings:load"),
+        save: (data: unknown): void => ipcRenderer.send("settings:save", data)
     },
     http: {
         send: (req: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke("http:send", req)

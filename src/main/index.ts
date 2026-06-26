@@ -5,6 +5,7 @@ import * as projects from "./projects"
 import { httpSend } from "./http"
 import * as files from "./files"
 import { loadWorkspace, saveWorkspace } from "./workspace"
+import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 
 let mainWindow: BrowserWindow | null = null
@@ -50,6 +51,10 @@ function registerIpc(): void {
     // --- Workspace (terminal layout persistence) ---
     ipcMain.handle("workspace:load", () => loadWorkspace())
     ipcMain.on("workspace:save", (_e, data) => saveWorkspace(data))
+
+    // --- Settings ---
+    ipcMain.handle("settings:load", () => loadSettings())
+    ipcMain.on("settings:save", (_e, data) => saveSettings(data))
 
     // --- API client ---
     ipcMain.handle("http:send", (_e, req) => httpSend(req))
