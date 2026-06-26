@@ -8,6 +8,7 @@ import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { SettingsModal } from "./components/SettingsModal"
+import { ProjectSwitcher } from "./components/ProjectSwitcher"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -20,6 +21,9 @@ export function App(): JSX.Element {
     const { init, view, setView, activeProject } = useStore()
     const loadSettings = useSettings((s) => s.load)
     const settingsOpen = useSettings((s) => s.settingsOpen)
+    const switcherOpen = useStore((s) => s.switcherOpen)
+    const openSwitcher = useStore((s) => s.openSwitcher)
+    const closeSwitcher = useStore((s) => s.closeSwitcher)
     const project = activeProject()
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
@@ -44,6 +48,19 @@ export function App(): JSX.Element {
             newTabIn(projectId, useSettings.getState().agents[0]?.id ?? "claude")
         )
     }, [newTabIn])
+
+    // Global Ctrl+K opens the project switcher.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent): void => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+                e.preventDefault()
+                if (useStore.getState().switcherOpen) closeSwitcher()
+                else openSwitcher()
+            }
+        }
+        window.addEventListener("keydown", handler, true)
+        return () => window.removeEventListener("keydown", handler, true)
+    }, [openSwitcher, closeSwitcher])
 
     return (
         <div className="app">
@@ -105,6 +122,7 @@ export function App(): JSX.Element {
                 </Allotment.Pane>
             </Allotment>
             {settingsOpen && <SettingsModal />}
+            {switcherOpen && <ProjectSwitcher />}
         </div>
     )
 }

@@ -50,10 +50,16 @@ interface AppState extends Persisted {
     addProject: () => Promise<void>
     removeProject: (id: string) => Promise<void>
     setActiveProject: (id: string) => Promise<void>
+    setProjectGroup: (id: string, group: string) => Promise<void>
     activeProject: () => Project | undefined
 
     view: MainView
     setView: (view: MainView) => void
+
+    // Project switcher overlay
+    switcherOpen: boolean
+    openSwitcher: () => void
+    closeSwitcher: () => void
 
     // Agent session awareness (runtime-only)
     agentStatus: Record<string, AgentStatus>
@@ -204,6 +210,7 @@ export const useStore = create<AppState>((set, get) => {
         activeTabByProject: {},
         activePaneByProject: {},
         view: "terminal",
+        switcherOpen: false,
         agentStatus: {},
         lastAgentTermId: null,
 
@@ -264,6 +271,14 @@ export const useStore = create<AppState>((set, get) => {
             await window.api.projects.setActive(id)
             ack(get().activePaneByProject[id])
         },
+
+        setProjectGroup: async (id, group) => {
+            const store = await window.api.projects.setGroup(id, group)
+            set({ projects: store.projects })
+        },
+
+        openSwitcher: () => set({ switcherOpen: true }),
+        closeSwitcher: () => set({ switcherOpen: false }),
 
         activeProject: () => get().projects.find((p) => p.id === get().activeId),
 

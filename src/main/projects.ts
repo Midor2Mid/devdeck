@@ -8,6 +8,7 @@ export interface Project {
     name: string
     path: string
     addedAt: number
+    group?: string
 }
 
 export interface ProjectStore {
@@ -72,6 +73,16 @@ export function removeProject(id: string): ProjectStore {
         store.activeId = store.projects[0]?.id ?? null
     }
     save(store)
+    return store
+}
+
+export function setGroup(id: string, group: string): ProjectStore {
+    const store = load()
+    const project = store.projects.find((p) => p.id === id)
+    if (project) {
+        project.group = group.trim() || undefined
+        save(store)
+    }
     return store
 }
 

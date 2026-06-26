@@ -9,6 +9,7 @@ export interface Project {
     name: string
     path: string
     addedAt: number
+    group?: string
 }
 export interface ProjectStore {
     projects: Project[]
@@ -106,7 +107,9 @@ const api = {
         add: (): Promise<ProjectStore> => ipcRenderer.invoke("projects:add"),
         remove: (id: string): Promise<ProjectStore> => ipcRenderer.invoke("projects:remove", id),
         setActive: (id: string): Promise<ProjectStore> =>
-            ipcRenderer.invoke("projects:setActive", id)
+            ipcRenderer.invoke("projects:setActive", id),
+        setGroup: (id: string, group: string): Promise<ProjectStore> =>
+            ipcRenderer.invoke("projects:setGroup", { id, group })
     },
     workspace: {
         load: (): Promise<unknown> => ipcRenderer.invoke("workspace:load"),
