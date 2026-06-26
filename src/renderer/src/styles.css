@@ -722,6 +722,16 @@ select:focus {
     font-size: 8px;
     padding: 1px 4px;
 }
+.settings-warn {
+    background: rgba(182, 107, 95, 0.12);
+    border: 1px solid var(--danger);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+}
 .agents-head,
 .agent-edit-row {
     display: grid;

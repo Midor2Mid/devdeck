@@ -163,6 +163,9 @@ const api = {
     },
     git: {
         status: (cwd: string): Promise<GitStatus> => ipcRenderer.invoke("git:status", cwd)
+    },
+    env: {
+        anthropicKey: (): Promise<{ set: boolean }> => ipcRenderer.invoke("env:anthropicKey")
     }
 }
 

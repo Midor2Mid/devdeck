@@ -27,6 +27,11 @@ function AgentsSection(): JSX.Element {
     const setAgents = useSettings((s) => s.setAgents)
     const agentIdleMs = useSettings((s) => s.agentIdleMs)
     const setAgentIdleMs = useSettings((s) => s.setAgentIdleMs)
+    const [apiKeySet, setApiKeySet] = useState(false)
+
+    useEffect(() => {
+        window.api.env.anthropicKey().then((r) => setApiKeySet(r.set))
+    }, [])
 
     const update = (i: number, patch: Record<string, string>): void => {
         setAgents(agents.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
@@ -41,6 +46,13 @@ function AgentsSection(): JSX.Element {
     return (
         <div className="settings-section">
             <h3>AI agents</h3>
+            {apiKeySet && (
+                <div className="settings-warn">
+                    ⚠ <b>ANTHROPIC_API_KEY is set</b> in this environment. Claude sessions will
+                    bill pay-as-you-go <b>API usage</b> instead of your Pro / Max / Team
+                    subscription. Unset it (and restart DevDeck) to use your subscription login.
+                </div>
+            )}
             <div className="agents-head">
                 <span>Name</span>
                 <span>Command</span>
