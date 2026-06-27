@@ -147,12 +147,18 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Command palette** (Ctrl+Shift+P): fuzzy access to views, layouts, themes, new agent/SSH sessions, jump-to-session, settings, project switch. Composer hotkey moved to Ctrl+Shift+I.
 - [x] **Canvas zoom** (Ctrl+scroll, 40–200%) + double-click to reset view
 
+## Milestone 18 — MCP settings + audit batch 2 ✅ (2026-06-27)
+
+- [x] **MCP** settings section — edit the active project's `.mcp.json` (servers: command/args/env) read by Claude Code & other agents
+- [x] Audit batch 2: fs path confinement to project roots, binary-file guard, terminal fit() zero-dim guard
+
+This completes every section from the original 1DevTool reference (Appearance, Terminal, Editor, Agents, Snippets, Git, SSH, MCP, Remote, Shortcuts, About).
+
 ## Next up
 
 - [ ] Browser network capture (needs the webContents debugger protocol)
 - [ ] Canvas: connectors between cards
-- [ ] MCP settings section
-- [ ] Audit batch 2 (low severity)
+- [ ] Activity feed across projects
 
 ## Later / maybe (parking lot)
 

@@ -94,6 +94,12 @@ export interface GitIdentity {
     email: string
     sshCommand: string
 }
+export interface McpServer {
+    name: string
+    command: string
+    args: string[]
+    env: Record<string, string>
+}
 
 const api = {
     pty: {
@@ -178,6 +184,11 @@ const api = {
     browser: {
         saveShot: (projectPath: string, dataUrl: string): Promise<string> =>
             ipcRenderer.invoke("browser:saveShot", { projectPath, dataUrl })
+    },
+    mcp: {
+        list: (projectPath: string): Promise<McpServer[]> => ipcRenderer.invoke("mcp:list", projectPath),
+        save: (projectPath: string, servers: McpServer[]): Promise<void> =>
+            ipcRenderer.invoke("mcp:save", { projectPath, servers })
     },
     env: {
         check: (names: string[]): Promise<Record<string, boolean>> =>

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
 import { useSettings, type ShellKind } from "../settings"
+import { useStore } from "../store"
 import { THEMES } from "../themes"
+import type { McpServer } from "../../../preload/index"
 
 const THEME_LIST = Object.values(THEMES)
 import type { ServerStatus } from "../../../preload/index"
@@ -14,6 +16,7 @@ type Section =
     | "snippets"
     | "git"
     | "ssh"
+    | "mcp"
     | "remote"
     | "shortcuts"
     | "about"
@@ -26,10 +29,100 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "snippets", label: "Snippets" },
     { key: "git", label: "Git" },
     { key: "ssh", label: "SSH" },
+    { key: "mcp", label: "MCP" },
     { key: "remote", label: "Remote (Mobile)" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
 ]
+
+function McpSection(): JSX.Element {
+    const project = useStore((s) => s.activeProject())
+    const [servers, setServers] = useState<McpServer[]>([])
+    const [saved, setSaved] = useState(false)
+    const path = project?.path
+
+    useEffect(() => {
+        if (path) window.api.mcp.list(path).then(setServers).catch(() => setServers([]))
+        else setServers([])
+    }, [path])
+
+    const update = (i: number, patch: Partial<McpServer>): void =>
+        setServers(servers.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
+    const remove = (i: number): void => setServers(servers.filter((_, idx) => idx !== i))
+    const add = (): void => setServers([...servers, { name: "", command: "npx", args: [], env: {} }])
+    const save = async (): Promise<void> => {
+        if (!path) return
+        await window.api.mcp.save(path, servers)
+        setSaved(true)
+        setTimeout(() => setSaved(false), 1500)
+    }
+
+    if (!project) {
+        return (
+            <div className="settings-section">
+                <h3>MCP servers</h3>
+                <p className="muted">Select a project first — MCP servers are per-project.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="settings-section">
+            <h3>MCP servers · {project.name}</h3>
+            {servers.map((s, i) => (
+                <div key={i} className="git-account">
+                    <div className="git-account-head">
+                        <input
+                            className="git-label"
+                            value={s.name}
+                            placeholder="server-name"
+                            onChange={(e) => update(i, { name: e.target.value })}
+                        />
+                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                            ×
+                        </button>
+                    </div>
+                    <div className="form-grid">
+                        <label>Command</label>
+                        <input value={s.command} onChange={(e) => update(i, { command: e.target.value })} />
+                        <label>Args</label>
+                        <input
+                            value={s.args.join(" ")}
+                            placeholder="-y @modelcontextprotocol/server-filesystem"
+                            onChange={(e) =>
+                                update(i, { args: e.target.value.split(/\s+/).filter(Boolean) })
+                            }
+                        />
+                        <label>Env</label>
+                        <input
+                            value={Object.entries(s.env).map(([k, v]) => `${k}=${v}`).join(" ")}
+                            placeholder="KEY=value KEY2=value2"
+                            onChange={(e) => {
+                                const env: Record<string, string> = {}
+                                for (const pair of e.target.value.split(/\s+/).filter(Boolean)) {
+                                    const eq = pair.indexOf("=")
+                                    if (eq > 0) env[pair.slice(0, eq)] = pair.slice(eq + 1)
+                                }
+                                update(i, { env })
+                            }}
+                        />
+                    </div>
+                </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button onClick={add}>+ Add server</button>
+                <span style={{ flex: 1 }} />
+                <button className="accent" onClick={save}>
+                    {saved ? "Saved ✓" : "Save .mcp.json"}
+                </button>
+            </div>
+            <p className="settings-hint">
+                Writes <code>{project.name}/.mcp.json</code> — the standard project MCP config read
+                by Claude Code (and other agents). Args/env are space-separated.
+            </p>
+        </div>
+    )
+}
 
 function SshSection(): JSX.Element {
     const profiles = useSettings((s) => s.sshProfiles)
@@ -623,6 +716,8 @@ export function SettingsModal(): JSX.Element {
                     {section === "git" && <GitSection />}
 
                     {section === "ssh" && <SshSection />}
+
+                    {section === "mcp" && <McpSection />}
 
                     {section === "remote" && <RemoteSection />}
 
