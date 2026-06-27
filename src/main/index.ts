@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron"
 import { join } from "path"
+import { mkdirSync, writeFileSync } from "fs"
 import * as ptyMgr from "./pty"
 import * as projects from "./projects"
 import { httpSend } from "./http"
@@ -140,6 +141,21 @@ function registerIpc(): void {
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))
+
+    // --- Browser: save a captured screenshot (data URL) into a project ---
+    ipcMain.handle("browser:saveShot", (_e, { projectPath, dataUrl }) => {
+        try {
+            const base = projectPath || app.getPath("temp")
+            const dir = join(base, ".devdeck", "uploads")
+            mkdirSync(dir, { recursive: true })
+            const file = join(dir, "shot-" + Date.now() + ".png")
+            const b64 = String(dataUrl).replace(/^data:image\/png;base64,/, "")
+            writeFileSync(file, Buffer.from(b64, "base64"))
+            return file
+        } catch {
+            return ""
+        }
+    })
 
     // --- Environment (what spawned terminals inherit) ---
     // Report which of the requested env vars are set, so the UI can warn that an

@@ -166,6 +166,10 @@ const api = {
     git: {
         status: (cwd: string): Promise<GitStatus> => ipcRenderer.invoke("git:status", cwd)
     },
+    browser: {
+        saveShot: (projectPath: string, dataUrl: string): Promise<string> =>
+            ipcRenderer.invoke("browser:saveShot", { projectPath, dataUrl })
+    },
     env: {
         check: (names: string[]): Promise<Record<string, boolean>> =>
             ipcRenderer.invoke("env:check", names)

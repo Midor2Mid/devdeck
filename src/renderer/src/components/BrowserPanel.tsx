@@ -33,8 +33,10 @@ function normalizeUrl(input: string): string {
 export function BrowserPanel(): JSX.Element {
     const sendToAgent = useStore((s) => s.sendToAgent)
     const lastAgent = useStore((s) => s.lastAgentTermId)
+    const projectPath = useStore((s) => s.activeProject()?.path ?? "")
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const wvRef = useRef<any>(null)
+    const consoleRef = useRef<{ level: number; message: string }[]>([])
     const [address, setAddress] = useState("https://")
     const [commentMode, setCommentMode] = useState(false)
     const [comments, setComments] = useState<PageComment[]>([])
@@ -58,7 +60,11 @@ export function BrowserPanel(): JSX.Element {
                 } catch {
                     /* ignore */
                 }
+                return
             }
+            // Collect page console output (capped) for the AI payload.
+            consoleRef.current.push({ level: e.level ?? 0, message: String(e.message ?? "") })
+            if (consoleRef.current.length > 80) consoleRef.current.shift()
         }
         const onNav = (): void => setAddress(wv.getURL())
         wv.addEventListener("dom-ready", onDom)
@@ -93,7 +99,7 @@ export function BrowserPanel(): JSX.Element {
         setNote("")
     }
 
-    const sendToAI = (): void => {
+    const sendToAI = async (): Promise<void> => {
         if (!comments.length || !lastAgent) return
         const byUrl: Record<string, PageComment[]> = {}
         for (const c of comments) (byUrl[c.url] = byUrl[c.url] ?? []).push(c)
@@ -104,6 +110,25 @@ export function BrowserPanel(): JSX.Element {
                 text += `  ${i + 1}. [${c.selector}] "${c.text}"${c.note ? " — " + c.note : ""}\n`
             })
         }
+
+        // Recent console errors/warnings (level >= 2).
+        const problems = consoleRef.current.filter((l) => l.level >= 2).slice(-15)
+        if (problems.length) {
+            text += "\nConsole errors/warnings:\n"
+            problems.forEach((l) => (text += `  - ${l.message}\n`))
+        }
+
+        // Capture a screenshot, save it into the project, reference its path.
+        try {
+            const img = await wvRef.current?.capturePage()
+            if (img) {
+                const path = await window.api.browser.saveShot(projectPath, img.toDataURL())
+                if (path) text += `\nScreenshot: ${path}\n`
+            }
+        } catch {
+            /* screenshot is best-effort */
+        }
+
         sendToAgent(text + "\n")
         setSent(true)
         setTimeout(() => setSent(false), 1500)

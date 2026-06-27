@@ -127,10 +127,14 @@ From studying the 1DevTool reference (video + 1devtool.com):
 
 - [x] **Canvas** terminal layout — free-form board: drag terminal cards anywhere, pan the surface; positions persisted. Third layout alongside Tabs + Grid.
 
-## Next up (from 1DevTool batch 2)
+## Milestone 14 — mobile attach + browser capture ✅ (2026-06-27)
 
-- [ ] **Mobile attach** — pick a screenshot/file on the phone → upload to desktop → save into the active project + reference it to the agent
-- [ ] Browser: capture console/network/screenshot into the comment payload
+- [x] **Mobile attach** — pick a screenshot/file on the phone → saved into the project (`.devdeck/uploads/`) → path typed into the agent session
+- [x] **Browser capture** — "Send to AI" now includes recent console errors/warnings + a page screenshot (saved + path referenced) alongside the element comments
+
+## Next up
+
+- [ ] Browser network capture (needs the webContents debugger protocol)
 - [ ] Canvas: zoom + connectors between cards
 
 ## Later / maybe (parking lot)
