@@ -23,6 +23,12 @@ export interface Tab {
     root: LayoutNode
 }
 
+export interface AppNotification {
+    id: string
+    termId: string
+    text: string
+}
+
 export interface AnySession {
     termId: string
     projectId: string
@@ -65,6 +71,8 @@ interface AppState extends Persisted {
     // Agent session awareness (runtime-only)
     agentStatus: Record<string, AgentStatus>
     lastAgentTermId: string | null
+    notifications: AppNotification[]
+    dismissNotification: (id: string) => void
     sessions: () => AnySession[]
     agentSessions: () => AnySession[]
     sendToAgent: (text: string) => boolean
@@ -128,7 +136,9 @@ export const useStore = create<AppState>((set, get) => {
             agentStatus:
                 s.agentStatus[termId] === "attention"
                     ? { ...s.agentStatus, [termId]: "idle" }
-                    : s.agentStatus
+                    : s.agentStatus,
+            // Acknowledging a session clears its pending notification.
+            notifications: s.notifications.filter((n) => n.termId !== termId)
         }))
     }
 
@@ -137,11 +147,35 @@ export const useStore = create<AppState>((set, get) => {
         return s.view === "terminal" && !!s.activeId && s.activePaneByProject[s.activeId] === termId
     }
 
+    const labelForTerm = (termId: string): string => {
+        const s = get()
+        for (const [pid, tabs] of Object.entries(s.tabsByProject)) {
+            const tab = tabs.find((t) => hasLeaf(t.root, termId))
+            if (tab) {
+                const project = s.projects.find((p) => p.id === pid)
+                return `${tab.name} · ${project?.name ?? "—"}`
+            }
+        }
+        return "agent session"
+    }
+
+    const pushNotification = (termId: string): void => {
+        if (get().notifications.some((n) => n.termId === termId)) return
+        set((s) => ({
+            notifications: [
+                ...s.notifications,
+                { id: newId(), termId, text: `${labelForTerm(termId)} needs attention` }
+            ]
+        }))
+    }
+
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
         if (!isAgentId(get().agentOf(id))) return
         const visible = isVisible(id)
         if (data.includes("\x07") && !visible) {
+            const was = get().agentStatus[id]
             setStatus(id, "attention")
+            if (was !== "attention") pushNotification(id)
             return
         }
         if (get().agentStatus[id] !== "attention" || visible) setStatus(id, "working")
@@ -217,6 +251,9 @@ export const useStore = create<AppState>((set, get) => {
         switcherOpen: false,
         agentStatus: {},
         lastAgentTermId: null,
+        notifications: [],
+        dismissNotification: (id) =>
+            set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 
         init: async () => {
             if (!dataSubscribed) {

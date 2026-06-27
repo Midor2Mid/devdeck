@@ -10,6 +10,7 @@ import { DbPanel } from "./components/DbPanel"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { StatusBar } from "./components/StatusBar"
+import { Toasts } from "./components/Toasts"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -127,6 +128,7 @@ export function App(): JSX.Element {
             <StatusBar />
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
+            <Toasts />
         </div>
     )
 }
