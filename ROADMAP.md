@@ -118,6 +118,12 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] Window bounds + last-view restored across restarts
 - [ ] Later: code signing; auto-update
 
+## Next up (from 1DevTool batch 2)
+
+- [ ] **Prompt snippets** — `/name` autocomplete in the composer to insert reusable prompts (symmetric to `@file`); user-defined in Settings
+- [ ] **Mobile attach** — pick a screenshot/file on the phone → upload to desktop → save into the active project + reference it to the agent
+- [ ] Browser: capture console/network/screenshot into the comment payload
+
 ## Later / maybe (parking lot)
 
 - Command palette (Ctrl+P) for projects/files/actions

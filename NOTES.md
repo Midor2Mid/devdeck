@@ -60,6 +60,11 @@ The maker shared shipped features + reasoning (Vietnamese). Highlights for DevDe
 - **Terminal layout modes:** Dashboard / List / **Canvas** (spatial board of all terminals across projects).
 - Pricing: $29 one-time (confirms category value).
 
+### More 1DevTool notes (2026-06-27, batch 2)
+> "Bạn có thể thêm hình screenshot hoặc đính kèm file trên điện thoại ở Remote Control. Ngoài ra cũng có thể dùng splash và skill /"
+- **Mobile attach:** add screenshots / attach files from the phone in Remote Control. (Complex in our model — terminals can't ingest images directly; would need to upload to desktop, save into the project, and reference the path / or rely on agent image support. Parked with plan.)
+- **Slash `/` commands / skills** in the prompt composer (symmetric to our `@file` mentions). Ambiguous whether it means agent-passthrough slash-commands or user-defined snippets — lean toward **user-defined prompt snippets** inserted by `/name` (generic, reusable). Next batch.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
