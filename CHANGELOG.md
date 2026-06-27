@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.9 — 2026-06-28
+
+- **Work panel (Jira + Azure DevOps)** — the ◷ sidebar button (or command
+  palette) opens a drawer listing your assigned work items. **Start work** on a
+  ticket launches an agent session (optionally in a fresh worktree) pre-seeded
+  with the ticket brief — title, type, status, link, description — and asks it to
+  investigate and propose a plan before changing code. Your day starts from the
+  ticket, not a blank terminal. **Open ↗** jumps to the item in your browser.
+  - Connect via the drawer's ⚙: Jira (base URL + email + API token + JQL) and/or
+    Azure DevOps (org URL + project + PAT + WIQL). Tokens are encrypted on-device
+    (safeStorage) and never read back into the UI. All calls happen in main (no
+    CORS), with an **"ignore TLS errors"** option for corporate MITM proxies.
+
 ## 0.1.8 — 2026-06-28
 
 - **Worktree-per-agent** — spin up an agent (or shell) in its own git worktree

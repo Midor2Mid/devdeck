@@ -16,6 +16,7 @@ import { RecordingsModal } from "./components/RecordingsModal"
 import { PipelineBar } from "./components/PipelineBar"
 import { WorktreesModal } from "./components/WorktreesModal"
 import { ChangesModal } from "./components/ChangesModal"
+import { WorkPanel } from "./components/WorkPanel"
 import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
 
@@ -39,6 +40,7 @@ export function App(): JSX.Element {
     const recordingsOpen = useStore((s) => s.recordingsOpen)
     const worktreesOpen = useStore((s) => s.worktreesOpen)
     const changesTarget = useStore((s) => s.changesTarget)
+    const workOpen = useStore((s) => s.workOpen)
     const project = activeProject()
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
@@ -165,6 +167,7 @@ export function App(): JSX.Element {
             {recordingsOpen && <RecordingsModal />}
             {worktreesOpen && <WorktreesModal />}
             {changesTarget && <ChangesModal />}
+            {workOpen && <WorkPanel />}
             <PipelineBar />
             <Toasts />
         </div>

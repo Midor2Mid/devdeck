@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Project } from "../../preload/index"
+import type { Project, WorkItem } from "../../preload/index"
 import { useSettings } from "./settings"
 import {
     type LayoutNode,
@@ -121,6 +121,11 @@ interface AppState extends Persisted {
     openChanges: (cwd: string, label: string) => void
     closeChanges: () => void
     newAgentInWorktree: (agentId: string, branch: string) => Promise<string | undefined>
+
+    // Work items (Jira / Azure DevOps)
+    workOpen: boolean
+    setWorkOpen: (open: boolean) => void
+    startWork: (item: WorkItem, opts?: { worktree?: boolean }) => Promise<void>
 
     // Agent pipelines (runtime-only)
     pipelineRun: PipelineRun | null
@@ -361,6 +366,7 @@ export const useStore = create<AppState>((set, get) => {
         recordingsOpen: false,
         worktreesOpen: false,
         changesTarget: null,
+        workOpen: false,
         pipelineRun: null,
         switcherOpen: false,
         composerOpen: false,
@@ -508,6 +514,43 @@ export const useStore = create<AppState>((set, get) => {
             if (termId) pushActivity("start", termId, `${res.branch} · worktree`)
             set({ worktreesOpen: false })
             return termId
+        },
+
+        setWorkOpen: (workOpen) => set({ workOpen }),
+
+        startWork: async (item, opts) => {
+            const proj = get().activeProject()
+            if (!proj) {
+                pushActivity("attention", "", "Pick a project before starting work")
+                return
+            }
+            const agentId = useSettings.getState().agents[0]?.id ?? "claude"
+            const brief =
+                `I'm starting work on ${item.key}: ${item.title}\n` +
+                `Type: ${item.type}${item.status ? ` · Status: ${item.status}` : ""}\n` +
+                `Link: ${item.url}\n\n` +
+                (item.description ? item.description + "\n\n" : "") +
+                `Please investigate this ticket first: find the relevant code and the root cause, ` +
+                `then propose a short plan before changing anything. Don't edit until I confirm the plan.`
+
+            let termId: string | undefined
+            if (opts?.worktree) {
+                const res = await window.api.git.worktreeAdd(proj.path, `${item.key} ${item.title}`)
+                if (!res.ok || !res.path) {
+                    pushActivity("attention", "", `worktree failed: ${res.error ?? "error"}`)
+                    return
+                }
+                termId = get().newTab(agentId, undefined, item.key, res.path)
+            } else {
+                termId = get().newTab(agentId, undefined, item.key)
+            }
+            if (!termId) return
+            set({ workOpen: false, composerDrafts: { ...get().composerDrafts, [proj.id]: "" } })
+            pushActivity("start", termId, `${item.key} · ${item.title}`.slice(0, 80))
+            // Wait for the agent CLI to boot, then send the ticket brief as its first prompt.
+            await sleep(2800)
+            window.api.pty.input(termId, brief + "\r")
+            set({ lastAgentTermId: termId })
         },
 
         fireTrigger: (triggerId) => {

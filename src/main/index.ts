@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from "electron"
+import { app, BrowserWindow, ipcMain, dialog, shell } from "electron"
 import { join } from "path"
 import { mkdirSync, writeFileSync } from "fs"
 import * as ptyMgr from "./pty"
@@ -18,6 +18,7 @@ import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
 import * as worktrees from "./worktrees"
 import * as changes from "./changes"
+import * as work from "./work"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -228,6 +229,17 @@ function registerIpc(): void {
         guardRepo(cwd)
         return changes.commitAll(cwd, message)
     })
+
+    // --- Open a URL in the system browser ---
+    ipcMain.handle("shell:open", (_e, url: string) => {
+        if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    })
+
+    // --- Work items (Jira / Azure DevOps) ---
+    ipcMain.handle("work:getConfig", () => work.getConfig())
+    ipcMain.handle("work:saveConfig", (_e, input: work.WorkConfigInput) => work.saveConfig(input))
+    ipcMain.handle("work:test", (_e, provider: work.Provider) => work.testProvider(provider))
+    ipcMain.handle("work:items", () => work.fetchItems())
 
     // --- MCP (per-project .mcp.json) ---
     ipcMain.handle("mcp:list", (_e, projectPath: string) => {
