@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2 — 2026-06-28
+
+- **Command palette** (`Ctrl+Shift+P`): fuzzy-run any action — views, layouts, themes,
+  new agent/SSH sessions, jump-to-session, settings. (Composer moved to `Ctrl+Shift+I`.)
+- **Canvas zoom** (`Ctrl+scroll`, 40–200%; double-click to reset).
+- **MCP settings** — manage the active project's `.mcp.json` (command/args/env).
+- **Hardening (audit batch 2):** filesystem access confined to open project roots,
+  editor refuses binary files, terminal fit() zero-dimension guard.
+- Tests up to 34 (added fs-confinement + MCP round-trip).
+
 ## 0.1.1 — 2026-06-27 (hardened)
 
 Security & robustness pass from a multi-agent audit (17 confirmed findings):
