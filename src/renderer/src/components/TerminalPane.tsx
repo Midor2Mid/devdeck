@@ -103,19 +103,27 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // Re-fit only when the pane actually has dimensions (avoid 0-size fit errors).
+    const refit = (): void => {
+        const c = containerRef.current
+        const term = termRef.current
+        if (!c || !term || !c.clientWidth || !c.clientHeight) return
+        try {
+            fitRef.current?.fit()
+            window.api.pty.resize(termId, term.cols, term.rows)
+        } catch {
+            /* resize can race with exit */
+        }
+    }
+
     // Live-apply font changes from settings.
     useEffect(() => {
         const term = termRef.current
-        const fit = fitRef.current
         if (!term) return
         term.options.fontFamily = fontFamily
         term.options.fontSize = fontSize
-        try {
-            fit?.fit()
-            window.api.pty.resize(termId, term.cols, term.rows)
-        } catch {
-            /* noop */
-        }
+        refit()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fontFamily, fontSize, termId])
 
     // Re-theme the terminal when the app theme changes.
@@ -124,12 +132,8 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         if (!term) return
         term.options.theme = THEMES[themeId].xterm
         term.options.lineHeight = THEMES[themeId].termLineHeight
-        try {
-            fitRef.current?.fit()
-            window.api.pty.resize(termId, term.cols, term.rows)
-        } catch {
-            /* noop */
-        }
+        refit()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [themeId, termId])
 
     // Focus the xterm when this pane becomes the active one.

@@ -1,5 +1,18 @@
 import { readdirSync, readFileSync, writeFileSync, statSync, type Dirent } from "fs"
-import { join } from "path"
+import { join, resolve, sep } from "path"
+
+/** True if `target` resolves to a path inside one of the allowed roots. */
+export function isWithinRoots(target: string, roots: string[]): boolean {
+    const norm = (p: string): string => {
+        const r = resolve(p)
+        return process.platform === "win32" ? r.toLowerCase() : r
+    }
+    const t = norm(target)
+    return roots.some((root) => {
+        const r = norm(root)
+        return t === r || t.startsWith(r + sep)
+    })
+}
 
 export interface DirEntry {
     name: string
@@ -71,7 +84,12 @@ export function readFileText(path: string): string {
     if (size > MAX_BYTES) {
         throw new Error(`File too large to open (${Math.round(size / 1024)} KB).`)
     }
-    return readFileSync(path, "utf8")
+    const buf = readFileSync(path)
+    // Refuse binary files — opening them as text would corrupt them on save.
+    if (buf.subarray(0, 8000).includes(0)) {
+        throw new Error("Binary file — not opened in the text editor.")
+    }
+    return buf.toString("utf8")
 }
 
 export function writeFileText(path: string, content: string): void {

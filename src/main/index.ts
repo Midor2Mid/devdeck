@@ -136,8 +136,23 @@ function registerIpc(): void {
     })
 
     // --- Files (editor) ---
-    ipcMain.handle("fs:readDir", (_e, dir: string) => files.readDir(dir))
-    ipcMain.handle("fs:allFiles", (_e, root: string) => files.allFiles(root))
+    // Confine all filesystem access to within an added project (defense in depth).
+    const inProject = (p: string): boolean =>
+        files.isWithinRoots(
+            p,
+            projects.listProjects().projects.map((x) => x.path)
+        )
+    const guardPath = (p: string): void => {
+        if (!inProject(p)) throw new Error("Path is outside any open project.")
+    }
+    ipcMain.handle("fs:readDir", (_e, dir: string) => {
+        guardPath(dir)
+        return files.readDir(dir)
+    })
+    ipcMain.handle("fs:allFiles", (_e, root: string) => {
+        guardPath(root)
+        return files.allFiles(root)
+    })
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))
@@ -167,8 +182,14 @@ function registerIpc(): void {
         for (const n of names) out[n] = !!process.env[n]
         return out
     })
-    ipcMain.handle("fs:read", (_e, path: string) => files.readFileText(path))
-    ipcMain.handle("fs:write", (_e, { path, content }) => files.writeFileText(path, content))
+    ipcMain.handle("fs:read", (_e, path: string) => {
+        guardPath(path)
+        return files.readFileText(path)
+    })
+    ipcMain.handle("fs:write", (_e, { path, content }) => {
+        guardPath(path)
+        return files.writeFileText(path, content)
+    })
 }
 
 app.whenReady().then(() => {
