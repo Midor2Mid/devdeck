@@ -1,6 +1,9 @@
 import { useState } from "react"
+import Editor from "@monaco-editor/react"
 import type { HttpResponse } from "../../../preload/index"
 import { parseCurl } from "../curl"
+import { THEMES } from "../themes"
+import "../monaco-setup"
 import { KeyValueEditor, KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor"
 import { splitUrl, parseQueryPairs, buildUrl } from "../httpParams"
 import { useSettings, type SavedRequest, type AuthConfig, defaultAuth } from "../settings"
@@ -23,6 +26,21 @@ function prettify(body: string, contentType?: string): string {
     return body
 }
 
+function langForContentType(ct: string): string {
+    if (ct.includes("json")) return "json"
+    if (ct.includes("html")) return "html"
+    if (ct.includes("xml")) return "xml"
+    if (ct.includes("javascript")) return "javascript"
+    if (ct.includes("css")) return "css"
+    return "plaintext"
+}
+
+function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
 const activeCount = (rows: KvRow[]): number =>
     rows.filter((r) => r.enabled && r.key.trim() !== "").length
 
@@ -40,7 +58,12 @@ export function ApiPanel(): JSX.Element {
     const [auth, setAuth] = useState<AuthConfig>(defaultAuth())
     const [reqTab, setReqTab] = useState<ReqTab>("params")
     const [resp, setResp] = useState<HttpResponse | null>(null)
+    const [respTab, setRespTab] = useState<"body" | "headers">("body")
+    const [respPretty, setRespPretty] = useState(true)
+    const [respWrap, setRespWrap] = useState(true)
+    const [copied, setCopied] = useState(false)
     const [sending, setSending] = useState(false)
+    const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
     const [imported, setImported] = useState(false)
     const [envOpen, setEnvOpen] = useState(false)
     const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -259,6 +282,25 @@ export function ApiPanel(): JSX.Element {
     const headerN = activeCount(headers)
     const bodyDot = bodyType !== "none" && (bodyType === "json" ? bodyText.trim() !== "" : activeCount(formRows) > 0)
 
+    // ----- response view derivations -----
+    const respCt = resp?.headers?.["content-type"] ?? ""
+    const respLang = langForContentType(respCt)
+    const rawRespBody = resp?.body ?? ""
+    const shownRespBody =
+        respLang === "json" && respPretty ? prettify(rawRespBody, "application/json") : rawRespBody
+    const respSize = formatSize(new TextEncoder().encode(rawRespBody).length)
+    const respHeaderEntries: Array<[string, string]> = resp?.headers ? Object.entries(resp.headers) : []
+
+    const copyBody = async (): Promise<void> => {
+        try {
+            await navigator.clipboard.writeText(shownRespBody)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1400)
+        } catch {
+            /* clipboard unavailable */
+        }
+    }
+
     return (
         <div className="api-panel">
             {sidebarOpen && <CollectionsSidebar onLoad={loadRequest} activeReqId={loadedReqId} />}
@@ -476,10 +518,76 @@ export function ApiPanel(): JSX.Element {
                                 {resp.status} {resp.statusText}
                             </span>
                             <span className="muted">{resp.timeMs} ms</span>
+                            <span className="muted">{respSize}</span>
+                            <div className="resp-tabs">
+                                <span
+                                    className={respTab === "body" ? "active" : ""}
+                                    onClick={() => setRespTab("body")}
+                                >
+                                    Body
+                                </span>
+                                <span
+                                    className={respTab === "headers" ? "active" : ""}
+                                    onClick={() => setRespTab("headers")}
+                                >
+                                    Headers{respHeaderEntries.length ? ` (${respHeaderEntries.length})` : ""}
+                                </span>
+                            </div>
+                            {respTab === "body" && (
+                                <div className="resp-tools">
+                                    {respLang === "json" && (
+                                        <button
+                                            className={respPretty ? "tool on" : "tool"}
+                                            onClick={() => setRespPretty((v) => !v)}
+                                            title="Pretty-print JSON"
+                                        >
+                                            Pretty
+                                        </button>
+                                    )}
+                                    <button
+                                        className={respWrap ? "tool on" : "tool"}
+                                        onClick={() => setRespWrap((v) => !v)}
+                                        title="Wrap long lines"
+                                    >
+                                        Wrap
+                                    </button>
+                                    <button className="tool" onClick={copyBody} title="Copy body">
+                                        {copied ? "Copied ✓" : "Copy"}
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        <pre className="resp-body">
-                            {prettify(resp.body ?? "", resp.headers?.["content-type"])}
-                        </pre>
+                        {respTab === "body" ? (
+                            <div className="resp-viewer">
+                                <Editor
+                                    theme={monacoTheme}
+                                    language={respLang}
+                                    value={shownRespBody}
+                                    options={{
+                                        readOnly: true,
+                                        domReadOnly: true,
+                                        fontFamily: '"Cascadia Mono", Consolas, monospace',
+                                        fontSize: 12,
+                                        minimap: { enabled: false },
+                                        wordWrap: respWrap ? "on" : "off",
+                                        scrollBeyondLastLine: false,
+                                        automaticLayout: true,
+                                        padding: { top: 10 },
+                                        folding: true,
+                                        guides: { indentation: false }
+                                    }}
+                                />
+                            </div>
+                        ) : (
+                            <div className="resp-headers">
+                                {respHeaderEntries.map(([k, v]) => (
+                                    <div className="resp-hrow" key={k}>
+                                        <span className="resp-hkey">{k}</span>
+                                        <span className="resp-hval">{v}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </>
                 ) : (
                     <div className="resp-error">
