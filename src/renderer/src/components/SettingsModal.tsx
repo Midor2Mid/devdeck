@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
 import { useSettings, DEFAULT_ACCENT, type ShellKind } from "../settings"
 import type { ServerStatus } from "../../../preload/index"
@@ -27,11 +27,17 @@ function AgentsSection(): JSX.Element {
     const setAgents = useSettings((s) => s.setAgents)
     const agentIdleMs = useSettings((s) => s.agentIdleMs)
     const setAgentIdleMs = useSettings((s) => s.setAgentIdleMs)
-    const [apiKeySet, setApiKeySet] = useState(false)
+    const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
 
+    // Which API-key env vars are present in the environment terminals inherit.
+    const keyNames = useMemo(
+        () => [...new Set(agents.map((a) => a.apiKeyEnv).filter(Boolean))],
+        [agents]
+    )
     useEffect(() => {
-        window.api.env.anthropicKey().then((r) => setApiKeySet(r.set))
-    }, [])
+        if (keyNames.length) window.api.env.check(keyNames).then(setEnvSet)
+        else setEnvSet({})
+    }, [keyNames.join(",")])
 
     const update = (i: number, patch: Record<string, string>): void => {
         setAgents(agents.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
@@ -40,48 +46,70 @@ function AgentsSection(): JSX.Element {
     const add = (): void =>
         setAgents([
             ...agents,
-            { id: crypto.randomUUID(), name: "New agent", command: "", resumeArgs: "", badge: "AGENT" }
+            {
+                id: crypto.randomUUID(),
+                name: "New agent",
+                command: "",
+                resumeArgs: "",
+                badge: "AGENT",
+                apiKeyEnv: ""
+            }
         ])
 
     return (
         <div className="settings-section">
             <h3>AI agents</h3>
-            {apiKeySet && (
-                <div className="settings-warn">
-                    ⚠ <b>ANTHROPIC_API_KEY is set</b> in this environment. Claude sessions will
-                    bill pay-as-you-go <b>API usage</b> instead of your Pro / Max / Team
-                    subscription. Unset it (and restart DevDeck) to use your subscription login.
-                </div>
-            )}
             <div className="agents-head">
                 <span>Name</span>
                 <span>Command</span>
                 <span>Resume</span>
                 <span>Badge</span>
+                <span>Key env var</span>
                 <span />
             </div>
-            {agents.map((a, i) => (
-                <div key={a.id} className="agent-edit-row">
-                    <input value={a.name} onChange={(e) => update(i, { name: e.target.value })} />
-                    <input
-                        value={a.command}
-                        placeholder="claude"
-                        onChange={(e) => update(i, { command: e.target.value })}
-                    />
-                    <input
-                        value={a.resumeArgs}
-                        placeholder="--continue"
-                        onChange={(e) => update(i, { resumeArgs: e.target.value })}
-                    />
-                    <input
-                        value={a.badge}
-                        onChange={(e) => update(i, { badge: e.target.value.toUpperCase() })}
-                    />
-                    <button className="row-remove" title="Remove" onClick={() => remove(i)}>
-                        ×
-                    </button>
-                </div>
-            ))}
+            {agents.map((a, i) => {
+                const overridden = !!a.apiKeyEnv && envSet[a.apiKeyEnv]
+                return (
+                    <div key={a.id}>
+                        <div className="agent-edit-row">
+                            <input
+                                value={a.name}
+                                onChange={(e) => update(i, { name: e.target.value })}
+                            />
+                            <input
+                                value={a.command}
+                                placeholder="claude"
+                                onChange={(e) => update(i, { command: e.target.value })}
+                            />
+                            <input
+                                value={a.resumeArgs}
+                                placeholder="--continue"
+                                onChange={(e) => update(i, { resumeArgs: e.target.value })}
+                            />
+                            <input
+                                value={a.badge}
+                                onChange={(e) => update(i, { badge: e.target.value.toUpperCase() })}
+                            />
+                            <input
+                                value={a.apiKeyEnv}
+                                placeholder="ANTHROPIC_API_KEY"
+                                className={overridden ? "warn-field" : ""}
+                                onChange={(e) => update(i, { apiKeyEnv: e.target.value.trim() })}
+                            />
+                            <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                                ×
+                            </button>
+                        </div>
+                        {overridden && (
+                            <div className="agent-warn">
+                                ⚠ <b>{a.apiKeyEnv}</b> is set — {a.name} will bill pay-as-you-go
+                                <b> API usage</b> instead of a subscription login. Unset it (and
+                                restart DevDeck) to use your subscription.
+                            </div>
+                        )}
+                    </div>
+                )
+            })}
             <button onClick={add} style={{ marginTop: 8 }}>
                 + Add agent
             </button>
@@ -97,9 +125,10 @@ function AgentsSection(): JSX.Element {
                 />
             </div>
             <p className="settings-hint">
-                Each agent is a CLI launched in a terminal. The first agent is the one-click{" "}
-                <b>+</b> button; the rest are in the ▾ menu. "Resume" runs <code>command +
-                resume args</code>. Badges show on sessions in the sidebar &amp; mobile.
+                Each agent is a CLI launched in a terminal. The first is the one-click <b>+</b>{" "}
+                button; the rest are in the ▾ menu. "Key env var" is the API key that would
+                override that CLI's subscription login — DevDeck warns when it's present in the
+                environment.
             </p>
         </div>
     )

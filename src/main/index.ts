@@ -120,11 +120,13 @@ function registerIpc(): void {
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))
 
     // --- Environment (what spawned terminals inherit) ---
-    // Report whether ANTHROPIC_API_KEY is set, so the UI can warn that Claude
-    // would bill pay-as-you-go API usage instead of a Pro/Max/Team subscription.
-    ipcMain.handle("env:anthropicKey", () => ({
-        set: !!process.env.ANTHROPIC_API_KEY
-    }))
+    // Report which of the requested env vars are set, so the UI can warn that an
+    // agent CLI would bill pay-as-you-go API usage instead of a subscription.
+    ipcMain.handle("env:check", (_e, names: string[]) => {
+        const out: Record<string, boolean> = {}
+        for (const n of names) out[n] = !!process.env[n]
+        return out
+    })
     ipcMain.handle("fs:read", (_e, path: string) => files.readFileText(path))
     ipcMain.handle("fs:write", (_e, { path, content }) => files.writeFileText(path, content))
 }

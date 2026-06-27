@@ -735,9 +735,23 @@ select:focus {
 .agents-head,
 .agent-edit-row {
     display: grid;
-    grid-template-columns: 1fr 1.2fr 1fr 0.8fr 24px;
+    grid-template-columns: 1fr 1.1fr 0.9fr 0.7fr 1.2fr 22px;
     gap: 6px;
     align-items: center;
+}
+.agent-edit-row .warn-field {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+.agent-warn {
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text);
+    background: rgba(182, 107, 95, 0.12);
+    border: 1px solid var(--danger);
+    border-radius: 6px;
+    padding: 6px 9px;
+    margin: 0 0 8px;
 }
 .agents-head {
     font-size: 10px;

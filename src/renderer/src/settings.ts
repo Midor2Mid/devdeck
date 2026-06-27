@@ -9,6 +9,15 @@ export interface AgentPreset {
     command: string
     resumeArgs: string
     badge: string
+    /** Env var that, if set, makes this CLI bill pay-as-you-go instead of a subscription. */
+    apiKeyEnv: string
+}
+
+/** Default API-key env var per built-in agent (for migrating older saved settings). */
+export const KNOWN_KEY_ENV: Record<string, string> = {
+    claude: "ANTHROPIC_API_KEY",
+    codex: "OPENAI_API_KEY",
+    gemini: "GEMINI_API_KEY"
 }
 
 export interface AppSettings {
@@ -58,9 +67,9 @@ const DEFAULTS: AppSettings = {
         minimap: false
     },
     agents: [
-        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE" },
-        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX" },
-        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI" }
+        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY" },
+        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY" },
+        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY" }
     ],
     agentIdleMs: 1000,
     appearance: {
@@ -120,7 +129,10 @@ export const useSettings = create<SettingsState>((set, get) => {
                 set({
                     terminal: { ...DEFAULTS.terminal, ...raw.terminal },
                     editor: { ...DEFAULTS.editor, ...raw.editor },
-                    agents: raw.agents?.length ? raw.agents : DEFAULTS.agents,
+                    agents: (raw.agents?.length ? raw.agents : DEFAULTS.agents).map((a) => ({
+                        ...a,
+                        apiKeyEnv: a.apiKeyEnv ?? KNOWN_KEY_ENV[a.id] ?? ""
+                    })),
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote }
