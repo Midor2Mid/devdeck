@@ -4,6 +4,8 @@ import { readFileSync } from "fs"
 import { join, dirname } from "path"
 import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
+import { httpSend } from "./http"
+import { allConnections, runQuery, listTables } from "./db"
 
 export interface RemoteSession {
     termId: string
@@ -140,6 +142,29 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
                 case "list":
                     send(ws, { t: "sessions", sessions: deps.getSessions() })
                     break
+                case "http":
+                    httpSend(msg.req as Parameters<typeof httpSend>[0]).then((res) =>
+                        send(ws, { t: "http:res", res })
+                    )
+                    break
+                case "db:conns":
+                    send(ws, { t: "db:conns", conns: allConnections() })
+                    break
+                case "db:tables":
+                    listTables(id)
+                        .then((tables) => send(ws, { t: "db:tables", profileId: id, tables }))
+                        .catch((e) =>
+                            send(ws, {
+                                t: "db:tables",
+                                profileId: id,
+                                tables: [],
+                                error: String(e?.message ?? e)
+                            })
+                        )
+                    break
+                case "db:query":
+                    runQuery(id, String(msg.sql)).then((res) => send(ws, { t: "db:res", res }))
+                    break
             }
         })
         ws.on("close", () => clients.delete(ws))
@@ -215,6 +240,21 @@ const CLIENT_HTML = `<!doctype html>
   .keys{display:flex;gap:6px;padding:0 8px 8px;background:var(--bg2);overflow-x:auto}
   .keys button{flex:none;font-size:13px;color:var(--mu)}
   .empty{color:var(--mu);text-align:center;padding:40px 20px;line-height:1.6}
+  nav#nav{display:flex;gap:4px;margin-left:8px}
+  nav#nav button{padding:5px 10px;font-size:13px;color:var(--mu);border-color:transparent}
+  nav#nav button.active{color:var(--tx);border-color:var(--bd)}
+  #http-view,#db-view{flex:1;display:none;flex-direction:column;min-height:0;overflow:auto;padding:12px;gap:8px}
+  #http-view .row{display:flex;gap:6px;margin-bottom:8px}
+  select,textarea,input.f{background:var(--bg3);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:10px;font-size:15px;font-family:inherit}
+  input.f,textarea{width:100%}
+  textarea{min-height:70px;font-family:monospace;font-size:13px}
+  .send-btn{background:var(--ac);color:#14110d;border:none;border-radius:8px;padding:10px 16px;font-weight:600}
+  .lbl{font-size:11px;color:var(--mu);margin:8px 0 4px}
+  .res{margin-top:10px;background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:10px;font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;overflow:auto}
+  .gridtbl{border-collapse:collapse;font-size:12px;font-family:monospace;width:max-content;min-width:100%}
+  .gridtbl th,.gridtbl td{border:1px solid var(--bd);padding:4px 8px;text-align:left;white-space:nowrap}
+  .gridtbl th{color:var(--ac)}
+  .tbl-item{padding:8px 6px;border-bottom:1px solid var(--bd);color:var(--mu);font-size:13px}
 </style>
 </head>
 <body>
@@ -222,9 +262,36 @@ const CLIENT_HTML = `<!doctype html>
   <header>
     <button id="back" style="display:none">‹</button>
     <span class="brand" id="title">DevDeck</span>
+    <nav id="nav">
+      <button data-v="list" class="active">Sessions</button>
+      <button data-v="http">HTTP</button>
+      <button data-v="db">DB</button>
+    </nav>
     <span id="status">connecting…</span>
   </header>
   <div id="list"></div>
+  <div id="http-view">
+    <div class="row">
+      <select id="h-method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+      <input class="f" id="h-url" placeholder="https://api.example.com" />
+    </div>
+    <div class="lbl">Headers (one per line, Key: Value)</div>
+    <textarea id="h-headers"></textarea>
+    <div class="lbl">Body</div>
+    <textarea id="h-body"></textarea>
+    <button class="send-btn" id="h-send">Send</button>
+    <div class="res" id="h-res" style="display:none"></div>
+  </div>
+  <div id="db-view">
+    <div class="row">
+      <select id="d-conn"><option value="">Select connection…</option></select>
+    </div>
+    <div id="d-tables"></div>
+    <div class="lbl">SQL</div>
+    <textarea id="d-sql">SELECT 1;</textarea>
+    <button class="send-btn" id="d-run">Run</button>
+    <div class="res" id="d-res" style="display:none"></div>
+  </div>
   <div id="term-view">
     <div id="term"></div>
     <div class="keys">
@@ -251,7 +318,23 @@ const CLIENT_HTML = `<!doctype html>
   var termView = document.getElementById('term-view');
   var titleEl = document.getElementById('title');
   var backBtn = document.getElementById('back');
+  var httpView=document.getElementById('http-view'), dbView=document.getElementById('db-view');
   var ws, term, attachedId = null, sessions = [];
+
+  function showView(v){
+    listEl.style.display = v==='list'?'block':'none';
+    termView.style.display = v==='term'?'flex':'none';
+    httpView.style.display = v==='http'?'flex':'none';
+    dbView.style.display = v==='db'?'flex':'none';
+    document.getElementById('nav').style.display = v==='term'?'none':'flex';
+    backBtn.style.display = v==='term'?'block':'none';
+    [].forEach.call(document.querySelectorAll('#nav button'),function(b){ b.classList.toggle('active', b.getAttribute('data-v')===v); });
+    if(v!=='term') attachedId=null;
+    if(v==='list') titleEl.textContent='DevDeck';
+    if(v==='http') titleEl.textContent='HTTP';
+    if(v==='db'){ titleEl.textContent='Database'; sendMsg({t:'db:conns'}); }
+  }
+  [].forEach.call(document.querySelectorAll('#nav button'),function(b){ b.onclick=function(){ showView(b.getAttribute('data-v')); }; });
 
   function connect(){
     var proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -263,13 +346,38 @@ const CLIENT_HTML = `<!doctype html>
       if(m.t === 'sessions'){ sessions = m.sessions; if(!attachedId) renderList(); }
       else if(m.t === 'data' && m.id === attachedId && term){ term.write(m.data); }
       else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m[process exited]\\x1b[0m\\r\\n'); }
+      else if(m.t === 'http:res'){ renderResult(document.getElementById('h-res'), m.res); }
+      else if(m.t === 'db:res'){ renderResult(document.getElementById('d-res'), m.res); }
+      else if(m.t === 'db:conns'){ var sel=document.getElementById('d-conn'); var cur=sel.value; sel.innerHTML='<option value="">Select connection…</option>'+m.conns.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+' ('+c.kind+')</option>';}).join(''); sel.value=cur; }
+      else if(m.t === 'db:tables'){ var dt=document.getElementById('d-tables'); dt.innerHTML=(m.tables||[]).map(function(t){return '<div class="tbl-item" data-t="'+esc(t)+'">'+esc(t)+'</div>';}).join(''); [].forEach.call(dt.querySelectorAll('.tbl-item'),function(el){ el.onclick=function(){ document.getElementById('d-sql').value='SELECT * FROM '+el.getAttribute('data-t')+' LIMIT 100;'; }; }); }
     };
   }
   function sendMsg(o){ if(ws && ws.readyState===1) ws.send(JSON.stringify(o)); }
 
+  function renderResult(el, res){
+    el.style.display='block';
+    if(!res){ el.textContent='(no response)'; return; }
+    if(res.ok===false){ el.textContent='Error: '+(res.error||'failed'); return; }
+    if(res.columns){
+      var cols=res.columns, rows=res.rows||[];
+      el.innerHTML='<div style="margin-bottom:6px;color:#8c9a68">'+(res.rowCount!=null?res.rowCount:rows.length)+' rows · '+res.timeMs+' ms</div><div style="overflow:auto"><table class="gridtbl"><thead><tr>'+cols.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(function(row){return '<tr>'+cols.map(function(c){var v=row[c];return '<td>'+esc(v==null?'NULL':(typeof v==='object'?JSON.stringify(v):String(v)))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+    } else {
+      el.textContent=(res.status?res.status+' '+(res.statusText||''):'')+' · '+res.timeMs+' ms\\n\\n'+(res.body||'');
+    }
+  }
+
+  document.getElementById('h-send').onclick=function(){
+    var headers={}; document.getElementById('h-headers').value.split('\\n').forEach(function(l){ var i=l.indexOf(':'); if(i>0) headers[l.slice(0,i).trim()]=l.slice(i+1).trim(); });
+    var req={ method:document.getElementById('h-method').value, url:document.getElementById('h-url').value.trim(), headers:headers, body:document.getElementById('h-body').value||undefined };
+    if(!req.url) return; var r=document.getElementById('h-res'); r.style.display='block'; r.textContent='Sending…'; sendMsg({t:'http',req:req});
+  };
+  document.getElementById('d-conn').onchange=function(){ var pid=this.value; if(pid) sendMsg({t:'db:tables',id:pid}); else document.getElementById('d-tables').innerHTML=''; };
+  document.getElementById('d-run').onclick=function(){
+    var pid=document.getElementById('d-conn').value, sql=document.getElementById('d-sql').value;
+    if(!pid||!sql.trim()) return; var r=document.getElementById('d-res'); r.style.display='block'; r.textContent='Running…'; sendMsg({t:'db:query',id:pid,sql:sql});
+  };
+
   function renderList(){
-    termView.style.display='none'; listEl.style.display='block'; backBtn.style.display='none';
-    titleEl.textContent='DevDeck'; attachedId=null;
     var byProj={}; sessions.forEach(function(s){ (byProj[s.projectId]=byProj[s.projectId]||{name:s.projectName,items:[]}).items.push(s); });
     var html='';
     var keys=Object.keys(byProj);
@@ -303,7 +411,7 @@ const CLIENT_HTML = `<!doctype html>
 
   function openTerm(id){
     var s=sessions.filter(function(x){return x.termId===id;})[0];
-    listEl.style.display='none'; termView.style.display='flex'; backBtn.style.display='block';
+    showView('term');
     titleEl.textContent = s ? s.tabName : 'terminal';
     document.getElementById('term').innerHTML='';
     term = new Terminal({fontFamily:'monospace',fontSize:13,cursorBlink:true,
@@ -314,7 +422,7 @@ const CLIENT_HTML = `<!doctype html>
     setTimeout(fit,60);
   }
 
-  backBtn.onclick=function(){ if(attachedId) sendMsg({t:'detach',id:attachedId}); renderList(); };
+  backBtn.onclick=function(){ if(attachedId) sendMsg({t:'detach',id:attachedId}); showView('list'); };
   document.getElementById('send').onclick=function(){ var i=document.getElementById('inp'); if(attachedId){ sendMsg({t:'input',id:attachedId,data:i.value+'\\r'}); i.value=''; } };
   document.getElementById('inp').addEventListener('keydown',function(e){ if(e.key==='Enter'){ document.getElementById('send').click(); }});
   [].forEach.call(document.querySelectorAll('.keys button'),function(b){ b.onclick=function(){ if(attachedId) sendMsg({t:'input',id:attachedId,data:b.getAttribute('data-k')}); }; });

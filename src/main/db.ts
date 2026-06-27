@@ -105,6 +105,10 @@ export function listConnections(projectId: string): ConnProfile[] {
         .map(publicProfile)
 }
 
+export function allConnections(): ConnProfile[] {
+    return load().profiles.map(publicProfile)
+}
+
 export function saveConnection(input: ConnInput): ConnProfile[] {
     const store = load()
     if (input.id) {
