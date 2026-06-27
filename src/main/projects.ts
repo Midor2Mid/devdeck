@@ -1,7 +1,8 @@
 import { app, dialog, BrowserWindow } from "electron"
 import { join, basename } from "path"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync } from "fs"
 import { randomUUID } from "crypto"
+import { atomicWrite } from "./atomic"
 
 export interface Project {
     id: string
@@ -30,7 +31,7 @@ function load(): ProjectStore {
 
 function save(store: ProjectStore): void {
     try {
-        writeFileSync(storeFile(), JSON.stringify(store, null, 2), "utf8")
+        atomicWrite(storeFile(), JSON.stringify(store, null, 2))
     } catch (err) {
         console.error("[projects] failed to save:", err)
     }

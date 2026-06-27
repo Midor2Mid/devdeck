@@ -80,6 +80,17 @@ First installable build shipped (`release/DevDeck Setup 0.1.0.exe` + portable `D
 **Friction log:**
 - _(add dated entries as you hit them)_
 
+### Hardening audit (2026-06-27) — multi-agent workflow, 17 confirmed findings
+Ran a parallel audit (6 subsystem reviewers + adversarial verify). Fixed in batch 1:
+- **Markdown XSS** in privileged renderer → DOMPurify-sanitize marked output.
+- **Remote server**: SSRF guard (block local/private/link-local/metadata), remote DB **read-only** (reject non-SELECT), WS **maxPayload** cap, and **bind to Tailscale IP** when present (not 0.0.0.0/LAN).
+- **Data loss on quit** → flush debounced store+settings on `beforeunload`.
+- **Non-atomic JSON writes** → `atomicWrite` (temp + rename) for all state stores.
+- PTY buffer trims to a line break (no mid-escape replay); canvasPos cleaned on close; sqlite test handle closed in finally.
+- Added Vitest + 26 tests (layout, curl, themes, ssh, SSRF/read-only guards).
+
+Remaining (batch 2, lower severity): token-in-URL (WS limitation), fs binary read/write + path confinement, DPAPI/b64 password fallback when safeStorage unavailable, FitAddon zero-dim guard, splitActive termInit for shell. See task output wr8a4sogg for full detail.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).

@@ -141,6 +141,7 @@ const DEFAULTS: AppSettings = {
 
 interface SettingsState extends AppSettings {
     settingsOpen: boolean
+    flush: () => void
     load: () => Promise<void>
     setTerminal: (patch: Partial<AppSettings["terminal"]>) => void
     setEditor: (patch: Partial<AppSettings["editor"]>) => void
@@ -163,12 +164,20 @@ interface SettingsState extends AppSettings {
 export const useSettings = create<SettingsState>((set, get) => {
     // Debounced — accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
+    const writeNow = (): void => {
+        const { terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote })
+    }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
-        persistTimer = setTimeout(() => {
-            const { terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote } = get()
-            window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote })
-        }, 300)
+        persistTimer = setTimeout(writeNow, 300)
+    }
+    const flush = (): void => {
+        if (persistTimer) {
+            clearTimeout(persistTimer)
+            persistTimer = null
+        }
+        writeNow()
     }
 
     // Reflect the remote config into the actual server (start/stop).
@@ -181,6 +190,7 @@ export const useSettings = create<SettingsState>((set, get) => {
     return {
         ...DEFAULTS,
         settingsOpen: false,
+        flush,
 
         load: async () => {
             const raw = (await window.api.settings.load()) as Partial<AppSettings> | null

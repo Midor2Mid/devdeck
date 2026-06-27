@@ -61,7 +61,11 @@ export function createPty(opts: CreateOpts): void {
     proc.onData((data) => {
         session.buffer += data
         if (session.buffer.length > BUFFER_CAP) {
-            session.buffer = session.buffer.slice(-BUFFER_CAP)
+            // Trim to the next line break so replay doesn't start mid escape-sequence.
+            let trimmed = session.buffer.slice(-BUFFER_CAP)
+            const nl = trimmed.indexOf("\n")
+            if (nl > -1 && nl < 8192) trimmed = trimmed.slice(nl + 1)
+            session.buffer = trimmed
         }
         ptyEvents.emit("data", { id, data })
     })

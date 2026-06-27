@@ -22,6 +22,7 @@
     "@xterm/addon-search": "^0.16.0",
     "@xterm/xterm": "^6.0.0",
     "allotment": "^1.20.5",
+    "dompurify": "^3.4.11",
     "marked": "^15.0.12",
     "monaco-editor": "^0.52.2",
     "mysql2": "^3.22.5",

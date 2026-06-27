@@ -41,6 +41,13 @@ export function App(): JSX.Element {
     useEffect(() => {
         init()
         loadSettings()
+        // Flush any pending debounced writes before the window tears down.
+        const flush = (): void => {
+            useStore.getState().flush()
+            useSettings.getState().flush()
+        }
+        window.addEventListener("beforeunload", flush)
+        return () => window.removeEventListener("beforeunload", flush)
     }, [init, loadSettings])
 
     useEffect(() => {

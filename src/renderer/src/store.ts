@@ -73,6 +73,7 @@ interface AppState extends Persisted {
 
     view: MainView
     setView: (view: MainView) => void
+    flush: () => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
     canvasPos: Record<string, CanvasPos>
@@ -129,22 +130,23 @@ function badgeFor(agentId: string): string {
 export const useStore = create<AppState>((set, get) => {
     // Debounced disk persistence — coalesces bursts (e.g. composer keystrokes).
     let persistTimer: ReturnType<typeof setTimeout> | null = null
+    const writeNow = (): void => {
+        const s = get()
+        window.api.workspace.save({
+            termAgents: s.termAgents,
+            termInit: s.termInit,
+            tabsByProject: s.tabsByProject,
+            activeTabByProject: s.activeTabByProject,
+            activePaneByProject: s.activePaneByProject,
+            composerDrafts: s.composerDrafts,
+            view: s.view,
+            termLayout: s.termLayout,
+            canvasPos: s.canvasPos
+        } satisfies Persisted)
+    }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
-        persistTimer = setTimeout(() => {
-            const s = get()
-            window.api.workspace.save({
-                termAgents: s.termAgents,
-                termInit: s.termInit,
-                tabsByProject: s.tabsByProject,
-                activeTabByProject: s.activeTabByProject,
-                activePaneByProject: s.activePaneByProject,
-                composerDrafts: s.composerDrafts,
-                view: s.view,
-                termLayout: s.termLayout,
-                canvasPos: s.canvasPos
-            } satisfies Persisted)
-        }, 300)
+        persistTimer = setTimeout(writeNow, 300)
     }
 
     const setStatus = (termId: string, status: AgentStatus): void => {
@@ -226,10 +228,13 @@ export const useStore = create<AppState>((set, get) => {
             delete termInit[termId]
             const termAgents = { ...s.termAgents }
             delete termAgents[termId]
+            const canvasPos = { ...s.canvasPos }
+            delete canvasPos[termId]
             return {
                 agentStatus,
                 termInit,
                 termAgents,
+                canvasPos,
                 lastAgentTermId: s.lastAgentTermId === termId ? null : s.lastAgentTermId
             }
         })
@@ -357,6 +362,13 @@ export const useStore = create<AppState>((set, get) => {
             set({ view })
             if (view === "terminal" && get().activeId) ack(get().activePaneByProject[get().activeId as string])
             persist()
+        },
+        flush: () => {
+            if (persistTimer) {
+                clearTimeout(persistTimer)
+                persistTimer = null
+            }
+            writeNow()
         },
         setTermLayout: (layout) => {
             set({ termLayout: layout })

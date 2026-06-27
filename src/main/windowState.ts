@@ -1,6 +1,7 @@
 import { app, type BrowserWindow, type Rectangle } from "electron"
 import { join } from "path"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync } from "fs"
+import { atomicWrite } from "./atomic"
 
 interface WindowState extends Partial<Rectangle> {
     maximized?: boolean
@@ -24,7 +25,7 @@ export function saveWindowState(win: BrowserWindow): void {
         const state: WindowState = win.isMaximized()
             ? { ...win.getNormalBounds(), maximized: true }
             : { ...win.getBounds(), maximized: false }
-        writeFileSync(file(), JSON.stringify(state), "utf8")
+        atomicWrite(file(), JSON.stringify(state))
     } catch {
         /* ignore */
     }

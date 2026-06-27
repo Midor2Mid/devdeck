@@ -7,6 +7,7 @@ import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
+import { isBlockedRemoteUrl, isReadOnlySql } from "./guards"
 
 export interface RemoteSession {
     termId: string
@@ -105,6 +106,7 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
     wss = new WebSocketServer({
         server: httpServer,
         path: "/ws",
+        maxPayload: 25 * 1024 * 1024,
         verifyClient: (info, cb) => {
             const url = new URL(info.req.url ?? "/", "http://localhost")
             cb(url.searchParams.get("token") === config.token, 1008, "Unauthorized")
@@ -144,11 +146,22 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
                 case "list":
                     send(ws, { t: "sessions", sessions: deps.getSessions() })
                     break
-                case "http":
-                    httpSend(msg.req as Parameters<typeof httpSend>[0]).then((res) =>
-                        send(ws, { t: "http:res", res })
-                    )
+                case "http": {
+                    const req = msg.req as Parameters<typeof httpSend>[0]
+                    if (!req || isBlockedRemoteUrl(String(req.url ?? ""))) {
+                        send(ws, {
+                            t: "http:res",
+                            res: {
+                                ok: false,
+                                error: "Blocked: remote requests to local/private hosts aren't allowed.",
+                                timeMs: 0
+                            }
+                        })
+                        break
+                    }
+                    httpSend(req).then((res) => send(ws, { t: "http:res", res }))
                     break
+                }
                 case "db:conns":
                     send(ws, { t: "db:conns", conns: allConnections() })
                     break
@@ -164,9 +177,22 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
                             })
                         )
                     break
-                case "db:query":
-                    runQuery(id, String(msg.sql)).then((res) => send(ws, { t: "db:res", res }))
+                case "db:query": {
+                    const sql = String(msg.sql)
+                    if (!isReadOnlySql(sql)) {
+                        send(ws, {
+                            t: "db:res",
+                            res: {
+                                ok: false,
+                                error: "Remote DB access is read-only (SELECT / SHOW / EXPLAIN only).",
+                                timeMs: 0
+                            }
+                        })
+                        break
+                    }
+                    runQuery(id, sql).then((res) => send(ws, { t: "db:res", res }))
                     break
+                }
                 case "upload": {
                     // Save a base64 file from the phone, then type its path into the session.
                     try {
@@ -200,8 +226,11 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
     ptyEvents.on("exit", onExit)
 
     httpServer.on("error", (err) => console.error("[server] error:", err.message))
-    httpServer.listen(config.port, "0.0.0.0")
-    console.log(`[server] DevDeck remote listening on :${config.port}`)
+    // Prefer binding to the Tailscale interface (private) over all-interfaces (LAN).
+    const tailscale = localAddresses().tailscale[0]
+    const host = tailscale ?? "0.0.0.0"
+    httpServer.listen(config.port, host)
+    console.log(`[server] DevDeck remote listening on ${host}:${config.port}`)
 }
 
 export function stop(): void {

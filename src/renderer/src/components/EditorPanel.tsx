@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Editor from "@monaco-editor/react"
 import { marked } from "marked"
+import DOMPurify from "dompurify"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
 import { THEMES } from "../themes"
@@ -147,8 +148,9 @@ export function EditorPanel(): JSX.Element {
         return { words, minutes: Math.max(1, Math.round(words / 200)) }
     }, [active])
 
+    // Sanitize — a .md file must never run script in this privileged renderer.
     const previewHtml = useMemo(
-        () => (active && md ? (marked.parse(active.content) as string) : ""),
+        () => (active && md ? DOMPurify.sanitize(marked.parse(active.content) as string) : ""),
         [active, md]
     )
 

@@ -1,6 +1,7 @@
 import { app } from "electron"
 import { join } from "path"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync } from "fs"
+import { atomicWrite } from "./atomic"
 
 // Opaque per-project terminal layout (tabs + split trees + active selections).
 // Shape is owned by the renderer; main just persists whatever JSON it is given.
@@ -18,7 +19,7 @@ export function loadWorkspace(): unknown {
 
 export function saveWorkspace(data: unknown): void {
     try {
-        writeFileSync(storeFile(), JSON.stringify(data, null, 2), "utf8")
+        atomicWrite(storeFile(), JSON.stringify(data, null, 2))
     } catch (err) {
         console.error("[workspace] failed to save:", err)
     }

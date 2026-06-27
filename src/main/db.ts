@@ -1,6 +1,7 @@
 import { app, safeStorage } from "electron"
 import { join } from "path"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync } from "fs"
+import { atomicWrite } from "./atomic"
 import { randomUUID } from "crypto"
 import { Pool as PgPool, Client as PgClient } from "pg"
 import mysql from "mysql2/promise"
@@ -59,7 +60,7 @@ function load(): Store {
 }
 function save(store: Store): void {
     try {
-        writeFileSync(storeFile(), JSON.stringify(store, null, 2), "utf8")
+        atomicWrite(storeFile(), JSON.stringify(store, null, 2))
     } catch (err) {
         console.error("[db] failed to save connections:", err)
     }
@@ -233,8 +234,11 @@ export async function testConnection(input: ConnInput): Promise<QueryResult> {
     try {
         if (input.kind === "sqlite") {
             const db = new SqliteDatabase(input.database)
-            db.all("SELECT 1")
-            db.close()
+            try {
+                db.all("SELECT 1")
+            } finally {
+                db.close()
+            }
             return { ok: true, timeMs: Date.now() - start }
         }
         if (input.kind === "postgres") {

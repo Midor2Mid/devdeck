@@ -1,6 +1,7 @@
 import { app } from "electron"
 import { join } from "path"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync } from "fs"
+import { atomicWrite } from "./atomic"
 
 // Opaque settings blob — shape is owned by the renderer; main just persists it.
 function storeFile(): string {
@@ -17,7 +18,7 @@ export function loadSettings(): unknown {
 
 export function saveSettings(data: unknown): void {
     try {
-        writeFileSync(storeFile(), JSON.stringify(data, null, 2), "utf8")
+        atomicWrite(storeFile(), JSON.stringify(data, null, 2))
     } catch (err) {
         console.error("[settings] failed to save:", err)
     }
