@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5 — 2026-06-28
+
+- **Agent pipelines** — define an ordered sequence of prompts (each routed to an
+  agent) that runs hands-free: each step is sent, waits for the agent to settle,
+  then the next fires. Same-agent steps reuse one session so context carries
+  across them; tick "fresh" to force a new session. Edit pipelines in
+  Settings → Pipelines (title, agent, prompt, reorder); run from there or the
+  command palette. A floating runner bar shows step/progress with a Stop control;
+  closing a pane mid-run is handled, and runs are logged to the activity feed.
+  Ships with a starter "Investigate → Fix → Verify" pipeline.
+
 ## 0.1.4 — 2026-06-28
 
 - **Terminal record & replay** — hit ⏺ in the terminal toolbar to record a

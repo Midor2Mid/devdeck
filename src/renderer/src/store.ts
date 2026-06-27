@@ -11,6 +11,8 @@ import {
     firstLeaf,
     hasLeaf
 } from "./layout"
+import type { PipelineRun } from "./pipeline"
+import { runnableSteps, sessionPlan } from "./pipeline"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -29,7 +31,7 @@ export interface AppNotification {
     text: string
 }
 
-export type ActivityKind = "start" | "attention" | "close" | "record"
+export type ActivityKind = "start" | "attention" | "close" | "record" | "pipeline"
 export interface ActivityEvent {
     id: string
     ts: number
@@ -156,6 +158,9 @@ function newId(): string {
 
 const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let dataSubscribed = false
+// Bumped on stop / new run; the async runner aborts when its token goes stale.
+let pipelineToken = 0
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 function isAgentId(agentId: string): boolean {
     return !!agentId && agentId !== SHELL
@@ -337,6 +342,7 @@ export const useStore = create<AppState>((set, get) => {
         activityOpen: false,
         recordingTermId: null,
         recordingsOpen: false,
+        pipelineRun: null,
         switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
@@ -463,6 +469,99 @@ export const useStore = create<AppState>((set, get) => {
         setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
         noteRecording: (termId, label) => pushActivity("record", termId, label),
 
+        stopPipeline: () => {
+            pipelineToken += 1
+            set((s) => (s.pipelineRun ? { pipelineRun: { ...s.pipelineRun, status: "stopped" } } : {}))
+            setTimeout(() => {
+                if (get().pipelineRun?.status === "stopped") set({ pipelineRun: null })
+            }, 2500)
+        },
+
+        runPipeline: (pipelineId) => {
+            const pipeline = useSettings.getState().pipelines.find((p) => p.id === pipelineId)
+            if (!pipeline || !get().activeId) return
+            const steps = runnableSteps(pipeline)
+            if (steps.length === 0) return
+
+            pipelineToken += 1
+            const token = pipelineToken
+            const stale = (): boolean => token !== pipelineToken
+
+            const setRun = (patch: Partial<PipelineRun>): void =>
+                set((s) => ({ pipelineRun: s.pipelineRun ? { ...s.pipelineRun, ...patch } : s.pipelineRun }))
+
+            // Wait until an agent term has settled: seen working, then idle for a beat.
+            const waitForIdle = async (termId: string): Promise<"idle" | "stopped" | "gone"> => {
+                const start = Date.now()
+                let sawWork = false
+                for (;;) {
+                    if (stale()) return "stopped"
+                    if (!get().termAgents[termId]) return "gone"
+                    const st = get().agentStatus[termId]
+                    if (st === "working") sawWork = true
+                    if (st === "attention") setRun({ status: "waiting" })
+                    else if (get().pipelineRun?.status === "waiting") setRun({ status: "running" })
+                    const elapsed = Date.now() - start
+                    // Require either observed work or a minimum grace, then a stable idle.
+                    if (st === "idle" && (sawWork || elapsed > 4000) && elapsed > 1500) return "idle"
+                    await sleep(300)
+                }
+            }
+
+            set({
+                pipelineRun: {
+                    pipelineId,
+                    name: pipeline.name,
+                    stepIndex: 0,
+                    total: steps.length,
+                    stepTitle: steps[0].title,
+                    status: "running"
+                }
+            })
+            pushActivity("pipeline", get().lastAgentTermId ?? "", `${pipeline.name} · started`)
+
+            void (async () => {
+                const liveByAgent: Record<string, string | undefined> = {}
+                for (let i = 0; i < steps.length; i++) {
+                    if (stale()) return
+                    const step = steps[i]
+                    setRun({ stepIndex: i, stepTitle: step.title, status: "running" })
+
+                    const plan = sessionPlan(step, liveByAgent)
+                    let termId = plan.termId
+                    if (!plan.reuse || !termId) {
+                        termId = get().newTab(step.agentId)
+                        if (!termId) {
+                            setRun({ status: "error" })
+                            return
+                        }
+                        liveByAgent[step.agentId] = termId
+                        // Give the freshly-spawned agent CLI time to boot before typing.
+                        await sleep(2800)
+                        if (stale()) return
+                    } else {
+                        get().jumpToTerm(termId)
+                    }
+
+                    // Type the prompt and submit it.
+                    window.api.pty.input(termId, step.prompt + "\r")
+                    set({ lastAgentTermId: termId })
+                    await sleep(600)
+
+                    const result = await waitForIdle(termId)
+                    if (result === "stopped") return
+                    // "gone" (user closed the pane) — continue to next step regardless.
+                }
+                if (stale()) return
+                setRun({ status: "done" })
+                pushActivity("pipeline", get().lastAgentTermId ?? "", `${pipeline.name} · done`)
+                setTimeout(() => {
+                    if (get().pipelineRun?.status === "done" && token === pipelineToken)
+                        set({ pipelineRun: null })
+                }, 4000)
+            })()
+        },
+
         sessions: () => buildSessions(false),
         agentSessions: () => buildSessions(true),
 
@@ -513,7 +612,7 @@ export const useStore = create<AppState>((set, get) => {
 
         newTab: (agentId, initialCommand, label) => {
             const projectId = get().activeId
-            if (!projectId) return
+            if (!projectId) return undefined
             const termId = newId()
             const tabId = newId()
             const count = (get().tabsByProject[projectId] ?? []).length + 1
@@ -541,6 +640,7 @@ export const useStore = create<AppState>((set, get) => {
             }))
             if (isAgentId(agentId)) pushActivity("start", termId, `${tab.name} · started`)
             persist()
+            return termId
         },
 
         splitActive: (dir, agentId) => {

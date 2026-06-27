@@ -27,6 +27,7 @@ export function CommandPalette(): JSX.Element {
     const store = useStore()
     const agents = useSettings((s) => s.agents)
     const sshProfiles = useSettings((s) => s.sshProfiles)
+    const pipelines = useSettings((s) => s.pipelines)
     const setAppearance = useSettings((s) => s.setAppearance)
     const openSettings = useSettings((s) => s.openSettings)
     const close = (): void => store.setPaletteOpen(false)
@@ -106,10 +107,17 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
         cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })
+        for (const p of pipelines)
+            cmds.push({
+                id: "pipeline:" + p.id,
+                section: "Pipelines",
+                title: "Run pipeline: " + p.name,
+                run: () => store.runPipeline(p.id)
+            })
         cmds.push({ id: "act:recordings", section: "Actions", title: "Recordings — replay a session", run: () => store.setRecordingsOpen(true) })
         cmds.push({ id: "act:activity", section: "Actions", title: "Open activity feed", run: () => store.setActivityOpen(true) })
         return cmds
-    }, [agents, sshProfiles, store, setAppearance, openSettings])
+    }, [agents, sshProfiles, pipelines, store, setAppearance, openSettings])
 
     const filtered = useMemo(() => commands.filter((c) => matches(c.title, q)).slice(0, 50), [commands, q])
 

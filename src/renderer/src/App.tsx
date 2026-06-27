@@ -13,6 +13,7 @@ import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
 import { ActivityPanel } from "./components/ActivityPanel"
 import { RecordingsModal } from "./components/RecordingsModal"
+import { PipelineBar } from "./components/PipelineBar"
 import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
 
@@ -158,6 +159,7 @@ export function App(): JSX.Element {
             {paletteOpen && <CommandPalette />}
             {activityOpen && <ActivityPanel />}
             {recordingsOpen && <RecordingsModal />}
+            <PipelineBar />
             <Toasts />
         </div>
     )

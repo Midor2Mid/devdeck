@@ -4,7 +4,8 @@ const ICON: Record<ActivityKind, string> = {
     start: "▸",
     attention: "⚑",
     close: "×",
-    record: "⏺"
+    record: "⏺",
+    pipeline: "⇥"
 }
 
 function ago(ts: number): string {

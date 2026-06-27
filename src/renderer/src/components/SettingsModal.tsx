@@ -4,6 +4,7 @@ import { useSettings, type ShellKind } from "../settings"
 import { useStore } from "../store"
 import { THEMES } from "../themes"
 import type { McpServer } from "../../../preload/index"
+import { type Pipeline, type PipelineStep, isRunnable, moveItem } from "../pipeline"
 
 const THEME_LIST = Object.values(THEMES)
 import type { ServerStatus } from "../../../preload/index"
@@ -14,6 +15,7 @@ type Section =
     | "editor"
     | "agents"
     | "snippets"
+    | "pipelines"
     | "git"
     | "ssh"
     | "mcp"
@@ -27,6 +29,7 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "editor", label: "Editor" },
     { key: "agents", label: "Agents" },
     { key: "snippets", label: "Snippets" },
+    { key: "pipelines", label: "Pipelines" },
     { key: "git", label: "Git" },
     { key: "ssh", label: "SSH" },
     { key: "mcp", label: "MCP" },
@@ -279,6 +282,136 @@ function SnippetsSection(): JSX.Element {
                 Type <code>/name</code> in the prompt composer to insert a snippet's text —
                 reusable prompts for reviews, commits, explanations, etc.
             </p>
+        </div>
+    )
+}
+
+function PipelinesSection(): JSX.Element {
+    const pipelines = useSettings((s) => s.pipelines)
+    const setPipelines = useSettings((s) => s.setPipelines)
+    const agents = useSettings((s) => s.agents)
+    const runPipeline = useStore((s) => s.runPipeline)
+    const closeSettings = useSettings((s) => s.closeSettings)
+
+    const updatePipe = (pi: number, patch: Partial<Pipeline>): void =>
+        setPipelines(pipelines.map((p, idx) => (idx === pi ? { ...p, ...patch } : p)))
+    const removePipe = (pi: number): void => setPipelines(pipelines.filter((_, idx) => idx !== pi))
+    const addPipe = (): void =>
+        setPipelines([
+            ...pipelines,
+            { id: crypto.randomUUID(), name: "New pipeline", steps: [] }
+        ])
+
+    const setSteps = (pi: number, steps: PipelineStep[]): void => updatePipe(pi, { steps })
+    const addStep = (pi: number): void =>
+        setSteps(pi, [
+            ...pipelines[pi].steps,
+            {
+                id: crypto.randomUUID(),
+                title: "Step " + (pipelines[pi].steps.length + 1),
+                agentId: agents[0]?.id ?? "claude",
+                prompt: "",
+                fresh: false
+            }
+        ])
+    const updateStep = (pi: number, si: number, patch: Partial<PipelineStep>): void =>
+        setSteps(
+            pi,
+            pipelines[pi].steps.map((st, idx) => (idx === si ? { ...st, ...patch } : st))
+        )
+    const removeStep = (pi: number, si: number): void =>
+        setSteps(pi, pipelines[pi].steps.filter((_, idx) => idx !== si))
+    const moveStep = (pi: number, si: number, dir: -1 | 1): void =>
+        setSteps(pi, moveItem(pipelines[pi].steps, si, si + dir))
+
+    const run = (pi: number): void => {
+        closeSettings()
+        runPipeline(pipelines[pi].id)
+    }
+
+    return (
+        <div className="settings-section">
+            <h3>Agent pipelines</h3>
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+                A pipeline sends a sequence of prompts to your agents, waiting for each to
+                finish before sending the next. Same-agent steps reuse one session, so context
+                carries across them. Run from here or the command palette (<code>Ctrl+Shift+P</code>).
+            </p>
+            {pipelines.map((p, pi) => (
+                <div key={p.id} className="pipe-edit">
+                    <div className="pipe-edit-head">
+                        <input
+                            className="pipe-name"
+                            value={p.name}
+                            onChange={(e) => updatePipe(pi, { name: e.target.value })}
+                        />
+                        <button
+                            className="btn-min"
+                            onClick={() => run(pi)}
+                            disabled={!isRunnable(p)}
+                            title="Run now"
+                        >
+                            ▶ run
+                        </button>
+                        <button className="row-remove" title="Remove" onClick={() => removePipe(pi)}>
+                            ×
+                        </button>
+                    </div>
+                    {p.steps.map((st, si) => (
+                        <div key={st.id} className="pipe-step">
+                            <div className="pipe-step-head">
+                                <span className="pipe-step-num">{si + 1}</span>
+                                <input
+                                    className="pipe-step-title"
+                                    value={st.title}
+                                    placeholder="Step title"
+                                    onChange={(e) => updateStep(pi, si, { title: e.target.value })}
+                                />
+                                <select
+                                    className="pipe-step-agent"
+                                    value={st.agentId}
+                                    onChange={(e) => updateStep(pi, si, { agentId: e.target.value })}
+                                >
+                                    {agents.map((a) => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <label className="pipe-fresh" title="Start a new session for this step instead of reusing the agent's">
+                                    <input
+                                        type="checkbox"
+                                        checked={st.fresh}
+                                        onChange={(e) => updateStep(pi, si, { fresh: e.target.checked })}
+                                    />
+                                    fresh
+                                </label>
+                                <button className="btn-min" disabled={si === 0} onClick={() => moveStep(pi, si, -1)} title="Move up">
+                                    ↑
+                                </button>
+                                <button className="btn-min" disabled={si === p.steps.length - 1} onClick={() => moveStep(pi, si, 1)} title="Move down">
+                                    ↓
+                                </button>
+                                <button className="row-remove" title="Remove step" onClick={() => removeStep(pi, si)}>
+                                    ×
+                                </button>
+                            </div>
+                            <textarea
+                                className="pipe-step-prompt"
+                                value={st.prompt}
+                                placeholder="Prompt sent to the agent for this step"
+                                onChange={(e) => updateStep(pi, si, { prompt: e.target.value })}
+                            />
+                        </div>
+                    ))}
+                    <button className="btn-min" style={{ marginTop: 6 }} onClick={() => addStep(pi)}>
+                        + Add step
+                    </button>
+                </div>
+            ))}
+            <button onClick={addPipe} style={{ marginTop: 10 }}>
+                + Add pipeline
+            </button>
         </div>
     )
 }
@@ -712,6 +845,8 @@ export function SettingsModal(): JSX.Element {
                     {section === "agents" && <AgentsSection />}
 
                     {section === "snippets" && <SnippetsSection />}
+
+                    {section === "pipelines" && <PipelinesSection />}
 
                     {section === "git" && <GitSection />}
 

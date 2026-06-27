@@ -2297,6 +2297,162 @@ select:focus {
     overflow: hidden;
 }
 
+/* ---------- Pipeline runner bar ---------- */
+.pipeline-bar {
+    position: fixed;
+    bottom: 38px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 65;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 420px;
+    max-width: 90vw;
+    padding: 10px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    animation: toast-in 0.18s ease;
+}
+.pipeline-bar.k-waiting {
+    border-left-color: var(--accent);
+}
+.pipeline-bar.k-done {
+    border-left-color: var(--ok);
+}
+.pipeline-bar.k-stopped,
+.pipeline-bar.k-error {
+    border-left-color: var(--danger);
+}
+.pipeline-icon {
+    color: var(--accent);
+    font-size: 16px;
+}
+.pipeline-info {
+    flex: 1;
+    min-width: 0;
+}
+.pipeline-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 12px;
+}
+.pipeline-step-count {
+    color: var(--faint);
+    font-weight: 400;
+}
+.pipeline-status {
+    margin-left: auto;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+}
+.pipeline-status.s-waiting {
+    color: var(--accent);
+}
+.pipeline-status.s-done {
+    color: var(--ok);
+}
+.pipeline-status.s-stopped,
+.pipeline-status.s-error {
+    color: var(--danger);
+}
+.pipeline-step {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 3px 0 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pipeline-progress {
+    height: 4px;
+    background: var(--bg-3);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.pipeline-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+}
+
+/* ---------- Pipelines editor (settings) ---------- */
+.pipe-edit {
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+.pipe-edit-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.pipe-name {
+    flex: 1;
+    font-weight: 600;
+}
+.pipe-step {
+    border: 1px solid var(--border-soft);
+    border-radius: 7px;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: var(--bg-3);
+}
+.pipe-step-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.pipe-step-num {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bg-2);
+    color: var(--muted);
+    font-size: 10px;
+}
+.pipe-step-title {
+    flex: 1;
+    min-width: 0;
+}
+.pipe-step-agent {
+    flex: none;
+    width: 96px;
+}
+.pipe-fresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+.pipe-fresh input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+}
+.pipe-step-prompt {
+    width: 100%;
+    min-height: 52px;
+    resize: vertical;
+    font-size: 12px;
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;
