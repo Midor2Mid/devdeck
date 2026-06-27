@@ -109,6 +109,11 @@ interface AppState extends Persisted {
     setRecordingsOpen: (open: boolean) => void
     noteRecording: (termId: string, label: string) => void
 
+    // Agent pipelines (runtime-only)
+    pipelineRun: PipelineRun | null
+    runPipeline: (pipelineId: string) => void
+    stopPipeline: () => void
+
     // Overlays / panels (runtime-only)
     switcherOpen: boolean
     openSwitcher: () => void
@@ -135,7 +140,7 @@ interface AppState extends Persisted {
     activePane: (projectId: string) => string | undefined
     agentOf: (termId: string) => string
 
-    newTab: (agentId: string, initialCommand?: string, label?: string) => void
+    newTab: (agentId: string, initialCommand?: string, label?: string) => string | undefined
     splitActive: (dir: SplitDir, agentId: string) => void
     closePane: (termId: string) => void
     closeActivePane: () => void

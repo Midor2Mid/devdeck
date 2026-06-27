@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { applyTheme, THEMES, type ThemeId } from "./themes"
+import type { Pipeline } from "./pipeline"
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
 
@@ -69,6 +70,7 @@ export interface AppSettings {
     agents: AgentPreset[]
     agentIdleMs: number
     snippets: Snippet[]
+    pipelines: Pipeline[]
     gitAccounts: GitAccount[]
     sshProfiles: SshProfile[]
     appearance: {
@@ -126,6 +128,35 @@ const DEFAULTS: AppSettings = {
             body: "Stage the changes and commit with a clear conventional-commit message."
         }
     ],
+    pipelines: [
+        {
+            id: "ship",
+            name: "Investigate → Fix → Verify",
+            steps: [
+                {
+                    id: "s1",
+                    title: "Investigate",
+                    agentId: "claude",
+                    prompt: "Investigate the issue I just described. Find the root cause and the exact files/lines involved. Don't change anything yet — report findings.",
+                    fresh: false
+                },
+                {
+                    id: "s2",
+                    title: "Implement the fix",
+                    agentId: "claude",
+                    prompt: "Now implement the smallest correct fix for the root cause you found. Keep the change focused.",
+                    fresh: false
+                },
+                {
+                    id: "s3",
+                    title: "Verify",
+                    agentId: "claude",
+                    prompt: "Run the tests and a typecheck. If anything fails, fix it and re-run until green. Summarize what changed.",
+                    fresh: false
+                }
+            ]
+        }
+    ],
     gitAccounts: [],
     sshProfiles: [],
     appearance: {
@@ -148,6 +179,7 @@ interface SettingsState extends AppSettings {
     setAgents: (agents: AgentPreset[]) => void
     setAgentIdleMs: (ms: number) => void
     setSnippets: (snippets: Snippet[]) => void
+    setPipelines: (pipelines: Pipeline[]) => void
     setGitAccounts: (accounts: GitAccount[]) => void
     setSshProfiles: (profiles: SshProfile[]) => void
     agentById: (id: string) => AgentPreset | undefined
@@ -165,8 +197,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced — accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, appearance, remote } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, appearance, remote })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -204,6 +236,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                     })),
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     snippets: raw.snippets ?? DEFAULTS.snippets,
+                    pipelines: raw.pipelines ?? DEFAULTS.pipelines,
                     gitAccounts: raw.gitAccounts ?? DEFAULTS.gitAccounts,
                     sshProfiles: raw.sshProfiles ?? DEFAULTS.sshProfiles,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
@@ -232,6 +265,10 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         setSnippets: (snippets) => {
             set({ snippets })
+            persist()
+        },
+        setPipelines: (pipelines) => {
+            set({ pipelines })
             persist()
         },
         setGitAccounts: (gitAccounts) => {

@@ -1,20 +1,12 @@
 import { useState } from "react"
 import type { HttpResponse } from "../../../preload/index"
 import { parseCurl } from "../curl"
+import { KeyValueEditor, KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor"
+import { splitUrl, parseQueryPairs, buildUrl } from "../httpParams"
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
-
-function parseHeaders(text: string): Record<string, string> {
-    const headers: Record<string, string> = {}
-    for (const line of text.split("\n")) {
-        const idx = line.indexOf(":")
-        if (idx === -1) continue
-        const key = line.slice(0, idx).trim()
-        const value = line.slice(idx + 1).trim()
-        if (key) headers[key] = value
-    }
-    return headers
-}
+type ReqTab = "params" | "headers" | "body"
+type BodyType = "none" | "json" | "form"
 
 function prettify(body: string, contentType?: string): string {
     if (contentType && contentType.includes("json")) {
@@ -27,37 +19,60 @@ function prettify(body: string, contentType?: string): string {
     return body
 }
 
+const activeCount = (rows: KvRow[]): number =>
+    rows.filter((r) => r.enabled && r.key.trim() !== "").length
+
+const hasHeader = (hdrs: Record<string, string>, name: string): boolean =>
+    Object.keys(hdrs).some((k) => k.toLowerCase() === name.toLowerCase())
+
 export function ApiPanel(): JSX.Element {
     const [method, setMethod] = useState("GET")
     const [url, setUrl] = useState("")
-    const [headersText, setHeadersText] = useState("")
-    const [body, setBody] = useState("")
-    const [reqTab, setReqTab] = useState<"headers" | "body">("headers")
+    const [params, setParams] = useState<KvRow[]>([emptyRow()])
+    const [headers, setHeaders] = useState<KvRow[]>([emptyRow()])
+    const [bodyType, setBodyType] = useState<BodyType>("none")
+    const [bodyText, setBodyText] = useState("")
+    const [formRows, setFormRows] = useState<KvRow[]>([emptyRow()])
+    const [reqTab, setReqTab] = useState<ReqTab>("params")
     const [resp, setResp] = useState<HttpResponse | null>(null)
     const [sending, setSending] = useState(false)
     const [imported, setImported] = useState(false)
 
-    // Postman-style smart paste: if the value is a cURL command, parse it into
-    // method/url/headers/body; otherwise treat it as a plain URL.
+    // URL bar edited → reflect query into the Params table (keeping disabled rows).
+    const setUrlSyncParams = (value: string): void => {
+        setUrl(value)
+        const fresh = rowsFromPairs(parseQueryPairs(value)) // [...enabled, trailing empty]
+        const disabled = params.filter((r) => !r.enabled && (r.key !== "" || r.value !== ""))
+        setParams([...fresh.slice(0, -1), ...disabled, fresh[fresh.length - 1]])
+    }
+
+    // Params table edited → rebuild the URL's query string.
+    const onParamsChange = (rows: KvRow[]): void => {
+        setParams(rows)
+        setUrl(buildUrl(splitUrl(url).base, rows))
+    }
+
+    // Smart paste: a cURL command populates the whole request; else it's a URL.
     const onUrlChange = (value: string): void => {
         if (/^\s*curl\s/i.test(value)) {
             const parsed = parseCurl(value)
             if (parsed) {
                 setMethod(parsed.method)
-                setUrl(parsed.url)
-                setHeadersText(
-                    Object.entries(parsed.headers)
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join("\n")
+                setUrlSyncParams(parsed.url)
+                setHeaders(
+                    rowsFromPairs(Object.entries(parsed.headers).map(([key, v]) => ({ key, value: v })))
                 )
-                setBody(parsed.body)
-                if (parsed.body) setReqTab("body")
+                if (parsed.body) {
+                    setBodyText(parsed.body)
+                    setBodyType("json")
+                    setReqTab("body")
+                }
                 setImported(true)
                 setTimeout(() => setImported(false), 1800)
                 return
             }
         }
-        setUrl(value)
+        setUrlSyncParams(value)
     }
 
     const send = async (): Promise<void> => {
@@ -65,11 +80,32 @@ export function ApiPanel(): JSX.Element {
         setSending(true)
         setResp(null)
         try {
+            const hdrs: Record<string, string> = {}
+            headers
+                .filter((h) => h.enabled && h.key.trim() !== "")
+                .forEach((h) => (hdrs[h.key.trim()] = h.value))
+
+            let outBody: string | undefined
+            if (bodyType === "json" && bodyText.trim()) {
+                outBody = bodyText
+                if (!hasHeader(hdrs, "content-type")) hdrs["Content-Type"] = "application/json"
+            } else if (bodyType === "form") {
+                const enc = formRows
+                    .filter((r) => r.enabled && r.key.trim() !== "")
+                    .map((r) => `${encodeURIComponent(r.key)}=${encodeURIComponent(r.value)}`)
+                    .join("&")
+                if (enc) {
+                    outBody = enc
+                    if (!hasHeader(hdrs, "content-type"))
+                        hdrs["Content-Type"] = "application/x-www-form-urlencoded"
+                }
+            }
+
             const res = await window.api.http.send({
                 method,
                 url: url.trim(),
-                headers: parseHeaders(headersText),
-                body: body || undefined
+                headers: hdrs,
+                body: outBody
             })
             setResp(res)
         } finally {
@@ -83,6 +119,10 @@ export function ApiPanel(): JSX.Element {
         if (status < 400) return "redirect"
         return "error"
     }
+
+    const paramN = activeCount(params)
+    const headerN = activeCount(headers)
+    const bodyDot = bodyType !== "none" && (bodyType === "json" ? bodyText.trim() !== "" : activeCount(formRows) > 0)
 
     return (
         <div className="api-panel">
@@ -111,33 +151,56 @@ export function ApiPanel(): JSX.Element {
 
             <div className="api-req">
                 <div className="subtabs">
-                    <span
-                        className={reqTab === "headers" ? "active" : ""}
-                        onClick={() => setReqTab("headers")}
-                    >
-                        Headers
+                    <span className={reqTab === "params" ? "active" : ""} onClick={() => setReqTab("params")}>
+                        Params{paramN ? ` (${paramN})` : ""}
                     </span>
-                    <span
-                        className={reqTab === "body" ? "active" : ""}
-                        onClick={() => setReqTab("body")}
-                    >
-                        Body
+                    <span className={reqTab === "headers" ? "active" : ""} onClick={() => setReqTab("headers")}>
+                        Headers{headerN ? ` (${headerN})` : ""}
+                    </span>
+                    <span className={reqTab === "body" ? "active" : ""} onClick={() => setReqTab("body")}>
+                        Body{bodyDot ? " •" : ""}
                     </span>
                 </div>
-                {reqTab === "headers" ? (
-                    <textarea
-                        className="code-area"
-                        placeholder={"One per line, e.g.\nAuthorization: Bearer xxx\nContent-Type: application/json"}
-                        value={headersText}
-                        onChange={(e) => setHeadersText(e.target.value)}
+
+                {reqTab === "params" && (
+                    <KeyValueEditor rows={params} onChange={onParamsChange} />
+                )}
+                {reqTab === "headers" && (
+                    <KeyValueEditor
+                        rows={headers}
+                        onChange={setHeaders}
+                        keyPlaceholder="Header"
+                        valuePlaceholder="value"
                     />
-                ) : (
-                    <textarea
-                        className="code-area"
-                        placeholder={'{\n  "key": "value"\n}'}
-                        value={body}
-                        onChange={(e) => setBody(e.target.value)}
-                    />
+                )}
+                {reqTab === "body" && (
+                    <div className="body-pane">
+                        <div className="body-types">
+                            {(["none", "json", "form"] as BodyType[]).map((t) => (
+                                <label key={t}>
+                                    <input
+                                        type="radio"
+                                        name="bodyType"
+                                        checked={bodyType === t}
+                                        onChange={() => setBodyType(t)}
+                                    />
+                                    {t === "none" ? "None" : t === "json" ? "JSON" : "Form"}
+                                </label>
+                            ))}
+                        </div>
+                        {bodyType === "json" && (
+                            <textarea
+                                className="code-area"
+                                placeholder={'{\n  "key": "value"\n}'}
+                                value={bodyText}
+                                onChange={(e) => setBodyText(e.target.value)}
+                            />
+                        )}
+                        {bodyType === "form" && (
+                            <KeyValueEditor rows={formRows} onChange={setFormRows} keyPlaceholder="field" />
+                        )}
+                        {bodyType === "none" && <div className="muted body-none">No request body.</div>}
+                    </div>
                 )}
             </div>
 
