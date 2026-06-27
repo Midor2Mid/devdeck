@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useSettings, type SavedRequest } from "../settings"
+import { ImportModal } from "./ImportModal"
 
 interface Props {
     onLoad: (req: SavedRequest) => void
@@ -11,6 +12,7 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
     const setCollections = useSettings((s) => s.setCollections)
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
     const [editId, setEditId] = useState<string | null>(null)
+    const [importOpen, setImportOpen] = useState(false)
 
     const toggle = (id: string): void => {
         setCollapsed((prev) => {
@@ -43,10 +45,16 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
         <div className="col-sidebar">
             <div className="col-head">
                 <span>Collections</span>
-                <button className="col-new" onClick={newCollection} title="New collection">
-                    +
-                </button>
+                <div className="col-head-actions">
+                    <button className="col-new" onClick={() => setImportOpen(true)} title="Import (Postman / OpenAPI / curl)">
+                        ↓
+                    </button>
+                    <button className="col-new" onClick={newCollection} title="New collection">
+                        +
+                    </button>
+                </div>
             </div>
+            {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
             <div className="col-scroll">
                 {collections.length === 0 && (
                     <div className="muted small col-empty">
