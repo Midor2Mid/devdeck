@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
-import { useSettings } from "../settings"
+import { useSettings, sshCommand } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { paneRegistry } from "../paneRegistry"
 import { SplitView } from "./SplitView"
@@ -24,6 +24,7 @@ export function TerminalView(): JSX.Element {
     const setTermLayout = useStore((s) => s.setTermLayout)
     const focusPane = useStore((s) => s.focusPane)
     const agents = useSettings((s) => s.agents)
+    const sshProfiles = useSettings((s) => s.sshProfiles)
 
     const [editingId, setEditingId] = useState<string | null>(null)
     const [draft, setDraft] = useState("")
@@ -215,6 +216,23 @@ export function TerminalView(): JSX.Element {
                                                     ↻
                                                 </span>
                                             )}
+                                        </div>
+                                    ))}
+                                    {sshProfiles.length > 0 && (
+                                        <div className="agent-menu-divider">SSH</div>
+                                    )}
+                                    {sshProfiles.map((p) => (
+                                        <div key={p.id} className="agent-menu-row">
+                                            <span
+                                                className="agent-menu-name"
+                                                onClick={() => {
+                                                    newTab(SHELL, sshCommand(p), p.label)
+                                                    setMenuOpen(false)
+                                                }}
+                                            >
+                                                <span className="agent-badge">SSH</span>
+                                                {p.label}
+                                            </span>
                                         </div>
                                     ))}
                                 </div>

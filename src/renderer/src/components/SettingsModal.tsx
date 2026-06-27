@@ -13,6 +13,7 @@ type Section =
     | "agents"
     | "snippets"
     | "git"
+    | "ssh"
     | "remote"
     | "shortcuts"
     | "about"
@@ -24,10 +25,67 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "agents", label: "Agents" },
     { key: "snippets", label: "Snippets" },
     { key: "git", label: "Git" },
+    { key: "ssh", label: "SSH" },
     { key: "remote", label: "Remote (Mobile)" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
 ]
+
+function SshSection(): JSX.Element {
+    const profiles = useSettings((s) => s.sshProfiles)
+    const setSshProfiles = useSettings((s) => s.setSshProfiles)
+
+    const update = (i: number, patch: Record<string, string>): void =>
+        setSshProfiles(profiles.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
+    const remove = (i: number): void => setSshProfiles(profiles.filter((_, idx) => idx !== i))
+    const add = (): void =>
+        setSshProfiles([
+            ...profiles,
+            { id: crypto.randomUUID(), label: "New host", host: "", user: "", port: "22", args: "" }
+        ])
+
+    return (
+        <div className="settings-section">
+            <h3>SSH hosts</h3>
+            {profiles.map((p, i) => (
+                <div key={p.id} className="git-account">
+                    <div className="git-account-head">
+                        <input
+                            className="git-label"
+                            value={p.label}
+                            placeholder="my-vps"
+                            onChange={(e) => update(i, { label: e.target.value })}
+                        />
+                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                            ×
+                        </button>
+                    </div>
+                    <div className="form-grid">
+                        <label>User</label>
+                        <input value={p.user} onChange={(e) => update(i, { user: e.target.value })} />
+                        <label>Host</label>
+                        <input value={p.host} onChange={(e) => update(i, { host: e.target.value })} />
+                        <label>Port</label>
+                        <input value={p.port} onChange={(e) => update(i, { port: e.target.value })} />
+                        <label>Extra args</label>
+                        <input
+                            value={p.args}
+                            placeholder="-i ~/.ssh/id_vps"
+                            onChange={(e) => update(i, { args: e.target.value })}
+                        />
+                    </div>
+                </div>
+            ))}
+            <button onClick={add} style={{ marginTop: 8 }}>
+                + Add host
+            </button>
+            <p className="settings-hint">
+                Launch an SSH session from the terminal's <b>▾</b> menu — it opens a shell running
+                the <code>ssh</code> command for the host.
+            </p>
+        </div>
+    )
+}
 
 function GitSection(): JSX.Element {
     const accounts = useSettings((s) => s.gitAccounts)
@@ -563,6 +621,8 @@ export function SettingsModal(): JSX.Element {
                     {section === "snippets" && <SnippetsSection />}
 
                     {section === "git" && <GitSection />}
+
+                    {section === "ssh" && <SshSection />}
 
                     {section === "remote" && <RemoteSection />}
 

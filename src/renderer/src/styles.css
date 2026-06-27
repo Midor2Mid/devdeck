@@ -749,6 +749,14 @@ select:focus {
 .agent-menu-resume:hover {
     color: var(--accent-soft);
 }
+.agent-menu-divider {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--faint);
+    padding: 8px 9px 4px;
+    border-top: 1px solid var(--border-soft);
+    margin-top: 4px;
+}
 .agent-badge {
     font-size: 9px;
     letter-spacing: 1px;

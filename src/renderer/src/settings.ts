@@ -35,6 +35,24 @@ export interface GitAccount {
     sshCommand: string
 }
 
+export interface SshProfile {
+    id: string
+    label: string
+    host: string
+    user: string
+    port: string
+    args: string
+}
+
+/** Build an `ssh` command line from a profile. */
+export function sshCommand(p: SshProfile): string {
+    const parts = ["ssh"]
+    if (p.port && p.port !== "22") parts.push("-p", p.port)
+    if (p.args.trim()) parts.push(p.args.trim())
+    parts.push((p.user ? p.user + "@" : "") + p.host)
+    return parts.join(" ")
+}
+
 export interface AppSettings {
     terminal: {
         shell: ShellKind
@@ -52,6 +70,7 @@ export interface AppSettings {
     agentIdleMs: number
     snippets: Snippet[]
     gitAccounts: GitAccount[]
+    sshProfiles: SshProfile[]
     appearance: {
         theme: ThemeId
         accent: string
@@ -108,6 +127,7 @@ const DEFAULTS: AppSettings = {
         }
     ],
     gitAccounts: [],
+    sshProfiles: [],
     appearance: {
         theme: "sumi",
         accent: DEFAULT_ACCENT
@@ -128,6 +148,7 @@ interface SettingsState extends AppSettings {
     setAgentIdleMs: (ms: number) => void
     setSnippets: (snippets: Snippet[]) => void
     setGitAccounts: (accounts: GitAccount[]) => void
+    setSshProfiles: (profiles: SshProfile[]) => void
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
@@ -145,8 +166,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
         persistTimer = setTimeout(() => {
-            const { terminal, editor, agents, agentIdleMs, snippets, gitAccounts, appearance, remote } = get()
-            window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, gitAccounts, appearance, remote })
+            const { terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote } = get()
+            window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, gitAccounts, sshProfiles, appearance, remote })
         }, 300)
     }
 
@@ -174,6 +195,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     snippets: raw.snippets ?? DEFAULTS.snippets,
                     gitAccounts: raw.gitAccounts ?? DEFAULTS.gitAccounts,
+                    sshProfiles: raw.sshProfiles ?? DEFAULTS.sshProfiles,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
@@ -204,6 +226,10 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         setGitAccounts: (gitAccounts) => {
             set({ gitAccounts })
+            persist()
+        },
+        setSshProfiles: (sshProfiles) => {
+            set({ sshProfiles })
             persist()
         },
         agentById: (id) => get().agents.find((a) => a.id === id),

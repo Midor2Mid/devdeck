@@ -100,7 +100,7 @@ interface AppState extends Persisted {
     activePane: (projectId: string) => string | undefined
     agentOf: (termId: string) => string
 
-    newTab: (agentId: string, initialCommand?: string) => void
+    newTab: (agentId: string, initialCommand?: string, label?: string) => void
     splitActive: (dir: SplitDir, agentId: string) => void
     closePane: (termId: string) => void
     closeActivePane: () => void
@@ -415,18 +415,19 @@ export const useStore = create<AppState>((set, get) => {
         activePane: (projectId) => get().activePaneByProject[projectId],
         agentOf: (termId) => get().termAgents[termId] ?? SHELL,
 
-        newTab: (agentId, initialCommand) => {
+        newTab: (agentId, initialCommand, label) => {
             const projectId = get().activeId
             if (!projectId) return
             const termId = newId()
             const tabId = newId()
             const count = (get().tabsByProject[projectId] ?? []).length + 1
             const preset = isAgentId(agentId) ? useSettings.getState().agentById(agentId) : undefined
-            const label = preset ? preset.name.toLowerCase() : "shell"
+            const baseLabel = label ?? (preset ? preset.name.toLowerCase() : "shell")
+            // Agents default to their command; a shell only runs an explicit command (e.g. ssh).
             const init = isAgentId(agentId)
                 ? (initialCommand ?? preset?.command ?? agentId)
-                : undefined
-            const tab: Tab = { id: tabId, name: `${label} ${count}`, root: leaf(termId) }
+                : initialCommand
+            const tab: Tab = { id: tabId, name: `${baseLabel} ${count}`, root: leaf(termId) }
             set((s) => ({
                 termAgents: { ...s.termAgents, [termId]: agentId },
                 termInit: init ? { ...s.termInit, [termId]: init } : s.termInit,
