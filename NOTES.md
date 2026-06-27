@@ -78,7 +78,8 @@ First installable build shipped (`release/DevDeck Setup 0.1.0.exe` + portable `D
 - Packaged-only bugs (asar/native paths) that don't show in `npm run dev`?
 
 **Friction log:**
-- _(add dated entries as you hit them)_
+- 2026-06-27 — Automated engine dogfood (headless under real Electron) all green: atomic persistence, pty spawn+I/O, sqlite CRUD via db.ts, git identity round-trip, remote WS attach+stream, **SSRF guard blocks**, **remote DB read-only enforced**, bad-token rejected. + 26 unit tests pass. Engine is solid; UI "feel" still needs human use.
+- _(add human-use friction here as you hit it)_
 
 ### Hardening audit (2026-06-27) — multi-agent workflow, 17 confirmed findings
 Ran a parallel audit (6 subsystem reviewers + adversarial verify). Fixed in batch 1:
