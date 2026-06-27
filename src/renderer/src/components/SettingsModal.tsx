@@ -11,6 +11,7 @@ type Section =
     | "terminal"
     | "editor"
     | "agents"
+    | "snippets"
     | "remote"
     | "shortcuts"
     | "about"
@@ -20,10 +21,58 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "terminal", label: "Terminal" },
     { key: "editor", label: "Editor" },
     { key: "agents", label: "Agents" },
+    { key: "snippets", label: "Snippets" },
     { key: "remote", label: "Remote (Mobile)" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
 ]
+
+function SnippetsSection(): JSX.Element {
+    const snippets = useSettings((s) => s.snippets)
+    const setSnippets = useSettings((s) => s.setSnippets)
+
+    const update = (i: number, patch: Record<string, string>): void =>
+        setSnippets(snippets.map((sn, idx) => (idx === i ? { ...sn, ...patch } : sn)))
+    const remove = (i: number): void => setSnippets(snippets.filter((_, idx) => idx !== i))
+    const add = (): void =>
+        setSnippets([...snippets, { id: crypto.randomUUID(), name: "new", body: "" }])
+
+    return (
+        <div className="settings-section">
+            <h3>Prompt snippets</h3>
+            {snippets.map((sn, i) => (
+                <div key={sn.id} className="snippet-row">
+                    <div className="snippet-head">
+                        <span className="snippet-slash">/</span>
+                        <input
+                            className="snippet-name"
+                            value={sn.name}
+                            onChange={(e) =>
+                                update(i, { name: e.target.value.replace(/\s+/g, "-") })
+                            }
+                        />
+                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                            ×
+                        </button>
+                    </div>
+                    <textarea
+                        className="snippet-body"
+                        value={sn.body}
+                        placeholder="The text inserted when you type /name"
+                        onChange={(e) => update(i, { body: e.target.value })}
+                    />
+                </div>
+            ))}
+            <button onClick={add} style={{ marginTop: 8 }}>
+                + Add snippet
+            </button>
+            <p className="settings-hint">
+                Type <code>/name</code> in the prompt composer to insert a snippet's text —
+                reusable prompts for reviews, commits, explanations, etc.
+            </p>
+        </div>
+    )
+}
 
 function AgentsSection(): JSX.Element {
     const agents = useSettings((s) => s.agents)
@@ -452,6 +501,8 @@ export function SettingsModal(): JSX.Element {
                     )}
 
                     {section === "agents" && <AgentsSection />}
+
+                    {section === "snippets" && <SnippetsSection />}
 
                     {section === "remote" && <RemoteSection />}
 

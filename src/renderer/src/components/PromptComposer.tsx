@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "../store"
+import { useSettings } from "../settings"
 
 interface Props {
     onClose: () => void
 }
 
+interface Suggestion {
+    key: string
+    label: string
+    insert: string
+}
+
 /**
  * Compose a rich prompt and send it to the focused (last-active) agent session.
- * Supports @file mentions with autocomplete from the active project's files.
+ * `@` autocompletes project files; `/` autocompletes user-defined snippets.
  */
 export function PromptComposer({ onClose }: Props): JSX.Element {
     const activeProject = useStore((s) => s.activeProject())
@@ -16,9 +23,12 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
     const agentSessions = useStore((s) => s.agentSessions)
     const draft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
     const setComposerDraft = useStore((s) => s.setComposerDraft)
+    const snippets = useSettings((s) => s.snippets)
 
     const [files, setFiles] = useState<string[]>([])
-    const [token, setToken] = useState<{ start: number; query: string } | null>(null)
+    const [token, setToken] = useState<{ start: number; query: string; trigger: "@" | "/" } | null>(
+        null
+    )
     const [sel, setSel] = useState(0)
     const ref = useRef<HTMLTextAreaElement>(null)
 
@@ -37,27 +47,38 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         ref.current?.focus()
     }, [activeProject])
 
-    const suggestions = useMemo(() => {
+    const suggestions = useMemo<Suggestion[]>(() => {
         if (!token) return []
         const q = token.query.toLowerCase()
-        return files.filter((f) => f.toLowerCase().includes(q)).slice(0, 8)
-    }, [token, files])
+        if (token.trigger === "@") {
+            return files
+                .filter((f) => f.toLowerCase().includes(q))
+                .slice(0, 8)
+                .map((f) => ({ key: f, label: f, insert: "@" + f + " " }))
+        }
+        return snippets
+            .filter((s) => s.name.toLowerCase().includes(q))
+            .slice(0, 8)
+            .map((s) => ({
+                key: s.id,
+                label: "/" + s.name + " — " + s.body.slice(0, 48),
+                insert: s.body + " "
+            }))
+    }, [token, files, snippets])
 
-    // Detect an active @token (from the last '@' with no whitespace before the caret).
+    // Detect a trigger word (@file or /snippet) at the caret — the whitespace-
+    // delimited word the caret is in, if it starts with @ or /.
     const detectToken = (value: string, caret: number): void => {
-        const upto = value.slice(0, caret)
-        const at = upto.lastIndexOf("@")
-        if (at === -1) {
+        let i = caret - 1
+        while (i >= 0 && !/\s/.test(value[i])) i--
+        const start = i + 1
+        const word = value.slice(start, caret)
+        if (word[0] === "@" || word[0] === "/") {
+            setToken({ start, query: word.slice(1), trigger: word[0] as "@" | "/" })
+            setSel(0)
+        } else {
             setToken(null)
-            return
         }
-        const frag = upto.slice(at + 1)
-        if (/\s/.test(frag)) {
-            setToken(null)
-            return
-        }
-        setToken({ start: at, query: frag })
-        setSel(0)
     }
 
     const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
@@ -65,14 +86,14 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         detectToken(e.target.value, e.target.selectionStart)
     }
 
-    const accept = (path: string): void => {
+    const accept = (item: Suggestion): void => {
         if (!token) return
         const caret = ref.current?.selectionStart ?? text.length
-        const next = text.slice(0, token.start) + "@" + path + " " + text.slice(caret)
+        const next = text.slice(0, token.start) + item.insert + text.slice(caret)
         setText(next)
         setToken(null)
         requestAnimationFrame(() => {
-            const pos = token.start + path.length + 2
+            const pos = token.start + item.insert.length
             ref.current?.setSelectionRange(pos, pos)
             ref.current?.focus()
         })
@@ -128,29 +149,29 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
                         "No agent session — start one to send a prompt"
                     )}
                 </span>
-                <span className="muted small">@ file · Ctrl+Enter send · Esc close</span>
+                <span className="muted small">@ file · / snippet · Ctrl+Enter send · Esc close</span>
             </div>
             <div className="composer-body">
                 <textarea
                     ref={ref}
                     className="composer-input"
-                    placeholder="Write a prompt… use @ to mention a file"
+                    placeholder="Write a prompt… @ to mention a file, / for a snippet"
                     value={text}
                     onChange={onChange}
                     onKeyDown={onKeyDown}
                 />
                 {suggestions.length > 0 && (
                     <div className="mention-pop">
-                        {suggestions.map((f, i) => (
+                        {suggestions.map((item, i) => (
                             <div
-                                key={f}
+                                key={item.key}
                                 className={"mention-item" + (i === sel ? " active" : "")}
                                 onMouseDown={(e) => {
                                     e.preventDefault()
-                                    accept(f)
+                                    accept(item)
                                 }}
                             >
-                                {f}
+                                {item.label}
                             </div>
                         ))}
                     </div>

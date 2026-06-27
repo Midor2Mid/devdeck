@@ -21,6 +21,12 @@ export const KNOWN_KEY_ENV: Record<string, string> = {
     gemini: "GEMINI_API_KEY"
 }
 
+export interface Snippet {
+    id: string
+    name: string
+    body: string
+}
+
 export interface AppSettings {
     terminal: {
         shell: ShellKind
@@ -36,6 +42,7 @@ export interface AppSettings {
     }
     agents: AgentPreset[]
     agentIdleMs: number
+    snippets: Snippet[]
     appearance: {
         theme: ThemeId
         accent: string
@@ -74,6 +81,23 @@ const DEFAULTS: AppSettings = {
         { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY" }
     ],
     agentIdleMs: 1000,
+    snippets: [
+        {
+            id: "review",
+            name: "review",
+            body: "Review my recent changes for correctness, bugs, and clarity. Be concise."
+        },
+        {
+            id: "explain",
+            name: "explain",
+            body: "Explain how this works and call out anything risky or surprising."
+        },
+        {
+            id: "commit",
+            name: "commit",
+            body: "Stage the changes and commit with a clear conventional-commit message."
+        }
+    ],
     appearance: {
         theme: "sumi",
         accent: DEFAULT_ACCENT
@@ -92,6 +116,7 @@ interface SettingsState extends AppSettings {
     setEditor: (patch: Partial<AppSettings["editor"]>) => void
     setAgents: (agents: AgentPreset[]) => void
     setAgentIdleMs: (ms: number) => void
+    setSnippets: (snippets: Snippet[]) => void
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
@@ -109,8 +134,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
         persistTimer = setTimeout(() => {
-            const { terminal, editor, agents, agentIdleMs, appearance, remote } = get()
-            window.api.settings.save({ terminal, editor, agents, agentIdleMs, appearance, remote })
+            const { terminal, editor, agents, agentIdleMs, snippets, appearance, remote } = get()
+            window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, appearance, remote })
         }, 300)
     }
 
@@ -136,6 +161,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                         apiKeyEnv: a.apiKeyEnv ?? KNOWN_KEY_ENV[a.id] ?? ""
                     })),
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
+                    snippets: raw.snippets ?? DEFAULTS.snippets,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
@@ -158,6 +184,10 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         setAgentIdleMs: (ms) => {
             set({ agentIdleMs: ms })
+            persist()
+        },
+        setSnippets: (snippets) => {
+            set({ snippets })
             persist()
         },
         agentById: (id) => get().agents.find((a) => a.id === id),
