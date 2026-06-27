@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.8 — 2026-06-28
+
+- **Worktree-per-agent** — spin up an agent (or shell) in its own git worktree
+  so parallel sessions on one repo don't collide. Settings via the ⑂ toolbar
+  button / command palette: name a branch, pick an agent, and it creates a
+  worktree in a sibling `<project>.worktrees/` folder and launches the session
+  pinned to it. List and remove worktrees from the same place.
+- **Unified change review** — the ✓ toolbar button (or "Review changes" in the
+  palette, or a worktree's "review") opens a diff viewer for any project or
+  worktree: per-file colorized diffs, **stage / unstage / discard**, and a
+  **commit-all** with a message. Review what the agents wrote before it lands.
+- Per-terminal working directory is now persisted (so worktree sessions survive
+  restarts).
+
 ## 0.1.7 — 2026-06-28
 
 - **Pipeline file-triggers** — auto-run a pipeline when files matching a glob

@@ -36,6 +36,8 @@ export function TerminalView(): JSX.Element {
     const recordingTermId = useStore((s) => s.recordingTermId)
     const setRecordingTermId = useStore((s) => s.setRecordingTermId)
     const setRecordingsOpen = useStore((s) => s.setRecordingsOpen)
+    const setWorktreesOpen = useStore((s) => s.setWorktreesOpen)
+    const openChanges = useStore((s) => s.openChanges)
     const noteRecording = useStore((s) => s.noteRecording)
     const activePaneId = useStore((s) => (s.activeId ? s.activePaneByProject[s.activeId] : undefined))
     const findInputRef = useRef<HTMLInputElement>(null)
@@ -336,6 +338,20 @@ export function TerminalView(): JSX.Element {
                         title="Recordings — replay a recorded session"
                     >
                         ▷
+                    </button>
+                    <button
+                        className="icon-action"
+                        onClick={() => setWorktreesOpen(true)}
+                        title="Worktrees — run an agent in its own worktree"
+                    >
+                        ⑂
+                    </button>
+                    <button
+                        className="icon-action"
+                        onClick={() => openChanges(activeProject.path, activeProject.name)}
+                        title="Review changes — stage / discard / commit"
+                    >
+                        ✓
                     </button>
                 </div>
             </div>

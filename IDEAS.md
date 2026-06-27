@@ -1,0 +1,58 @@
+# DevDeck — Ideas Backlog
+
+Living list of feature ideas and product direction. Nothing here is committed
+scope — it's a place to capture thinking so it isn't lost. Built items move to
+`CHANGELOG.md`.
+
+> Philosophy: don't copycat. DevDeck's moat is being a **personal** tool wired to
+> one developer's actual workday (C# backend, outsource team, Jira + Azure DevOps,
+> UAT→PROD). A commercial tool can't justify that specificity; this one can.
+
+## Parity check vs. 1DevTool (2026-06-28)
+
+DevDeck is at rough feature parity and ahead in three places 1DevTool doesn't
+have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
+**Canvas** layout. So the goal is differentiation, not catch-up.
+
+### Gaps worth closing (their features we lack)
+
+- [ ] **Git worktree-per-agent** — each agent session in its own worktree so
+      parallel agents on one repo don't collide. *(building now)*
+- [ ] **Unified AI diff review** — one surface to review pending changes across
+      agent worktrees, stage/discard/commit before they land. *(building now)*
+- [ ] **Fire one prompt at many agents** at once (+ @mention targeting).
+- [ ] **Rich prompts** — image/drag-drop into the composer.
+- [ ] **Pipeline conditional branching / delays / checkpoints** (we have linear
+      pipelines + gates + triggers already).
+
+### Deliberately skipping (breadth, not differentiation)
+
+- 26 database engines (we have PG/MySQL/SQLite — enough).
+- Standalone "memory manager" UI (Claude already manages memory).
+
+## Unique to DevDeck — the moat (built around the user's workday)
+
+- [ ] **Work-item-native start** — a "Work" panel of assigned **Jira / Azure
+      DevOps** tickets. Click one → opens the right project, cuts a branch named
+      from the ticket, pre-seeds a Claude session with the ticket description +
+      acceptance criteria. The day starts from the ticket, not a blank terminal.
+- [ ] **Release / promotion board (UAT→PROD)** — visual lanes showing which
+      build/commit sits in dev → UAT → PROD, wired to the API **environments**,
+      with a "promote" action + pre-flight checklist.
+- [ ] **Standup / worklog generator** — one click turns today's activity feed +
+      git history across projects into a summary to paste into Jira / standup.
+- [ ] **Record → share repro** — turn a terminal recording into a shareable
+      bug-repro / PR artifact (asciinema-style link or GIF).
+- [ ] **Role-panel review** — on Claude Team, run a panel of agents with
+      different lenses (correctness / security / .NET conventions) over a diff and
+      aggregate the verdicts. The "act as a team" idea, productized.
+- [ ] **C#/.NET-aware actions** — build/test/watch with parsed, clickable build
+      errors.
+- [ ] **Corporate-proxy friendliness** — first-class TLS-proxy config (the user's
+      environment breaks npm behind a corporate proxy).
+
+## Design
+
+- [ ] **Design Style presets** (shape/type/depth, not just color) — see
+      `DESIGN.md` and the gallery study. Candidates: Modern Minimal, Neon, Flat,
+      Bauhaus, Phosphor CRT, on top of the existing color themes.

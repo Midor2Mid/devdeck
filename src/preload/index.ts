@@ -127,6 +127,26 @@ export interface PipelineTrigger {
     debounceMs: number
 }
 
+export interface Worktree {
+    path: string
+    branch: string
+    head: string
+    main: boolean
+}
+export interface WorktreeAddResult {
+    ok: boolean
+    path?: string
+    branch?: string
+    error?: string
+}
+export interface ChangeFile {
+    path: string
+    code: string
+    staged: boolean
+    untracked: boolean
+    label: string
+}
+
 const api = {
     pty: {
         create: (opts: PtyCreateOpts): void => ipcRenderer.send("pty:create", opts),
@@ -205,7 +225,26 @@ const api = {
         getIdentity: (cwd: string): Promise<GitIdentity> =>
             ipcRenderer.invoke("git:getIdentity", cwd),
         setIdentity: (cwd: string, identity: GitIdentity): Promise<GitIdentity> =>
-            ipcRenderer.invoke("git:setIdentity", { cwd, identity })
+            ipcRenderer.invoke("git:setIdentity", { cwd, identity }),
+        // Worktrees
+        worktrees: (repoPath: string): Promise<Worktree[]> =>
+            ipcRenderer.invoke("git:worktrees", repoPath),
+        worktreeAdd: (repoPath: string, branch: string, base?: string): Promise<WorktreeAddResult> =>
+            ipcRenderer.invoke("git:worktreeAdd", { repoPath, branch, base }),
+        worktreeRemove: (repoPath: string, path: string, deleteBranch?: string): Promise<{ ok: boolean; error?: string }> =>
+            ipcRenderer.invoke("git:worktreeRemove", { repoPath, path, deleteBranch }),
+        // Change review
+        changes: (cwd: string): Promise<ChangeFile[]> => ipcRenderer.invoke("git:changes", cwd),
+        fileDiff: (cwd: string, path: string, staged: boolean, untracked: boolean): Promise<string> =>
+            ipcRenderer.invoke("git:fileDiff", { cwd, path, staged, untracked }),
+        stage: (cwd: string, path: string): Promise<boolean> =>
+            ipcRenderer.invoke("git:stage", { cwd, path }),
+        unstage: (cwd: string, path: string): Promise<boolean> =>
+            ipcRenderer.invoke("git:unstage", { cwd, path }),
+        discard: (cwd: string, path: string, untracked: boolean): Promise<boolean> =>
+            ipcRenderer.invoke("git:discard", { cwd, path, untracked }),
+        commit: (cwd: string, message: string): Promise<{ ok: boolean; error?: string }> =>
+            ipcRenderer.invoke("git:commit", { cwd, message })
     },
     browser: {
         saveShot: (projectPath: string, dataUrl: string): Promise<string> =>

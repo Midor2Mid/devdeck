@@ -62,6 +62,8 @@ export interface AnySession {
 interface Persisted {
     termAgents: Record<string, string>
     termInit: Record<string, string>
+    /** Per-terminal working-dir override (e.g. a git worktree path). */
+    termCwd: Record<string, string>
     tabsByProject: Record<string, Tab[]>
     activeTabByProject: Record<string, string | undefined>
     activePaneByProject: Record<string, string | undefined>
@@ -112,6 +114,14 @@ interface AppState extends Persisted {
     setRecordingsOpen: (open: boolean) => void
     noteRecording: (termId: string, label: string) => void
 
+    // Worktrees + change review (runtime-only)
+    worktreesOpen: boolean
+    setWorktreesOpen: (open: boolean) => void
+    changesTarget: { cwd: string; label: string } | null
+    openChanges: (cwd: string, label: string) => void
+    closeChanges: () => void
+    newAgentInWorktree: (agentId: string, branch: string) => Promise<string | undefined>
+
     // Agent pipelines (runtime-only)
     pipelineRun: PipelineRun | null
     runPipeline: (pipelineId: string) => void
@@ -144,7 +154,7 @@ interface AppState extends Persisted {
     activePane: (projectId: string) => string | undefined
     agentOf: (termId: string) => string
 
-    newTab: (agentId: string, initialCommand?: string, label?: string) => string | undefined
+    newTab: (agentId: string, initialCommand?: string, label?: string, cwd?: string) => string | undefined
     splitActive: (dir: SplitDir, agentId: string) => void
     closePane: (termId: string) => void
     closeActivePane: () => void
@@ -181,6 +191,7 @@ export const useStore = create<AppState>((set, get) => {
         window.api.workspace.save({
             termAgents: s.termAgents,
             termInit: s.termInit,
+            termCwd: s.termCwd,
             tabsByProject: s.tabsByProject,
             activeTabByProject: s.activeTabByProject,
             activePaneByProject: s.activePaneByProject,
@@ -287,12 +298,15 @@ export const useStore = create<AppState>((set, get) => {
             delete termInit[termId]
             const termAgents = { ...s.termAgents }
             delete termAgents[termId]
+            const termCwd = { ...s.termCwd }
+            delete termCwd[termId]
             const canvasPos = { ...s.canvasPos }
             delete canvasPos[termId]
             return {
                 agentStatus,
                 termInit,
                 termAgents,
+                termCwd,
                 canvasPos,
                 canvasLinks: s.canvasLinks.filter((l) => l.a !== termId && l.b !== termId),
                 lastAgentTermId: s.lastAgentTermId === termId ? null : s.lastAgentTermId
@@ -332,6 +346,7 @@ export const useStore = create<AppState>((set, get) => {
         activeId: null,
         termAgents: {},
         termInit: {},
+        termCwd: {},
         tabsByProject: {},
         activeTabByProject: {},
         activePaneByProject: {},
@@ -344,6 +359,8 @@ export const useStore = create<AppState>((set, get) => {
         activityOpen: false,
         recordingTermId: null,
         recordingsOpen: false,
+        worktreesOpen: false,
+        changesTarget: null,
         pipelineRun: null,
         switcherOpen: false,
         composerOpen: false,
@@ -371,6 +388,7 @@ export const useStore = create<AppState>((set, get) => {
                 // Migrate the old termKinds → termAgents if present.
                 termAgents: w.termAgents ?? w.termKinds ?? {},
                 termInit: w.termInit ?? {},
+                termCwd: w.termCwd ?? {},
                 tabsByProject: w.tabsByProject ?? {},
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
@@ -471,6 +489,26 @@ export const useStore = create<AppState>((set, get) => {
         setRecordingTermId: (recordingTermId) => set({ recordingTermId }),
         setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
         noteRecording: (termId, label) => pushActivity("record", termId, label),
+
+        setWorktreesOpen: (worktreesOpen) => set({ worktreesOpen }),
+        openChanges: (cwd, label) => set({ changesTarget: { cwd, label } }),
+        closeChanges: () => set({ changesTarget: null }),
+
+        newAgentInWorktree: async (agentId, branch) => {
+            const proj = get().activeProject()
+            if (!proj) return undefined
+            const res = await window.api.git.worktreeAdd(proj.path, branch)
+            if (!res.ok || !res.path) {
+                pushNotification(get().lastAgentTermId ?? "")
+                pushActivity("close", get().lastAgentTermId ?? "", `worktree failed: ${res.error ?? "error"}`)
+                return undefined
+            }
+            // Spawn the agent with its cwd pinned to the new worktree.
+            const termId = get().newTab(agentId, undefined, res.branch, res.path)
+            if (termId) pushActivity("start", termId, `${res.branch} · worktree`)
+            set({ worktreesOpen: false })
+            return termId
+        },
 
         fireTrigger: (triggerId) => {
             const trig = useSettings.getState().triggers.find((t) => t.id === triggerId && t.enabled)
@@ -669,7 +707,7 @@ export const useStore = create<AppState>((set, get) => {
         activePane: (projectId) => get().activePaneByProject[projectId],
         agentOf: (termId) => get().termAgents[termId] ?? SHELL,
 
-        newTab: (agentId, initialCommand, label) => {
+        newTab: (agentId, initialCommand, label, cwd) => {
             const projectId = get().activeId
             if (!projectId) return undefined
             const termId = newId()
@@ -685,6 +723,7 @@ export const useStore = create<AppState>((set, get) => {
             set((s) => ({
                 termAgents: { ...s.termAgents, [termId]: agentId },
                 termInit: init ? { ...s.termInit, [termId]: init } : s.termInit,
+                termCwd: cwd ? { ...s.termCwd, [termId]: cwd } : s.termCwd,
                 agentStatus: isAgentId(agentId)
                     ? { ...s.agentStatus, [termId]: "working" }
                     : s.agentStatus,

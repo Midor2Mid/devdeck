@@ -1213,6 +1213,10 @@ select:focus {
     text-transform: uppercase;
     color: var(--muted);
 }
+.col-head-actions {
+    display: flex;
+    gap: 2px;
+}
 .col-new {
     border: none;
     color: var(--muted);
@@ -1334,6 +1338,35 @@ select:focus {
     margin-top: 12px;
     font-size: 12px;
     color: var(--muted);
+}
+
+/* ---------- import modal ---------- */
+.import-modal {
+    width: 600px;
+    max-width: 92vw;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    padding: 18px 20px;
+}
+.import-text {
+    width: 100%;
+    height: 200px;
+    resize: vertical;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.import-error {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--danger);
+}
+.import-ok {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--moss);
 }
 .save-actions {
     display: flex;
@@ -2922,6 +2955,133 @@ select:focus {
 .trigger-debounce input {
     width: 64px;
 }
+
+/* ---------- Worktrees modal ---------- */
+.worktrees-modal { width: 600px; max-width: 94vw; }
+.wt-new {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.wt-branch { flex: 1; min-width: 160px; }
+.wt-err { color: var(--danger); font-size: 12px; margin: 0 0 10px; }
+.wt-list { display: flex; flex-direction: column; gap: 6px; }
+.wt-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 11px;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    background: var(--bg-3);
+}
+.wt-icon { color: var(--accent); flex: none; }
+.wt-info { flex: 1; min-width: 0; }
+.wt-name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+.wt-tag {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #111;
+    background: var(--moss);
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+.wt-path {
+    font-family: var(--mono, monospace);
+    font-size: 10.5px;
+    color: var(--faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.btn-min.danger:hover { color: var(--danger); }
+
+/* ---------- Changes (diff review) modal ---------- */
+.changes-modal {
+    width: 920px;
+    max-width: 96vw;
+    height: 80vh;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+.changes-body { flex: 1; display: flex; min-height: 0; }
+.ch-files {
+    width: 280px;
+    flex: none;
+    border-right: 1px solid var(--border-soft);
+    overflow-y: auto;
+    padding: 6px;
+}
+.ch-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--muted);
+}
+.ch-file:hover { background: var(--bg-3); }
+.ch-file.sel { background: var(--bg-3); color: var(--text); }
+.ch-stat {
+    flex: none;
+    width: 22px;
+    text-align: center;
+    font-family: var(--mono, monospace);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+}
+.ch-stat.s-untracked { color: var(--moss); }
+.ch-stat.s-deleted { color: var(--danger); }
+.ch-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-staged { color: var(--ok); font-size: 9px; flex: none; }
+.ch-diff { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ch-diff-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 12px;
+}
+.ch-diff-bar .spacer { flex: 1; }
+.ch-diff-name {
+    font-family: var(--mono, monospace);
+    font-size: 11.5px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.diff {
+    flex: 1;
+    overflow: auto;
+    padding: 8px 0;
+    font-family: var(--mono, monospace);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+.d-line { padding: 0 12px; white-space: pre; }
+.d-add { background: rgba(140, 154, 104, 0.14); color: #c8d3a8; }
+.d-del { background: rgba(182, 107, 95, 0.14); color: #e0a89f; }
+.d-hunk { color: var(--accent-soft); background: var(--bg-3); }
+.d-meta { color: var(--faint); }
+.d-ctx { color: var(--muted); }
+.diff-empty { padding: 24px; color: var(--faint); font-size: 13px; }
+.ch-commit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-soft);
+}
+.ch-commit input { flex: 1; }
+.ch-note { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 
 /* ---------- Toasts ---------- */
 .toasts {

@@ -114,6 +114,16 @@ export function CommandPalette(): JSX.Element {
                 title: "Run pipeline: " + p.name,
                 run: () => store.runPipeline(p.id)
             })
+        cmds.push({ id: "act:worktrees", section: "Actions", title: "Worktrees — new agent in a worktree", run: () => store.setWorktreesOpen(true) })
+        cmds.push({
+            id: "act:review",
+            section: "Actions",
+            title: "Review changes (active project)",
+            run: () => {
+                const p = store.activeProject()
+                if (p) store.openChanges(p.path, p.name)
+            }
+        })
         cmds.push({ id: "act:recordings", section: "Actions", title: "Recordings — replay a session", run: () => store.setRecordingsOpen(true) })
         cmds.push({ id: "act:activity", section: "Actions", title: "Open activity feed", run: () => store.setActivityOpen(true) })
         return cmds

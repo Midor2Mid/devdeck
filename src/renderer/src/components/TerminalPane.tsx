@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { SearchAddon } from "@xterm/addon-search"
 import { paneRegistry } from "../paneRegistry"
 import { useSettings } from "../settings"
+import { useStore } from "../store"
 import { THEMES } from "../themes"
 
 interface Props {
@@ -78,9 +79,10 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 }
             }
             // Spawn (first time) or re-attach + replay (already running).
+            // A per-terminal cwd override (e.g. a git worktree) wins over the project dir.
             window.api.pty.create({
                 id: termId,
-                cwd,
+                cwd: useStore.getState().termCwd[termId] ?? cwd,
                 initialCommand,
                 shell: useSettings.getState().resolveShell(),
                 cols: term.cols,

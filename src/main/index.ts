@@ -16,6 +16,8 @@ import * as browserNet from "./browserNet"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
+import * as worktrees from "./worktrees"
+import * as changes from "./changes"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -174,6 +176,58 @@ function registerIpc(): void {
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))
     ipcMain.handle("git:getIdentity", (_e, cwd: string) => getIdentity(cwd))
     ipcMain.handle("git:setIdentity", (_e, { cwd, identity }) => setIdentity(cwd, identity))
+
+    // A repo path is allowed if it's an open project, or inside an open
+    // project's managed worktree sibling folder.
+    const repoRoots = (): string[] => projects.listProjects().projects.map((x) => x.path)
+    const isAllowedRepo = (cwd: string): boolean => {
+        const roots = repoRoots()
+        if (files.isWithinRoots(cwd, roots)) return true
+        return files.isWithinRoots(cwd, roots.map((r) => worktrees.worktreeBase(r)))
+    }
+    const guardRepo = (cwd: string): void => {
+        if (!isAllowedRepo(cwd)) throw new Error("Path is outside any open project.")
+    }
+
+    // --- Git worktrees ---
+    ipcMain.handle("git:worktrees", (_e, repoPath: string) => {
+        guardPath(repoPath)
+        return worktrees.listWorktrees(repoPath)
+    })
+    ipcMain.handle("git:worktreeAdd", (_e, { repoPath, branch, base }) => {
+        guardPath(repoPath)
+        return worktrees.addWorktree(repoPath, branch, base)
+    })
+    ipcMain.handle("git:worktreeRemove", (_e, { repoPath, path, deleteBranch }) => {
+        guardPath(repoPath)
+        return worktrees.removeWorktree(repoPath, path, deleteBranch)
+    })
+
+    // --- Git changes (diff review) ---
+    ipcMain.handle("git:changes", (_e, cwd: string) => {
+        guardRepo(cwd)
+        return changes.listChanges(cwd)
+    })
+    ipcMain.handle("git:fileDiff", (_e, { cwd, path, staged, untracked }) => {
+        guardRepo(cwd)
+        return changes.fileDiff(cwd, path, { staged: !!staged, untracked: !!untracked })
+    })
+    ipcMain.handle("git:stage", (_e, { cwd, path }) => {
+        guardRepo(cwd)
+        return changes.stageFile(cwd, path)
+    })
+    ipcMain.handle("git:unstage", (_e, { cwd, path }) => {
+        guardRepo(cwd)
+        return changes.unstageFile(cwd, path)
+    })
+    ipcMain.handle("git:discard", (_e, { cwd, path, untracked }) => {
+        guardRepo(cwd)
+        return changes.discardFile(cwd, path, !!untracked)
+    })
+    ipcMain.handle("git:commit", (_e, { cwd, message }) => {
+        guardRepo(cwd)
+        return changes.commitAll(cwd, message)
+    })
 
     // --- MCP (per-project .mcp.json) ---
     ipcMain.handle("mcp:list", (_e, projectPath: string) => {
