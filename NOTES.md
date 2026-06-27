@@ -65,6 +65,21 @@ The maker shared shipped features + reasoning (Vietnamese). Highlights for DevDe
 - **Mobile attach:** add screenshots / attach files from the phone in Remote Control. (Complex in our model — terminals can't ingest images directly; would need to upload to desktop, save into the project, and reference the path / or rely on agent image support. Parked with plan.)
 - **Slash `/` commands / skills** in the prompt composer (symmetric to our `@file` mentions). Ambiguous whether it means agent-passthrough slash-commands or user-defined snippets — lean toward **user-defined prompt snippets** inserted by `/name` (generic, reusable). Next batch.
 
+## Dogfooding — v0.1.0 (started 2026-06-27)
+
+First installable build shipped (`release/DevDeck Setup 0.1.0.exe` + portable `DevDeck 0.1.0.exe`). **Now stop adding features and use it for real work** — let friction drive the backlog (success metric #1: becomes the daily driver for ≥1 week).
+
+**Watch for (jot friction below as it happens):**
+- Does it replace Windows Terminal for a full day? What makes you reach for the old tool instead?
+- Multi-agent legibility: can you track ≥3 Claude/Codex sessions without losing which is which?
+- Project switch < 5s, zero manual `cd`?
+- Any crashes / white screens (error boundary should catch UI ones), pty hangs, or layout glitches?
+- Light theme (Washi) contrast issues in real use?
+- Packaged-only bugs (asar/native paths) that don't show in `npm run dev`?
+
+**Friction log:**
+- _(add dated entries as you hit them)_
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
