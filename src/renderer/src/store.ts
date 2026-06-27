@@ -48,6 +48,7 @@ interface Persisted {
     activeTabByProject: Record<string, string | undefined>
     activePaneByProject: Record<string, string | undefined>
     composerDrafts: Record<string, string>
+    view: MainView
 }
 
 interface AppState extends Persisted {
@@ -124,7 +125,8 @@ export const useStore = create<AppState>((set, get) => {
                 tabsByProject: s.tabsByProject,
                 activeTabByProject: s.activeTabByProject,
                 activePaneByProject: s.activePaneByProject,
-                composerDrafts: s.composerDrafts
+                composerDrafts: s.composerDrafts,
+                view: s.view
             } satisfies Persisted)
         }, 300)
     }
@@ -279,7 +281,8 @@ export const useStore = create<AppState>((set, get) => {
                 tabsByProject: w.tabsByProject ?? {},
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
-                composerDrafts: w.composerDrafts ?? {}
+                composerDrafts: w.composerDrafts ?? {},
+                view: w.view ?? "terminal"
             })
         },
 
@@ -332,6 +335,7 @@ export const useStore = create<AppState>((set, get) => {
         setView: (view) => {
             set({ view })
             if (view === "terminal" && get().activeId) ack(get().activePaneByProject[get().activeId as string])
+            persist()
         },
 
         sessions: () => buildSessions(false),

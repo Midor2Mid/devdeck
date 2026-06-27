@@ -10,16 +10,20 @@ import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus } from "./git"
+import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
+    const saved = loadWindowState()
     mainWindow = new BrowserWindow({
-        width: 1400,
-        height: 900,
+        width: saved.width ?? 1400,
+        height: saved.height ?? 900,
+        x: saved.x,
+        y: saved.y,
         minWidth: 900,
         minHeight: 600,
-        backgroundColor: "#181825",
+        backgroundColor: "#1b1a18",
         title: "DevDeck",
         autoHideMenuBar: true,
         webPreferences: {
@@ -31,12 +35,18 @@ function createWindow(): void {
         }
     })
 
+    if (saved.maximized) mainWindow.maximize()
+
     // electron-vite injects ELECTRON_RENDERER_URL in dev (vite dev server).
     if (process.env["ELECTRON_RENDERER_URL"]) {
         mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"])
     } else {
         mainWindow.loadFile(join(__dirname, "../renderer/index.html"))
     }
+
+    mainWindow.on("close", () => {
+        if (mainWindow) saveWindowState(mainWindow)
+    })
 }
 
 function registerIpc(): void {

@@ -1774,6 +1774,44 @@ select:focus {
     white-space: nowrap;
 }
 
+/* ---------- Crash / error boundary ---------- */
+.crash {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    padding: 40px;
+}
+.crash-card {
+    max-width: 480px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+}
+.crash-card h2 {
+    margin: 0 0 10px;
+    font-size: 16px;
+}
+.crash-msg {
+    margin: 14px 0;
+    padding: 12px;
+    background: var(--bg-3);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    color: var(--danger);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.crash-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;
