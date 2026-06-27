@@ -14,12 +14,19 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
     const lastAgent = useStore((s) => s.lastAgentTermId)
     const sendToAgent = useStore((s) => s.sendToAgent)
     const agentSessions = useStore((s) => s.agentSessions)
+    const draft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
+    const setComposerDraft = useStore((s) => s.setComposerDraft)
 
-    const [text, setText] = useState("")
     const [files, setFiles] = useState<string[]>([])
     const [token, setToken] = useState<{ start: number; query: string } | null>(null)
     const [sel, setSel] = useState(0)
     const ref = useRef<HTMLTextAreaElement>(null)
+
+    // Draft is persisted per project (survives project switch + restart).
+    const text = draft
+    const setText = (value: string): void => {
+        if (activeProject) setComposerDraft(activeProject.id, value)
+    }
 
     const target = agentSessions().find((s) => s.termId === lastAgent)
 

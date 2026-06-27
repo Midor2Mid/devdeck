@@ -41,6 +41,7 @@ interface Persisted {
     tabsByProject: Record<string, Tab[]>
     activeTabByProject: Record<string, string | undefined>
     activePaneByProject: Record<string, string | undefined>
+    composerDrafts: Record<string, string>
 }
 
 interface AppState extends Persisted {
@@ -67,6 +68,7 @@ interface AppState extends Persisted {
     sessions: () => AnySession[]
     agentSessions: () => AnySession[]
     sendToAgent: (text: string) => boolean
+    setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
     newTabIn: (projectId: string, agentId: string, initialCommand?: string) => void
 
@@ -109,7 +111,8 @@ export const useStore = create<AppState>((set, get) => {
             termInit: s.termInit,
             tabsByProject: s.tabsByProject,
             activeTabByProject: s.activeTabByProject,
-            activePaneByProject: s.activePaneByProject
+            activePaneByProject: s.activePaneByProject,
+            composerDrafts: s.composerDrafts
         } satisfies Persisted)
     }
 
@@ -209,6 +212,7 @@ export const useStore = create<AppState>((set, get) => {
         tabsByProject: {},
         activeTabByProject: {},
         activePaneByProject: {},
+        composerDrafts: {},
         view: "terminal",
         switcherOpen: false,
         agentStatus: {},
@@ -232,7 +236,8 @@ export const useStore = create<AppState>((set, get) => {
                 termInit: w.termInit ?? {},
                 tabsByProject: w.tabsByProject ?? {},
                 activeTabByProject: w.activeTabByProject ?? {},
-                activePaneByProject: w.activePaneByProject ?? {}
+                activePaneByProject: w.activePaneByProject ?? {},
+                composerDrafts: w.composerDrafts ?? {}
             })
         },
 
@@ -295,6 +300,11 @@ export const useStore = create<AppState>((set, get) => {
             if (!id) return false
             window.api.pty.input(id, text)
             return true
+        },
+
+        setComposerDraft: (projectId, text) => {
+            set((s) => ({ composerDrafts: { ...s.composerDrafts, [projectId]: text } }))
+            persist()
         },
 
         jumpToTerm: (termId) => {

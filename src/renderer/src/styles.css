@@ -904,6 +904,39 @@ select:focus {
     gap: 8px;
     padding: 8px 12px;
 }
+.composer-launcher {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    cursor: text;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.composer-launcher:hover {
+    background: var(--bg-2);
+    color: var(--text);
+    box-shadow: inset 0 1px 0 var(--accent);
+}
+.composer-launcher .cl-icon {
+    color: var(--accent);
+}
+.composer-launcher .cl-text {
+    flex: 1;
+}
+.composer-launcher .cl-draft {
+    color: var(--accent-soft);
+    font-size: 11px;
+}
+.composer-launcher .cl-kbd {
+    font-size: 10px;
+    color: var(--faint);
+    border: 1px solid var(--border-soft);
+    border-radius: 5px;
+    padding: 2px 6px;
+}
 
 /* ---------- API panel ---------- */
 .api-panel {

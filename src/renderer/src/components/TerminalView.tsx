@@ -18,6 +18,7 @@ export function TerminalView(): JSX.Element {
     const closePane = useStore((s) => s.closePane)
     const renameTab = useStore((s) => s.renameTab)
     const setActiveTab = useStore((s) => s.setActiveTab)
+    const composerDraft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
     const agents = useSettings((s) => s.agents)
 
     const [editingId, setEditingId] = useState<string | null>(null)
@@ -285,7 +286,24 @@ export function TerminalView(): JSX.Element {
                     )}
                 </div>
             </div>
-            {composerOpen && <PromptComposer onClose={() => setComposerOpen(false)} />}
+            {composerOpen ? (
+                <PromptComposer onClose={() => setComposerOpen(false)} />
+            ) : (
+                <div
+                    className="composer-launcher"
+                    onClick={() => setComposerOpen(true)}
+                    title="Open the prompt composer (Ctrl+Shift+P)"
+                >
+                    <span className="cl-icon">✎</span>
+                    <span className="cl-text">
+                        {composerDraft.trim()
+                            ? "Resume your prompt draft…"
+                            : `Write a prompt${primaryAgent ? " for " + primaryAgent.name : ""}…`}
+                    </span>
+                    {composerDraft.trim() && <span className="cl-draft">● draft</span>}
+                    <span className="cl-kbd">Ctrl+Shift+P</span>
+                </div>
+            )}
         </div>
     )
 }
