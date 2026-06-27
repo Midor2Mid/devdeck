@@ -21,6 +21,7 @@
     "marked": "^15.0.12",
     "monaco-editor": "^0.52.2",
     "mysql2": "^3.22.5",
+    "node-sqlite3-wasm": "^0.8.58",
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

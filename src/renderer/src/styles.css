@@ -1403,6 +1403,17 @@ select:focus {
     font-size: 12px;
     text-align: right;
 }
+.file-pick {
+    display: flex;
+    gap: 6px;
+}
+.file-pick input {
+    flex: 1;
+    min-width: 0;
+}
+.file-pick button {
+    flex: none;
+}
 .form-grid .checkbox {
     width: 16px;
     height: 16px;

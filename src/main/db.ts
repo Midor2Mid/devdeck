@@ -4,8 +4,9 @@ import { readFileSync, writeFileSync } from "fs"
 import { randomUUID } from "crypto"
 import { Pool as PgPool, Client as PgClient } from "pg"
 import mysql from "mysql2/promise"
+import { Database as SqliteDatabase } from "node-sqlite3-wasm"
 
-export type DbKind = "postgres" | "mysql"
+export type DbKind = "postgres" | "mysql" | "sqlite"
 
 /** Connection profile as seen by the renderer — never includes the password. */
 export interface ConnProfile {
@@ -152,6 +153,7 @@ interface LivePool {
     kind: DbKind
     pg?: PgPool
     my?: mysql.Pool
+    sqlite?: SqliteDatabase
 }
 const pools = new Map<string, LivePool>()
 
@@ -185,10 +187,15 @@ function getPool(profileId: string): LivePool {
     if (existing) return existing
     const profile = load().profiles.find((p) => p.id === profileId)
     if (!profile) throw new Error("Connection not found")
-    const live: LivePool =
-        profile.kind === "postgres"
-            ? { kind: "postgres", pg: new PgPool(buildPgConfig(profile)) }
-            : { kind: "mysql", my: mysql.createPool(buildMyConfig(profile)) }
+    let live: LivePool
+    if (profile.kind === "postgres") {
+        live = { kind: "postgres", pg: new PgPool(buildPgConfig(profile)) }
+    } else if (profile.kind === "mysql") {
+        live = { kind: "mysql", my: mysql.createPool(buildMyConfig(profile)) }
+    } else {
+        // SQLite: the `database` field holds the .db file path.
+        live = { kind: "sqlite", sqlite: new SqliteDatabase(profile.database) }
+    }
     // A pool-level error (e.g. server dropped) shouldn't crash the app.
     live.pg?.on("error", (e) => console.error("[db] pg pool error:", e.message))
     pools.set(profileId, live)
@@ -200,6 +207,11 @@ function closePool(profileId: string): void {
     if (!live) return
     live.pg?.end().catch(() => undefined)
     live.my?.end().catch(() => undefined)
+    try {
+        live.sqlite?.close()
+    } catch {
+        /* ignore */
+    }
     pools.delete(profileId)
 }
 
@@ -215,6 +227,12 @@ export function closeAll(): void {
 export async function testConnection(input: ConnInput): Promise<QueryResult> {
     const start = Date.now()
     try {
+        if (input.kind === "sqlite") {
+            const db = new SqliteDatabase(input.database)
+            db.all("SELECT 1")
+            db.close()
+            return { ok: true, timeMs: Date.now() - start }
+        }
         if (input.kind === "postgres") {
             const client = new PgClient({
                 host: input.host,
@@ -255,6 +273,27 @@ export async function runQuery(profileId: string, sql: string): Promise<QueryRes
     const start = Date.now()
     try {
         const live = getPool(profileId)
+        if (live.kind === "sqlite" && live.sqlite) {
+            const isReturning = /^\s*(select|pragma|with|explain)/i.test(sql)
+            if (isReturning) {
+                const rows = live.sqlite.all(sql) as Record<string, unknown>[]
+                return {
+                    ok: true,
+                    columns: rows[0] ? Object.keys(rows[0]) : [],
+                    rows,
+                    rowCount: rows.length,
+                    timeMs: Date.now() - start
+                }
+            }
+            const res = live.sqlite.run(sql)
+            return {
+                ok: true,
+                columns: ["changes", "lastInsertRowid"],
+                rows: [{ changes: res.changes, lastInsertRowid: Number(res.lastInsertRowid) }],
+                rowCount: res.changes,
+                timeMs: Date.now() - start
+            }
+        }
         if (live.kind === "postgres" && live.pg) {
             const res = await live.pg.query(sql)
             return {
@@ -307,6 +346,12 @@ export async function listTables(profileId: string): Promise<string[]> {
     if (live.my) {
         const [rows] = await live.my.query("SHOW TABLES")
         return (rows as Record<string, unknown>[]).map((r) => String(Object.values(r)[0]))
+    }
+    if (live.sqlite) {
+        const rows = live.sqlite.all(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ) as { name: string }[]
+        return rows.map((r) => String(r.name))
     }
     return []
 }

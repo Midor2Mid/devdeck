@@ -6,7 +6,7 @@ import { useSettings } from "../settings"
 import "../monaco-setup"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
-const DEFAULT_PORT: Record<DbKind, number> = { postgres: 5432, mysql: 3306 }
+const DEFAULT_PORT: Record<DbKind, number> = { postgres: 5432, mysql: 3306, sqlite: 0 }
 
 function blankInput(projectId: string): ConnInput {
     return {
@@ -57,7 +57,8 @@ function ConnForm({
     }
 
     const save = async (): Promise<void> => {
-        if (!form.name.trim() || !form.host.trim()) return
+        if (!form.name.trim()) return
+        if (form.kind === "sqlite" ? !form.database.trim() : !form.host.trim()) return
         setBusy(true)
         await window.api.db.save(form)
         setBusy(false)
@@ -81,36 +82,60 @@ function ConnForm({
                     >
                         <option value="postgres">PostgreSQL</option>
                         <option value="mysql">MySQL</option>
+                        <option value="sqlite">SQLite</option>
                     </select>
-                    <label>Host</label>
-                    <input value={form.host} onChange={(e) => set({ host: e.target.value })} />
-                    <label>Port</label>
-                    <input
-                        type="number"
-                        value={form.port}
-                        onChange={(e) => set({ port: Number(e.target.value) })}
-                    />
-                    <label>Database</label>
-                    <input
-                        value={form.database}
-                        onChange={(e) => set({ database: e.target.value })}
-                    />
-                    <label>User</label>
-                    <input value={form.user} onChange={(e) => set({ user: e.target.value })} />
-                    <label>Password</label>
-                    <input
-                        type="password"
-                        placeholder={isEdit ? "(leave blank to keep)" : ""}
-                        value={form.password ?? ""}
-                        onChange={(e) => set({ password: e.target.value })}
-                    />
-                    <label>SSL</label>
-                    <input
-                        type="checkbox"
-                        className="checkbox"
-                        checked={Boolean(form.ssl)}
-                        onChange={(e) => set({ ssl: e.target.checked })}
-                    />
+                    {form.kind === "sqlite" ? (
+                        <>
+                            <label>Database file</label>
+                            <div className="file-pick">
+                                <input
+                                    value={form.database}
+                                    placeholder="C:\\path\\to\\app.db"
+                                    onChange={(e) => set({ database: e.target.value })}
+                                />
+                                <button
+                                    onClick={async () => {
+                                        const f = await window.api.db.pickFile()
+                                        if (f) set({ database: f })
+                                    }}
+                                >
+                                    Browse…
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <label>Host</label>
+                            <input value={form.host} onChange={(e) => set({ host: e.target.value })} />
+                            <label>Port</label>
+                            <input
+                                type="number"
+                                value={form.port}
+                                onChange={(e) => set({ port: Number(e.target.value) })}
+                            />
+                            <label>Database</label>
+                            <input
+                                value={form.database}
+                                onChange={(e) => set({ database: e.target.value })}
+                            />
+                            <label>User</label>
+                            <input value={form.user} onChange={(e) => set({ user: e.target.value })} />
+                            <label>Password</label>
+                            <input
+                                type="password"
+                                placeholder={isEdit ? "(leave blank to keep)" : ""}
+                                value={form.password ?? ""}
+                                onChange={(e) => set({ password: e.target.value })}
+                            />
+                            <label>SSL</label>
+                            <input
+                                type="checkbox"
+                                className="checkbox"
+                                checked={Boolean(form.ssl)}
+                                onChange={(e) => set({ ssl: e.target.checked })}
+                            />
+                        </>
+                    )}
                 </div>
                 {testMsg && (
                     <div className={"test-msg " + (testMsg.ok ? "ok" : "err")}>{testMsg.text}</div>
@@ -286,7 +311,11 @@ export function DbPanel(): JSX.Element {
                                         "db-conn" + (c.id === activeId ? " active" : "")
                                     }
                                     onClick={() => selectConn(c.id)}
-                                    title={`${c.user}@${c.host}:${c.port}/${c.database}`}
+                                    title={
+                                        c.kind === "sqlite"
+                                            ? c.database
+                                            : `${c.user}@${c.host}:${c.port}/${c.database}`
+                                    }
                                 >
                                     <span className={"tab-dot " + c.kind} />
                                     <span className="db-conn-name">{c.name}</span>
@@ -346,7 +375,7 @@ export function DbPanel(): JSX.Element {
                                     Select or add a connection to run SQL.
                                 </p>
                                 <p className="muted small">
-                                    PostgreSQL & MySQL supported. SQLite coming next (WASM driver).
+                                    PostgreSQL, MySQL & SQLite (WASM — no native build) supported.
                                 </p>
                             </div>
                         ) : (

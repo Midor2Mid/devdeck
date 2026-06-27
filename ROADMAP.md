@@ -43,8 +43,9 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 
 - [x] Per-project saved connections (PostgreSQL, MySQL) with encrypted passwords (`safeStorage`)
 - [x] Connect / test, list tables, run SQL (Monaco editor, Ctrl+Enter), results grid
-- [ ] SQLite via WASM driver (deferred — native `better-sqlite3` needs a C++ compiler this machine lacks)
+- [x] **SQLite via WASM** (`node-sqlite3-wasm`, 2026-06-27) — no native build; reads/writes real `.db` files, file picker in the connection form
 - [ ] Query history / saved queries per connection
+- [ ] Packaging note: unpack `node-sqlite3-wasm` `.wasm` from asar when building a distributable
 
 ## Milestone 7 — Remote / mobile access ✅ (2026-06-27, terminals-first)
 

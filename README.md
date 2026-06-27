@@ -45,7 +45,7 @@ npm run build      # bundle main + preload + renderer into out/
 - **In-terminal find** — ⌕ / Ctrl+Shift+F to search the focused terminal.
 - **API client** — Postman-style request builder (runs in the main process, no CORS limits).
 - **Editor** — Monaco-powered: file tree, multi-file tabs, syntax highlighting, dirty indicators, Ctrl+S to save.
-- **Database** — per-project saved connections (PostgreSQL & MySQL), Monaco SQL editor (Ctrl+Enter to run), table browser, results grid. Passwords encrypted at rest (Electron `safeStorage`). SQLite coming via a WASM driver.
+- **Database** — per-project saved connections (PostgreSQL, MySQL & **SQLite**), Monaco SQL editor (Ctrl+Enter to run), table browser, results grid. SQLite uses a WASM driver (no native build) and reads/writes real `.db` files via a file picker. Passwords encrypted at rest (Electron `safeStorage`).
 - **Settings** (⚙ in the sidebar) — Appearance (accent color), Terminal (default shell: PowerShell/cmd/Git Bash/WSL/custom + font), Editor (font/tab/wrap/minimap), Claude (command, resume args, idle timing), Remote (mobile access), Shortcuts reference, About. Persisted to `settings.json`.
 - **Remote / mobile access** — turn on a token-guarded server (Settings → Remote) and open the shown URL/QR on your phone to view and drive your terminals + Claude sessions. Off by default; bind is token-gated. For access *anywhere*, run [Tailscale](https://tailscale.com) on this PC and your phone (no public exposure) — the URL uses your Tailscale IP automatically when present.
 

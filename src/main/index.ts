@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron"
+import { app, BrowserWindow, ipcMain, dialog } from "electron"
 import { join } from "path"
 import * as ptyMgr from "./pty"
 import * as projects from "./projects"
@@ -111,6 +111,17 @@ function registerIpc(): void {
     ipcMain.handle("db:query", (_e, { profileId, sql }) => db.runQuery(profileId, sql))
     ipcMain.handle("db:tables", (_e, profileId: string) => db.listTables(profileId))
     ipcMain.on("db:disconnect", (_e, profileId: string) => db.disconnect(profileId))
+    ipcMain.handle("db:pickFile", async () => {
+        const res = await dialog.showOpenDialog(mainWindow!, {
+            title: "Select a SQLite database file",
+            properties: ["openFile"],
+            filters: [
+                { name: "SQLite", extensions: ["db", "sqlite", "sqlite3", "db3"] },
+                { name: "All files", extensions: ["*"] }
+            ]
+        })
+        return res.canceled ? "" : (res.filePaths[0] ?? "")
+    })
 
     // --- Files (editor) ---
     ipcMain.handle("fs:readDir", (_e, dir: string) => files.readDir(dir))

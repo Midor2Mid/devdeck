@@ -44,7 +44,7 @@ export interface HttpResponse {
     error?: string
 }
 
-export type DbKind = "postgres" | "mysql"
+export type DbKind = "postgres" | "mysql" | "sqlite"
 export interface ConnProfile {
     id: string
     projectId: string
@@ -152,7 +152,8 @@ const api = {
             ipcRenderer.invoke("db:query", { profileId, sql }),
         tables: (profileId: string): Promise<string[]> =>
             ipcRenderer.invoke("db:tables", profileId),
-        disconnect: (profileId: string): void => ipcRenderer.send("db:disconnect", profileId)
+        disconnect: (profileId: string): void => ipcRenderer.send("db:disconnect", profileId),
+        pickFile: (): Promise<string> => ipcRenderer.invoke("db:pickFile")
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),
