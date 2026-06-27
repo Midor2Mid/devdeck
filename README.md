@@ -45,7 +45,8 @@ unpacked from the asar archive automatically (see the `build` field in
 - **Multi-terminal** — real shells via xterm.js + pty, tabbed, each spawned in the active project's directory.
 - **Split panes** — split any terminal right (⇆) or down (⇅) to see multiple terminals at once; close panes and the layout collapses cleanly.
 - **Multi-agent sessions** — configurable agent presets (Claude, Codex, Gemini, custom) launched per project, each with a type badge; `+` for the primary agent, `▾` menu for the rest (with resume). Configure in Settings → Agents.
-- **Prompt composer** — `Ctrl+Shift+P` opens a rich prompt box with `@file` autocomplete to compose and send to the focused agent session.
+- **Prompt composer** — `Ctrl+Shift+P` opens a rich prompt box with `@file` and `/snippet` autocomplete (snippets defined in Settings) to compose and send to the focused agent session.
+- **Terminal layouts** — toggle between **Tabs** and a **Dashboard grid** that shows every terminal in the project at once.
 - **Project groups + switcher** — organize projects into collapsible groups; `Ctrl+K` opens a searchable launchpad grid of all projects with live session counts.
 - **Status bar** — active project, git branch + uncommitted-change count, attention flag, remote indicator.
 - **Claude session awareness** — every Claude session (across all projects) is listed in the sidebar with live status (working / idle / **needs attention**), an attention badge, and click-to-jump. Status is inferred from output activity + the terminal bell — no fragile output parsing.

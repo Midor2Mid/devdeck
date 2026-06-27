@@ -19,6 +19,9 @@ export function TerminalView(): JSX.Element {
     const renameTab = useStore((s) => s.renameTab)
     const setActiveTab = useStore((s) => s.setActiveTab)
     const composerDraft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
+    const termLayout = useStore((s) => s.termLayout)
+    const setTermLayout = useStore((s) => s.setTermLayout)
+    const focusPane = useStore((s) => s.focusPane)
     const agents = useSettings((s) => s.agents)
 
     const [editingId, setEditingId] = useState<string | null>(null)
@@ -214,9 +217,25 @@ export function TerminalView(): JSX.Element {
                     </div>
                     <span className="action-sep" />
                     <button
+                        className={"icon-action" + (termLayout === "tabs" ? " on" : "")}
+                        onClick={() => setTermLayout("tabs")}
+                        title="Tabs layout"
+                    >
+                        ▭
+                    </button>
+                    <button
+                        className={"icon-action" + (termLayout === "grid" ? " on" : "")}
+                        onClick={() => setTermLayout("grid")}
+                        title="Dashboard grid — all this project's terminals at once"
+                    >
+                        ▦
+                    </button>
+                    <span className="action-sep" />
+                    <button
                         className="icon-action"
                         onClick={() => splitActive("row", SHELL)}
                         title="Split right (Ctrl+Shift+\\)"
+                        disabled={termLayout === "grid"}
                     >
                         ⇆
                     </button>
@@ -276,6 +295,55 @@ export function TerminalView(): JSX.Element {
                                 <b>+ Terminal</b> for a shell, <b>+ {primaryAgent?.name ?? "agent"}</b>{" "}
                                 for an AI session. Split with the ⇆ / ⇅ buttons.
                             </p>
+                        </div>
+                    ) : termLayout === "grid" ? (
+                        <div className="term-grid">
+                            {tabs.flatMap((tab) =>
+                                collectLeaves(tab.root).map((termId) => {
+                                    const isAgent = agentOf(termId) !== SHELL
+                                    return (
+                                        <div key={termId} className="grid-card">
+                                            <div className="grid-card-head">
+                                                <span
+                                                    className={
+                                                        "tab-dot " +
+                                                        (isAgent
+                                                            ? "claude status-" +
+                                                              (agentStatus[termId] ?? "idle")
+                                                            : "shell")
+                                                    }
+                                                />
+                                                <span className="grid-card-name">{tab.name}</span>
+                                                <span
+                                                    className="grid-card-open"
+                                                    title="Open in tabs view"
+                                                    onClick={() => {
+                                                        setActiveTab(activeProject.id, tab.id)
+                                                        focusPane(activeProject.id, termId)
+                                                        setTermLayout("tabs")
+                                                    }}
+                                                >
+                                                    ↗
+                                                </span>
+                                                <span
+                                                    className="tab-close"
+                                                    title="Close"
+                                                    onClick={() => closePane(termId)}
+                                                >
+                                                    ×
+                                                </span>
+                                            </div>
+                                            <div className="grid-card-body">
+                                                <SplitView
+                                                    node={{ kind: "leaf", termId }}
+                                                    projectId={activeProject.id}
+                                                    cwd={activeProject.path}
+                                                />
+                                            </div>
+                                        </div>
+                                    )
+                                })
+                            )}
                         </div>
                     ) : (
                         <SplitView

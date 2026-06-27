@@ -49,7 +49,10 @@ interface Persisted {
     activePaneByProject: Record<string, string | undefined>
     composerDrafts: Record<string, string>
     view: MainView
+    termLayout: TermLayout
 }
+
+export type TermLayout = "tabs" | "grid"
 
 interface AppState extends Persisted {
     projects: Project[]
@@ -63,6 +66,8 @@ interface AppState extends Persisted {
 
     view: MainView
     setView: (view: MainView) => void
+    termLayout: TermLayout
+    setTermLayout: (layout: TermLayout) => void
 
     // Project switcher overlay
     switcherOpen: boolean
@@ -126,7 +131,8 @@ export const useStore = create<AppState>((set, get) => {
                 activeTabByProject: s.activeTabByProject,
                 activePaneByProject: s.activePaneByProject,
                 composerDrafts: s.composerDrafts,
-                view: s.view
+                view: s.view,
+                termLayout: s.termLayout
             } satisfies Persisted)
         }, 300)
     }
@@ -255,6 +261,7 @@ export const useStore = create<AppState>((set, get) => {
         activePaneByProject: {},
         composerDrafts: {},
         view: "terminal",
+        termLayout: "tabs",
         switcherOpen: false,
         agentStatus: {},
         lastAgentTermId: null,
@@ -282,7 +289,8 @@ export const useStore = create<AppState>((set, get) => {
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
                 composerDrafts: w.composerDrafts ?? {},
-                view: w.view ?? "terminal"
+                view: w.view ?? "terminal",
+                termLayout: w.termLayout ?? "tabs"
             })
         },
 
@@ -335,6 +343,10 @@ export const useStore = create<AppState>((set, get) => {
         setView: (view) => {
             set({ view })
             if (view === "terminal" && get().activeId) ack(get().activePaneByProject[get().activeId as string])
+            persist()
+        },
+        setTermLayout: (layout) => {
+            set({ termLayout: layout })
             persist()
         },
 
