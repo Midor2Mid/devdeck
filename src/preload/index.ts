@@ -73,6 +73,7 @@ export interface RemoteSession {
     termId: string
     projectId: string
     projectName: string
+    projectPath: string
     tabName: string
     badge: string
     isAgent: boolean

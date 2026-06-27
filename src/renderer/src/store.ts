@@ -33,6 +33,7 @@ export interface AnySession {
     termId: string
     projectId: string
     projectName: string
+    projectPath: string
     tabName: string
     agentId: string
     badge: string
@@ -248,6 +249,7 @@ export const useStore = create<AppState>((set, get) => {
                         termId,
                         projectId: pid,
                         projectName: project?.name ?? "—",
+                        projectPath: project?.path ?? "",
                         tabName: tab.name,
                         agentId,
                         badge: badgeFor(agentId),

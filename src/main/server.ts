@@ -1,7 +1,8 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "http"
 import { WebSocketServer, WebSocket } from "ws"
-import { readFileSync } from "fs"
-import { join, dirname } from "path"
+import { app } from "electron"
+import { readFileSync, writeFileSync, mkdirSync } from "fs"
+import { join, dirname, basename } from "path"
 import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
@@ -11,6 +12,7 @@ export interface RemoteSession {
     termId: string
     projectId: string
     projectName: string
+    projectPath: string
     tabName: string
     badge: string
     isAgent: boolean
@@ -165,6 +167,23 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
                 case "db:query":
                     runQuery(id, String(msg.sql)).then((res) => send(ws, { t: "db:res", res }))
                     break
+                case "upload": {
+                    // Save a base64 file from the phone, then type its path into the session.
+                    try {
+                        const sess = deps.getSessions().find((s) => s.termId === id)
+                        const projectPath = sess?.projectPath || app.getPath("temp")
+                        const dir = join(projectPath, ".devdeck", "uploads")
+                        mkdirSync(dir, { recursive: true })
+                        const safe = basename(String(msg.name || "file")).replace(/[^\w.\-]/g, "_")
+                        const dest = join(dir, Date.now() + "-" + safe)
+                        writeFileSync(dest, Buffer.from(String(msg.data || ""), "base64"))
+                        writePty(id, dest + " ")
+                        send(ws, { t: "upload:done", path: dest })
+                    } catch (e) {
+                        send(ws, { t: "upload:done", error: String((e as Error)?.message ?? e) })
+                    }
+                    break
+                }
             }
         })
         ws.on("close", () => clients.delete(ws))
@@ -305,6 +324,8 @@ const CLIENT_HTML = `<!doctype html>
       <button data-k="\\u001b[C">→</button>
     </div>
     <div id="bar">
+      <input type="file" id="file" style="display:none" />
+      <button id="attach" title="Attach a screenshot or file">📎</button>
       <input id="inp" placeholder="type, then Send (adds Enter)" autocapitalize="off" autocomplete="off" autocorrect="off" />
       <button id="send">Send</button>
     </div>
@@ -346,6 +367,7 @@ const CLIENT_HTML = `<!doctype html>
       if(m.t === 'sessions'){ sessions = m.sessions; if(!attachedId) renderList(); }
       else if(m.t === 'data' && m.id === attachedId && term){ term.write(m.data); }
       else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m[process exited]\\x1b[0m\\r\\n'); }
+      else if(m.t === 'upload:done'){ statusEl.textContent = m.error ? ('upload failed: '+m.error) : ('attached → path inserted'); setTimeout(function(){statusEl.textContent='connected';},2500); }
       else if(m.t === 'http:res'){ renderResult(document.getElementById('h-res'), m.res); }
       else if(m.t === 'db:res'){ renderResult(document.getElementById('d-res'), m.res); }
       else if(m.t === 'db:conns'){ var sel=document.getElementById('d-conn'); var cur=sel.value; sel.innerHTML='<option value="">Select connection…</option>'+m.conns.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+' ('+c.kind+')</option>';}).join(''); sel.value=cur; }
@@ -424,6 +446,13 @@ const CLIENT_HTML = `<!doctype html>
 
   backBtn.onclick=function(){ if(attachedId) sendMsg({t:'detach',id:attachedId}); showView('list'); };
   document.getElementById('send').onclick=function(){ var i=document.getElementById('inp'); if(attachedId){ sendMsg({t:'input',id:attachedId,data:i.value+'\\r'}); i.value=''; } };
+  document.getElementById('attach').onclick=function(){ if(attachedId) document.getElementById('file').click(); };
+  document.getElementById('file').onchange=function(e){
+    var f=e.target.files[0]; if(!f||!attachedId) return;
+    var r=new FileReader();
+    r.onload=function(){ var b64=String(r.result).split(',')[1]||''; sendMsg({t:'upload',id:attachedId,name:f.name,data:b64}); statusEl.textContent='uploading '+f.name+'…'; };
+    r.readAsDataURL(f); e.target.value='';
+  };
   document.getElementById('inp').addEventListener('keydown',function(e){ if(e.key==='Enter'){ document.getElementById('send').click(); }});
   [].forEach.call(document.querySelectorAll('.keys button'),function(b){ b.onclick=function(){ if(attachedId) sendMsg({t:'input',id:attachedId,data:b.getAttribute('data-k')}); }; });
   window.addEventListener('resize',function(){ if(attachedId) fit(); });
