@@ -35,6 +35,22 @@ export interface Theme {
     vars: Record<string, string>
     xterm: XtermTheme
     monacoId: string
+    /** xterm line spacing — higher = airier. */
+    termLineHeight: number
+}
+
+// Density/typography vars per feel. Sumi/Washi are compact; Zen is airy.
+const COMPACT = {
+    "--radius": "7px",
+    "--row-py": "7px",
+    "--brand-weight": "500",
+    "--brand-spacing": "1.5px"
+}
+const AIRY = {
+    "--radius": "11px",
+    "--row-py": "10px",
+    "--brand-weight": "300",
+    "--brand-spacing": "3px"
 }
 
 const SUMI_VARS = {
@@ -97,8 +113,9 @@ export const THEMES: Record<ThemeId, Theme> = {
         label: "Sumi (dark)",
         mode: "dark",
         accent: "#b8895c",
-        vars: SUMI_VARS,
+        vars: { ...SUMI_VARS, ...COMPACT },
         monacoId: "devdeck-sumi",
+        termLineHeight: 1.0,
         xterm: {
             background: "#141312",
             foreground: "#e4ddcf",
@@ -128,8 +145,9 @@ export const THEMES: Record<ThemeId, Theme> = {
         label: "Washi (light)",
         mode: "light",
         accent: "#b07a4a",
-        vars: WASHI_VARS,
+        vars: { ...WASHI_VARS, ...COMPACT },
         monacoId: "devdeck-washi",
+        termLineHeight: 1.0,
         xterm: {
             background: "#fbf7ee",
             foreground: "#3a342b",
@@ -159,8 +177,9 @@ export const THEMES: Record<ThemeId, Theme> = {
         label: "Zen (dark)",
         mode: "dark",
         accent: "#c2a878",
-        vars: ZEN_VARS,
+        vars: { ...ZEN_VARS, ...AIRY },
         monacoId: "devdeck-zen",
+        termLineHeight: 1.3,
         xterm: {
             background: "#100e0a",
             foreground: "#ece5d2",

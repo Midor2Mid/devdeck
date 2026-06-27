@@ -38,6 +38,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             fontSize: useSettings.getState().terminal.fontSize,
             cursorBlink: true,
             allowProposedApi: true,
+            lineHeight: THEMES[useSettings.getState().appearance.theme].termLineHeight,
             theme: THEMES[useSettings.getState().appearance.theme].xterm
         })
         const fit = new FitAddon()
@@ -119,8 +120,17 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
 
     // Re-theme the terminal when the app theme changes.
     useEffect(() => {
-        if (termRef.current) termRef.current.options.theme = THEMES[themeId].xterm
-    }, [themeId])
+        const term = termRef.current
+        if (!term) return
+        term.options.theme = THEMES[themeId].xterm
+        term.options.lineHeight = THEMES[themeId].termLineHeight
+        try {
+            fitRef.current?.fit()
+            window.api.pty.resize(termId, term.cols, term.rows)
+        } catch {
+            /* noop */
+        }
+    }, [themeId, termId])
 
     // Focus the xterm when this pane becomes the active one.
     useEffect(() => {
