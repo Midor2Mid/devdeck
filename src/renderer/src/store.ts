@@ -79,10 +79,14 @@ interface AppState extends Persisted {
     canvasPos: Record<string, CanvasPos>
     setCanvasPos: (termId: string, pos: CanvasPos) => void
 
-    // Project switcher overlay
+    // Overlays / panels (runtime-only)
     switcherOpen: boolean
     openSwitcher: () => void
     closeSwitcher: () => void
+    composerOpen: boolean
+    setComposerOpen: (open: boolean) => void
+    paletteOpen: boolean
+    setPaletteOpen: (open: boolean) => void
 
     // Agent session awareness (runtime-only)
     agentStatus: Record<string, AgentStatus>
@@ -280,6 +284,8 @@ export const useStore = create<AppState>((set, get) => {
         termLayout: "tabs",
         canvasPos: {},
         switcherOpen: false,
+        composerOpen: false,
+        paletteOpen: false,
         agentStatus: {},
         lastAgentTermId: null,
         notifications: [],
@@ -355,6 +361,8 @@ export const useStore = create<AppState>((set, get) => {
 
         openSwitcher: () => set({ switcherOpen: true }),
         closeSwitcher: () => set({ switcherOpen: false }),
+        setComposerOpen: (composerOpen) => set({ composerOpen }),
+        setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
         activeProject: () => get().projects.find((p) => p.id === get().activeId),
 

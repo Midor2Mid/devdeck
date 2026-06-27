@@ -31,7 +31,8 @@ export function TerminalView(): JSX.Element {
     const [findOpen, setFindOpen] = useState(false)
     const [query, setQuery] = useState("")
     const [menuOpen, setMenuOpen] = useState(false)
-    const [composerOpen, setComposerOpen] = useState(false)
+    const composerOpen = useStore((s) => s.composerOpen)
+    const setComposerOpen = useStore((s) => s.setComposerOpen)
     const findInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = projects.find((p) => p.id === activeId)
@@ -68,7 +69,7 @@ export function TerminalView(): JSX.Element {
                 BracketRight: () => s.cycleTab(1),
                 BracketLeft: () => s.cycleTab(-1),
                 KeyF: () => setFindOpen((v) => !v),
-                KeyP: () => setComposerOpen((v) => !v)
+                KeyI: () => s.setComposerOpen(!s.composerOpen)
             }
             const action = map[e.code]
             if (action) {
@@ -286,8 +287,8 @@ export function TerminalView(): JSX.Element {
                     </button>
                     <button
                         className={"icon-action" + (composerOpen ? " on" : "")}
-                        onClick={() => setComposerOpen((v) => !v)}
-                        title="Prompt composer (Ctrl+Shift+P)"
+                        onClick={() => setComposerOpen(!composerOpen)}
+                        title="Prompt composer (Ctrl+Shift+I)"
                     >
                         ✎
                     </button>
@@ -395,7 +396,7 @@ export function TerminalView(): JSX.Element {
                 <div
                     className="composer-launcher"
                     onClick={() => setComposerOpen(true)}
-                    title="Open the prompt composer (Ctrl+Shift+P)"
+                    title="Open the prompt composer (Ctrl+Shift+I)"
                 >
                     <span className="cl-icon">✎</span>
                     <span className="cl-text">
@@ -404,7 +405,7 @@ export function TerminalView(): JSX.Element {
                             : `Write a prompt${primaryAgent ? " for " + primaryAgent.name : ""}…`}
                     </span>
                     {composerDraft.trim() && <span className="cl-draft">● draft</span>}
-                    <span className="cl-kbd">Ctrl+Shift+P</span>
+                    <span className="cl-kbd">Ctrl+Shift+I</span>
                 </div>
             )}
         </div>

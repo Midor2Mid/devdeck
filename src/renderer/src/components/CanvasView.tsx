@@ -30,6 +30,7 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
     const closePane = useStore((s) => s.closePane)
 
     const [pan, setPan] = useState({ x: 0, y: 0 })
+    const [zoom, setZoom] = useState(1)
     const [drag, setDrag] = useState<{ termId: string; x: number; y: number } | null>(null)
     const surfaceRef = useRef<HTMLDivElement>(null)
 
@@ -43,14 +44,19 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
         e.stopPropagation()
         const base = drag && drag.termId === termId ? drag : posOf(termId, i)
         const start = { mx: e.clientX, my: e.clientY, bx: base.x, by: base.y }
+        // World coords are scaled by zoom, so convert screen delta back to world delta.
         const onMove = (ev: MouseEvent): void =>
-            setDrag({ termId, x: start.bx + (ev.clientX - start.mx), y: start.by + (ev.clientY - start.my) })
+            setDrag({
+                termId,
+                x: start.bx + (ev.clientX - start.mx) / zoom,
+                y: start.by + (ev.clientY - start.my) / zoom
+            })
         const onUp = (ev: MouseEvent): void => {
             window.removeEventListener("mousemove", onMove)
             window.removeEventListener("mouseup", onUp)
             setCanvasPos(termId, {
-                x: start.bx + (ev.clientX - start.mx),
-                y: start.by + (ev.clientY - start.my)
+                x: start.bx + (ev.clientX - start.mx) / zoom,
+                y: start.by + (ev.clientY - start.my) / zoom
             })
             setDrag(null)
         }
@@ -71,9 +77,30 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
         window.addEventListener("mouseup", onUp)
     }
 
+    const onWheel = (e: React.WheelEvent): void => {
+        if (!(e.ctrlKey || e.metaKey)) return
+        e.preventDefault()
+        setZoom((z) => Math.max(0.4, Math.min(2, z * (e.deltaY < 0 ? 1.1 : 0.9))))
+    }
+    const resetView = (): void => {
+        setZoom(1)
+        setPan({ x: 0, y: 0 })
+    }
+
     return (
-        <div className="canvas-surface" ref={surfaceRef} onMouseDown={startPan}>
-            <div className="canvas-world" style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
+        <div
+            className="canvas-surface"
+            ref={surfaceRef}
+            onMouseDown={startPan}
+            onWheel={onWheel}
+            onDoubleClick={(e) => {
+                if (!(e.target as HTMLElement).closest(".canvas-card")) resetView()
+            }}
+        >
+            <div
+                className="canvas-world"
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+            >
                 {panes.map((p, i) => {
                     const pos = drag && drag.termId === p.termId ? drag : posOf(p.termId, i)
                     const isAgent = agentOf(p.termId) !== SHELL
@@ -128,7 +155,9 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
                     )
                 })}
             </div>
-            <div className="canvas-hint muted small">drag a card's header to move · drag the background to pan</div>
+            <div className="canvas-hint muted small">
+                drag header to move · drag background to pan · Ctrl+scroll to zoom ({Math.round(zoom * 100)}%) · dbl-click to reset
+            </div>
         </div>
     )
 }

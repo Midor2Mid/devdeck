@@ -142,11 +142,17 @@ From studying the 1DevTool reference (video + 1devtool.com):
 
 - [x] **SSH profiles** in Settings → SSH (label, user, host, port, extra args); launch a connected terminal from the ▾ menu
 
+## Milestone 17 — command palette + canvas zoom ✅ (2026-06-27)
+
+- [x] **Command palette** (Ctrl+Shift+P): fuzzy access to views, layouts, themes, new agent/SSH sessions, jump-to-session, settings, project switch. Composer hotkey moved to Ctrl+Shift+I.
+- [x] **Canvas zoom** (Ctrl+scroll, 40–200%) + double-click to reset view
+
 ## Next up
 
 - [ ] Browser network capture (needs the webContents debugger protocol)
-- [ ] Canvas: zoom + connectors between cards
+- [ ] Canvas: connectors between cards
 - [ ] MCP settings section
+- [ ] Audit batch 2 (low severity)
 
 ## Later / maybe (parking lot)
 

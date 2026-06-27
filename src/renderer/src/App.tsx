@@ -10,6 +10,7 @@ import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
+import { CommandPalette } from "./components/CommandPalette"
 import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
 
@@ -28,6 +29,7 @@ export function App(): JSX.Element {
     const switcherOpen = useStore((s) => s.switcherOpen)
     const openSwitcher = useStore((s) => s.openSwitcher)
     const closeSwitcher = useStore((s) => s.closeSwitcher)
+    const paletteOpen = useStore((s) => s.paletteOpen)
     const project = activeProject()
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
@@ -60,10 +62,16 @@ export function App(): JSX.Element {
         )
     }, [newTabIn])
 
-    // Global Ctrl+K opens the project switcher.
+    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+P command palette.
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+            const mod = e.ctrlKey || e.metaKey
+            if (mod && e.shiftKey && e.code === "KeyP") {
+                e.preventDefault()
+                e.stopPropagation()
+                const s = useStore.getState()
+                s.setPaletteOpen(!s.paletteOpen)
+            } else if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
                 e.preventDefault()
                 if (useStore.getState().switcherOpen) closeSwitcher()
                 else openSwitcher()
@@ -143,6 +151,7 @@ export function App(): JSX.Element {
             <StatusBar />
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
+            {paletteOpen && <CommandPalette />}
             <Toasts />
         </div>
     )

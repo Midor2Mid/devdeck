@@ -78,6 +78,9 @@ unpacked from the asar archive automatically (see the `build` field in
 | `Ctrl+Shift+-` | Split down |
 | `Ctrl+Shift+]` / `[` | Next / previous tab |
 | `Ctrl+Shift+F` | Find in terminal |
+| `Ctrl+Shift+I` | Prompt composer |
+| `Ctrl+Shift+P` | Command palette |
+| `Ctrl+K` | Project switcher |
 
 ## Architecture
 
