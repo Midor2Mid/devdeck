@@ -35,28 +35,29 @@ export function ApiPanel(): JSX.Element {
     const [reqTab, setReqTab] = useState<"headers" | "body">("headers")
     const [resp, setResp] = useState<HttpResponse | null>(null)
     const [sending, setSending] = useState(false)
-    const [curlOpen, setCurlOpen] = useState(false)
-    const [curlText, setCurlText] = useState("")
-    const [curlErr, setCurlErr] = useState<string | null>(null)
+    const [imported, setImported] = useState(false)
 
-    const importCurl = (): void => {
-        const parsed = parseCurl(curlText)
-        if (!parsed) {
-            setCurlErr("Couldn't parse — make sure it starts with `curl` and has a URL.")
-            return
+    // Postman-style smart paste: if the value is a cURL command, parse it into
+    // method/url/headers/body; otherwise treat it as a plain URL.
+    const onUrlChange = (value: string): void => {
+        if (/^\s*curl\s/i.test(value)) {
+            const parsed = parseCurl(value)
+            if (parsed) {
+                setMethod(parsed.method)
+                setUrl(parsed.url)
+                setHeadersText(
+                    Object.entries(parsed.headers)
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join("\n")
+                )
+                setBody(parsed.body)
+                if (parsed.body) setReqTab("body")
+                setImported(true)
+                setTimeout(() => setImported(false), 1800)
+                return
+            }
         }
-        setMethod(parsed.method)
-        setUrl(parsed.url)
-        setHeadersText(
-            Object.entries(parsed.headers)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join("\n")
-        )
-        setBody(parsed.body)
-        if (parsed.body) setReqTab("body")
-        setCurlOpen(false)
-        setCurlText("")
-        setCurlErr(null)
+        setUrl(value)
     }
 
     const send = async (): Promise<void> => {
@@ -95,43 +96,18 @@ export function ApiPanel(): JSX.Element {
                 </select>
                 <input
                     className="api-url"
-                    placeholder="https://api.example.com/endpoint"
+                    placeholder="https://api.example.com/endpoint  —  or paste a curl command"
                     value={url}
-                    onChange={(e) => setUrl(e.target.value)}
+                    onChange={(e) => onUrlChange(e.target.value)}
                     onKeyDown={(e) => {
                         if (e.key === "Enter") send()
                     }}
                 />
-                <button
-                    className={"icon-action" + (curlOpen ? " on" : "")}
-                    onClick={() => setCurlOpen((v) => !v)}
-                    title="Import a cURL command"
-                >
-                    cURL
-                </button>
+                {imported && <span className="api-imported" title="Imported from cURL">cURL ✓</span>}
                 <button className="accent" onClick={send} disabled={sending || !url.trim()}>
                     {sending ? "Sending…" : "Send"}
                 </button>
             </div>
-
-            {curlOpen && (
-                <div className="curl-import">
-                    <textarea
-                        className="code-area"
-                        placeholder="Paste a curl command…  curl -X POST https://… -H 'Authorization: Bearer …' -d '{...}'"
-                        value={curlText}
-                        onChange={(e) => setCurlText(e.target.value)}
-                        autoFocus
-                    />
-                    {curlErr && <div className="resp-error">{curlErr}</div>}
-                    <div className="curl-import-actions">
-                        <button onClick={() => setCurlOpen(false)}>Cancel</button>
-                        <button className="accent" onClick={importCurl} disabled={!curlText.trim()}>
-                            Import
-                        </button>
-                    </div>
-                </div>
-            )}
 
             <div className="api-req">
                 <div className="subtabs">

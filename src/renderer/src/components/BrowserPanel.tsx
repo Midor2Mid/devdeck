@@ -66,6 +66,16 @@ export function BrowserPanel(): JSX.Element {
             consoleRef.current.push({ level: e.level ?? 0, message: String(e.message ?? "") })
             if (consoleRef.current.length > 80) consoleRef.current.shift()
         }
+        let netId = -1
+        const onDomOnce = (): void => {
+            try {
+                netId = wv.getWebContentsId()
+                window.api.browser.netAttach(netId)
+            } catch {
+                /* ignore */
+            }
+        }
+        wv.addEventListener("dom-ready", onDomOnce, { once: true })
         const onNav = (): void => setAddress(wv.getURL())
         wv.addEventListener("dom-ready", onDom)
         wv.addEventListener("console-message", onConsole)
@@ -76,6 +86,7 @@ export function BrowserPanel(): JSX.Element {
             wv.removeEventListener("console-message", onConsole)
             wv.removeEventListener("did-navigate", onNav)
             wv.removeEventListener("did-navigate-in-page", onNav)
+            if (netId >= 0) window.api.browser.netDetach(netId)
         }
     }, [commentMode])
 
@@ -116,6 +127,23 @@ export function BrowserPanel(): JSX.Element {
         if (problems.length) {
             text += "\nConsole errors/warnings:\n"
             problems.forEach((l) => (text += `  - ${l.message}\n`))
+        }
+
+        // Network: summary + any failed / non-2xx requests.
+        try {
+            const id = wvRef.current?.getWebContentsId()
+            if (id >= 0) {
+                const net = await window.api.browser.netGet(id)
+                const bad = net.filter((r) => r.failed || r.status >= 400)
+                if (net.length) {
+                    text += `\nNetwork: ${net.length} requests, ${bad.length} failed/4xx/5xx\n`
+                    bad.slice(-15).forEach((r) => {
+                        text += `  - ${r.method} ${r.failed ? "FAILED" : r.status} ${r.url}\n`
+                    })
+                }
+            }
+        } catch {
+            /* network capture is best-effort */
         }
 
         // Capture a screenshot, save it into the project, reference its path.

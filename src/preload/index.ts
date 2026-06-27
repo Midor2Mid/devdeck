@@ -183,7 +183,11 @@ const api = {
     },
     browser: {
         saveShot: (projectPath: string, dataUrl: string): Promise<string> =>
-            ipcRenderer.invoke("browser:saveShot", { projectPath, dataUrl })
+            ipcRenderer.invoke("browser:saveShot", { projectPath, dataUrl }),
+        netAttach: (id: number): Promise<void> => ipcRenderer.invoke("browser:netAttach", id),
+        netGet: (id: number): Promise<{ method: string; url: string; status: number; type: string; failed: boolean }[]> =>
+            ipcRenderer.invoke("browser:netGet", id),
+        netDetach: (id: number): Promise<void> => ipcRenderer.invoke("browser:netDetach", id)
     },
     mcp: {
         list: (projectPath: string): Promise<McpServer[]> => ipcRenderer.invoke("mcp:list", projectPath),

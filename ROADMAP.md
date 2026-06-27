@@ -154,9 +154,13 @@ From studying the 1DevTool reference (video + 1devtool.com):
 
 This completes every section from the original 1DevTool reference (Appearance, Terminal, Editor, Agents, Snippets, Git, SSH, MCP, Remote, Shortcuts, About).
 
+## Milestone 19 — network capture + API smart-paste ✅ (2026-06-28)
+
+- [x] **Browser network capture** (CDP on the webview): comment-to-AI now includes a request summary + failed/4xx/5xx requests
+- [x] **API smart-paste** — paste a cURL command into the URL bar and it auto-parses (Postman-style); replaces the separate cURL button
+
 ## Next up
 
-- [ ] Browser network capture (needs the webContents debugger protocol)
 - [ ] Canvas: connectors between cards
 - [ ] Activity feed across projects
 

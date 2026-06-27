@@ -12,6 +12,7 @@ import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus, getIdentity, setIdentity } from "./git"
 import { readMcp, writeMcp, type McpServer } from "./mcp"
+import * as browserNet from "./browserNet"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -169,6 +170,11 @@ function registerIpc(): void {
         guardPath(projectPath)
         writeMcp(projectPath, servers)
     })
+
+    // --- Browser network capture (CDP on the webview's webContents) ---
+    ipcMain.handle("browser:netAttach", (_e, id: number) => browserNet.attach(id))
+    ipcMain.handle("browser:netGet", (_e, id: number) => browserNet.getRecent(id))
+    ipcMain.handle("browser:netDetach", (_e, id: number) => browserNet.detach(id))
 
     // --- Browser: save a captured screenshot (data URL) into a project ---
     ipcMain.handle("browser:saveShot", (_e, { projectPath, dataUrl }) => {

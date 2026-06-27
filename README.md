@@ -58,8 +58,8 @@ unpacked from the asar archive automatically (see the `build` field in
 - **Layout persists** — your tabs and split layout per project are restored on relaunch (as fresh shells/Claude sessions in the same arrangement).
 - **Rename tabs** — double-click a tab to rename it.
 - **In-terminal find** — ⌕ / Ctrl+Shift+F to search the focused terminal.
-- **API client** — Postman-style request builder (runs in the main process, no CORS limits); **paste a cURL command** to fill the request.
-- **Browser** — embedded web browser with a **Comment Mode**: click any element to annotate it, then send grouped feedback to your focused agent — including the element selector + note + URL, recent **console errors/warnings**, and a **page screenshot** (saved into the project).
+- **API client** — Postman-style request builder (runs in the main process, no CORS limits); **paste a cURL command into the URL bar** and it auto-parses into method/headers/body.
+- **Browser** — embedded web browser with a **Comment Mode**: click any element to annotate it, then send grouped feedback to your focused agent — element selector + note + URL, recent **console errors/warnings**, captured **network requests** (failed/4xx/5xx), and a **page screenshot**.
 - **Editor** — Monaco-powered: file tree, multi-file tabs, syntax highlighting, dirty indicators, Ctrl+S to save.
 - **Database** — per-project saved connections (PostgreSQL, MySQL & **SQLite**), Monaco SQL editor (Ctrl+Enter to run), table browser, results grid. SQLite uses a WASM driver (no native build) and reads/writes real `.db` files via a file picker. Passwords encrypted at rest (Electron `safeStorage`).
 - **Themes** — three wabi-sabi themes (Sumi & Zen dark, Washi light), switchable in Settings → Appearance and applied across UI, terminal, and editor; plus a customizable accent color.
