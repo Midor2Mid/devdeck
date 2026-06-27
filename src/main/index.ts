@@ -10,7 +10,7 @@ import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
-import { gitStatus } from "./git"
+import { gitStatus, getIdentity, setIdentity } from "./git"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -141,6 +141,8 @@ function registerIpc(): void {
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))
+    ipcMain.handle("git:getIdentity", (_e, cwd: string) => getIdentity(cwd))
+    ipcMain.handle("git:setIdentity", (_e, { cwd, identity }) => setIdentity(cwd, identity))
 
     // --- Browser: save a captured screenshot (data URL) into a project ---
     ipcMain.handle("browser:saveShot", (_e, { projectPath, dataUrl }) => {

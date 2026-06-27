@@ -147,6 +147,45 @@ select:focus {
 .sb-remote {
     color: var(--moss);
 }
+.sb-identity {
+    cursor: pointer;
+}
+.sb-identity:hover {
+    color: var(--accent-soft);
+}
+.sb-git-id {
+    position: relative;
+}
+.sb-id-menu {
+    position: absolute;
+    bottom: 130%;
+    left: 0;
+    z-index: 30;
+    min-width: 200px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Git accounts editor */
+.git-account {
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+.git-account-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.git-label {
+    flex: 1;
+    font-weight: 600;
+}
 
 /* ---------- Sidebar ---------- */
 .sidebar {

@@ -27,6 +27,14 @@ export interface Snippet {
     body: string
 }
 
+export interface GitAccount {
+    id: string
+    label: string
+    name: string
+    email: string
+    sshCommand: string
+}
+
 export interface AppSettings {
     terminal: {
         shell: ShellKind
@@ -43,6 +51,7 @@ export interface AppSettings {
     agents: AgentPreset[]
     agentIdleMs: number
     snippets: Snippet[]
+    gitAccounts: GitAccount[]
     appearance: {
         theme: ThemeId
         accent: string
@@ -98,6 +107,7 @@ const DEFAULTS: AppSettings = {
             body: "Stage the changes and commit with a clear conventional-commit message."
         }
     ],
+    gitAccounts: [],
     appearance: {
         theme: "sumi",
         accent: DEFAULT_ACCENT
@@ -117,6 +127,7 @@ interface SettingsState extends AppSettings {
     setAgents: (agents: AgentPreset[]) => void
     setAgentIdleMs: (ms: number) => void
     setSnippets: (snippets: Snippet[]) => void
+    setGitAccounts: (accounts: GitAccount[]) => void
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
@@ -134,8 +145,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
         persistTimer = setTimeout(() => {
-            const { terminal, editor, agents, agentIdleMs, snippets, appearance, remote } = get()
-            window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, appearance, remote })
+            const { terminal, editor, agents, agentIdleMs, snippets, gitAccounts, appearance, remote } = get()
+            window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, gitAccounts, appearance, remote })
         }, 300)
     }
 
@@ -162,6 +173,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                     })),
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     snippets: raw.snippets ?? DEFAULTS.snippets,
+                    gitAccounts: raw.gitAccounts ?? DEFAULTS.gitAccounts,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
@@ -188,6 +200,10 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         setSnippets: (snippets) => {
             set({ snippets })
+            persist()
+        },
+        setGitAccounts: (gitAccounts) => {
+            set({ gitAccounts })
             persist()
         },
         agentById: (id) => get().agents.find((a) => a.id === id),

@@ -48,7 +48,8 @@ unpacked from the asar archive automatically (see the `build` field in
 - **Prompt composer** — `Ctrl+Shift+P` opens a rich prompt box with `@file` and `/snippet` autocomplete (snippets defined in Settings) to compose and send to the focused agent session.
 - **Terminal layouts** — toggle between **Tabs** and a **Dashboard grid** that shows every terminal in the project at once.
 - **Project groups + switcher** — organize projects into collapsible groups; `Ctrl+K` opens a searchable launchpad grid of all projects with live session counts.
-- **Status bar** — active project, git branch + uncommitted-change count, attention flag, remote indicator.
+- **Status bar** — active project, git branch + uncommitted-change count, **git identity** (click to switch account), attention flag, remote indicator.
+- **Git accounts** — define work/personal identities (name, email, custom SSH command) in Settings → Git and apply one per project (writes the repo's local `git config`).
 - **Claude session awareness** — every Claude session (across all projects) is listed in the sidebar with live status (working / idle / **needs attention**), an attention badge, and click-to-jump. Status is inferred from output activity + the terminal bell — no fragile output parsing.
 - **Send file → Claude** — from the editor, send the current file's `@path` into the last-focused Claude session.
 - **Sessions survive switches** — switching project/tab/pane keeps every pty running; panes re-attach and replay recent output (no lost work). Sessions end only when you close them.

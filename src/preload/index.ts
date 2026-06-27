@@ -89,6 +89,11 @@ export interface GitStatus {
     branch: string
     changes: number
 }
+export interface GitIdentity {
+    name: string
+    email: string
+    sshCommand: string
+}
 
 const api = {
     pty: {
@@ -164,7 +169,11 @@ const api = {
             ipcRenderer.invoke("fs:write", { path, content })
     },
     git: {
-        status: (cwd: string): Promise<GitStatus> => ipcRenderer.invoke("git:status", cwd)
+        status: (cwd: string): Promise<GitStatus> => ipcRenderer.invoke("git:status", cwd),
+        getIdentity: (cwd: string): Promise<GitIdentity> =>
+            ipcRenderer.invoke("git:getIdentity", cwd),
+        setIdentity: (cwd: string, identity: GitIdentity): Promise<GitIdentity> =>
+            ipcRenderer.invoke("git:setIdentity", { cwd, identity })
     },
     browser: {
         saveShot: (projectPath: string, dataUrl: string): Promise<string> =>

@@ -12,6 +12,7 @@ type Section =
     | "editor"
     | "agents"
     | "snippets"
+    | "git"
     | "remote"
     | "shortcuts"
     | "about"
@@ -22,10 +23,67 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "editor", label: "Editor" },
     { key: "agents", label: "Agents" },
     { key: "snippets", label: "Snippets" },
+    { key: "git", label: "Git" },
     { key: "remote", label: "Remote (Mobile)" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
 ]
+
+function GitSection(): JSX.Element {
+    const accounts = useSettings((s) => s.gitAccounts)
+    const setGitAccounts = useSettings((s) => s.setGitAccounts)
+
+    const update = (i: number, patch: Record<string, string>): void =>
+        setGitAccounts(accounts.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
+    const remove = (i: number): void => setGitAccounts(accounts.filter((_, idx) => idx !== i))
+    const add = (): void =>
+        setGitAccounts([
+            ...accounts,
+            { id: crypto.randomUUID(), label: "New account", name: "", email: "", sshCommand: "" }
+        ])
+
+    return (
+        <div className="settings-section">
+            <h3>Git accounts</h3>
+            {accounts.map((a, i) => (
+                <div key={a.id} className="git-account">
+                    <div className="git-account-head">
+                        <input
+                            className="git-label"
+                            value={a.label}
+                            placeholder="Work / Personal…"
+                            onChange={(e) => update(i, { label: e.target.value })}
+                        />
+                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                            ×
+                        </button>
+                    </div>
+                    <div className="form-grid">
+                        <label>user.name</label>
+                        <input value={a.name} onChange={(e) => update(i, { name: e.target.value })} />
+                        <label>user.email</label>
+                        <input value={a.email} onChange={(e) => update(i, { email: e.target.value })} />
+                        <label>SSH command</label>
+                        <input
+                            value={a.sshCommand}
+                            placeholder={'ssh -i ~/.ssh/id_work -o IdentitiesOnly=yes'}
+                            onChange={(e) => update(i, { sshCommand: e.target.value })}
+                        />
+                    </div>
+                </div>
+            ))}
+            <button onClick={add} style={{ marginTop: 8 }}>
+                + Add account
+            </button>
+            <p className="settings-hint">
+                Apply an account to the active project from the <b>status bar</b> (click the
+                identity next to the branch). It writes the project's local <code>git config</code>{" "}
+                (name, email, and optional <code>core.sshCommand</code>) — so each repo can use a
+                different identity/key. Tokens (PAT) aren't stored yet.
+            </p>
+        </div>
+    )
+}
 
 function SnippetsSection(): JSX.Element {
     const snippets = useSettings((s) => s.snippets)
@@ -503,6 +561,8 @@ export function SettingsModal(): JSX.Element {
                     {section === "agents" && <AgentsSection />}
 
                     {section === "snippets" && <SnippetsSection />}
+
+                    {section === "git" && <GitSection />}
 
                     {section === "remote" && <RemoteSection />}
 

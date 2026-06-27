@@ -132,10 +132,17 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Mobile attach** — pick a screenshot/file on the phone → saved into the project (`.devdeck/uploads/`) → path typed into the agent session
 - [x] **Browser capture** — "Send to AI" now includes recent console errors/warnings + a page screenshot (saved + path referenced) alongside the element comments
 
+## Milestone 15 — Git multi-account ✅ (2026-06-27)
+
+- [x] **Git accounts** in Settings → Git (label, user.name, user.email, custom SSH command)
+- [x] Apply an account to the active project from the **status bar** (writes the repo's local `git config` incl. `core.sshCommand`); status bar shows the current identity
+- [ ] Later: store PATs (encrypted) for HTTPS push; token verification
+
 ## Next up
 
 - [ ] Browser network capture (needs the webContents debugger protocol)
 - [ ] Canvas: zoom + connectors between cards
+- [ ] SSH / MCP settings sections
 
 ## Later / maybe (parking lot)
 
