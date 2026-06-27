@@ -7,6 +7,7 @@ import { TerminalView } from "./components/TerminalView"
 import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
+import { BrowserPanel } from "./components/BrowserPanel"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { StatusBar } from "./components/StatusBar"
@@ -16,7 +17,8 @@ const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
     { key: "editor", label: "Editor" },
     { key: "api", label: "API" },
-    { key: "database", label: "Database" }
+    { key: "database", label: "Database" },
+    { key: "browser", label: "Browser" }
 ]
 
 export function App(): JSX.Element {
@@ -119,6 +121,12 @@ export function App(): JSX.Element {
                                 style={{ display: view === "database" ? "flex" : "none" }}
                             >
                                 <DbPanel />
+                            </div>
+                            <div
+                                className="panel"
+                                style={{ display: view === "browser" ? "flex" : "none" }}
+                            >
+                                <BrowserPanel />
                             </div>
                         </div>
                     </div>

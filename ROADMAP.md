@@ -93,6 +93,16 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Status bar** — git branch + change count, attention, remote, project
 - [ ] Later (from reference): agent pipelines (chain agents), embedded browser, image-preview tabs, AI diff, activity feed, more DB engines
 
+## Milestone 9 — more 1DevTool-inspired features ✅ (2026-06-27)
+
+- [x] **SQLite** via `node-sqlite3-wasm` (no native build)
+- [x] **Paste cURL → parse** into an API request
+- [x] **Composer drafts** persisted per project + a discoverable launcher bar
+- [x] **In-app notifications** (toasts) when a background agent needs attention
+- [x] **Mobile DB + HTTP** — run SQL / send HTTP requests from the phone client
+- [x] **Embedded browser** panel + **Comment Mode** → click page elements, annotate, send grouped feedback to the focused agent
+- [ ] Later: browser screenshot/console/network capture into the comment payload; terminal Canvas/Dashboard layouts; AI quota display
+
 ## Later / maybe (parking lot)
 
 - Command palette (Ctrl+P) for projects/files/actions

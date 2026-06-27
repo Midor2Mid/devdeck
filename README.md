@@ -43,7 +43,8 @@ npm run build      # bundle main + preload + renderer into out/
 - **Layout persists** — your tabs and split layout per project are restored on relaunch (as fresh shells/Claude sessions in the same arrangement).
 - **Rename tabs** — double-click a tab to rename it.
 - **In-terminal find** — ⌕ / Ctrl+Shift+F to search the focused terminal.
-- **API client** — Postman-style request builder (runs in the main process, no CORS limits).
+- **API client** — Postman-style request builder (runs in the main process, no CORS limits); **paste a cURL command** to fill the request.
+- **Browser** — embedded web browser with a **Comment Mode**: click any element to annotate it, then send the grouped feedback (selector + note + URL) to your focused agent.
 - **Editor** — Monaco-powered: file tree, multi-file tabs, syntax highlighting, dirty indicators, Ctrl+S to save.
 - **Database** — per-project saved connections (PostgreSQL, MySQL & **SQLite**), Monaco SQL editor (Ctrl+Enter to run), table browser, results grid. SQLite uses a WASM driver (no native build) and reads/writes real `.db` files via a file picker. Passwords encrypted at rest (Electron `safeStorage`).
 - **Settings** (⚙ in the sidebar) — Appearance (accent color), Terminal (default shell: PowerShell/cmd/Git Bash/WSL/custom + font), Editor (font/tab/wrap/minimap), Claude (command, resume args, idle timing), Remote (mobile access), Shortcuts reference, About. Persisted to `settings.json`.

@@ -14,7 +14,7 @@ import {
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
-export type MainView = "terminal" | "editor" | "api" | "database"
+export type MainView = "terminal" | "editor" | "api" | "database" | "browser"
 export type AgentStatus = "working" | "idle" | "attention"
 
 export interface Tab {
