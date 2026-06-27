@@ -159,10 +159,12 @@ This completes every section from the original 1DevTool reference (Appearance, T
 - [x] **Browser network capture** (CDP on the webview): comment-to-AI now includes a request summary + failed/4xx/5xx requests
 - [x] **API smart-paste** — paste a cURL command into the URL bar and it auto-parses (Postman-style); replaces the separate cURL button
 
-## Next up
+## Milestone 20 — activity feed + canvas connectors ✅ (2026-06-28)
 
-- [ ] Canvas: connectors between cards
-- [ ] Activity feed across projects
+- [x] **Activity feed** — ⧗ in the sidebar opens a drawer of agent events (started / needs-attention / closed) across all projects; click to jump
+- [x] **Canvas connectors** — ⚯ handle to link cards; SVG lines follow pan/zoom; click a line to remove; persisted
+
+The reference feature set is fully covered. Remaining ideas are open-ended (terminal record/replay, agent pipelines, embedded-browser polish).
 
 ## Later / maybe (parking lot)
 

@@ -19,6 +19,7 @@ export function Sidebar(): JSX.Element {
         useStore()
     const openSettings = useSettings((s) => s.openSettings)
     const openSwitcher = useStore((s) => s.openSwitcher)
+    const setActivityOpen = useStore((s) => s.setActivityOpen)
     const agents = useSettings((s) => s.agents)
 
     const tabsByProject = useStore((s) => s.tabsByProject)
@@ -153,6 +154,13 @@ export function Sidebar(): JSX.Element {
             <div className="sidebar-header">
                 <span className="brand">DevDeck</span>
                 <div className="header-actions">
+                    <button
+                        className="gear-btn"
+                        title="Activity feed"
+                        onClick={() => setActivityOpen(true)}
+                    >
+                        ⧗
+                    </button>
                     <button className="gear-btn" title="Switch project (Ctrl+K)" onClick={openSwitcher}>
                         ⊞
                     </button>

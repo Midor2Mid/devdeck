@@ -29,6 +29,20 @@ export interface AppNotification {
     text: string
 }
 
+export type ActivityKind = "start" | "attention" | "close"
+export interface ActivityEvent {
+    id: string
+    ts: number
+    termId: string
+    label: string
+    kind: ActivityKind
+}
+
+export interface CanvasLink {
+    a: string
+    b: string
+}
+
 export interface AnySession {
     termId: string
     projectId: string
@@ -52,6 +66,7 @@ interface Persisted {
     view: MainView
     termLayout: TermLayout
     canvasPos: Record<string, CanvasPos>
+    canvasLinks: CanvasLink[]
 }
 
 export type TermLayout = "tabs" | "grid" | "canvas"
@@ -78,6 +93,14 @@ interface AppState extends Persisted {
     setTermLayout: (layout: TermLayout) => void
     canvasPos: Record<string, CanvasPos>
     setCanvasPos: (termId: string, pos: CanvasPos) => void
+    canvasLinks: CanvasLink[]
+    toggleCanvasLink: (a: string, b: string) => void
+
+    // Activity feed
+    activity: ActivityEvent[]
+    activityOpen: boolean
+    setActivityOpen: (open: boolean) => void
+    clearActivity: () => void
 
     // Overlays / panels (runtime-only)
     switcherOpen: boolean
@@ -145,7 +168,8 @@ export const useStore = create<AppState>((set, get) => {
             composerDrafts: s.composerDrafts,
             view: s.view,
             termLayout: s.termLayout,
-            canvasPos: s.canvasPos
+            canvasPos: s.canvasPos,
+            canvasLinks: s.canvasLinks
         } satisfies Persisted)
     }
     const persist = (): void => {
@@ -198,13 +222,25 @@ export const useStore = create<AppState>((set, get) => {
         }))
     }
 
+    const pushActivity = (kind: ActivityKind, termId: string, label?: string): void => {
+        set((s) => ({
+            activity: [
+                { id: newId(), ts: Date.now(), termId, label: label ?? labelForTerm(termId), kind },
+                ...s.activity
+            ].slice(0, 200)
+        }))
+    }
+
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
         if (!isAgentId(get().agentOf(id))) return
         const visible = isVisible(id)
         if (data.includes("\x07") && !visible) {
             const was = get().agentStatus[id]
             setStatus(id, "attention")
-            if (was !== "attention") pushNotification(id)
+            if (was !== "attention") {
+                pushNotification(id)
+                pushActivity("attention", id)
+            }
             return
         }
         if (get().agentStatus[id] !== "attention" || visible) setStatus(id, "working")
@@ -239,6 +275,7 @@ export const useStore = create<AppState>((set, get) => {
                 termInit,
                 termAgents,
                 canvasPos,
+                canvasLinks: s.canvasLinks.filter((l) => l.a !== termId && l.b !== termId),
                 lastAgentTermId: s.lastAgentTermId === termId ? null : s.lastAgentTermId
             }
         })
@@ -283,6 +320,9 @@ export const useStore = create<AppState>((set, get) => {
         view: "terminal",
         termLayout: "tabs",
         canvasPos: {},
+        canvasLinks: [],
+        activity: [],
+        activityOpen: false,
         switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
@@ -314,7 +354,8 @@ export const useStore = create<AppState>((set, get) => {
                 composerDrafts: w.composerDrafts ?? {},
                 view: w.view ?? "terminal",
                 termLayout: w.termLayout ?? "tabs",
-                canvasPos: w.canvasPos ?? {}
+                canvasPos: w.canvasPos ?? {},
+                canvasLinks: w.canvasLinks ?? []
             })
         },
 
@@ -386,6 +427,24 @@ export const useStore = create<AppState>((set, get) => {
             set((s) => ({ canvasPos: { ...s.canvasPos, [termId]: pos } }))
             persist()
         },
+        toggleCanvasLink: (a, b) => {
+            if (a === b) return
+            set((s) => {
+                const exists = s.canvasLinks.some(
+                    (l) => (l.a === a && l.b === b) || (l.a === b && l.b === a)
+                )
+                return {
+                    canvasLinks: exists
+                        ? s.canvasLinks.filter(
+                              (l) => !((l.a === a && l.b === b) || (l.a === b && l.b === a))
+                          )
+                        : [...s.canvasLinks, { a, b }]
+                }
+            })
+            persist()
+        },
+        setActivityOpen: (activityOpen) => set({ activityOpen }),
+        clearActivity: () => set({ activity: [] }),
 
         sessions: () => buildSessions(false),
         agentSessions: () => buildSessions(true),
@@ -463,6 +522,7 @@ export const useStore = create<AppState>((set, get) => {
                 lastAgentTermId: isAgentId(agentId) ? termId : s.lastAgentTermId,
                 view: "terminal"
             }))
+            if (isAgentId(agentId)) pushActivity("start", termId, `${tab.name} · started`)
             persist()
         },
 
@@ -496,6 +556,7 @@ export const useStore = create<AppState>((set, get) => {
 
         closePane: (termId) => {
             const s = get()
+            if (isAgentId(s.agentOf(termId))) pushActivity("close", termId)
             let ownerProject: string | undefined
             let ownerTab: Tab | undefined
             for (const [pid, tabs] of Object.entries(s.tabsByProject)) {

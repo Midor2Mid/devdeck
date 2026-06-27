@@ -11,6 +11,7 @@ import { BrowserPanel } from "./components/BrowserPanel"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
+import { ActivityPanel } from "./components/ActivityPanel"
 import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
 
@@ -30,6 +31,7 @@ export function App(): JSX.Element {
     const openSwitcher = useStore((s) => s.openSwitcher)
     const closeSwitcher = useStore((s) => s.closeSwitcher)
     const paletteOpen = useStore((s) => s.paletteOpen)
+    const activityOpen = useStore((s) => s.activityOpen)
     const project = activeProject()
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
@@ -152,6 +154,7 @@ export function App(): JSX.Element {
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
             {paletteOpen && <CommandPalette />}
+            {activityOpen && <ActivityPanel />}
             <Toasts />
         </div>
     )

@@ -22,6 +22,9 @@ const GAP = 30
 export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
     const canvasPos = useStore((s) => s.canvasPos)
     const setCanvasPos = useStore((s) => s.setCanvasPos)
+    const canvasLinks = useStore((s) => s.canvasLinks)
+    const toggleCanvasLink = useStore((s) => s.toggleCanvasLink)
+    const [linkSrc, setLinkSrc] = useState<string | null>(null)
     const agentOf = useStore((s) => s.agentOf)
     const agentStatus = useStore((s) => s.agentStatus)
     const setActiveTab = useStore((s) => s.setActiveTab)
@@ -87,6 +90,12 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
         setPan({ x: 0, y: 0 })
     }
 
+    // Resolved position for each pane (drag override wins) — shared by cards + links.
+    const posMap: Record<string, { x: number; y: number }> = {}
+    panes.forEach((p, i) => {
+        posMap[p.termId] = drag && drag.termId === p.termId ? { x: drag.x, y: drag.y } : posOf(p.termId, i)
+    })
+
     return (
         <div
             className="canvas-surface"
@@ -101,13 +110,30 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
                 className="canvas-world"
                 style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             >
+                <svg className="canvas-links" width="12000" height="12000">
+                    {canvasLinks.map((l, idx) => {
+                        const pa = posMap[l.a]
+                        const pb = posMap[l.b]
+                        if (!pa || !pb) return null
+                        const x1 = pa.x + W / 2
+                        const y1 = pa.y + H / 2
+                        const x2 = pb.x + W / 2
+                        const y2 = pb.y + H / 2
+                        return (
+                            <g key={idx} onClick={() => toggleCanvasLink(l.a, l.b)}>
+                                <line className="canvas-link-hit" x1={x1} y1={y1} x2={x2} y2={y2} />
+                                <line className="canvas-link" x1={x1} y1={y1} x2={x2} y2={y2} />
+                            </g>
+                        )
+                    })}
+                </svg>
                 {panes.map((p, i) => {
-                    const pos = drag && drag.termId === p.termId ? drag : posOf(p.termId, i)
+                    const pos = posMap[p.termId]
                     const isAgent = agentOf(p.termId) !== SHELL
                     return (
                         <div
                             key={p.termId}
-                            className="canvas-card"
+                            className={"canvas-card" + (linkSrc === p.termId ? " linking" : "")}
                             style={{ left: pos.x, top: pos.y, width: W, height: H }}
                         >
                             <div
@@ -123,6 +149,27 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
                                     }
                                 />
                                 <span className="grid-card-name">{p.tabName}</span>
+                                <span
+                                    className={"grid-card-open" + (linkSrc ? " arm" : "")}
+                                    title={
+                                        linkSrc === p.termId
+                                            ? "Click another card to link (or here to cancel)"
+                                            : linkSrc
+                                              ? "Link to this card"
+                                              : "Start a connector from this card"
+                                    }
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={() => {
+                                        if (linkSrc && linkSrc !== p.termId) {
+                                            toggleCanvasLink(linkSrc, p.termId)
+                                            setLinkSrc(null)
+                                        } else {
+                                            setLinkSrc(linkSrc === p.termId ? null : p.termId)
+                                        }
+                                    }}
+                                >
+                                    ⚯
+                                </span>
                                 <span
                                     className="grid-card-open"
                                     title="Open in tabs view"
@@ -156,7 +203,7 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
                 })}
             </div>
             <div className="canvas-hint muted small">
-                drag header to move · drag background to pan · Ctrl+scroll to zoom ({Math.round(zoom * 100)}%) · dbl-click to reset
+                drag header to move · ⚯ to connect cards · drag bg to pan · Ctrl+scroll zoom ({Math.round(zoom * 100)}%) · dbl-click reset
             </div>
         </div>
     )
