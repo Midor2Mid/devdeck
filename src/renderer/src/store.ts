@@ -29,7 +29,7 @@ export interface AppNotification {
     text: string
 }
 
-export type ActivityKind = "start" | "attention" | "close"
+export type ActivityKind = "start" | "attention" | "close" | "record"
 export interface ActivityEvent {
     id: string
     ts: number
@@ -101,6 +101,13 @@ interface AppState extends Persisted {
     activityOpen: boolean
     setActivityOpen: (open: boolean) => void
     clearActivity: () => void
+
+    // Terminal record & replay (runtime-only)
+    recordingTermId: string | null
+    setRecordingTermId: (id: string | null) => void
+    recordingsOpen: boolean
+    setRecordingsOpen: (open: boolean) => void
+    noteRecording: (termId: string, label: string) => void
 
     // Overlays / panels (runtime-only)
     switcherOpen: boolean
@@ -323,6 +330,8 @@ export const useStore = create<AppState>((set, get) => {
         canvasLinks: [],
         activity: [],
         activityOpen: false,
+        recordingTermId: null,
+        recordingsOpen: false,
         switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
@@ -445,6 +454,9 @@ export const useStore = create<AppState>((set, get) => {
         },
         setActivityOpen: (activityOpen) => set({ activityOpen }),
         clearActivity: () => set({ activity: [] }),
+        setRecordingTermId: (recordingTermId) => set({ recordingTermId }),
+        setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
+        noteRecording: (termId, label) => pushActivity("record", termId, label),
 
         sessions: () => buildSessions(false),
         agentSessions: () => buildSessions(true),
@@ -566,6 +578,12 @@ export const useStore = create<AppState>((set, get) => {
                     ownerTab = t
                     break
                 }
+            }
+            // If this pane was recording, persist the recording before it dies.
+            if (s.recordingTermId === termId) {
+                const path = s.projects.find((p) => p.id === ownerProject)?.path
+                if (path) window.api.rec.stop(termId, path, ownerTab?.name ?? "session")
+                set({ recordingTermId: null })
             }
             window.api.pty.kill(termId)
             forget(termId)

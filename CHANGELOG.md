@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4 — 2026-06-28
+
+- **Terminal record & replay** — hit ⏺ in the terminal toolbar to record a
+  session's output (with timing); ▷ opens the Recordings player to replay it
+  with play/pause, restart, and 1×–8× speed. Recordings are saved per project
+  under `.devdeck/recordings/` and survive restarts. A recording is auto-saved
+  if you close the pane mid-record. (Also reachable from the command palette;
+  recorded events show in the activity feed.)
+
 ## 0.1.3 — 2026-06-28
 
 - **Browser network capture** — Comment Mode's "Send to AI" now includes captured

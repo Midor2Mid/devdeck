@@ -106,6 +106,8 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
         cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })
+        cmds.push({ id: "act:recordings", section: "Actions", title: "Recordings — replay a session", run: () => store.setRecordingsOpen(true) })
+        cmds.push({ id: "act:activity", section: "Actions", title: "Open activity feed", run: () => store.setActivityOpen(true) })
         return cmds
     }, [agents, sshProfiles, store, setAppearance, openSettings])
 

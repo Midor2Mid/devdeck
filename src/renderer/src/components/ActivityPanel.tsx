@@ -3,7 +3,8 @@ import { useStore, type ActivityKind } from "../store"
 const ICON: Record<ActivityKind, string> = {
     start: "▸",
     attention: "⚑",
-    close: "×"
+    close: "×",
+    record: "⏺"
 }
 
 function ago(ts: number): string {

@@ -13,6 +13,7 @@ import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus, getIdentity, setIdentity } from "./git"
 import { readMcp, writeMcp, type McpServer } from "./mcp"
 import * as browserNet from "./browserNet"
+import * as recorder from "./recorder"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -169,6 +170,25 @@ function registerIpc(): void {
     ipcMain.handle("mcp:save", (_e, { projectPath, servers }: { projectPath: string; servers: McpServer[] }) => {
         guardPath(projectPath)
         writeMcp(projectPath, servers)
+    })
+
+    // --- Terminal record & replay ---
+    ipcMain.handle("rec:start", (_e, termId: string) => recorder.startRecording(termId))
+    ipcMain.handle(
+        "rec:stop",
+        (_e, { termId, projectPath, label }: { termId: string; projectPath: string; label: string }) => {
+            guardPath(projectPath)
+            return recorder.stopRecording(termId, projectPath, label)
+        }
+    )
+    ipcMain.handle("rec:active", (_e, termId: string) => recorder.isRecording(termId))
+    ipcMain.handle("rec:list", (_e, projectPath: string) => {
+        guardPath(projectPath)
+        return recorder.listRecordings(projectPath)
+    })
+    ipcMain.handle("rec:load", (_e, path: string) => {
+        guardPath(path)
+        return recorder.loadRecording(path)
     })
 
     // --- Browser network capture (CDP on the webview's webContents) ---

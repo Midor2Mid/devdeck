@@ -33,6 +33,11 @@ export function TerminalView(): JSX.Element {
     const [menuOpen, setMenuOpen] = useState(false)
     const composerOpen = useStore((s) => s.composerOpen)
     const setComposerOpen = useStore((s) => s.setComposerOpen)
+    const recordingTermId = useStore((s) => s.recordingTermId)
+    const setRecordingTermId = useStore((s) => s.setRecordingTermId)
+    const setRecordingsOpen = useStore((s) => s.setRecordingsOpen)
+    const noteRecording = useStore((s) => s.noteRecording)
+    const activePaneId = useStore((s) => (s.activeId ? s.activePaneByProject[s.activeId] : undefined))
     const findInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = projects.find((p) => p.id === activeId)
@@ -93,6 +98,24 @@ export function TerminalView(): JSX.Element {
                 <p className="muted">Add a project from the sidebar to start a terminal.</p>
             </div>
         )
+    }
+
+    const recordingActive = !!activePaneId && recordingTermId === activePaneId
+
+    const toggleRecord = async (): Promise<void> => {
+        const s = useStore.getState()
+        if (!activeId) return
+        const pane = s.activePane(activeId) ?? (activeTab ? firstLeaf(activeTab.root) : undefined)
+        if (!pane) return
+        const label = activeTab?.name ?? "session"
+        if (recordingTermId === pane) {
+            const meta = await window.api.rec.stop(pane, activeProject.path, label)
+            setRecordingTermId(null)
+            if (meta) noteRecording(pane, `${label} · recorded (${meta.events} frames)`)
+        } else if (!recordingTermId) {
+            await window.api.rec.start(pane)
+            setRecordingTermId(pane)
+        }
     }
 
     const commitRename = (): void => {
@@ -291,6 +314,28 @@ export function TerminalView(): JSX.Element {
                         title="Prompt composer (Ctrl+Shift+I)"
                     >
                         ✎
+                    </button>
+                    <span className="action-sep" />
+                    <button
+                        className={"icon-action" + (recordingActive ? " rec-on" : "")}
+                        onClick={toggleRecord}
+                        disabled={!!recordingTermId && !recordingActive}
+                        title={
+                            recordingActive
+                                ? "Stop recording — saves to .devdeck/recordings"
+                                : recordingTermId
+                                  ? "A recording is in progress in another session"
+                                  : "Record this terminal"
+                        }
+                    >
+                        ⏺
+                    </button>
+                    <button
+                        className="icon-action"
+                        onClick={() => setRecordingsOpen(true)}
+                        title="Recordings — replay a recorded session"
+                    >
+                        ▷
                     </button>
                 </div>
             </div>

@@ -101,6 +101,23 @@ export interface McpServer {
     env: Record<string, string>
 }
 
+export interface RecEvent {
+    dt: number
+    data: string
+}
+export interface Recording {
+    label: string
+    createdAt: number
+    events: RecEvent[]
+}
+export interface RecordingMeta {
+    name: string
+    path: string
+    label: string
+    createdAt: number
+    events: number
+}
+
 const api = {
     pty: {
         create: (opts: PtyCreateOpts): void => ipcRenderer.send("pty:create", opts),
@@ -193,6 +210,14 @@ const api = {
         list: (projectPath: string): Promise<McpServer[]> => ipcRenderer.invoke("mcp:list", projectPath),
         save: (projectPath: string, servers: McpServer[]): Promise<void> =>
             ipcRenderer.invoke("mcp:save", { projectPath, servers })
+    },
+    rec: {
+        start: (termId: string): Promise<void> => ipcRenderer.invoke("rec:start", termId),
+        stop: (termId: string, projectPath: string, label: string): Promise<RecordingMeta | null> =>
+            ipcRenderer.invoke("rec:stop", { termId, projectPath, label }),
+        active: (termId: string): Promise<boolean> => ipcRenderer.invoke("rec:active", termId),
+        list: (projectPath: string): Promise<RecordingMeta[]> => ipcRenderer.invoke("rec:list", projectPath),
+        load: (path: string): Promise<Recording> => ipcRenderer.invoke("rec:load", path)
     },
     env: {
         check: (names: string[]): Promise<Record<string, boolean>> =>
