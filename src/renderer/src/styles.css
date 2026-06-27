@@ -873,6 +873,49 @@ select:focus {
     flex: 1;
     min-height: 0;
 }
+
+/* ---------- Canvas layout ---------- */
+.canvas-surface {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 1px 1px, var(--border-soft) 1px, transparent 0) 0 0 / 28px 28px,
+        var(--bg-3);
+    cursor: grab;
+}
+.canvas-surface:active {
+    cursor: grabbing;
+}
+.canvas-world {
+    position: absolute;
+    inset: 0;
+}
+.canvas-card {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 8px);
+    overflow: hidden;
+    background: var(--bg-3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.canvas-drag {
+    cursor: move;
+}
+.canvas-hint {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-2);
+    border: 1px solid var(--border-soft);
+    border-radius: 7px;
+    padding: 4px 10px;
+    pointer-events: none;
+    opacity: 0.75;
+}
 .term-mount {
     position: absolute;
     inset: 0;

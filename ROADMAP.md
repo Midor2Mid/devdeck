@@ -123,11 +123,15 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Prompt snippets** — `/name` autocomplete in the composer (user-defined in Settings → Snippets)
 - [x] **Dashboard grid layout** — toggle the terminal area between Tabs and a grid of all the project's terminals at once (persisted)
 
+## Milestone 13 — Canvas layout ✅ (2026-06-27)
+
+- [x] **Canvas** terminal layout — free-form board: drag terminal cards anywhere, pan the surface; positions persisted. Third layout alongside Tabs + Grid.
+
 ## Next up (from 1DevTool batch 2)
 
 - [ ] **Mobile attach** — pick a screenshot/file on the phone → upload to desktop → save into the active project + reference it to the agent
 - [ ] Browser: capture console/network/screenshot into the comment payload
-- [ ] Canvas layout (free-form spatial board, beyond the grid)
+- [ ] Canvas: zoom + connectors between cards
 
 ## Later / maybe (parking lot)
 

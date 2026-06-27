@@ -50,9 +50,15 @@ interface Persisted {
     composerDrafts: Record<string, string>
     view: MainView
     termLayout: TermLayout
+    canvasPos: Record<string, CanvasPos>
 }
 
-export type TermLayout = "tabs" | "grid"
+export type TermLayout = "tabs" | "grid" | "canvas"
+
+export interface CanvasPos {
+    x: number
+    y: number
+}
 
 interface AppState extends Persisted {
     projects: Project[]
@@ -68,6 +74,8 @@ interface AppState extends Persisted {
     setView: (view: MainView) => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
+    canvasPos: Record<string, CanvasPos>
+    setCanvasPos: (termId: string, pos: CanvasPos) => void
 
     // Project switcher overlay
     switcherOpen: boolean
@@ -132,7 +140,8 @@ export const useStore = create<AppState>((set, get) => {
                 activePaneByProject: s.activePaneByProject,
                 composerDrafts: s.composerDrafts,
                 view: s.view,
-                termLayout: s.termLayout
+                termLayout: s.termLayout,
+                canvasPos: s.canvasPos
             } satisfies Persisted)
         }, 300)
     }
@@ -262,6 +271,7 @@ export const useStore = create<AppState>((set, get) => {
         composerDrafts: {},
         view: "terminal",
         termLayout: "tabs",
+        canvasPos: {},
         switcherOpen: false,
         agentStatus: {},
         lastAgentTermId: null,
@@ -290,7 +300,8 @@ export const useStore = create<AppState>((set, get) => {
                 activePaneByProject: w.activePaneByProject ?? {},
                 composerDrafts: w.composerDrafts ?? {},
                 view: w.view ?? "terminal",
-                termLayout: w.termLayout ?? "tabs"
+                termLayout: w.termLayout ?? "tabs",
+                canvasPos: w.canvasPos ?? {}
             })
         },
 
@@ -347,6 +358,10 @@ export const useStore = create<AppState>((set, get) => {
         },
         setTermLayout: (layout) => {
             set({ termLayout: layout })
+            persist()
+        },
+        setCanvasPos: (termId, pos) => {
+            set((s) => ({ canvasPos: { ...s.canvasPos, [termId]: pos } }))
             persist()
         },
 

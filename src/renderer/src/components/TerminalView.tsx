@@ -5,6 +5,7 @@ import { firstLeaf, collectLeaves } from "../layout"
 import { paneRegistry } from "../paneRegistry"
 import { SplitView } from "./SplitView"
 import { PromptComposer } from "./PromptComposer"
+import { CanvasView } from "./CanvasView"
 
 export function TerminalView(): JSX.Element {
     const projects = useStore((s) => s.projects)
@@ -96,6 +97,11 @@ export function TerminalView(): JSX.Element {
         if (editingId) renameTab(activeProject.id, editingId, draft.trim())
         setEditingId(null)
     }
+
+    // All terminals across the project's tabs — used by Grid + Canvas layouts.
+    const allPanes = tabs.flatMap((tab) =>
+        collectLeaves(tab.root).map((termId) => ({ termId, tabName: tab.name, tabId: tab.id }))
+    )
 
     return (
         <div className="terminal-view">
@@ -230,6 +236,13 @@ export function TerminalView(): JSX.Element {
                     >
                         ▦
                     </button>
+                    <button
+                        className={"icon-action" + (termLayout === "canvas" ? " on" : "")}
+                        onClick={() => setTermLayout("canvas")}
+                        title="Canvas — free-form board of all terminals"
+                    >
+                        ◇
+                    </button>
                     <span className="action-sep" />
                     <button
                         className="icon-action"
@@ -298,53 +311,57 @@ export function TerminalView(): JSX.Element {
                         </div>
                     ) : termLayout === "grid" ? (
                         <div className="term-grid">
-                            {tabs.flatMap((tab) =>
-                                collectLeaves(tab.root).map((termId) => {
-                                    const isAgent = agentOf(termId) !== SHELL
-                                    return (
-                                        <div key={termId} className="grid-card">
-                                            <div className="grid-card-head">
-                                                <span
-                                                    className={
-                                                        "tab-dot " +
-                                                        (isAgent
-                                                            ? "claude status-" +
-                                                              (agentStatus[termId] ?? "idle")
-                                                            : "shell")
-                                                    }
-                                                />
-                                                <span className="grid-card-name">{tab.name}</span>
-                                                <span
-                                                    className="grid-card-open"
-                                                    title="Open in tabs view"
-                                                    onClick={() => {
-                                                        setActiveTab(activeProject.id, tab.id)
-                                                        focusPane(activeProject.id, termId)
-                                                        setTermLayout("tabs")
-                                                    }}
-                                                >
-                                                    ↗
-                                                </span>
-                                                <span
-                                                    className="tab-close"
-                                                    title="Close"
-                                                    onClick={() => closePane(termId)}
-                                                >
-                                                    ×
-                                                </span>
-                                            </div>
-                                            <div className="grid-card-body">
-                                                <SplitView
-                                                    node={{ kind: "leaf", termId }}
-                                                    projectId={activeProject.id}
-                                                    cwd={activeProject.path}
-                                                />
-                                            </div>
+                            {allPanes.map(({ termId, tabName, tabId }) => {
+                                const isAgent = agentOf(termId) !== SHELL
+                                return (
+                                    <div key={termId} className="grid-card">
+                                        <div className="grid-card-head">
+                                            <span
+                                                className={
+                                                    "tab-dot " +
+                                                    (isAgent
+                                                        ? "claude status-" +
+                                                          (agentStatus[termId] ?? "idle")
+                                                        : "shell")
+                                                }
+                                            />
+                                            <span className="grid-card-name">{tabName}</span>
+                                            <span
+                                                className="grid-card-open"
+                                                title="Open in tabs view"
+                                                onClick={() => {
+                                                    setActiveTab(activeProject.id, tabId)
+                                                    focusPane(activeProject.id, termId)
+                                                    setTermLayout("tabs")
+                                                }}
+                                            >
+                                                ↗
+                                            </span>
+                                            <span
+                                                className="tab-close"
+                                                title="Close"
+                                                onClick={() => closePane(termId)}
+                                            >
+                                                ×
+                                            </span>
                                         </div>
-                                    )
-                                })
-                            )}
+                                        <div className="grid-card-body">
+                                            <SplitView
+                                                node={{ kind: "leaf", termId }}
+                                                projectId={activeProject.id}
+                                                cwd={activeProject.path}
+                                            />
+                                        </div>
+                                    </div>
+                                )
+                            })}
                         </div>
+                    ) : termLayout === "canvas" ? (
+                        <CanvasView
+                            panes={allPanes}
+                            projectId={activeProject.id}
+                            cwd={activeProject.path}
+                        />
                     ) : (
                         <SplitView
                             node={activeTab.root}
