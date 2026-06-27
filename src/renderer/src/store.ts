@@ -112,16 +112,21 @@ function badgeFor(agentId: string): string {
 }
 
 export const useStore = create<AppState>((set, get) => {
+    // Debounced disk persistence — coalesces bursts (e.g. composer keystrokes).
+    let persistTimer: ReturnType<typeof setTimeout> | null = null
     const persist = (): void => {
-        const s = get()
-        window.api.workspace.save({
-            termAgents: s.termAgents,
-            termInit: s.termInit,
-            tabsByProject: s.tabsByProject,
-            activeTabByProject: s.activeTabByProject,
-            activePaneByProject: s.activePaneByProject,
-            composerDrafts: s.composerDrafts
-        } satisfies Persisted)
+        if (persistTimer) clearTimeout(persistTimer)
+        persistTimer = setTimeout(() => {
+            const s = get()
+            window.api.workspace.save({
+                termAgents: s.termAgents,
+                termInit: s.termInit,
+                tabsByProject: s.tabsByProject,
+                activeTabByProject: s.activeTabByProject,
+                activePaneByProject: s.activePaneByProject,
+                composerDrafts: s.composerDrafts
+            } satisfies Persisted)
+        }, 300)
     }
 
     const setStatus = (termId: string, status: AgentStatus): void => {

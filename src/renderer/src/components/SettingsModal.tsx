@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
-import { useSettings, DEFAULT_ACCENT, type ShellKind } from "../settings"
+import { useSettings, type ShellKind } from "../settings"
+import { THEMES } from "../themes"
+
+const THEME_LIST = Object.values(THEMES)
 import type { ServerStatus } from "../../../preload/index"
 
 type Section =
@@ -280,6 +283,31 @@ export function SettingsModal(): JSX.Element {
                         <div className="settings-section">
                             <h3>Appearance</h3>
                             <div className="setting-row">
+                                <label>Theme</label>
+                                <div className="theme-cards">
+                                    {THEME_LIST.map((t) => (
+                                        <div
+                                            key={t.id}
+                                            className={
+                                                "theme-card" +
+                                                (s.appearance.theme === t.id ? " on" : "")
+                                            }
+                                            onClick={() => s.setAppearance({ theme: t.id })}
+                                        >
+                                            <div
+                                                className="theme-swatch"
+                                                style={{ background: t.vars["--bg"] }}
+                                            >
+                                                <span style={{ background: t.vars["--bg-2"] }} />
+                                                <span style={{ background: t.accent }} />
+                                                <span style={{ background: t.vars["--text"] }} />
+                                            </div>
+                                            <span className="theme-name">{t.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="setting-row">
                                 <label>Accent color</label>
                                 <div className="accent-controls">
                                     <input
@@ -299,14 +327,21 @@ export function SettingsModal(): JSX.Element {
                                             />
                                         ))}
                                     </div>
-                                    <button onClick={() => s.setAppearance({ accent: DEFAULT_ACCENT })}>
+                                    <button
+                                        onClick={() =>
+                                            s.setAppearance({
+                                                accent: THEMES[s.appearance.theme].accent
+                                            })
+                                        }
+                                    >
                                         Reset
                                     </button>
                                 </div>
                             </div>
                             <p className="settings-hint">
-                                Theme: Sumi &amp; Kinari (wabi-sabi dark). A light "washi paper"
-                                theme is on the roadmap.
+                                Three wabi-sabi themes — Sumi &amp; Zen (dark), Washi (light) —
+                                applied across the UI, terminal, and editor. Accent tints the one
+                                highlight color.
                             </p>
                         </div>
                     )}

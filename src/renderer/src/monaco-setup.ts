@@ -7,6 +7,7 @@
  */
 import * as monaco from "monaco-editor"
 import { loader } from "@monaco-editor/react"
+import { THEMES } from "./themes"
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
 import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
 import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker"
@@ -37,43 +38,47 @@ globalSelf.MonacoEnvironment = {
     }
 }
 
-monaco.editor.defineTheme("devdeck", {
-    base: "vs-dark",
-    inherit: true,
-    rules: [
-        { token: "", foreground: "e4ddcf", background: "141312" },
-        { token: "comment", foreground: "6f6857", fontStyle: "italic" },
-        { token: "string", foreground: "8c9a68" },
-        { token: "keyword", foreground: "b8895c" },
-        { token: "number", foreground: "c4a35d" },
-        { token: "type", foreground: "7fa0a0" },
-        { token: "type.identifier", foreground: "7fa0a0" },
-        { token: "delimiter", foreground: "8f8678" },
-        { token: "operator", foreground: "b8895c" },
-        { token: "variable", foreground: "e4ddcf" },
-        { token: "function", foreground: "caa07a" },
-        { token: "tag", foreground: "b8895c" },
-        { token: "attribute.name", foreground: "c4a35d" }
-    ],
-    colors: {
-        "editor.background": "#141312",
-        "editor.foreground": "#e4ddcf",
-        "editorLineNumber.foreground": "#3f3a33",
-        "editorLineNumber.activeForeground": "#8f8678",
-        "editorCursor.foreground": "#b8895c",
-        "editor.selectionBackground": "#3a352e",
-        "editor.lineHighlightBackground": "#1b1a18",
-        "editorWidget.background": "#1f1d1a",
-        "editorWidget.border": "#322e28",
-        "editorSuggestWidget.background": "#1f1d1a",
-        "editorSuggestWidget.selectedBackground": "#2a2723",
-        "editorIndentGuide.background1": "#252220",
-        "editorGutter.background": "#141312",
-        "scrollbarSlider.background": "#2e2a2540",
-        "scrollbarSlider.hoverBackground": "#3a352e80",
-        "minimap.background": "#141312"
-    }
-})
+// Define a Monaco theme per app theme, derived from its palette + xterm colors.
+const hex = (c: string): string => c.replace("#", "")
+for (const t of Object.values(THEMES)) {
+    const v = t.vars
+    const x = t.xterm
+    monaco.editor.defineTheme(t.monacoId, {
+        base: t.mode === "light" ? "vs" : "vs-dark",
+        inherit: true,
+        rules: [
+            { token: "", foreground: hex(v["--text"]), background: hex(x.background) },
+            { token: "comment", foreground: hex(v["--faint"]), fontStyle: "italic" },
+            { token: "string", foreground: hex(x.green) },
+            { token: "keyword", foreground: hex(v["--accent"]) },
+            { token: "number", foreground: hex(x.yellow) },
+            { token: "type", foreground: hex(x.cyan) },
+            { token: "type.identifier", foreground: hex(x.cyan) },
+            { token: "delimiter", foreground: hex(v["--muted"]) },
+            { token: "operator", foreground: hex(v["--accent"]) },
+            { token: "variable", foreground: hex(v["--text"]) },
+            { token: "function", foreground: hex(v["--accent-soft"]) },
+            { token: "tag", foreground: hex(v["--accent"]) },
+            { token: "attribute.name", foreground: hex(x.yellow) }
+        ],
+        colors: {
+            "editor.background": x.background,
+            "editor.foreground": v["--text"],
+            "editorLineNumber.foreground": v["--faint"],
+            "editorLineNumber.activeForeground": v["--muted"],
+            "editorCursor.foreground": v["--accent"],
+            "editor.selectionBackground": x.selectionBackground,
+            "editor.lineHighlightBackground": v["--bg"],
+            "editorWidget.background": v["--bg-2"],
+            "editorWidget.border": v["--border"],
+            "editorSuggestWidget.background": v["--bg-2"],
+            "editorSuggestWidget.selectedBackground": v["--border-soft"],
+            "editorIndentGuide.background1": v["--border-soft"],
+            "editorGutter.background": x.background,
+            "minimap.background": x.background
+        }
+    })
+}
 
 loader.config({ monaco })
 

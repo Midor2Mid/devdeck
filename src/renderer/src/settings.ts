@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { applyTheme, THEMES, type ThemeId } from "./themes"
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
 
@@ -36,6 +37,7 @@ export interface AppSettings {
     agents: AgentPreset[]
     agentIdleMs: number
     appearance: {
+        theme: ThemeId
         accent: string
     }
     remote: {
@@ -73,6 +75,7 @@ const DEFAULTS: AppSettings = {
     ],
     agentIdleMs: 1000,
     appearance: {
+        theme: "sumi",
         accent: DEFAULT_ACCENT
     },
     remote: {
@@ -100,16 +103,15 @@ interface SettingsState extends AppSettings {
     resolveShell: () => { file: string; args: string[] }
 }
 
-/** Apply the single accent color to the CSS custom properties. */
-export function applyAccent(hex: string): void {
-    document.documentElement.style.setProperty("--accent", hex)
-    document.documentElement.style.setProperty("--accent-soft", hex)
-}
-
 export const useSettings = create<SettingsState>((set, get) => {
+    // Debounced — accent dragging and rapid edits shouldn't hammer the disk.
+    let persistTimer: ReturnType<typeof setTimeout> | null = null
     const persist = (): void => {
-        const { terminal, editor, agents, agentIdleMs, appearance, remote } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, appearance, remote })
+        if (persistTimer) clearTimeout(persistTimer)
+        persistTimer = setTimeout(() => {
+            const { terminal, editor, agents, agentIdleMs, appearance, remote } = get()
+            window.api.settings.save({ terminal, editor, agents, agentIdleMs, appearance, remote })
+        }, 300)
     }
 
     // Reflect the remote config into the actual server (start/stop).
@@ -138,7 +140,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                     remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
             }
-            applyAccent(get().appearance.accent)
+            applyTheme(get().appearance.theme, get().appearance.accent)
             applyServer()
         },
 
@@ -160,8 +162,16 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         agentById: (id) => get().agents.find((a) => a.id === id),
         setAppearance: (patch) => {
-            set((s) => ({ appearance: { ...s.appearance, ...patch } }))
-            applyAccent(get().appearance.accent)
+            set((s) => {
+                const appearance = { ...s.appearance, ...patch }
+                // Switching theme resets the accent to that theme's default
+                // (unless an accent was supplied in the same change).
+                if (patch.theme && patch.accent === undefined) {
+                    appearance.accent = THEMES[patch.theme].accent
+                }
+                return { appearance }
+            })
+            applyTheme(get().appearance.theme, get().appearance.accent)
             persist()
         },
         setRemote: (patch) => {
@@ -181,7 +191,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         resetAll: () => {
             set({ ...DEFAULTS })
-            applyAccent(DEFAULTS.appearance.accent)
+            applyTheme(DEFAULTS.appearance.theme, DEFAULTS.appearance.accent)
             applyServer()
             persist()
         },

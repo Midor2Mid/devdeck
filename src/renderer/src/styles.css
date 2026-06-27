@@ -1576,6 +1576,46 @@ select:focus {
     margin-top: 18px;
     max-width: 440px;
 }
+.theme-cards {
+    display: flex;
+    gap: 10px;
+}
+.theme-card {
+    flex: 1;
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    padding: 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s ease;
+}
+.theme-card:hover {
+    border-color: var(--muted);
+}
+.theme-card.on {
+    border-color: var(--accent);
+}
+.theme-swatch {
+    height: 38px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    margin-bottom: 6px;
+}
+.theme-swatch span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+.theme-name {
+    font-size: 11px;
+    color: var(--muted);
+}
+.theme-card.on .theme-name {
+    color: var(--text);
+}
 .accent-controls {
     display: flex;
     align-items: center;
@@ -1798,11 +1838,11 @@ select:focus {
     height: 9px;
 }
 ::-webkit-scrollbar-thumb {
-    background: #2e2a25;
+    background: var(--border);
     border-radius: 5px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #3a352e;
+    background: var(--muted);
 }
 ::-webkit-scrollbar-track {
     background: transparent;

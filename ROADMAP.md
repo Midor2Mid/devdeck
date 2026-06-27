@@ -103,6 +103,14 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Embedded browser** panel + **Comment Mode** → click page elements, annotate, send grouped feedback to the focused agent
 - [ ] Later: browser screenshot/console/network capture into the comment payload; terminal Canvas/Dashboard layouts; AI quota display
 
+## Milestone 10 — themes, polish & perf ✅ (2026-06-27)
+
+- [x] **Theme system** — Sumi (dark, default), Washi (light), Zen (airy dark); picker in Settings → Appearance; applied across UI (CSS vars), terminal (xterm) and editor (Monaco). User chose mockups from generated PNGs first.
+- [x] Accent customization derives `--accent-soft` as a proper tint (lighter on dark, darker on light)
+- [x] **Perf:** debounced disk persistence (was writing on every composer keystroke / accent drag)
+- [x] Theme-aware scrollbars
+- [ ] Later: spacing/typography theming (Zen's airiness), per-theme density
+
 ## Later / maybe (parking lot)
 
 - Command palette (Ctrl+P) for projects/files/actions

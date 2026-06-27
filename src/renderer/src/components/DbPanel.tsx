@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react"
 import { Allotment } from "allotment"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
+import { THEMES } from "../themes"
 import "../monaco-setup"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
@@ -216,6 +217,7 @@ export function DbPanel(): JSX.Element {
     const [running, setRunning] = useState(false)
     const runRef = useRef<() => void>(() => undefined)
     const editorFontSize = useSettings((s) => s.editor.fontSize)
+    const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
 
     const projectId = activeProject?.id
 
@@ -397,7 +399,7 @@ export function DbPanel(): JSX.Element {
                                         </div>
                                         <div className="db-editor-host">
                                             <Editor
-                                                theme="devdeck"
+                                                theme={monacoTheme}
                                                 language="sql"
                                                 value={sql}
                                                 onChange={(v) => setSql(v ?? "")}

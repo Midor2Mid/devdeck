@@ -3,6 +3,7 @@ import Editor from "@monaco-editor/react"
 import { marked } from "marked"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
+import { THEMES } from "../themes"
 import "../monaco-setup"
 
 type MdMode = "edit" | "split" | "preview"
@@ -130,6 +131,7 @@ export function EditorPanel(): JSX.Element {
     const sendToClaude = useStore((s) => s.sendToAgent)
     const lastClaude = useStore((s) => s.lastAgentTermId)
     const editorSettings = useSettings((s) => s.editor)
+    const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
     const [files, setFiles] = useState<OpenFile[]>([])
     const [activePath, setActivePath] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -287,7 +289,7 @@ export function EditorPanel(): JSX.Element {
                         {!(md && mdMode === "preview") && (
                             <div className="editor-slot">
                                 <Editor
-                                    theme="devdeck"
+                                    theme={monacoTheme}
                                     path={active.path}
                                     language={langFor(active.name)}
                                     value={active.content}
