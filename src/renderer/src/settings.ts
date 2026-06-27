@@ -1,6 +1,14 @@
 import { create } from "zustand"
 import { applyTheme, THEMES, type ThemeId } from "./themes"
 import type { Pipeline } from "./pipeline"
+import type { KvRow } from "./components/KeyValueEditor"
+
+/** A named set of {{variables}} for the API client (e.g. dev / UAT / PROD). */
+export interface Environment {
+    id: string
+    name: string
+    vars: KvRow[]
+}
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
 
@@ -73,6 +81,8 @@ export interface AppSettings {
     pipelines: Pipeline[]
     gitAccounts: GitAccount[]
     sshProfiles: SshProfile[]
+    environments: Environment[]
+    activeEnvId: string | null
     appearance: {
         theme: ThemeId
         accent: string
@@ -152,13 +162,17 @@ const DEFAULTS: AppSettings = {
                     title: "Verify",
                     agentId: "claude",
                     prompt: "Run the tests and a typecheck. If anything fails, fix it and re-run until green. Summarize what changed.",
-                    fresh: false
+                    fresh: false,
+                    // Only finish if the output shows no failures; otherwise re-run.
+                    gate: { mode: "absent", pattern: "FAIL", retries: 2, onFail: "stop" }
                 }
             ]
         }
     ],
     gitAccounts: [],
     sshProfiles: [],
+    environments: [],
+    activeEnvId: null,
     appearance: {
         theme: "sumi",
         accent: DEFAULT_ACCENT
@@ -182,6 +196,9 @@ interface SettingsState extends AppSettings {
     setPipelines: (pipelines: Pipeline[]) => void
     setGitAccounts: (accounts: GitAccount[]) => void
     setSshProfiles: (profiles: SshProfile[]) => void
+    setEnvironments: (environments: Environment[]) => void
+    setActiveEnv: (id: string | null) => void
+    activeEnv: () => Environment | undefined
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
@@ -197,8 +214,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced — accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, appearance, remote } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, appearance, remote })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, environments, activeEnvId, appearance, remote } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, environments, activeEnvId, appearance, remote })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -239,6 +256,8 @@ export const useSettings = create<SettingsState>((set, get) => {
                     pipelines: raw.pipelines ?? DEFAULTS.pipelines,
                     gitAccounts: raw.gitAccounts ?? DEFAULTS.gitAccounts,
                     sshProfiles: raw.sshProfiles ?? DEFAULTS.sshProfiles,
+                    environments: raw.environments ?? DEFAULTS.environments,
+                    activeEnvId: raw.activeEnvId ?? DEFAULTS.activeEnvId,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
@@ -279,6 +298,19 @@ export const useSettings = create<SettingsState>((set, get) => {
             set({ sshProfiles })
             persist()
         },
+        setEnvironments: (environments) => {
+            // Keep the active selection valid if its environment was removed.
+            const activeEnvId = environments.some((e) => e.id === get().activeEnvId)
+                ? get().activeEnvId
+                : null
+            set({ environments, activeEnvId })
+            persist()
+        },
+        setActiveEnv: (activeEnvId) => {
+            set({ activeEnvId })
+            persist()
+        },
+        activeEnv: () => get().environments.find((e) => e.id === get().activeEnvId),
         agentById: (id) => get().agents.find((a) => a.id === id),
         setAppearance: (patch) => {
             set((s) => {

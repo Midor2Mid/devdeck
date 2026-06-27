@@ -13,6 +13,7 @@ import {
 } from "./layout"
 import type { PipelineRun } from "./pipeline"
 import { runnableSteps, sessionPlan } from "./pipeline"
+import { gateActive, evaluateGate, maxAttempts } from "./gate"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -525,8 +526,9 @@ export const useStore = create<AppState>((set, get) => {
                 for (let i = 0; i < steps.length; i++) {
                     if (stale()) return
                     const step = steps[i]
-                    setRun({ stepIndex: i, stepTitle: step.title, status: "running" })
+                    setRun({ stepIndex: i, stepTitle: step.title, status: "running", gateMsg: undefined })
 
+                    // Resolve the session once per step; retries reuse it.
                     const plan = sessionPlan(step, liveByAgent)
                     let termId = plan.termId
                     if (!plan.reuse || !termId) {
@@ -543,14 +545,53 @@ export const useStore = create<AppState>((set, get) => {
                         get().jumpToTerm(termId)
                     }
 
-                    // Type the prompt and submit it.
-                    window.api.pty.input(termId, step.prompt + "\r")
-                    set({ lastAgentTermId: termId })
-                    await sleep(600)
+                    const attempts = maxAttempts(step.gate)
+                    let passed = true
+                    for (let attempt = 1; attempt <= attempts; attempt++) {
+                        if (stale()) return
+                        if (attempt > 1)
+                            setRun({ status: "running", gateMsg: `retry ${attempt - 1}/${attempts - 1}` })
 
-                    const result = await waitForIdle(termId)
-                    if (result === "stopped") return
-                    // "gone" (user closed the pane) — continue to next step regardless.
+                        // Capture this attempt's output (capped tail) for gating.
+                        let buf = ""
+                        const off = window.api.pty.onData(({ id, data }) => {
+                            if (id !== termId) return
+                            buf += data
+                            if (buf.length > 200_000) buf = buf.slice(buf.length - 200_000)
+                        })
+                        window.api.pty.input(termId, step.prompt + "\r")
+                        set({ lastAgentTermId: termId })
+                        await sleep(600)
+                        const result = await waitForIdle(termId)
+                        off()
+                        if (result === "stopped") return
+
+                        if (!gateActive(step.gate)) {
+                            passed = true
+                            break
+                        }
+                        passed = evaluateGate(step.gate, buf)
+                        if (passed) {
+                            setRun({ gateMsg: "✓ gate passed" })
+                            pushActivity("pipeline", termId, `${step.title} · gate passed`)
+                            break
+                        }
+                        if (attempt < attempts) {
+                            setRun({ gateMsg: `✗ gate failed — retrying (${attempt}/${attempts - 1})` })
+                            pushActivity("pipeline", termId, `${step.title} · gate failed, retrying`)
+                            await sleep(800)
+                        }
+                    }
+
+                    if (!passed) {
+                        const onFail = step.gate?.onFail ?? "stop"
+                        pushActivity("pipeline", termId, `${step.title} · gate failed`)
+                        if (onFail === "stop") {
+                            setRun({ status: "error", gateMsg: "✗ gate failed — stopped" })
+                            return
+                        }
+                        setRun({ gateMsg: "✗ gate failed — continued" })
+                    }
                 }
                 if (stale()) return
                 setRun({ status: "done" })

@@ -2,8 +2,9 @@
 // Each row has an enable/disable checkbox; there is always one trailing empty
 // row so typing into it adds a new entry without losing focus.
 
-let _seq = 0
-const nextId = (): string => `kv${++_seq}`
+// Collision-safe ids — rows may be persisted (e.g. environment variables) and
+// later mixed with freshly minted rows in the same list.
+const nextId = (): string => `kv-${crypto.randomUUID()}`
 
 export interface KvRow {
     id: string

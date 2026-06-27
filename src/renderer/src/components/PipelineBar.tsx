@@ -34,7 +34,10 @@ export function PipelineBar(): JSX.Element | null {
                         {STATUS_LABEL[run.status] ?? run.status}
                     </span>
                 </div>
-                <div className="pipeline-step">{run.stepTitle}</div>
+                <div className="pipeline-step">
+                    {run.stepTitle}
+                    {run.gateMsg && <span className="pipeline-gate"> · {run.gateMsg}</span>}
+                </div>
                 <div className="pipeline-progress">
                     <div className="pipeline-progress-fill" style={{ width: pct + "%" }} />
                 </div>

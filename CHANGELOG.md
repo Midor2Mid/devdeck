@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.6 — 2026-06-28
+
+- **Per-step success gates** — a pipeline step can now require its agent's output
+  to pass a check before advancing: "output contains", "does NOT contain", or
+  "matches /regex/". On failure it retries up to N times, then either stops the
+  run or continues. The runner bar shows gate status live (✓ passed / retrying /
+  ✗ failed). The starter pipeline's Verify step ships with a gate that re-runs
+  until the test output shows no failures.
+- **API environments** — define named environments (dev / UAT / PROD) of
+  `{{variable}}` values and switch the active one from the API client. URL,
+  headers, and body interpolate `{{tokens}}`; unresolved tokens are flagged.
+
 ## 0.1.5 — 2026-06-28
 
 - **Agent pipelines** — define an ordered sequence of prompts (each routed to an

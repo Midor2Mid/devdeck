@@ -5,6 +5,7 @@ import { useStore } from "../store"
 import { THEMES } from "../themes"
 import type { McpServer } from "../../../preload/index"
 import { type Pipeline, type PipelineStep, isRunnable, moveItem } from "../pipeline"
+import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
 
 const THEME_LIST = Object.values(THEMES)
 import type { ServerStatus } from "../../../preload/index"
@@ -286,6 +287,69 @@ function SnippetsSection(): JSX.Element {
     )
 }
 
+const GATE_MODE_LABEL: Record<GateMode, string> = {
+    none: "No gate",
+    contains: "Output contains",
+    absent: "Output does NOT contain",
+    regex: "Output matches /regex/"
+}
+
+function GateEditor({
+    gate,
+    onChange
+}: {
+    gate?: StepGate
+    onChange: (gate: StepGate) => void
+}): JSX.Element {
+    const g = gate ?? DEFAULT_GATE
+    const patch = (p: Partial<StepGate>): void => onChange({ ...g, ...p })
+    return (
+        <div className="pipe-gate">
+            <span className="pipe-gate-label">Gate</span>
+            <select
+                className="pipe-gate-mode"
+                value={g.mode}
+                onChange={(e) => patch({ mode: e.target.value as GateMode })}
+            >
+                {(Object.keys(GATE_MODE_LABEL) as GateMode[]).map((m) => (
+                    <option key={m} value={m}>
+                        {GATE_MODE_LABEL[m]}
+                    </option>
+                ))}
+            </select>
+            {g.mode !== "none" && (
+                <>
+                    <input
+                        className="pipe-gate-pattern"
+                        value={g.pattern}
+                        placeholder={g.mode === "regex" ? "e.g. \\b0 errors?\\b" : "e.g. All tests passed"}
+                        onChange={(e) => patch({ pattern: e.target.value })}
+                    />
+                    <label className="pipe-gate-retries" title="Extra attempts if the gate fails">
+                        retries
+                        <input
+                            type="number"
+                            min={0}
+                            max={10}
+                            value={g.retries}
+                            onChange={(e) => patch({ retries: Math.max(0, Number(e.target.value) || 0) })}
+                        />
+                    </label>
+                    <select
+                        className="pipe-gate-onfail"
+                        value={g.onFail}
+                        onChange={(e) => patch({ onFail: e.target.value as StepGate["onFail"] })}
+                        title="What to do if the gate ultimately fails"
+                    >
+                        <option value="stop">then stop</option>
+                        <option value="continue">then continue</option>
+                    </select>
+                </>
+            )}
+        </div>
+    )
+}
+
 function PipelinesSection(): JSX.Element {
     const pipelines = useSettings((s) => s.pipelines)
     const setPipelines = useSettings((s) => s.setPipelines)
@@ -401,6 +465,10 @@ function PipelinesSection(): JSX.Element {
                                 value={st.prompt}
                                 placeholder="Prompt sent to the agent for this step"
                                 onChange={(e) => updateStep(pi, si, { prompt: e.target.value })}
+                            />
+                            <GateEditor
+                                gate={st.gate}
+                                onChange={(gate) => updateStep(pi, si, { gate })}
                             />
                         </div>
                     ))}

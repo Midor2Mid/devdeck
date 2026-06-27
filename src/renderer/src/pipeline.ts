@@ -6,6 +6,8 @@
  * helpers so the sequencing logic is unit-testable without React/IPC.
  */
 
+import type { StepGate } from "./gate"
+
 export interface PipelineStep {
     id: string
     /** Display title for the step (shown in the runner). */
@@ -16,6 +18,8 @@ export interface PipelineStep {
     prompt: string
     /** Force a brand-new agent session instead of reusing the agent's session. */
     fresh: boolean
+    /** Optional success gate — only advance if the agent's output passes. */
+    gate?: StepGate
 }
 
 export interface Pipeline {
@@ -34,6 +38,8 @@ export interface PipelineRun {
     total: number
     stepTitle: string
     status: PipelineRunStatus
+    /** Transient note about the current step's gate (e.g. "✓ gate passed"). */
+    gateMsg?: string
 }
 
 /** A pipeline is runnable if it has a name and at least one step with a prompt. */

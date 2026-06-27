@@ -3,6 +3,9 @@ import type { HttpResponse } from "../../../preload/index"
 import { parseCurl } from "../curl"
 import { KeyValueEditor, KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor"
 import { splitUrl, parseQueryPairs, buildUrl } from "../httpParams"
+import { useSettings } from "../settings"
+import { buildVarMap, substitute, findUnresolved } from "../vars"
+import { EnvManager } from "./EnvManager"
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 type ReqTab = "params" | "headers" | "body"
@@ -37,6 +40,23 @@ export function ApiPanel(): JSX.Element {
     const [resp, setResp] = useState<HttpResponse | null>(null)
     const [sending, setSending] = useState(false)
     const [imported, setImported] = useState(false)
+    const [envOpen, setEnvOpen] = useState(false)
+
+    const environments = useSettings((s) => s.environments)
+    const activeEnvId = useSettings((s) => s.activeEnvId)
+    const setActiveEnv = useSettings((s) => s.setActiveEnv)
+    const env = environments.find((e) => e.id === activeEnvId)
+    const varMap = buildVarMap(env?.vars)
+
+    // Variables referenced but not defined in the active env (for a gentle warning).
+    const unresolved = (() => {
+        const all = [url, ...headers.flatMap((h) => [h.key, h.value])]
+        if (bodyType === "json") all.push(bodyText)
+        if (bodyType === "form") formRows.forEach((r) => all.push(r.key, r.value))
+        const set = new Set<string>()
+        all.forEach((t) => findUnresolved(t, varMap).forEach((v) => set.add(v)))
+        return [...set]
+    })()
 
     // URL bar edited → reflect query into the Params table (keeping disabled rows).
     const setUrlSyncParams = (value: string): void => {
@@ -80,19 +100,21 @@ export function ApiPanel(): JSX.Element {
         setSending(true)
         setResp(null)
         try {
+            const sub = (s: string): string => substitute(s, varMap)
+
             const hdrs: Record<string, string> = {}
             headers
                 .filter((h) => h.enabled && h.key.trim() !== "")
-                .forEach((h) => (hdrs[h.key.trim()] = h.value))
+                .forEach((h) => (hdrs[sub(h.key).trim()] = sub(h.value)))
 
             let outBody: string | undefined
             if (bodyType === "json" && bodyText.trim()) {
-                outBody = bodyText
+                outBody = sub(bodyText)
                 if (!hasHeader(hdrs, "content-type")) hdrs["Content-Type"] = "application/json"
             } else if (bodyType === "form") {
                 const enc = formRows
                     .filter((r) => r.enabled && r.key.trim() !== "")
-                    .map((r) => `${encodeURIComponent(r.key)}=${encodeURIComponent(r.value)}`)
+                    .map((r) => `${encodeURIComponent(sub(r.key))}=${encodeURIComponent(sub(r.value))}`)
                     .join("&")
                 if (enc) {
                     outBody = enc
@@ -103,7 +125,7 @@ export function ApiPanel(): JSX.Element {
 
             const res = await window.api.http.send({
                 method,
-                url: url.trim(),
+                url: sub(url.trim()),
                 headers: hdrs,
                 body: outBody
             })
@@ -147,6 +169,28 @@ export function ApiPanel(): JSX.Element {
                 <button className="accent" onClick={send} disabled={sending || !url.trim()}>
                     {sending ? "Sending…" : "Send"}
                 </button>
+            </div>
+
+            <div className="api-env-bar">
+                <span className="muted small">Env</span>
+                <select
+                    className="api-env-select"
+                    value={activeEnvId ?? ""}
+                    onChange={(e) => setActiveEnv(e.target.value || null)}
+                >
+                    <option value="">No environment</option>
+                    {environments.map((e) => (
+                        <option key={e.id} value={e.id}>
+                            {e.name || "(unnamed)"}
+                        </option>
+                    ))}
+                </select>
+                <button onClick={() => setEnvOpen(true)}>Manage…</button>
+                {unresolved.length > 0 && (
+                    <span className="api-unresolved" title="Variables not defined in the active environment">
+                        unresolved: {unresolved.join(", ")}
+                    </span>
+                )}
             </div>
 
             <div className="api-req">
@@ -228,6 +272,8 @@ export function ApiPanel(): JSX.Element {
                     </div>
                 )}
             </div>
+
+            {envOpen && <EnvManager onClose={() => setEnvOpen(false)} />}
         </div>
     )
 }

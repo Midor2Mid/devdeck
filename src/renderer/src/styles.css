@@ -1293,6 +1293,142 @@ select:focus {
     padding: 14px 2px;
     font-size: 12px;
 }
+
+/* ---------- API environment bar + manager ---------- */
+.api-env-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: -4px;
+}
+.api-env-select {
+    min-width: 150px;
+    padding: 4px 8px;
+}
+.api-unresolved {
+    font-size: 11px;
+    color: var(--danger);
+    margin-left: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40%;
+}
+.env-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(12, 11, 10, 0.6);
+    backdrop-filter: blur(3px);
+    z-index: 70;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 8vh;
+}
+.env-modal {
+    width: 80vw;
+    max-width: 760px;
+    max-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    padding: 18px 20px;
+}
+.env-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.env-head h3 {
+    margin: 0;
+    font-size: 15px;
+}
+.env-hint {
+    margin: 6px 0 12px;
+}
+.env-body {
+    display: flex;
+    gap: 16px;
+    min-height: 0;
+    flex: 1;
+}
+.env-list {
+    width: 190px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-right: 1px solid var(--border-soft);
+    padding-right: 12px;
+    overflow-y: auto;
+}
+.env-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+.env-list-item:hover {
+    background: var(--bg-3);
+}
+.env-list-item.sel {
+    background: var(--bg-3);
+    border-color: var(--border-soft);
+}
+.env-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.env-active-dot {
+    font-size: 10px;
+    color: var(--moss);
+    flex: none;
+}
+.env-add {
+    margin-top: 6px;
+    width: 100%;
+    font-size: 12px;
+}
+.env-empty,
+.env-detail-empty {
+    font-size: 12px;
+    padding: 8px 2px;
+}
+.env-detail {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.env-detail-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.env-name-input {
+    flex: 1;
+    font-weight: 600;
+}
+.env-active-badge {
+    font-size: 11px;
+    color: var(--moss);
+    border: 1px solid var(--border-soft);
+    border-radius: 20px;
+    padding: 3px 10px;
+}
+.env-del:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+}
 .api-resp {
     flex: 1;
     min-height: 0;
@@ -2451,6 +2587,42 @@ select:focus {
     min-height: 52px;
     resize: vertical;
     font-size: 12px;
+}
+.pipe-gate {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.pipe-gate-label {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--faint);
+}
+.pipe-gate-pattern {
+    flex: 1;
+    min-width: 120px;
+    font-size: 12px;
+}
+.pipe-gate-retries {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+.pipe-gate-retries input {
+    width: 46px;
+}
+.pipe-gate-mode,
+.pipe-gate-onfail {
+    flex: none;
+}
+.pipeline-gate {
+    color: var(--accent-soft);
 }
 
 /* ---------- Toasts ---------- */
