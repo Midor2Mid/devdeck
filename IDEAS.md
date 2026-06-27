@@ -16,10 +16,8 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 
 ### Gaps worth closing (their features we lack)
 
-- [ ] **Git worktree-per-agent** — each agent session in its own worktree so
-      parallel agents on one repo don't collide. *(building now)*
-- [ ] **Unified AI diff review** — one surface to review pending changes across
-      agent worktrees, stage/discard/commit before they land. *(building now)*
+- [x] **Git worktree-per-agent** — shipped v0.1.8.
+- [x] **Unified AI diff review** — shipped v0.1.8.
 - [ ] **Fire one prompt at many agents** at once (+ @mention targeting).
 - [ ] **Rich prompts** — image/drag-drop into the composer.
 - [ ] **Pipeline conditional branching / delays / checkpoints** (we have linear
@@ -32,13 +30,10 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 
 ## Unique to DevDeck — the moat (built around the user's workday)
 
-- [ ] **Work-item-native start** — a "Work" panel of assigned **Jira / Azure
-      DevOps** tickets. Click one → opens the right project, cuts a branch named
-      from the ticket, pre-seeds a Claude session with the ticket description +
-      acceptance criteria. The day starts from the ticket, not a blank terminal.
-- [ ] **Release / promotion board (UAT→PROD)** — visual lanes showing which
-      build/commit sits in dev → UAT → PROD, wired to the API **environments**,
-      with a "promote" action + pre-flight checklist.
+- [x] **Work-item-native start** — Jira/Azure Work panel, shipped v0.1.9
+      (proxy support v0.2.0).
+- [x] **Release / promotion board (UAT→PROD)** — shipped v0.2.0 (git-ref stages,
+      promote gaps, pre-flight checklist, commands/tag — no auto-push).
 - [ ] **Standup / worklog generator** — one click turns today's activity feed +
       git history across projects into a summary to paste into Jira / standup.
 - [ ] **Record → share repro** — turn a terminal recording into a shareable

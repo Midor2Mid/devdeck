@@ -1,5 +1,22 @@
 import { describe, it, expect } from "vitest"
-import { normalizeJira, normalizeAzure, htmlToText, adfToText } from "../src/main/work"
+import { normalizeJira, normalizeAzure, htmlToText, adfToText, resolveProxy } from "../src/main/work"
+
+describe("resolveProxy", () => {
+    it("prefers an explicit proxy over env", () => {
+        const prev = process.env.HTTPS_PROXY
+        process.env.HTTPS_PROXY = "http://env:8080"
+        expect(resolveProxy("http://explicit:3128")).toBe("http://explicit:3128")
+        if (prev === undefined) delete process.env.HTTPS_PROXY
+        else process.env.HTTPS_PROXY = prev
+    })
+    it("falls back to HTTPS_PROXY env when no explicit value", () => {
+        const prev = process.env.HTTPS_PROXY
+        process.env.HTTPS_PROXY = "http://env:8080"
+        expect(resolveProxy("  ")).toBe("http://env:8080")
+        if (prev === undefined) delete process.env.HTTPS_PROXY
+        else process.env.HTTPS_PROXY = prev
+    })
+})
 
 describe("htmlToText", () => {
     it("converts breaks and lists to text", () => {

@@ -140,14 +140,41 @@ export interface WorkItem {
 export interface WorkConfigPublic {
     jira: { enabled: boolean; baseUrl: string; email: string; jql: string; insecureTLS: boolean; hasToken: boolean }
     azure: { enabled: boolean; orgUrl: string; project: string; wiql: string; insecureTLS: boolean; hasToken: boolean }
+    proxy: string
+    effectiveProxy: string
 }
 export interface WorkConfigInput {
     jira: { enabled: boolean; baseUrl: string; email: string; jql: string; insecureTLS: boolean; token?: string }
     azure: { enabled: boolean; orgUrl: string; project: string; wiql: string; insecureTLS: boolean; pat?: string }
+    proxy: string
 }
 export interface WorkFetchResult {
     items: WorkItem[]
     errors: { provider: WorkProvider; message: string }[]
+}
+
+export interface ReleaseStage {
+    id: string
+    name: string
+    ref: string
+}
+export interface ReleaseConfig {
+    stages: ReleaseStage[]
+    checklist: string[]
+}
+export interface ReleaseCommit {
+    sha: string
+    subject: string
+    author: string
+    when: string
+}
+export interface StageStatus {
+    id: string
+    name: string
+    ref: string
+    found: boolean
+    commit: ReleaseCommit | null
+    aheadOfNext: number
 }
 
 export interface Worktree {
@@ -284,6 +311,17 @@ const api = {
     },
     shell: {
         open: (url: string): Promise<void> => ipcRenderer.invoke("shell:open", url)
+    },
+    release: {
+        config: (repo: string): Promise<ReleaseConfig> => ipcRenderer.invoke("release:config", repo),
+        saveConfig: (repo: string, config: ReleaseConfig): Promise<ReleaseConfig> =>
+            ipcRenderer.invoke("release:saveConfig", { repo, config }),
+        status: (repo: string, stages: ReleaseStage[]): Promise<StageStatus[]> =>
+            ipcRenderer.invoke("release:status", { repo, stages }),
+        pending: (repo: string, target: string, source: string): Promise<ReleaseCommit[]> =>
+            ipcRenderer.invoke("release:pending", { repo, target, source }),
+        tag: (repo: string, name: string, ref: string): Promise<{ ok: boolean; error?: string }> =>
+            ipcRenderer.invoke("release:tag", { repo, name, ref })
     },
     work: {
         getConfig: (): Promise<WorkConfigPublic> => ipcRenderer.invoke("work:getConfig"),

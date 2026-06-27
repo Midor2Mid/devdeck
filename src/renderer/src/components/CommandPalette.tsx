@@ -115,6 +115,7 @@ export function CommandPalette(): JSX.Element {
                 run: () => store.runPipeline(p.id)
             })
         cmds.push({ id: "act:work", section: "Actions", title: "Work — Jira / Azure items", run: () => store.setWorkOpen(true) })
+        cmds.push({ id: "act:release", section: "Actions", title: "Release board — promote Dev → UAT → PROD", run: () => store.setReleaseOpen(true) })
         cmds.push({ id: "act:worktrees", section: "Actions", title: "Worktrees — new agent in a worktree", run: () => store.setWorktreesOpen(true) })
         cmds.push({
             id: "act:review",

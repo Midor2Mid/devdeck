@@ -127,6 +127,10 @@ interface AppState extends Persisted {
     setWorkOpen: (open: boolean) => void
     startWork: (item: WorkItem, opts?: { worktree?: boolean }) => Promise<void>
 
+    // Release board
+    releaseOpen: boolean
+    setReleaseOpen: (open: boolean) => void
+
     // Agent pipelines (runtime-only)
     pipelineRun: PipelineRun | null
     runPipeline: (pipelineId: string) => void
@@ -367,6 +371,7 @@ export const useStore = create<AppState>((set, get) => {
         worktreesOpen: false,
         changesTarget: null,
         workOpen: false,
+        releaseOpen: false,
         pipelineRun: null,
         switcherOpen: false,
         composerOpen: false,
@@ -517,6 +522,7 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         setWorkOpen: (workOpen) => set({ workOpen }),
+        setReleaseOpen: (releaseOpen) => set({ releaseOpen }),
 
         startWork: async (item, opts) => {
             const proj = get().activeProject()

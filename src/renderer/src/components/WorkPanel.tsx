@@ -139,12 +139,14 @@ function SetupForm({
         pat: "",
         hasToken: cfg?.azure.hasToken ?? false
     }))
+    const [proxy, setProxy] = useState(cfg?.proxy ?? "")
     const [msg, setMsg] = useState("")
 
     const save = async (): Promise<WorkConfigPublic> => {
         const c = await window.api.work.saveConfig({
             jira: { enabled: j.enabled, baseUrl: j.baseUrl, email: j.email, jql: j.jql, insecureTLS: j.insecureTLS, token: j.token || undefined },
-            azure: { enabled: a.enabled, orgUrl: a.orgUrl, project: a.project, wiql: a.wiql, insecureTLS: a.insecureTLS, pat: a.pat || undefined }
+            azure: { enabled: a.enabled, orgUrl: a.orgUrl, project: a.project, wiql: a.wiql, insecureTLS: a.insecureTLS, pat: a.pat || undefined },
+            proxy
         })
         return c
     }
@@ -174,6 +176,13 @@ function SetupForm({
             <textarea className="work-jql" placeholder="WIQL" value={a.wiql} onChange={(e) => setA({ ...a, wiql: e.target.value })} />
             <label className="work-en"><input type="checkbox" checked={a.insecureTLS} onChange={(e) => setA({ ...a, insecureTLS: e.target.checked })} /> Ignore TLS errors (corporate proxy)</label>
             <button className="btn-min" onClick={() => test("azure")}>Test Azure</button>
+
+            <h3 style={{ marginTop: 20 }}>Proxy (optional)</h3>
+            <input placeholder="http://user:pass@proxy.corp:8080" value={proxy} onChange={(e) => setProxy(e.target.value)} />
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+                Leave blank to use the system <code>HTTPS_PROXY</code> environment variable.
+                {cfg?.effectiveProxy ? ` In effect: ${cfg.effectiveProxy.replace(/\/\/[^@]*@/, "//***@")}` : ""}
+            </p>
 
             {msg && <p className="work-msg">{msg}</p>}
             <button className="accent work-save" onClick={async () => { const c = await save(); setMsg("Saved."); onSaved(c) }}>

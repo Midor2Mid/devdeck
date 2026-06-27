@@ -3141,6 +3141,87 @@ select:focus {
 .work-msg { font-size: 12px; color: var(--accent-soft); margin: 6px 0; }
 .work-save { width: 100%; margin-top: 10px; }
 
+/* ---------- Release board ---------- */
+.release-modal { width: 900px; max-width: 96vw; padding: 0; display: flex; flex-direction: column; max-height: 86vh; }
+.release-body { padding: 16px; overflow-y: auto; }
+.lanes { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+.lane-wrap { display: flex; align-items: stretch; }
+.lane {
+    width: 220px;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: var(--bg-3);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.lane.missing { opacity: 0.7; border-style: dashed; }
+.lane-name { font-weight: 700; font-size: 14px; letter-spacing: 0.02em; }
+.lane-ref { font-family: var(--mono, monospace); font-size: 11px; color: var(--accent-soft); margin-bottom: 6px; }
+.lane-commit { display: flex; flex-direction: column; gap: 2px; }
+.lc-sha { font-family: var(--mono, monospace); font-size: 11px; color: var(--accent); }
+.lc-subj { font-size: 12px; color: var(--text); line-height: 1.35; }
+.lc-meta { font-size: 10.5px; color: var(--faint); }
+.lane-missing { font-size: 11.5px; color: var(--faint); }
+.promote-arrow {
+    align-self: center;
+    margin: 0 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    border: none;
+    background: transparent;
+    color: var(--faint);
+    cursor: pointer;
+    min-width: 44px;
+}
+.promote-arrow.hot { color: var(--accent); }
+.promote-arrow .pa-count {
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid currentColor;
+    border-radius: 12px;
+    padding: 1px 8px;
+}
+.promote-arrow .pa-tip { font-size: 16px; line-height: 1; }
+.promote-arrow:hover { color: var(--accent-soft); }
+
+.promote-panel {
+    margin-top: 18px;
+    border-top: 1px solid var(--border-soft);
+    padding-top: 14px;
+}
+.promote-head { font-size: 13px; margin-bottom: 10px; }
+.promote-cols { display: flex; gap: 16px; align-items: flex-start; }
+.promote-commits {
+    flex: 1;
+    min-width: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 6px;
+}
+.pc-row { display: flex; gap: 8px; align-items: baseline; padding: 4px 6px; font-size: 12px; }
+.pc-subj { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.promote-side { width: 280px; flex: none; }
+.promote-check-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 6px; }
+.promote-check { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.promote-check input { width: 14px; height: 14px; accent-color: var(--accent); }
+.promote-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.promote-actions .accent { font-size: 12px; }
+.promote-tag { display: flex; gap: 6px; }
+.promote-tag input { flex: 1; min-width: 0; font-family: var(--mono, monospace); font-size: 11px; }
+.promote-msg { font-size: 12px; color: var(--accent-soft); }
+
+.stage-editor { max-width: 560px; }
+.se-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 8px; }
+.se-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.se-name { width: 120px; }
+.se-ref { flex: 1; font-family: var(--mono, monospace); font-size: 12px; }
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;

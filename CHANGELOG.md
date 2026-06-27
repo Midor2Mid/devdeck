@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-06-28
+
+- **Release / promotion board** — model a project's deploy stages (Dev → UAT →
+  PROD), each mapped to a git ref, and see at a glance what commit sits in each
+  and **how many commits are waiting to be promoted** to the next. Click a gap
+  to see the exact commits, tick a **pre-flight checklist**, then either **send
+  the promote commands to a terminal**, copy them, or **tag the release**.
+  DevDeck never pushes for you — promotion stays explicit. Open via the
+  ⬆ release button in the status bar or the command palette; stages + checklist
+  are editable and stored per project in `.devdeck/release.json`.
+- **Proxy support** — work-item calls now route through a corporate proxy
+  (HTTPS via CONNECT tunnel, HTTP via absolute-form), configured in the Work
+  drawer or auto-detected from `HTTPS_PROXY`/`HTTP_PROXY` env vars. Pairs with
+  the existing "ignore TLS errors" toggle for locked-down corporate networks.
+
 ## 0.1.9 — 2026-06-28
 
 - **Work panel (Jira + Azure DevOps)** — the ◷ sidebar button (or command

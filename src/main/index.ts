@@ -19,6 +19,7 @@ import type { PipelineTrigger } from "./triggers"
 import * as worktrees from "./worktrees"
 import * as changes from "./changes"
 import * as work from "./work"
+import * as release from "./release"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -202,6 +203,28 @@ function registerIpc(): void {
     ipcMain.handle("git:worktreeRemove", (_e, { repoPath, path, deleteBranch }) => {
         guardPath(repoPath)
         return worktrees.removeWorktree(repoPath, path, deleteBranch)
+    })
+
+    // --- Release / promotion board ---
+    ipcMain.handle("release:config", (_e, repo: string) => {
+        guardPath(repo)
+        return release.loadConfig(repo)
+    })
+    ipcMain.handle("release:saveConfig", (_e, { repo, config }) => {
+        guardPath(repo)
+        return release.saveConfig(repo, config)
+    })
+    ipcMain.handle("release:status", (_e, { repo, stages }) => {
+        guardRepo(repo)
+        return release.status(repo, stages)
+    })
+    ipcMain.handle("release:pending", (_e, { repo, target, source }) => {
+        guardRepo(repo)
+        return release.pending(repo, target, source)
+    })
+    ipcMain.handle("release:tag", (_e, { repo, name, ref }) => {
+        guardRepo(repo)
+        return release.createTag(repo, name, ref)
     })
 
     // --- Git changes (diff review) ---

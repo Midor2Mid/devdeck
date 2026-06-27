@@ -9,6 +9,7 @@ export function StatusBar(): JSX.Element {
     const tabsByProject = useStore((s) => s.tabsByProject)
     const agentStatus = useStore((s) => s.agentStatus)
     const remoteEnabled = useSettings((s) => s.remote.enabled)
+    const setReleaseOpen = useStore((s) => s.setReleaseOpen)
     const gitAccounts = useSettings((s) => s.gitAccounts)
     const [git, setGit] = useState<GitStatus | null>(null)
     const [identity, setIdentity] = useState<GitIdentity | null>(null)
@@ -117,7 +118,16 @@ export function StatusBar(): JSX.Element {
                         ● remote
                     </span>
                 )}
-                <span className="sb-item muted">DevDeck 0.1.0</span>
+                {project && (
+                    <span
+                        className="sb-item sb-identity"
+                        title="Release board — promote Dev → UAT → PROD"
+                        onClick={() => setReleaseOpen(true)}
+                    >
+                        ⬆ release
+                    </span>
+                )}
+                <span className="sb-item muted">DevDeck</span>
             </div>
         </div>
     )
