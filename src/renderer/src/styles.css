@@ -947,6 +947,22 @@ select:focus {
     font-size: 12px;
     line-height: 1.5;
 }
+.curl-import {
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--bg-3);
+    margin-bottom: 4px;
+}
+.curl-import .code-area {
+    height: 90px;
+}
+.curl-import-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
 .api-resp {
     flex: 1;
     min-height: 0;

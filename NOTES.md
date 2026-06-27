@@ -47,6 +47,19 @@ The shared screen recording is a real, polished app (**"1DevTool"**) that is alm
 
 → Wabi-sabi lens: adopt the *depth* (AI-CLI-first: multi-agent sessions + prompt composer + project groups) but resist the *surface sprawl* (Notes/Tasks/Draw/activity-bar) unless each earns its place. Frames saved during session in scratchpad.
 
+### Reference: 1DevTool dev's feature notes (2026-06-27)
+The maker shared shipped features + reasoning (Vietnamese). Highlights for DevDeck:
+- **Prompt composer lesson (important):** users didn't discover the Agent Input feature → made it prominent/centered. Also it **saves drafts per project** (compose, switch project, come back → draft still there). *Lesson: "if the UX doesn't make users realize a feature exists, it's wasted."* → We should make our composer (Ctrl+Shift+P) more discoverable AND persist its draft per project. Quick, high-value.
+- **In-app notifications** when an agent finishes (we already track attention status → just surface a toast).
+- **AI quota shown in the terminal** when a session is active (no app-switching to check). Hard for Claude (no easy quota API) — defer.
+- **Remote upgrades:** query DB + call HTTP request from the phone; better mobile prompt typing. (We have mobile terminals; DB/HTTP are next.)
+- **Resume detects external sessions** (Ghostty/iTerm2) and imports them. Platform-specific — defer.
+- **Terminal "Note"** scratchpad to gather/compose before sending one prompt (overlaps with composer drafts).
+- **Embedded browser + "Comment Mode"**: click any element on a page to leave a comment, persists across pages, then **send all feedback to AI** grouped by page with console logs + network + screenshot. Big, novel; the browser is a real panel in 1DevTool.
+- **Image annotation editor** before sending to AI; paste image / drag file into prompt.
+- **Terminal layout modes:** Dashboard / List / **Canvas** (spatial board of all terminals across projects).
+- Pricing: $29 one-time (confirms category value).
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
