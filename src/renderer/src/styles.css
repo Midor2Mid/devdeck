@@ -1453,6 +1453,32 @@ select:focus {
     font-size: 12px;
 }
 
+/* ---------- auth pane ---------- */
+.auth-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 460px;
+}
+.auth-type,
+.auth-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.auth-type > span,
+.auth-field > span {
+    width: 80px;
+    flex: none;
+}
+.auth-type select,
+.auth-field input,
+.auth-field select {
+    flex: 1;
+}
+
 /* ---------- API environment bar + manager ---------- */
 .api-env-bar {
     display: flex;

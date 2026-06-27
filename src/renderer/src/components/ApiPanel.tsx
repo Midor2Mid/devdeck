@@ -3,13 +3,13 @@ import type { HttpResponse } from "../../../preload/index"
 import { parseCurl } from "../curl"
 import { KeyValueEditor, KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor"
 import { splitUrl, parseQueryPairs, buildUrl } from "../httpParams"
-import { useSettings, type SavedRequest } from "../settings"
+import { useSettings, type SavedRequest, type AuthConfig, defaultAuth } from "../settings"
 import { buildVarMap, substitute, findUnresolved } from "../vars"
 import { EnvManager } from "./EnvManager"
 import { CollectionsSidebar } from "./CollectionsSidebar"
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
-type ReqTab = "params" | "headers" | "body"
+type ReqTab = "params" | "auth" | "headers" | "body"
 type BodyType = "none" | "json" | "form"
 
 function prettify(body: string, contentType?: string): string {
@@ -37,6 +37,7 @@ export function ApiPanel(): JSX.Element {
     const [bodyType, setBodyType] = useState<BodyType>("none")
     const [bodyText, setBodyText] = useState("")
     const [formRows, setFormRows] = useState<KvRow[]>([emptyRow()])
+    const [auth, setAuth] = useState<AuthConfig>(defaultAuth())
     const [reqTab, setReqTab] = useState<ReqTab>("params")
     const [resp, setResp] = useState<HttpResponse | null>(null)
     const [sending, setSending] = useState(false)
@@ -63,6 +64,9 @@ export function ApiPanel(): JSX.Element {
         const all = [url, ...headers.flatMap((h) => [h.key, h.value])]
         if (bodyType === "json") all.push(bodyText)
         if (bodyType === "form") formRows.forEach((r) => all.push(r.key, r.value))
+        if (auth.type === "bearer") all.push(auth.token)
+        if (auth.type === "basic") all.push(auth.username, auth.password)
+        if (auth.type === "apikey") all.push(auth.apiKeyName, auth.apiKeyValue)
         const set = new Set<string>()
         all.forEach((t) => findUnresolved(t, varMap).forEach((v) => set.add(v)))
         return [...set]
@@ -117,6 +121,24 @@ export function ApiPanel(): JSX.Element {
                 .filter((h) => h.enabled && h.key.trim() !== "")
                 .forEach((h) => (hdrs[sub(h.key).trim()] = sub(h.value)))
 
+            // Auth (overrides a manually-set header of the same name, like Postman).
+            let finalUrl = sub(url.trim())
+            if (auth.type === "bearer" && auth.token.trim()) {
+                hdrs["Authorization"] = "Bearer " + sub(auth.token).trim()
+            } else if (auth.type === "basic") {
+                hdrs["Authorization"] = "Basic " + btoa(`${sub(auth.username)}:${sub(auth.password)}`)
+            } else if (auth.type === "apikey" && auth.apiKeyName.trim()) {
+                const name = sub(auth.apiKeyName).trim()
+                const value = sub(auth.apiKeyValue)
+                if (auth.apiKeyIn === "query") {
+                    finalUrl +=
+                        (finalUrl.includes("?") ? "&" : "?") +
+                        `${encodeURIComponent(name)}=${encodeURIComponent(value)}`
+                } else {
+                    hdrs[name] = value
+                }
+            }
+
             let outBody: string | undefined
             if (bodyType === "json" && bodyText.trim()) {
                 outBody = sub(bodyText)
@@ -135,7 +157,7 @@ export function ApiPanel(): JSX.Element {
 
             const res = await window.api.http.send({
                 method,
-                url: sub(url.trim()),
+                url: finalUrl,
                 headers: hdrs,
                 body: outBody
             })
@@ -166,7 +188,8 @@ export function ApiPanel(): JSX.Element {
         headers,
         bodyType,
         bodyText,
-        formRows
+        formRows,
+        auth
     })
 
     const loadRequest = (req: SavedRequest): void => {
@@ -177,6 +200,7 @@ export function ApiPanel(): JSX.Element {
         setBodyType(req.bodyType ?? "none")
         setBodyText(req.bodyText ?? "")
         setFormRows(req.formRows?.length ? req.formRows : [emptyRow()])
+        setAuth({ ...defaultAuth(), ...req.auth })
         setLoadedReqId(req.id)
         setResp(null)
         setReqTab("params")
@@ -305,6 +329,9 @@ export function ApiPanel(): JSX.Element {
                     <span className={reqTab === "params" ? "active" : ""} onClick={() => setReqTab("params")}>
                         Params{paramN ? ` (${paramN})` : ""}
                     </span>
+                    <span className={reqTab === "auth" ? "active" : ""} onClick={() => setReqTab("auth")}>
+                        Auth{auth.type !== "none" ? " •" : ""}
+                    </span>
                     <span className={reqTab === "headers" ? "active" : ""} onClick={() => setReqTab("headers")}>
                         Headers{headerN ? ` (${headerN})` : ""}
                     </span>
@@ -315,6 +342,87 @@ export function ApiPanel(): JSX.Element {
 
                 {reqTab === "params" && (
                     <KeyValueEditor rows={params} onChange={onParamsChange} />
+                )}
+                {reqTab === "auth" && (
+                    <div className="auth-pane">
+                        <label className="auth-type">
+                            <span>Type</span>
+                            <select
+                                value={auth.type}
+                                onChange={(e) => setAuth({ ...auth, type: e.target.value as AuthConfig["type"] })}
+                            >
+                                <option value="none">No auth</option>
+                                <option value="bearer">Bearer token</option>
+                                <option value="basic">Basic auth</option>
+                                <option value="apikey">API key</option>
+                            </select>
+                        </label>
+
+                        {auth.type === "none" && (
+                            <div className="muted body-none">No authentication.</div>
+                        )}
+                        {auth.type === "bearer" && (
+                            <label className="auth-field">
+                                <span>Token</span>
+                                <input
+                                    value={auth.token}
+                                    onChange={(e) => setAuth({ ...auth, token: e.target.value })}
+                                    placeholder="{{token}} or a literal token"
+                                />
+                            </label>
+                        )}
+                        {auth.type === "basic" && (
+                            <>
+                                <label className="auth-field">
+                                    <span>Username</span>
+                                    <input
+                                        value={auth.username}
+                                        onChange={(e) => setAuth({ ...auth, username: e.target.value })}
+                                    />
+                                </label>
+                                <label className="auth-field">
+                                    <span>Password</span>
+                                    <input
+                                        type="password"
+                                        value={auth.password}
+                                        onChange={(e) => setAuth({ ...auth, password: e.target.value })}
+                                    />
+                                </label>
+                            </>
+                        )}
+                        {auth.type === "apikey" && (
+                            <>
+                                <label className="auth-field">
+                                    <span>Key</span>
+                                    <input
+                                        value={auth.apiKeyName}
+                                        onChange={(e) => setAuth({ ...auth, apiKeyName: e.target.value })}
+                                        placeholder="X-API-Key"
+                                    />
+                                </label>
+                                <label className="auth-field">
+                                    <span>Value</span>
+                                    <input
+                                        value={auth.apiKeyValue}
+                                        onChange={(e) => setAuth({ ...auth, apiKeyValue: e.target.value })}
+                                        placeholder="{{apiKey}}"
+                                    />
+                                </label>
+                                <label className="auth-field">
+                                    <span>Add to</span>
+                                    <select
+                                        value={auth.apiKeyIn}
+                                        onChange={(e) =>
+                                            setAuth({ ...auth, apiKeyIn: e.target.value as "header" | "query" })
+                                        }
+                                    >
+                                        <option value="header">Header</option>
+                                        <option value="query">Query param</option>
+                                    </select>
+                                </label>
+                            </>
+                        )}
+                    </div>
                 )}
                 {reqTab === "headers" && (
                     <KeyValueEditor

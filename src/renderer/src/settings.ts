@@ -11,6 +11,30 @@ export interface Environment {
 }
 
 export type ApiBodyType = "none" | "json" | "form"
+export type AuthType = "none" | "bearer" | "basic" | "apikey"
+
+/** Authentication config for a request. Fields support {{variables}}. */
+export interface AuthConfig {
+    type: AuthType
+    token: string
+    username: string
+    password: string
+    apiKeyName: string
+    apiKeyValue: string
+    apiKeyIn: "header" | "query"
+}
+
+export function defaultAuth(): AuthConfig {
+    return {
+        type: "none",
+        token: "",
+        username: "",
+        password: "",
+        apiKeyName: "",
+        apiKeyValue: "",
+        apiKeyIn: "header"
+    }
+}
 
 /** A saved API request (the full editable state of the API client). */
 export interface SavedRequest {
@@ -23,6 +47,7 @@ export interface SavedRequest {
     bodyType: ApiBodyType
     bodyText: string
     formRows: KvRow[]
+    auth: AuthConfig
 }
 
 /** A named folder of saved requests. */
