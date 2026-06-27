@@ -4,7 +4,7 @@ import { useSettings, type ShellKind } from "../settings"
 import { useStore } from "../store"
 import { THEMES } from "../themes"
 import type { McpServer } from "../../../preload/index"
-import { type Pipeline, type PipelineStep, isRunnable, moveItem } from "../pipeline"
+import { type Pipeline, type PipelineStep, type PipelineTrigger, isRunnable, moveItem } from "../pipeline"
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
 
 const THEME_LIST = Object.values(THEMES)
@@ -350,6 +350,103 @@ function GateEditor({
     )
 }
 
+function TriggersEditor({ pipelines }: { pipelines: Pipeline[] }): JSX.Element {
+    const triggers = useSettings((s) => s.triggers)
+    const setTriggers = useSettings((s) => s.setTriggers)
+    const projects = useStore((s) => s.projects)
+
+    const update = (i: number, patch: Partial<PipelineTrigger>): void =>
+        setTriggers(triggers.map((t, idx) => (idx === i ? { ...t, ...patch } : t)))
+    const remove = (i: number): void => setTriggers(triggers.filter((_, idx) => idx !== i))
+    const add = (): void =>
+        setTriggers([
+            ...triggers,
+            {
+                id: crypto.randomUUID(),
+                enabled: false,
+                pipelineId: pipelines[0]?.id ?? "",
+                projectPath: projects[0]?.path ?? "",
+                glob: "",
+                debounceMs: 1500
+            }
+        ])
+
+    return (
+        <div className="triggers-block">
+            <h3 style={{ marginTop: 22 }}>File triggers</h3>
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+                Auto-run a pipeline when files matching a glob change in a project. Triggers are
+                <b> off by default</b> — enable one only when you want hands-free runs. A run won't
+                start while another is already in progress.
+            </p>
+            {triggers.length === 0 && (
+                <p className="muted small">No triggers yet.</p>
+            )}
+            {triggers.map((t, i) => (
+                <div key={t.id} className={"trigger-row" + (t.enabled ? " on" : "")}>
+                    <label className="trigger-enable" title="Enable this trigger">
+                        <input
+                            type="checkbox"
+                            checked={t.enabled}
+                            onChange={(e) => update(i, { enabled: e.target.checked })}
+                        />
+                    </label>
+                    <select
+                        className="trigger-project"
+                        value={t.projectPath}
+                        onChange={(e) => update(i, { projectPath: e.target.value })}
+                    >
+                        {projects.map((p) => (
+                            <option key={p.id} value={p.path}>
+                                {p.name}
+                            </option>
+                        ))}
+                    </select>
+                    <input
+                        className="trigger-glob"
+                        value={t.glob}
+                        placeholder="glob, e.g. src/**/*.cs (blank = any)"
+                        onChange={(e) => update(i, { glob: e.target.value })}
+                    />
+                    <span className="trigger-arrow">→</span>
+                    <select
+                        className="trigger-pipeline"
+                        value={t.pipelineId}
+                        onChange={(e) => update(i, { pipelineId: e.target.value })}
+                    >
+                        {pipelines.map((p) => (
+                            <option key={p.id} value={p.id}>
+                                {p.name}
+                            </option>
+                        ))}
+                    </select>
+                    <label className="trigger-debounce" title="Quiet period after the last change before firing">
+                        <input
+                            type="number"
+                            min={200}
+                            step={100}
+                            value={t.debounceMs}
+                            onChange={(e) => update(i, { debounceMs: Math.max(200, Number(e.target.value) || 200) })}
+                        />
+                        ms
+                    </label>
+                    <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                        ×
+                    </button>
+                </div>
+            ))}
+            <button
+                className="btn-min"
+                style={{ marginTop: 6 }}
+                onClick={add}
+                disabled={pipelines.length === 0 || projects.length === 0}
+            >
+                + Add trigger
+            </button>
+        </div>
+    )
+}
+
 function PipelinesSection(): JSX.Element {
     const pipelines = useSettings((s) => s.pipelines)
     const setPipelines = useSettings((s) => s.setPipelines)
@@ -480,6 +577,8 @@ function PipelinesSection(): JSX.Element {
             <button onClick={addPipe} style={{ marginTop: 10 }}>
                 + Add pipeline
             </button>
+
+            <TriggersEditor pipelines={pipelines} />
         </div>
     )
 }

@@ -3,9 +3,10 @@ import type { HttpResponse } from "../../../preload/index"
 import { parseCurl } from "../curl"
 import { KeyValueEditor, KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor"
 import { splitUrl, parseQueryPairs, buildUrl } from "../httpParams"
-import { useSettings } from "../settings"
+import { useSettings, type SavedRequest } from "../settings"
 import { buildVarMap, substitute, findUnresolved } from "../vars"
 import { EnvManager } from "./EnvManager"
+import { CollectionsSidebar } from "./CollectionsSidebar"
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 type ReqTab = "params" | "headers" | "body"
@@ -41,10 +42,19 @@ export function ApiPanel(): JSX.Element {
     const [sending, setSending] = useState(false)
     const [imported, setImported] = useState(false)
     const [envOpen, setEnvOpen] = useState(false)
+    const [sidebarOpen, setSidebarOpen] = useState(true)
+    const [loadedReqId, setLoadedReqId] = useState<string | null>(null)
+    const [saved, setSaved] = useState(false)
+    const [saveOpen, setSaveOpen] = useState(false)
+    const [saveName, setSaveName] = useState("")
+    const [saveColId, setSaveColId] = useState("")
+    const [saveNewCol, setSaveNewCol] = useState("")
 
     const environments = useSettings((s) => s.environments)
     const activeEnvId = useSettings((s) => s.activeEnvId)
     const setActiveEnv = useSettings((s) => s.setActiveEnv)
+    const collections = useSettings((s) => s.collections)
+    const setCollections = useSettings((s) => s.setCollections)
     const env = environments.find((e) => e.id === activeEnvId)
     const varMap = buildVarMap(env?.vars)
 
@@ -142,13 +152,101 @@ export function ApiPanel(): JSX.Element {
         return "error"
     }
 
+    // ----- saved requests / collections -----
+    const flashSaved = (): void => {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 1600)
+    }
+
+    // The current editor state as a savable request body (no id/name).
+    const currentBody = (): Omit<SavedRequest, "id" | "name"> => ({
+        method,
+        url,
+        params,
+        headers,
+        bodyType,
+        bodyText,
+        formRows
+    })
+
+    const loadRequest = (req: SavedRequest): void => {
+        setMethod(req.method)
+        setUrl(req.url)
+        setParams(req.params?.length ? req.params : [emptyRow()])
+        setHeaders(req.headers?.length ? req.headers : [emptyRow()])
+        setBodyType(req.bodyType ?? "none")
+        setBodyText(req.bodyText ?? "")
+        setFormRows(req.formRows?.length ? req.formRows : [emptyRow()])
+        setLoadedReqId(req.id)
+        setResp(null)
+        setReqTab("params")
+    }
+
+    // Update the currently-loaded saved request in place.
+    const saveExisting = (): void => {
+        if (!loadedReqId) return
+        setCollections(
+            collections.map((c) => ({
+                ...c,
+                requests: c.requests.map((r) =>
+                    r.id === loadedReqId ? { ...r, ...currentBody() } : r
+                )
+            }))
+        )
+        flashSaved()
+    }
+
+    const onSaveClick = (): void => {
+        if (loadedReqId) {
+            saveExisting()
+            return
+        }
+        openSaveDialog()
+    }
+
+    const openSaveDialog = (): void => {
+        const guess = url ? `${method} ${splitUrl(url).base.replace(/^https?:\/\//, "")}` : "New request"
+        setSaveName(guess.slice(0, 60))
+        setSaveColId(collections[0]?.id ?? "")
+        setSaveNewCol("")
+        setSaveOpen(true)
+    }
+
+    const confirmSave = (): void => {
+        const name = saveName.trim() || "Untitled"
+        const req: SavedRequest = { id: crypto.randomUUID(), name, ...currentBody() }
+
+        let next = collections
+        let targetId = saveColId
+        if (!targetId) {
+            const col = { id: crypto.randomUUID(), name: saveNewCol.trim() || "Collection 1", requests: [] }
+            next = [...collections, col]
+            targetId = col.id
+        }
+        setCollections(
+            next.map((c) => (c.id === targetId ? { ...c, requests: [...c.requests, req] } : c))
+        )
+        setLoadedReqId(req.id)
+        setSaveOpen(false)
+        flashSaved()
+    }
+
     const paramN = activeCount(params)
     const headerN = activeCount(headers)
     const bodyDot = bodyType !== "none" && (bodyType === "json" ? bodyText.trim() !== "" : activeCount(formRows) > 0)
 
     return (
         <div className="api-panel">
+            {sidebarOpen && <CollectionsSidebar onLoad={loadRequest} activeReqId={loadedReqId} />}
+            <div className="api-main">
             <div className="api-bar">
+                <button
+                    className="api-toggle"
+                    onClick={() => setSidebarOpen((v) => !v)}
+                    title={sidebarOpen ? "Hide collections" : "Show collections"}
+                >
+                    ☰
+                </button>
                 <select value={method} onChange={(e) => setMethod(e.target.value)}>
                     {METHODS.map((m) => (
                         <option key={m} value={m}>
@@ -166,6 +264,15 @@ export function ApiPanel(): JSX.Element {
                     }}
                 />
                 {imported && <span className="api-imported" title="Imported from cURL">cURL ✓</span>}
+                {saved && <span className="api-imported" title="Saved">Saved ✓</span>}
+                <button onClick={onSaveClick} disabled={!url.trim()} title={loadedReqId ? "Update saved request" : "Save request"}>
+                    Save
+                </button>
+                {loadedReqId && (
+                    <button onClick={openSaveDialog} disabled={!url.trim()} title="Save as a new request">
+                        as…
+                    </button>
+                )}
                 <button className="accent" onClick={send} disabled={sending || !url.trim()}>
                     {sending ? "Sending…" : "Send"}
                 </button>
@@ -272,8 +379,56 @@ export function ApiPanel(): JSX.Element {
                     </div>
                 )}
             </div>
+            </div>
 
             {envOpen && <EnvManager onClose={() => setEnvOpen(false)} />}
+
+            {saveOpen && (
+                <div className="env-backdrop" onClick={() => setSaveOpen(false)}>
+                    <div className="save-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="env-head">
+                            <h3>Save request</h3>
+                            <button onClick={() => setSaveOpen(false)}>Close</button>
+                        </div>
+                        <label className="save-field">
+                            <span>Name</span>
+                            <input
+                                autoFocus
+                                value={saveName}
+                                onChange={(e) => setSaveName(e.target.value)}
+                                placeholder="e.g. Get orders (paid)"
+                            />
+                        </label>
+                        <label className="save-field">
+                            <span>Collection</span>
+                            <select value={saveColId} onChange={(e) => setSaveColId(e.target.value)}>
+                                {collections.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.name}
+                                    </option>
+                                ))}
+                                <option value="">+ New collection…</option>
+                            </select>
+                        </label>
+                        {saveColId === "" && (
+                            <label className="save-field">
+                                <span>New name</span>
+                                <input
+                                    value={saveNewCol}
+                                    onChange={(e) => setSaveNewCol(e.target.value)}
+                                    placeholder="Collection name"
+                                />
+                            </label>
+                        )}
+                        <div className="save-actions">
+                            <button onClick={() => setSaveOpen(false)}>Cancel</button>
+                            <button className="accent" onClick={confirmSave} disabled={!saveName.trim()}>
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

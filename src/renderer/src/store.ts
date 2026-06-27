@@ -116,6 +116,7 @@ interface AppState extends Persisted {
     pipelineRun: PipelineRun | null
     runPipeline: (pipelineId: string) => void
     stopPipeline: () => void
+    fireTrigger: (triggerId: string) => void
 
     // Overlays / panels (runtime-only)
     switcherOpen: boolean
@@ -356,6 +357,7 @@ export const useStore = create<AppState>((set, get) => {
         init: async () => {
             if (!dataSubscribed) {
                 window.api.pty.onData(onPtyData)
+                window.api.triggers.onFired(({ triggerId }) => get().fireTrigger(triggerId))
                 dataSubscribed = true
             }
             const [store, ws] = await Promise.all([
@@ -469,6 +471,22 @@ export const useStore = create<AppState>((set, get) => {
         setRecordingTermId: (recordingTermId) => set({ recordingTermId }),
         setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
         noteRecording: (termId, label) => pushActivity("record", termId, label),
+
+        fireTrigger: (triggerId) => {
+            const trig = useSettings.getState().triggers.find((t) => t.id === triggerId && t.enabled)
+            if (!trig) return
+            // Don't stomp a run already in progress.
+            const run = get().pipelineRun
+            if (run && (run.status === "running" || run.status === "waiting")) return
+            const proj = get().projects.find((p) => p.path === trig.projectPath)
+            if (!proj) return
+            if (get().activeId !== proj.id) {
+                set({ activeId: proj.id })
+                window.api.projects.setActive(proj.id)
+            }
+            pushActivity("pipeline", get().lastAgentTermId ?? "", `${trig.glob || "any file"} changed · triggered`)
+            get().runPipeline(trig.pipelineId)
+        },
 
         stopPipeline: () => {
             pipelineToken += 1

@@ -118,6 +118,15 @@ export interface RecordingMeta {
     events: number
 }
 
+export interface PipelineTrigger {
+    id: string
+    enabled: boolean
+    pipelineId: string
+    projectPath: string
+    glob: string
+    debounceMs: number
+}
+
 const api = {
     pty: {
         create: (opts: PtyCreateOpts): void => ipcRenderer.send("pty:create", opts),
@@ -210,6 +219,14 @@ const api = {
         list: (projectPath: string): Promise<McpServer[]> => ipcRenderer.invoke("mcp:list", projectPath),
         save: (projectPath: string, servers: McpServer[]): Promise<void> =>
             ipcRenderer.invoke("mcp:save", { projectPath, servers })
+    },
+    triggers: {
+        apply: (list: PipelineTrigger[]): Promise<void> => ipcRenderer.invoke("triggers:apply", list),
+        onFired: (cb: (p: { triggerId: string }) => void): (() => void) => {
+            const h = (_e: unknown, p: { triggerId: string }): void => cb(p)
+            ipcRenderer.on("trigger:fired", h)
+            return () => ipcRenderer.removeListener("trigger:fired", h)
+        }
     },
     rec: {
         start: (termId: string): Promise<void> => ipcRenderer.invoke("rec:start", termId),

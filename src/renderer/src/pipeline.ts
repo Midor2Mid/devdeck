@@ -28,6 +28,19 @@ export interface Pipeline {
     steps: PipelineStep[]
 }
 
+/** A file-watch trigger that auto-runs a pipeline when matching files change. */
+export interface PipelineTrigger {
+    id: string
+    enabled: boolean
+    pipelineId: string
+    /** Project directory to watch recursively. */
+    projectPath: string
+    /** Glob to match changed files (relative). "" = any file. */
+    glob: string
+    /** Quiet period after the last change before firing, ms. */
+    debounceMs: number
+}
+
 export type PipelineRunStatus = "running" | "waiting" | "done" | "stopped" | "error"
 
 export interface PipelineRun {

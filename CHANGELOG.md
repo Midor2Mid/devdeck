@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.7 — 2026-06-28
+
+- **Pipeline file-triggers** — auto-run a pipeline when files matching a glob
+  change in a project. Configure in Settings → Pipelines → File triggers
+  (project, glob like `src/**/*.cs`, target pipeline, debounce). Triggers are
+  **off by default**; a fired trigger switches to the project and runs the
+  pipeline, and won't start while another run is in progress. Watching ignores
+  `node_modules`, `.git`, build output, etc. Fires are logged to the activity feed.
+- Also lands in-progress API **request collections** (Postman-style saved
+  requests sidebar) alongside the existing environments work.
+
 ## 0.1.6 — 2026-06-28
 
 - **Per-step success gates** — a pipeline step can now require its agent's output

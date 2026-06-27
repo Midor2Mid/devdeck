@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import { applyTheme, THEMES, type ThemeId } from "./themes"
-import type { Pipeline } from "./pipeline"
+import type { Pipeline, PipelineTrigger } from "./pipeline"
 import type { KvRow } from "./components/KeyValueEditor"
 
 /** A named set of {{variables}} for the API client (e.g. dev / UAT / PROD). */
@@ -8,6 +8,28 @@ export interface Environment {
     id: string
     name: string
     vars: KvRow[]
+}
+
+export type ApiBodyType = "none" | "json" | "form"
+
+/** A saved API request (the full editable state of the API client). */
+export interface SavedRequest {
+    id: string
+    name: string
+    method: string
+    url: string
+    params: KvRow[]
+    headers: KvRow[]
+    bodyType: ApiBodyType
+    bodyText: string
+    formRows: KvRow[]
+}
+
+/** A named folder of saved requests. */
+export interface Collection {
+    id: string
+    name: string
+    requests: SavedRequest[]
 }
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
@@ -79,10 +101,12 @@ export interface AppSettings {
     agentIdleMs: number
     snippets: Snippet[]
     pipelines: Pipeline[]
+    triggers: PipelineTrigger[]
     gitAccounts: GitAccount[]
     sshProfiles: SshProfile[]
     environments: Environment[]
     activeEnvId: string | null
+    collections: Collection[]
     appearance: {
         theme: ThemeId
         accent: string
@@ -169,10 +193,12 @@ const DEFAULTS: AppSettings = {
             ]
         }
     ],
+    triggers: [],
     gitAccounts: [],
     sshProfiles: [],
     environments: [],
     activeEnvId: null,
+    collections: [],
     appearance: {
         theme: "sumi",
         accent: DEFAULT_ACCENT
@@ -194,11 +220,13 @@ interface SettingsState extends AppSettings {
     setAgentIdleMs: (ms: number) => void
     setSnippets: (snippets: Snippet[]) => void
     setPipelines: (pipelines: Pipeline[]) => void
+    setTriggers: (triggers: PipelineTrigger[]) => void
     setGitAccounts: (accounts: GitAccount[]) => void
     setSshProfiles: (profiles: SshProfile[]) => void
     setEnvironments: (environments: Environment[]) => void
     setActiveEnv: (id: string | null) => void
     activeEnv: () => Environment | undefined
+    setCollections: (collections: Collection[]) => void
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
@@ -214,8 +242,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced — accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, environments, activeEnvId, appearance, remote } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, gitAccounts, sshProfiles, environments, activeEnvId, appearance, remote })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -236,6 +264,11 @@ export const useSettings = create<SettingsState>((set, get) => {
         else window.api.server.stop()
     }
 
+    // Push the enabled file-triggers to the main-process watcher.
+    const applyTriggers = (): void => {
+        window.api.triggers.apply(get().triggers.filter((t) => t.enabled))
+    }
+
     return {
         ...DEFAULTS,
         settingsOpen: false,
@@ -254,16 +287,19 @@ export const useSettings = create<SettingsState>((set, get) => {
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     snippets: raw.snippets ?? DEFAULTS.snippets,
                     pipelines: raw.pipelines ?? DEFAULTS.pipelines,
+                    triggers: raw.triggers ?? DEFAULTS.triggers,
                     gitAccounts: raw.gitAccounts ?? DEFAULTS.gitAccounts,
                     sshProfiles: raw.sshProfiles ?? DEFAULTS.sshProfiles,
                     environments: raw.environments ?? DEFAULTS.environments,
                     activeEnvId: raw.activeEnvId ?? DEFAULTS.activeEnvId,
+                    collections: raw.collections ?? DEFAULTS.collections,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote }
                 })
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
             applyServer()
+            applyTriggers()
         },
 
         setTerminal: (patch) => {
@@ -290,6 +326,11 @@ export const useSettings = create<SettingsState>((set, get) => {
             set({ pipelines })
             persist()
         },
+        setTriggers: (triggers) => {
+            set({ triggers })
+            applyTriggers()
+            persist()
+        },
         setGitAccounts: (gitAccounts) => {
             set({ gitAccounts })
             persist()
@@ -311,6 +352,10 @@ export const useSettings = create<SettingsState>((set, get) => {
             persist()
         },
         activeEnv: () => get().environments.find((e) => e.id === get().activeEnvId),
+        setCollections: (collections) => {
+            set({ collections })
+            persist()
+        },
         agentById: (id) => get().agents.find((a) => a.id === id),
         setAppearance: (patch) => {
             set((s) => {
@@ -344,6 +389,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             set({ ...DEFAULTS })
             applyTheme(DEFAULTS.appearance.theme, DEFAULTS.appearance.accent)
             applyServer()
+            applyTriggers()
             persist()
         },
 

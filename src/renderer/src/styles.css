@@ -1171,6 +1171,13 @@ select:focus {
 .api-panel {
     height: 100%;
     display: flex;
+    flex-direction: row;
+    min-height: 0;
+}
+.api-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
     flex-direction: column;
     padding: 18px;
     gap: 12px;
@@ -1181,6 +1188,158 @@ select:focus {
 }
 .api-bar select {
     width: 100px;
+}
+.api-toggle {
+    flex: none;
+    padding: 5px 10px;
+}
+
+/* ---------- collections sidebar ---------- */
+.col-sidebar {
+    width: 230px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-soft);
+    background: var(--bg);
+}
+.col-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px 8px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.col-new {
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 6px;
+}
+.col-new:hover {
+    color: var(--accent-soft);
+    background: transparent;
+}
+.col-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px 12px;
+}
+.col-empty {
+    padding: 10px 8px;
+}
+.col-group {
+    margin-bottom: 4px;
+}
+.col-group-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.col-group-head:hover {
+    background: var(--bg-3);
+}
+.col-caret {
+    color: var(--faint);
+    width: 12px;
+    flex: none;
+}
+.col-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+.col-rename {
+    flex: 1;
+    padding: 2px 6px;
+    font-size: 12px;
+}
+.col-count {
+    font-size: 10px;
+    color: var(--faint);
+}
+.col-del {
+    border: none;
+    background: transparent;
+    color: var(--faint);
+    padding: 0 4px;
+    opacity: 0;
+}
+.col-group-head:hover .col-del,
+.col-req:hover .col-del {
+    opacity: 1;
+}
+.col-del:hover {
+    color: var(--danger);
+    background: transparent;
+}
+.col-req {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 6px 5px 22px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.col-req:hover {
+    background: var(--bg-3);
+}
+.col-req.active {
+    background: var(--bg-3);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+.col-method {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--muted);
+    width: 38px;
+    flex: none;
+}
+.col-method.m-get { color: var(--moss); }
+.col-method.m-post { color: var(--accent-soft); }
+.col-method.m-put,
+.col-method.m-patch { color: var(--clay); }
+.col-method.m-delete { color: var(--danger); }
+.col-req-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+/* ---------- save dialog ---------- */
+.save-modal {
+    width: 440px;
+    max-width: 90vw;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    padding: 18px 20px;
+}
+.save-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.save-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
 }
 .api-url {
     flex: 1;
@@ -2623,6 +2782,61 @@ select:focus {
 }
 .pipeline-gate {
     color: var(--accent-soft);
+}
+
+/* ---------- File triggers editor ---------- */
+.triggers-block {
+    margin-top: 8px;
+    border-top: 1px solid var(--border-soft);
+}
+.trigger-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border-soft);
+    border-radius: 7px;
+    background: var(--bg-3);
+}
+.trigger-row.on {
+    border-color: var(--accent);
+}
+.trigger-enable {
+    display: inline-flex;
+    align-items: center;
+}
+.trigger-enable input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+}
+.trigger-project {
+    flex: none;
+    width: 120px;
+}
+.trigger-glob {
+    flex: 1;
+    min-width: 90px;
+    font-size: 12px;
+}
+.trigger-arrow {
+    color: var(--faint);
+}
+.trigger-pipeline {
+    flex: none;
+    width: 150px;
+}
+.trigger-debounce {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+.trigger-debounce input {
+    width: 64px;
 }
 
 /* ---------- Toasts ---------- */

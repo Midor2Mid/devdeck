@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useSettings } from "../settings"
+import { useSettings, type Environment } from "../settings"
 import { KeyValueEditor, emptyRow } from "./KeyValueEditor"
 
 export function EnvManager({ onClose }: { onClose: () => void }): JSX.Element {
@@ -21,7 +21,7 @@ export function EnvManager({ onClose }: { onClose: () => void }): JSX.Element {
         setSelId(env.id)
     }
 
-    const updateSel = (patch: Partial<{ name: string; vars: typeof sel.vars }>): void => {
+    const updateSel = (patch: Partial<Pick<Environment, "name" | "vars">>): void => {
         if (!sel) return
         setEnvironments(environments.map((e) => (e.id === sel.id ? { ...e, ...patch } : e)))
     }

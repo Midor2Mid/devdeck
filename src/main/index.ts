@@ -14,6 +14,8 @@ import { gitStatus, getIdentity, setIdentity } from "./git"
 import { readMcp, writeMcp, type McpServer } from "./mcp"
 import * as browserNet from "./browserNet"
 import * as recorder from "./recorder"
+import * as triggers from "./triggers"
+import type { PipelineTrigger } from "./triggers"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -68,6 +70,17 @@ function registerIpc(): void {
         const buf = ptyMgr.getBuffer(opts.id)
         if (buf && !e.sender.isDestroyed()) e.sender.send("pty:data", { id: opts.id, data: buf })
     })
+    // --- Pipeline file-triggers ---
+    triggers.onTriggerFired((triggerId) => {
+        if (mainWindow && !mainWindow.isDestroyed())
+            mainWindow.webContents.send("trigger:fired", { triggerId })
+    })
+    ipcMain.handle("triggers:apply", (_e, list: PipelineTrigger[]) => {
+        // Confine each watch to an open project root.
+        const ok = (list ?? []).filter((t) => inProject(t.projectPath))
+        triggers.applyTriggers(ok)
+    })
+
     ipcMain.on("pty:input", (_e, { id, data }) => ptyMgr.writePty(id, data))
     ipcMain.on("pty:resize", (_e, { id, cols, rows }) => ptyMgr.resizePty(id, cols, rows))
     ipcMain.on("pty:kill", (_e, { id }) => ptyMgr.killPty(id))
