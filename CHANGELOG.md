@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3 — 2026-06-28
+
+- **Browser network capture** — Comment Mode's "Send to AI" now includes captured
+  network requests (summary + failed/4xx/5xx) alongside comments, console, and screenshot.
+- **API smart-paste** — paste a cURL command into the URL bar and it auto-parses.
+- **Activity feed** (⧗) — agent events (started / needs-attention / closed) across all
+  projects; click to jump.
+- **Canvas connectors** — link terminal cards with ⚯; lines follow pan/zoom; persisted.
+
 ## 0.1.2 — 2026-06-28
 
 - **Command palette** (`Ctrl+Shift+P`): fuzzy-run any action — views, layouts, themes,

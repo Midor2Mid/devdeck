@@ -1,6 +1,6 @@
 {
   "name": "devdeck",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A command deck for terminal-first, Claude-driven development.",
   "author": "Raymond Tran",
   "license": "MIT",
