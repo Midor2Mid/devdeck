@@ -111,6 +111,13 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] Theme-aware scrollbars
 - [ ] Later: spacing/typography theming (Zen's airiness), per-theme density
 
+## Milestone 11 — installable app + robustness ✅ (2026-06-27)
+
+- [x] **Packaging** via electron-builder (NSIS + portable); asar-unpack for node-pty / sqlite-wasm / xterm; ensō app icon; verified the packaged `DevDeck.exe` launches standalone
+- [x] **Error boundary** (no more white-screen on a render error)
+- [x] Window bounds + last-view restored across restarts
+- [ ] Later: code signing; auto-update
+
 ## Later / maybe (parking lot)
 
 - Command palette (Ctrl+P) for projects/files/actions

@@ -24,6 +24,17 @@ To build the bundled output:
 npm run build      # bundle main + preload + renderer into out/
 ```
 
+To package an installable Windows app:
+
+```bash
+npm run package        # NSIS installer + portable .exe in release/
+npm run package:dir    # just the unpacked app in release/win-unpacked/ (faster)
+```
+
+Native/WASM deps (`@lydell/node-pty`, `node-sqlite3-wasm`, `@xterm/xterm`) are
+unpacked from the asar archive automatically (see the `build` field in
+`package.json`). Builds are unsigned.
+
 > **Toolchain note:** pinned to Electron 33 + Vite 5 because Electron 42 / Vite 7
 > require Node ≥ 22.12, and this machine runs 22.11. Bump Node to the latest 22 LTS
 > to move up to the newest Electron later (see `ROADMAP.md` decisions log).

@@ -9,7 +9,9 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "start": "electron-vite preview"
+    "start": "electron-vite preview",
+    "package": "electron-vite build && electron-builder",
+    "package:dir": "electron-vite build && electron-builder --dir"
   },
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.12",
@@ -38,8 +40,38 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
     "typescript": "^5.7.2",
     "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.devdeck.app",
+    "productName": "DevDeck",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/node_modules/@lydell/**",
+      "**/node_modules/node-sqlite3-wasm/**",
+      "**/node_modules/@xterm/xterm/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
