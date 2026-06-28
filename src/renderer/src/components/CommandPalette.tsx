@@ -129,6 +129,7 @@ export function CommandPalette(): JSX.Element {
         })
         cmds.push({ id: "act:recordings", section: "Actions", title: "Recordings — replay a session", run: () => store.setRecordingsOpen(true) })
         cmds.push({ id: "act:activity", section: "Actions", title: "Open activity feed", run: () => store.setActivityOpen(true) })
+        cmds.push({ id: "act:shortcuts", section: "Help", title: "Keyboard shortcuts (F1)", run: () => store.setShortcutsOpen(true) })
         return cmds
     }, [agents, sshProfiles, pipelines, store, setAppearance, openSettings])
 

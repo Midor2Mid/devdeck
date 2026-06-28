@@ -22,6 +22,7 @@ export function Sidebar(): JSX.Element {
     const setActivityOpen = useStore((s) => s.setActivityOpen)
     const setWorkOpen = useStore((s) => s.setWorkOpen)
     const setStandupOpen = useStore((s) => s.setStandupOpen)
+    const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const agents = useSettings((s) => s.agents)
 
     const tabsByProject = useStore((s) => s.tabsByProject)
@@ -179,6 +180,13 @@ export function Sidebar(): JSX.Element {
                     </button>
                     <button className="gear-btn" title="Switch project (Ctrl+K)" onClick={openSwitcher}>
                         ⊞
+                    </button>
+                    <button
+                        className="gear-btn"
+                        title="Keyboard shortcuts (F1)"
+                        onClick={() => setShortcutsOpen(true)}
+                    >
+                        ?
                     </button>
                     <button className="gear-btn" title="Settings" onClick={openSettings}>
                         ⚙

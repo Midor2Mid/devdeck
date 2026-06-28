@@ -21,6 +21,8 @@ import { ReleaseBoard } from "./components/ReleaseBoard"
 import { StandupModal } from "./components/StandupModal"
 import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
+import { ShortcutsModal } from "./components/ShortcutsModal"
+import { IntroTip } from "./components/IntroTip"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -38,6 +40,8 @@ export function App(): JSX.Element {
     const openSwitcher = useStore((s) => s.openSwitcher)
     const closeSwitcher = useStore((s) => s.closeSwitcher)
     const paletteOpen = useStore((s) => s.paletteOpen)
+    const shortcutsOpen = useStore((s) => s.shortcutsOpen)
+    const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const activityOpen = useStore((s) => s.activityOpen)
     const recordingsOpen = useStore((s) => s.recordingsOpen)
     const worktreesOpen = useStore((s) => s.worktreesOpen)
@@ -81,7 +85,11 @@ export function App(): JSX.Element {
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
             const mod = e.ctrlKey || e.metaKey
-            if (mod && e.shiftKey && e.code === "KeyP") {
+            if (e.code === "F1") {
+                e.preventDefault()
+                const s = useStore.getState()
+                s.setShortcutsOpen(!s.shortcutsOpen)
+            } else if (mod && e.shiftKey && e.code === "KeyP") {
                 e.preventDefault()
                 e.stopPropagation()
                 const s = useStore.getState()
@@ -167,6 +175,7 @@ export function App(): JSX.Element {
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
             {paletteOpen && <CommandPalette />}
+            {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
             {activityOpen && <ActivityPanel />}
             {recordingsOpen && <RecordingsModal />}
             {worktreesOpen && <WorktreesModal />}
@@ -176,6 +185,7 @@ export function App(): JSX.Element {
             {standupOpen && <StandupModal />}
             <PipelineBar />
             <Toasts />
+            <IntroTip />
         </div>
     )
 }

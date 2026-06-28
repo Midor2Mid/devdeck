@@ -3722,6 +3722,102 @@ select:focus {
     }
 }
 
+/* ---------- shortcuts cheat-sheet + kbd ---------- */
+kbd {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 1px 6px;
+    color: var(--text);
+    white-space: nowrap;
+}
+.shortcuts-modal {
+    width: 640px;
+    max-width: 92vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    padding: 20px 22px;
+}
+.shortcuts-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.shortcuts-head h3 {
+    margin: 0;
+    font-size: 16px;
+}
+.shortcuts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 28px;
+}
+.shortcuts-group-title {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border-soft);
+    padding-bottom: 5px;
+    margin-bottom: 6px;
+}
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+}
+.shortcut-desc {
+    font-size: 13px;
+}
+.shortcuts-foot {
+    margin: 16px 0 0;
+}
+
+/* ---------- first-run intro tip ---------- */
+.intro-tip {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 75;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 12px 16px;
+    background: var(--bg-2);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+    max-width: 90vw;
+}
+.intro-tip-title {
+    font-weight: 600;
+    margin-bottom: 3px;
+}
+.intro-tip-text {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.intro-tip-actions {
+    display: flex;
+    gap: 8px;
+    flex: none;
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;

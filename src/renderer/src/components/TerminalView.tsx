@@ -97,7 +97,10 @@ export function TerminalView(): JSX.Element {
         return (
             <div className="empty-state">
                 <p>No project selected.</p>
-                <p className="muted">Add a project from the sidebar to start a terminal.</p>
+                <p className="muted">
+                    Click <b>+</b> next to <b>PROJECTS</b> in the sidebar to add a folder, or press{" "}
+                    <kbd>Ctrl + K</kbd> to switch projects. Press <kbd>F1</kbd> for all shortcuts.
+                </p>
             </div>
         )
     }

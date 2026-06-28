@@ -149,6 +149,8 @@ interface AppState extends Persisted {
     setComposerOpen: (open: boolean) => void
     paletteOpen: boolean
     setPaletteOpen: (open: boolean) => void
+    shortcutsOpen: boolean
+    setShortcutsOpen: (open: boolean) => void
 
     // Agent session awareness (runtime-only)
     agentStatus: Record<string, AgentStatus>
@@ -381,6 +383,7 @@ export const useStore = create<AppState>((set, get) => {
         switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
+        shortcutsOpen: false,
         agentStatus: {},
         lastAgentTermId: null,
         notifications: [],
@@ -461,6 +464,7 @@ export const useStore = create<AppState>((set, get) => {
         closeSwitcher: () => set({ switcherOpen: false }),
         setComposerOpen: (composerOpen) => set({ composerOpen }),
         setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+        setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 
         activeProject: () => get().projects.find((p) => p.id === get().activeId),
 
