@@ -236,7 +236,7 @@ export function applyTheme(id: ThemeId, accent?: string): void {
 // A *style* sets how surfaces feel: corner radius, border weight, depth, and
 // typography. It layers on top of the color themes above (style × theme are
 // orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
-export type StyleId = "wabi" | "minimal"
+export type StyleId = "wabi" | "minimal" | "neon"
 
 export interface DesignStyle {
     id: StyleId
@@ -254,6 +254,11 @@ export const STYLES: Record<StyleId, DesignStyle> = {
         id: "minimal",
         label: "Modern Minimal",
         description: "Crisp small radii, flat surfaces, tight spacing — Linear/Vercel-style."
+    },
+    neon: {
+        id: "neon",
+        label: "Neon",
+        description: "Glassy panels, glowing accents & scanlines. Best on a dark theme — set a cyan accent for classic neon."
     }
 }
 

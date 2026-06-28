@@ -3262,23 +3262,50 @@ select:focus {
    tighter spacing & type. Layers on top of any color theme.
    ============================================================ */
 [data-style="minimal"] {
-    --radius: 5px;
+    --radius: 4px;
+    --row-py: 5px;
+    --brand-weight: 600;
+    --brand-spacing: -0.01em;
+    /* tighter, crisper UI type */
+    font-family: -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: -0.006em;
 }
-/* Crisp corners on controls */
+/* Crisp, tight controls (smaller radius + denser padding) */
 [data-style="minimal"] button,
 [data-style="minimal"] input,
 [data-style="minimal"] select,
 [data-style="minimal"] textarea,
-[data-style="minimal"] .icon-action,
-[data-style="minimal"] .btn-min,
-[data-style="minimal"] .term-tab,
-[data-style="minimal"] .tab-rename,
+[data-style="minimal"] .tab-rename {
+    border-radius: 4px;
+    transition-duration: 0.08s;
+}
+[data-style="minimal"] button {
+    padding: 4px 10px;
+}
+[data-style="minimal"] input,
+[data-style="minimal"] select,
+[data-style="minimal"] textarea {
+    padding: 5px 8px;
+}
+[data-style="minimal"] .icon-action {
+    border-radius: 4px;
+    padding: 3px 6px;
+}
 [data-style="minimal"] .chip,
 [data-style="minimal"] .work-type,
-[data-style="minimal"] .work-status {
-    border-radius: 5px;
+[data-style="minimal"] .work-status,
+[data-style="minimal"] .agent-badge {
+    border-radius: 4px;
 }
-/* Cards / rows: small uniform radius */
+/* Denser tabs */
+[data-style="minimal"] .term-tab {
+    border-radius: 4px;
+    padding: 4px 9px;
+}
+[data-style="minimal"] .term-tabbar {
+    padding: 7px 10px;
+}
+/* Cards / rows: small uniform radius, no rounded puffiness */
 [data-style="minimal"] .switcher-card,
 [data-style="minimal"] .theme-card,
 [data-style="minimal"] .style-card,
@@ -3296,9 +3323,9 @@ select:focus {
 [data-style="minimal"] .term-pane,
 [data-style="minimal"] .promote-commits,
 [data-style="minimal"] .replay-term {
-    border-radius: 6px;
+    border-radius: 5px;
 }
-/* Large surfaces: modest radius + flat, restrained shadow */
+/* Large surfaces: small radius + near-flat depth (structure reads via borders) */
 [data-style="minimal"] .modal,
 [data-style="minimal"] .switcher,
 [data-style="minimal"] .recordings-modal,
@@ -3307,37 +3334,118 @@ select:focus {
 [data-style="minimal"] .standup-modal,
 [data-style="minimal"] .worktrees-modal,
 [data-style="minimal"] .settings-modal {
-    border-radius: 8px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+[data-style="minimal"] .modal {
+    padding: 15px 17px;
 }
 [data-style="minimal"] .agent-menu,
 [data-style="minimal"] .group-menu,
 [data-style="minimal"] .sb-id-menu,
 [data-style="minimal"] .pipeline-bar,
 [data-style="minimal"] .toast {
-    border-radius: 7px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+    border-radius: 5px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 3px 10px rgba(0, 0, 0, 0.14);
 }
 [data-style="minimal"] .drawer {
-    box-shadow: -6px 0 22px rgba(0, 0, 0, 0.24);
+    box-shadow: -1px 0 0 var(--border), -4px 0 16px rgba(0, 0, 0, 0.16);
 }
-/* Snappier interactions + a touch tighter label tracking */
-[data-style="minimal"] button,
-[data-style="minimal"] .icon-action,
-[data-style="minimal"] input,
-[data-style="minimal"] select,
-[data-style="minimal"] textarea {
-    transition-duration: 0.08s;
-}
-[data-style="minimal"] .brand,
-[data-style="minimal"] .m-brand {
-    letter-spacing: -0.01em;
-    font-weight: 600;
+[data-style="minimal"] .pipeline-bar {
+    border-left-width: 2px;
 }
 /* Flatten the accent "on" insets to a clean 1px line */
 [data-style="minimal"] .switcher-card.active,
 [data-style="minimal"] .style-card.on {
     box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* ============================================================
+   DESIGN STYLE: Neon — glassy surfaces, glowing accents, scan-
+   lines. Color comes from the active theme/accent (set a cyan
+   accent for classic neon). Best paired with a dark theme.
+   ============================================================ */
+[data-style="neon"] {
+    --radius: 9px;
+}
+/* Glowing wordmark */
+[data-style="neon"] .brand {
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+/* Accent buttons + active toggles bloom */
+[data-style="neon"] button.accent,
+[data-style="neon"] .icon-action.on {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent),
+        0 0 16px -3px var(--accent);
+}
+[data-style="neon"] button:hover {
+    box-shadow: 0 0 14px -4px var(--accent);
+}
+/* Focused inputs glow instead of just changing border */
+[data-style="neon"] input:focus,
+[data-style="neon"] select:focus,
+[data-style="neon"] textarea:focus {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 14px -4px var(--accent);
+}
+/* Active terminal tab + focused pane get a neon edge */
+[data-style="neon"] .term-tab.active {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+        0 0 14px -4px var(--accent);
+}
+[data-style="neon"] .term-pane.focused {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+        inset 0 0 22px -10px var(--accent);
+}
+/* Working/agent dots glow */
+[data-style="neon"] .tab-dot.status-working,
+[data-style="neon"] .dot.work {
+    box-shadow: 0 0 8px 1px var(--accent);
+}
+/* Glassy floating surfaces: translucent + blur + accent ring */
+[data-style="neon"] .modal,
+[data-style="neon"] .switcher,
+[data-style="neon"] .recordings-modal,
+[data-style="neon"] .changes-modal,
+[data-style="neon"] .release-modal,
+[data-style="neon"] .standup-modal,
+[data-style="neon"] .worktrees-modal,
+[data-style="neon"] .settings-modal,
+[data-style="neon"] .agent-menu,
+[data-style="neon"] .group-menu,
+[data-style="neon"] .sb-id-menu,
+[data-style="neon"] .pipeline-bar,
+[data-style="neon"] .toast,
+[data-style="neon"] .drawer {
+    backdrop-filter: blur(7px);
+    border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent),
+        0 14px 44px rgba(0, 0, 0, 0.5),
+        0 0 36px -10px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+[data-style="neon"] .accent,
+[data-style="neon"] .lc-sha,
+[data-style="neon"] .work-key {
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Signature scanline wash over everything */
+[data-style="neon"] .app::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 200;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(255, 255, 255, 0.022) 0 1px,
+        transparent 1px 3px
+    );
+}
+@media (prefers-reduced-motion: no-preference) {
+    [data-style="neon"] button.accent:hover {
+        transition: box-shadow 0.15s ease;
+    }
 }
 
 /* ---------- Toasts ---------- */

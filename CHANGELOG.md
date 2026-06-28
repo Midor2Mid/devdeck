@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3 — 2026-06-28
+
+- **Neon style** — a third design style: glassy blurred panels, glowing accents
+  (active tab, accent buttons, focused inputs/pane), glowing status dots, and a
+  subtle scanline wash. The glow is driven by your **accent color**, so it works
+  with any theme — set a cyan accent on a dark theme for the classic neon look.
+- **Modern Minimal, sharpened** — pushed further so it reads as a distinct style:
+  tighter radii (modal 12→6px, controls →4px), denser padding, near-flat depth
+  (crisp 1px edge instead of a soft glow), and tighter UI type.
+
 ## 0.2.2 — 2026-06-28
 
 - **Design styles** — a new **Style** picker in Settings → Appearance, independent

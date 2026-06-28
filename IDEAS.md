@@ -47,6 +47,6 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 
 ## Design
 
-- [~] **Design Style presets** (shape/type/depth, not just color) — system built
-      v0.2.2 with **Wabi-sabi** + **Modern Minimal**. Remaining candidates from the
-      gallery: Neon, Flat, Bauhaus, Phosphor CRT.
+- [~] **Design Style presets** (shape/type/depth, not just color) — shipped
+      **Wabi-sabi** + **Modern Minimal** (v0.2.2) + **Neon** (v0.2.3). Remaining
+      gallery candidates: Flat, Bauhaus, Phosphor CRT.

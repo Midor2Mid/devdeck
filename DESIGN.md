@@ -29,6 +29,8 @@ A "style" is more than color. When I ask for a look, these are the knobs:
 - **Design styles (selectable, Settings → Appearance):**
   - **Wabi-sabi** (default) — warm, soft, generous; hairline borders, soft depth.
   - **Modern Minimal** — crisp small radii, flat surfaces, tighter spacing/type.
+  - **Neon** — glassy panels, glowing accents, scanlines (glow uses the accent;
+    best on a dark theme with a cyan accent).
 - **Color themes within any style:** sumi (dark), washi (light), zen (dark).
 - Style × theme are independent (e.g. "Modern Minimal + zen dark").
 
