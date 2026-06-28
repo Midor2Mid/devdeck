@@ -287,7 +287,7 @@ export function applyTheme(id: ThemeId, accent?: string): void {
 // A *style* sets how surfaces feel: corner radius, border weight, depth, and
 // typography. It layers on top of the color themes above (style × theme are
 // orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
-export type StyleId = "wabi" | "minimal" | "neon" | "flat" | "bauhaus" | "crt" | "modern"
+export type StyleId = "wabi" | "minimal" | "neon" | "flat" | "bauhaus" | "crt" | "modern" | "lacquer"
 
 export interface DesignStyle {
     id: StyleId
@@ -330,6 +330,11 @@ export const STYLES: Record<StyleId, DesignStyle> = {
         id: "modern",
         label: "Modern Pro",
         description: "Contemporary product UI: clean 8px radii, subtle elevation, tight grotesk type, line icons. Pairs with Slate."
+    },
+    lacquer: {
+        id: "lacquer",
+        label: "Lacquer",
+        description: "Opulent urushi gloss: frosted-glass surfaces, gilded gradient buttons, a soft accent glow and deep layered shadows. Elegant, not flashy."
     }
 }
 

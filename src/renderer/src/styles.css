@@ -4552,3 +4552,139 @@ kbd {
     word-break: break-word;
     color: var(--text);
 }
+
+/* ============================================================
+   DESIGN STYLE: Lacquer — opulent urushi gloss. Frosted-glass
+   surfaces with a light sheen, gilded gradient CTAs, a soft accent
+   glow and deep layered shadows. Elegant/premium — distinct from
+   Neon's techy scanlines. Layers over any color theme.
+   ============================================================ */
+[data-style="lacquer"] {
+    --radius: 12px;
+}
+/* A faint radial sheen on the working area, like light catching lacquer. */
+[data-style="lacquer"] .main {
+    background:
+        radial-gradient(
+            130% 90% at 50% -15%,
+            color-mix(in srgb, var(--accent) 10%, transparent),
+            transparent 62%
+        ),
+        var(--bg-2);
+}
+/* Rail + sidebar become frosted glass. */
+[data-style="lacquer"] .rail,
+[data-style="lacquer"] .sidebar {
+    background: color-mix(in srgb, var(--bg) 68%, transparent);
+    backdrop-filter: blur(10px);
+}
+/* Glass controls with a subtle top highlight + smooth motion. */
+[data-style="lacquer"] button,
+[data-style="lacquer"] input,
+[data-style="lacquer"] select,
+[data-style="lacquer"] textarea,
+[data-style="lacquer"] .icon-action,
+[data-style="lacquer"] .term-tab,
+[data-style="lacquer"] .tab-rename {
+    border-radius: 10px;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--text) 7%, transparent), transparent 58%),
+        color-mix(in srgb, var(--bg-2) 70%, transparent);
+    backdrop-filter: blur(8px);
+    border-color: color-mix(in srgb, var(--text) 14%, transparent);
+    transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease,
+        color 0.18s ease;
+}
+[data-style="lacquer"] button:hover,
+[data-style="lacquer"] .icon-action:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+        0 6px 18px -8px rgba(0, 0, 0, 0.5);
+    color: var(--accent-soft);
+}
+/* Gilded accent CTA: vertical gradient, inner sheen, soft glow. */
+[data-style="lacquer"] button.accent {
+    background: linear-gradient(180deg, var(--accent-soft), var(--accent));
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    color: var(--bg-3);
+    box-shadow: 0 2px 10px -2px color-mix(in srgb, var(--accent) 55%, transparent),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+[data-style="lacquer"] button.accent:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+        0 6px 20px -2px color-mix(in srgb, var(--accent) 70%, transparent),
+        inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+/* Active tab: glass + a glowing accent underline. */
+[data-style="lacquer"] .term-tab.active {
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent),
+        color-mix(in srgb, var(--bg-2) 75%, transparent);
+    box-shadow: inset 0 -2px 0 var(--accent),
+        0 0 14px -4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* Active rail icon gets a soft halo. */
+[data-style="lacquer"] .rail-btn.on {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent),
+        0 0 16px -4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* The ensō brand mark catches a gilded glow. */
+[data-style="lacquer"] .rail-logo,
+[data-style="lacquer"] .brand-enso {
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+/* Cards & rows: frosted glass + lift; hover raises them. */
+[data-style="lacquer"] .switcher-card,
+[data-style="lacquer"] .theme-card,
+[data-style="lacquer"] .style-card,
+[data-style="lacquer"] .recording-row,
+[data-style="lacquer"] .work-item,
+[data-style="lacquer"] .wt-row,
+[data-style="lacquer"] .pipe-edit,
+[data-style="lacquer"] .pipe-step,
+[data-style="lacquer"] .lane,
+[data-style="lacquer"] .trigger-row,
+[data-style="lacquer"] .git-account,
+[data-style="lacquer"] .find-bar,
+[data-style="lacquer"] .term-pane {
+    border-radius: 12px;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--text) 5%, transparent), transparent 50%),
+        color-mix(in srgb, var(--bg-2) 72%, transparent);
+    backdrop-filter: blur(6px);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 10%, transparent),
+        0 8px 26px -12px rgba(0, 0, 0, 0.6);
+    transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+[data-style="lacquer"] .switcher-card:hover,
+[data-style="lacquer"] .theme-card:hover,
+[data-style="lacquer"] .style-card:hover,
+[data-style="lacquer"] .work-item:hover {
+    transform: translateY(-2px);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 14%, transparent),
+        0 12px 30px -10px rgba(0, 0, 0, 0.65),
+        0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* Floating surfaces: heavy frosted glass, deep shadow, gilded ring. */
+[data-style="lacquer"] .modal,
+[data-style="lacquer"] .switcher,
+[data-style="lacquer"] .recordings-modal,
+[data-style="lacquer"] .changes-modal,
+[data-style="lacquer"] .release-modal,
+[data-style="lacquer"] .standup-modal,
+[data-style="lacquer"] .worktrees-modal,
+[data-style="lacquer"] .settings-modal,
+[data-style="lacquer"] .agent-menu,
+[data-style="lacquer"] .group-menu,
+[data-style="lacquer"] .sb-id-menu,
+[data-style="lacquer"] .pipeline-bar,
+[data-style="lacquer"] .toast {
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--text) 7%, transparent), transparent 42%),
+        color-mix(in srgb, var(--bg-2) 82%, transparent);
+    backdrop-filter: blur(16px);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
+        0 24px 60px -16px rgba(0, 0, 0, 0.7);
+}
