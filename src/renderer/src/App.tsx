@@ -3,6 +3,8 @@ import { Allotment } from "allotment"
 import { useStore, type MainView } from "./store"
 import { useSettings } from "./settings"
 import { Sidebar } from "./components/Sidebar"
+import { Rail } from "./components/Rail"
+import { Icon } from "./components/Icon"
 import { TerminalView } from "./components/TerminalView"
 import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
@@ -34,7 +36,7 @@ const VIEWS: { key: MainView; label: string }[] = [
 ]
 
 export function App(): JSX.Element {
-    const { init, view, setView, activeProject } = useStore()
+    const { init, view, activeProject } = useStore()
     const loadSettings = useSettings((s) => s.load)
     const settingsOpen = useSettings((s) => s.settingsOpen)
     const switcherOpen = useStore((s) => s.switcherOpen)
@@ -108,6 +110,8 @@ export function App(): JSX.Element {
     return (
         <div className="app">
             <div className="app-body">
+            <Rail />
+            <div className="app-split">
             <Allotment proportionalLayout={false}>
                 <Allotment.Pane minSize={180} preferredSize={240} maxSize={420}>
                     <Sidebar />
@@ -115,24 +119,26 @@ export function App(): JSX.Element {
                 <Allotment.Pane>
                     <div className="main">
                         <div className="topbar">
-                            <div className="view-tabs">
-                                {VIEWS.map((v) => (
-                                    <button
-                                        key={v.key}
-                                        className={"view-tab" + (view === v.key ? " active" : "")}
-                                        onClick={() => setView(v.key)}
-                                    >
-                                        {v.label}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="topbar-project">
+                            <div className="topbar-crumb">
+                                <span className="crumb-view">{VIEWS.find((v) => v.key === view)?.label}</span>
                                 {project ? (
-                                    <span title={project.path}>{project.path}</span>
+                                    <span className="crumb-sep">/</span>
+                                ) : null}
+                                {project ? (
+                                    <span className="crumb-proj" title={project.path}>{project.name}</span>
                                 ) : (
                                     <span className="muted">No project</span>
                                 )}
                             </div>
+                            <button
+                                className="cmd-pill"
+                                onClick={() => useStore.getState().setPaletteOpen(true)}
+                                title="Command palette (Ctrl+Shift+P)"
+                            >
+                                <Icon name="search" size={14} />
+                                <span>Search or run…</span>
+                                <span className="cmd-kbd">⌘K</span>
+                            </button>
                         </div>
 
                         <div className="panels">
@@ -171,6 +177,7 @@ export function App(): JSX.Element {
                     </div>
                 </Allotment.Pane>
             </Allotment>
+            </div>
             </div>
             <StatusBar />
             {settingsOpen && <SettingsModal />}

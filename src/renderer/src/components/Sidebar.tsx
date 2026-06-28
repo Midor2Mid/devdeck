@@ -19,12 +19,7 @@ const UNGROUPED = "__ungrouped__"
 export function Sidebar(): JSX.Element {
     const { projects, activeId, addProject, removeProject, setActiveProject, setProjectGroup } =
         useStore()
-    const openSettings = useSettings((s) => s.openSettings)
     const openSwitcher = useStore((s) => s.openSwitcher)
-    const setActivityOpen = useStore((s) => s.setActivityOpen)
-    const setWorkOpen = useStore((s) => s.setWorkOpen)
-    const setStandupOpen = useStore((s) => s.setStandupOpen)
-    const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const agents = useSettings((s) => s.agents)
 
     const tabsByProject = useStore((s) => s.tabsByProject)
@@ -164,42 +159,9 @@ export function Sidebar(): JSX.Element {
         <div className="sidebar">
             <div className="sidebar-header">
                 <span className="brand">DevDeck</span>
-                <div className="header-actions">
-                    <button
-                        className="gear-btn"
-                        title="Work — your Jira / Azure items"
-                        onClick={() => setWorkOpen(true)}
-                    >
-                        <Icon name="work" />
-                    </button>
-                    <button
-                        className="gear-btn"
-                        title="Activity feed"
-                        onClick={() => setActivityOpen(true)}
-                    >
-                        <Icon name="activity" />
-                    </button>
-                    <button
-                        className="gear-btn"
-                        title="Standup / worklog"
-                        onClick={() => setStandupOpen(true)}
-                    >
-                        <Icon name="list" />
-                    </button>
-                    <button className="gear-btn" title="Switch project (Ctrl+K)" onClick={openSwitcher}>
-                        <Icon name="layers" />
-                    </button>
-                    <button
-                        className="gear-btn"
-                        title="Keyboard shortcuts (F1)"
-                        onClick={() => setShortcutsOpen(true)}
-                    >
-                        <Icon name="help" />
-                    </button>
-                    <button className="gear-btn" title="Settings" onClick={openSettings}>
-                        <Icon name="settings" />
-                    </button>
-                </div>
+                <button className="gear-btn" title="Switch project (Ctrl+K)" onClick={openSwitcher}>
+                    <Icon name="layers" />
+                </button>
             </div>
 
             <div className="sidebar-section-title">

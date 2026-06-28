@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 — 2026-06-28
+
+- **Slim icon-rail layout** — primary navigation moved to a 58px icon rail on the
+  far left: the five views (terminal / editor / API / database / browser) switch
+  from the rail with an active accent indicator, and the cross-cutting tools
+  (work, activity, standup, release, shortcuts, settings) sit at its foot. The
+  sidebar slimmed to projects + sessions, and the top bar is now a breadcrumb +
+  a **⌘K command pill**. Completes the modernization.
+
 ## 0.3.0 — 2026-06-28
 
 Modernization pass — DevDeck looks like a contemporary product now.

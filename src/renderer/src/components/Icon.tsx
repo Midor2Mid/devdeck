@@ -31,6 +31,10 @@ export type IconName =
     | "release"
     | "flag"
     | "broadcast"
+    | "code"
+    | "send"
+    | "database"
+    | "appWindow"
 
 const P: Record<IconName, JSX.Element> = {
     terminal: (
@@ -161,6 +165,31 @@ const P: Record<IconName, JSX.Element> = {
         <>
             <circle cx="12" cy="12" r="2" />
             <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
+        </>
+    ),
+    code: (
+        <>
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+        </>
+    ),
+    send: (
+        <>
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+        </>
+    ),
+    database: (
+        <>
+            <ellipse cx="12" cy="5" rx="9" ry="3" />
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+        </>
+    ),
+    appWindow: (
+        <>
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <line x1="2" y1="9" x2="22" y2="9" />
         </>
     )
 }

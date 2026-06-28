@@ -49,4 +49,4 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 
 - [x] **Design Style presets** — six shipped (v0.2.2–v0.2.6) + **Modern Pro**
       (v0.3.0). **Modernization** (v0.3.0): line-icon system, Slate theme, Modern
-      Pro default. Remaining: slim icon-rail layout + top command bar (structural).
+      Pro default. Slim icon-rail layout + ⌘K command-bar topbar (v0.3.1). DONE.

@@ -109,7 +109,79 @@ select:focus {
 .app-body {
     flex: 1;
     min-height: 0;
+    display: flex;
+    flex-direction: row;
+}
+.app-split {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
     position: relative;
+}
+
+/* ---------- Slim icon rail (primary nav) ---------- */
+.rail {
+    width: 58px;
+    flex: none;
+    background: var(--bg);
+    border-right: 1px solid var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 4px;
+}
+.rail-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 10px;
+    font-weight: 800;
+    font-size: 15px;
+    color: var(--bg);
+    background: linear-gradient(145deg, var(--accent), var(--accent-soft));
+}
+.rail-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.rail-spacer {
+    flex: 1;
+}
+.rail-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+.rail-btn:hover {
+    color: var(--text);
+    background: var(--bg-2);
+}
+.rail-btn.on {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.rail-btn.on::before {
+    content: "";
+    position: absolute;
+    left: -12px;
+    top: 9px;
+    bottom: 9px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--accent);
 }
 .statusbar {
     flex: none;
@@ -658,6 +730,60 @@ button .ic,
     white-space: nowrap;
     font-size: 12px;
     color: var(--faint);
+}
+/* Topbar breadcrumb + command pill (rail-layout) */
+.topbar-crumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+}
+.crumb-view {
+    color: var(--text);
+    font-weight: 600;
+}
+.crumb-sep {
+    color: var(--faint);
+}
+.crumb-proj {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cmd-pill {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 240px;
+    max-width: 38vw;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-3);
+    color: var(--faint);
+    font-size: 12.5px;
+    cursor: text;
+}
+.cmd-pill:hover {
+    border-color: var(--accent);
+    color: var(--muted);
+}
+.cmd-pill > span:nth-of-type(1) {
+    flex: 1;
+    text-align: left;
+}
+.cmd-kbd {
+    font-family: var(--mono, monospace);
+    font-size: 10.5px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 5px;
+    color: var(--muted);
 }
 .panels {
     flex: 1;
