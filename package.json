@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "electron-vite build && electron-builder",
-    "package:dir": "electron-vite build && electron-builder --dir"
+    "package:dir": "electron-vite build && electron-builder --dir",
+    "cert:make": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-signing-cert.ps1",
+    "package:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-signed.ps1"
   },
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.12",
