@@ -9,11 +9,11 @@ import { Icon, type IconName } from "./Icon"
  * Replaces the old text view-tabs + sidebar header buttons.
  */
 const VIEW_NAV: { view: MainView; icon: IconName; label: string }[] = [
-    { view: "terminal", icon: "terminal", label: "Terminals" },
-    { view: "editor", icon: "code", label: "Editor" },
-    { view: "api", icon: "send", label: "API client" },
-    { view: "database", icon: "database", label: "Database" },
-    { view: "browser", icon: "appWindow", label: "Browser" }
+    { view: "terminal", icon: "terminal", label: "Terminals — multi-agent sessions, splits & layouts" },
+    { view: "editor", icon: "code", label: "Editor — browse & edit project files (Monaco)" },
+    { view: "api", icon: "send", label: "API client — test requests, environments & collections" },
+    { view: "database", icon: "database", label: "Database — query Postgres / MySQL / SQLite" },
+    { view: "browser", icon: "appWindow", label: "Browser — embedded, with send-to-AI" }
 ]
 
 export function Rail(): JSX.Element {
@@ -36,7 +36,8 @@ export function Rail(): JSX.Element {
                     <button
                         key={v.view}
                         className={"rail-btn" + (view === v.view ? " on" : "")}
-                        title={v.label}
+                        data-tip={v.label}
+                        data-tip-pos="right"
                         onClick={() => setView(v.view)}
                     >
                         <Icon name={v.icon} size={20} />
@@ -45,22 +46,22 @@ export function Rail(): JSX.Element {
             </div>
             <div className="rail-spacer" />
             <div className="rail-group">
-                <button className="rail-btn" title="Work — Jira / Azure items" onClick={() => setWorkOpen(true)}>
+                <button className="rail-btn" data-tip="Work — your assigned Jira / Azure DevOps tickets; start a session from one" data-tip-pos="right" onClick={() => setWorkOpen(true)}>
                     <Icon name="work" size={20} />
                 </button>
-                <button className="rail-btn" title="Activity feed" onClick={() => setActivityOpen(true)}>
+                <button className="rail-btn" data-tip="Activity — agent events across all projects" data-tip-pos="right" onClick={() => setActivityOpen(true)}>
                     <Icon name="activity" size={20} />
                 </button>
-                <button className="rail-btn" title="Standup / worklog" onClick={() => setStandupOpen(true)}>
+                <button className="rail-btn" data-tip="Standup — generate today's worklog from git + activity" data-tip-pos="right" onClick={() => setStandupOpen(true)}>
                     <Icon name="list" size={20} />
                 </button>
-                <button className="rail-btn" title="Release board" onClick={() => setReleaseOpen(true)}>
+                <button className="rail-btn" data-tip="Release board — promote Dev → UAT → PROD" data-tip-pos="right" onClick={() => setReleaseOpen(true)}>
                     <Icon name="release" size={20} />
                 </button>
-                <button className="rail-btn" title="Keyboard shortcuts (F1)" onClick={() => setShortcutsOpen(true)}>
+                <button className="rail-btn" data-tip="Keyboard shortcuts (F1)" data-tip-pos="right" onClick={() => setShortcutsOpen(true)}>
                     <Icon name="help" size={20} />
                 </button>
-                <button className="rail-btn" title="Settings" onClick={() => openSettings()}>
+                <button className="rail-btn" data-tip="Settings — appearance, agents, snippets, remote…" data-tip-pos="right" onClick={() => openSettings()}>
                     <Icon name="settings" size={20} />
                 </button>
             </div>

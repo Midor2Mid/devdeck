@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3 — 2026-06-28
+
+- **Tooltips** — hover any icon button (the rail, terminal toolbar, sidebar,
+  status bar) and a styled tooltip explains what it does after a brief pause.
+  Hidden by default; rendered as a fixed-position chip so it never clips against
+  the rail or panes. Opt-in via `data-tip` — richer and more legible than the
+  old native title tooltips.
+
 ## 0.3.2 — 2026-06-28
 
 - **AI on the diff** — Review changes now has AI actions: **Review / Explain /

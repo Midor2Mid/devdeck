@@ -225,7 +225,7 @@ export function TerminalView(): JSX.Element {
                         <button
                             className="icon-action"
                             onClick={() => setMenuOpen((v) => !v)}
-                            title="Other agents…"
+                            data-tip="More agents & SSH hosts"
                         >
                             <Icon name="chevronDown" />
                         </button>
@@ -284,21 +284,21 @@ export function TerminalView(): JSX.Element {
                     <button
                         className={"icon-action" + (termLayout === "tabs" ? " on" : "")}
                         onClick={() => setTermLayout("tabs")}
-                        title="Tabs layout"
+                        data-tip="Tabs — one terminal at a time"
                     >
                         <Icon name="tabs" />
                     </button>
                     <button
                         className={"icon-action" + (termLayout === "grid" ? " on" : "")}
                         onClick={() => setTermLayout("grid")}
-                        title="Dashboard grid — all this project's terminals at once"
+                        data-tip="Grid — all this project's terminals at once"
                     >
                         <Icon name="grid" />
                     </button>
                     <button
                         className={"icon-action" + (termLayout === "canvas" ? " on" : "")}
                         onClick={() => setTermLayout("canvas")}
-                        title="Canvas — free-form board of all terminals"
+                        data-tip="Canvas — free-form board of all terminals"
                     >
                         <Icon name="canvas" />
                     </button>
@@ -306,7 +306,7 @@ export function TerminalView(): JSX.Element {
                     <button
                         className="icon-action"
                         onClick={() => splitActive("row", SHELL)}
-                        title="Split right (Ctrl+Shift+\\)"
+                        data-tip="Split right (Ctrl+Shift+\\)"
                         disabled={termLayout === "grid"}
                     >
                         <Icon name="splitH" />
@@ -314,21 +314,21 @@ export function TerminalView(): JSX.Element {
                     <button
                         className="icon-action"
                         onClick={() => splitActive("col", SHELL)}
-                        title="Split down (Ctrl+Shift+-)"
+                        data-tip="Split down (Ctrl+Shift+-)"
                     >
                         <Icon name="splitV" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => setFindOpen((v) => !v)}
-                        title="Find in terminal (Ctrl+Shift+F)"
+                        data-tip="Find in terminal (Ctrl+Shift+F)"
                     >
                         <Icon name="search" />
                     </button>
                     <button
                         className={"icon-action" + (composerOpen ? " on" : "")}
                         onClick={() => setComposerOpen(!composerOpen)}
-                        title="Prompt composer (Ctrl+Shift+I)"
+                        data-tip="Prompt composer — @file & /snippet autocomplete (Ctrl+Shift+I)"
                     >
                         <Icon name="pencil" />
                     </button>
@@ -337,12 +337,12 @@ export function TerminalView(): JSX.Element {
                         className={"icon-action" + (recordingActive ? " rec-on" : "")}
                         onClick={toggleRecord}
                         disabled={!!recordingTermId && !recordingActive}
-                        title={
+                        data-tip={
                             recordingActive
                                 ? "Stop recording — saves to .devdeck/recordings"
                                 : recordingTermId
                                   ? "A recording is in progress in another session"
-                                  : "Record this terminal"
+                                  : "Record this terminal (replay it later)"
                         }
                     >
                         <Icon name="record" size={13} />
@@ -350,21 +350,21 @@ export function TerminalView(): JSX.Element {
                     <button
                         className="icon-action"
                         onClick={() => setRecordingsOpen(true)}
-                        title="Recordings — replay a recorded session"
+                        data-tip="Recordings — replay a recorded session"
                     >
                         <Icon name="play" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => setWorktreesOpen(true)}
-                        title="Worktrees — run an agent in its own worktree"
+                        data-tip="Worktrees — run an agent in its own git worktree"
                     >
                         <Icon name="gitBranch" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => openChanges(activeProject.path, activeProject.name)}
-                        title="Review changes — stage / discard / commit"
+                        data-tip="Review changes — diff, AI review, stage / commit, open PR"
                     >
                         <Icon name="check" />
                     </button>

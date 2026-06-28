@@ -27,6 +27,7 @@ import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { IntroTip } from "./components/IntroTip"
 import { ConfirmDialog } from "./components/ConfirmDialog"
+import { TooltipLayer } from "./components/Tooltip"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -198,6 +199,7 @@ export function App(): JSX.Element {
             <Toasts />
             <IntroTip />
             <ConfirmDialog />
+            <TooltipLayer />
         </div>
     )
 }

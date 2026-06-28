@@ -122,7 +122,8 @@ export function StatusBar(): JSX.Element {
                 {project && (
                     <span
                         className="sb-item sb-identity"
-                        title="Release board — promote Dev → UAT → PROD"
+                        data-tip="Release board — promote Dev → UAT → PROD"
+                        data-tip-pos="top"
                         onClick={() => setReleaseOpen(true)}
                     >
                         <Icon name="release" size={12} /> release

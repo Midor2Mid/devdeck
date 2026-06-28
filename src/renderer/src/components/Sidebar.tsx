@@ -159,7 +159,7 @@ export function Sidebar(): JSX.Element {
         <div className="sidebar">
             <div className="sidebar-header">
                 <span className="brand">DevDeck</span>
-                <button className="gear-btn" title="Switch project (Ctrl+K)" onClick={openSwitcher}>
+                <button className="gear-btn" data-tip="Switch project (Ctrl+K)" data-tip-pos="bottom" onClick={openSwitcher}>
                     <Icon name="layers" />
                 </button>
             </div>
