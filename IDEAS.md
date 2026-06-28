@@ -34,8 +34,7 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
       (proxy support v0.2.0).
 - [x] **Release / promotion board (UAT→PROD)** — shipped v0.2.0 (git-ref stages,
       promote gaps, pre-flight checklist, commands/tag — no auto-push).
-- [ ] **Standup / worklog generator** — one click turns today's activity feed +
-      git history across projects into a summary to paste into Jira / standup.
+- [x] **Standup / worklog generator** — shipped v0.2.1.
 - [ ] **Record → share repro** — turn a terminal recording into a shareable
       bug-repro / PR artifact (asciinema-style link or GIF).
 - [ ] **Role-panel review** — on Claude Team, run a panel of agents with

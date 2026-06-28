@@ -21,6 +21,7 @@ export function Sidebar(): JSX.Element {
     const openSwitcher = useStore((s) => s.openSwitcher)
     const setActivityOpen = useStore((s) => s.setActivityOpen)
     const setWorkOpen = useStore((s) => s.setWorkOpen)
+    const setStandupOpen = useStore((s) => s.setStandupOpen)
     const agents = useSettings((s) => s.agents)
 
     const tabsByProject = useStore((s) => s.tabsByProject)
@@ -168,6 +169,13 @@ export function Sidebar(): JSX.Element {
                         onClick={() => setActivityOpen(true)}
                     >
                         ⧗
+                    </button>
+                    <button
+                        className="gear-btn"
+                        title="Standup / worklog"
+                        onClick={() => setStandupOpen(true)}
+                    >
+                        ▤
                     </button>
                     <button className="gear-btn" title="Switch project (Ctrl+K)" onClick={openSwitcher}>
                         ⊞

@@ -153,6 +153,19 @@ export interface WorkFetchResult {
     errors: { provider: WorkProvider; message: string }[]
 }
 
+export interface WorklogCommit {
+    sha: string
+    subject: string
+    when: string
+}
+export interface WorklogRepo {
+    name: string
+    path: string
+    branch: string
+    changes: number
+    commits: WorklogCommit[]
+}
+
 export interface ReleaseStage {
     id: string
     name: string
@@ -311,6 +324,10 @@ const api = {
     },
     shell: {
         open: (url: string): Promise<void> => ipcRenderer.invoke("shell:open", url)
+    },
+    worklog: {
+        collect: (repos: { name: string; path: string }[], sinceISO: string): Promise<WorklogRepo[]> =>
+            ipcRenderer.invoke("worklog:collect", { repos, sinceISO })
     },
     release: {
         config: (repo: string): Promise<ReleaseConfig> => ipcRenderer.invoke("release:config", repo),

@@ -20,6 +20,7 @@ import * as worktrees from "./worktrees"
 import * as changes from "./changes"
 import * as work from "./work"
 import * as release from "./release"
+import * as worklog from "./worklog"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -203,6 +204,12 @@ function registerIpc(): void {
     ipcMain.handle("git:worktreeRemove", (_e, { repoPath, path, deleteBranch }) => {
         guardPath(repoPath)
         return worktrees.removeWorktree(repoPath, path, deleteBranch)
+    })
+
+    // --- Worklog / standup ---
+    ipcMain.handle("worklog:collect", (_e, { repos, sinceISO }) => {
+        const ok = (repos ?? []).filter((r: { path: string }) => inProject(r.path))
+        return worklog.collect(ok, sinceISO)
     })
 
     // --- Release / promotion board ---

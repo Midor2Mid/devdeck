@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — 2026-06-28
+
+- **Standup / worklog generator** — the ▤ sidebar button (or command palette)
+  collects the commits you authored across every project in a time window
+  (Today / 24h / 3 days / 7 days), plus uncommitted work and the session's agent
+  activity, and renders an editable markdown standup: **Done / In progress /
+  Next**. Tweak it and **Copy markdown** to paste into Jira or your standup.
+  Commits are filtered to your git email per repo.
+
 ## 0.2.0 — 2026-06-28
 
 - **Release / promotion board** — model a project's deploy stages (Dev → UAT →
