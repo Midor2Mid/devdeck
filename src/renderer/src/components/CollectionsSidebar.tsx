@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { useSettings, type SavedRequest } from "../settings"
+import { useMemo, useState } from "react"
+import { useSettings, type SavedRequest, type Collection } from "../settings"
 import { ImportModal } from "./ImportModal"
 import { confirm } from "../confirm"
 
@@ -14,6 +14,8 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
     const [editId, setEditId] = useState<string | null>(null)
     const [importOpen, setImportOpen] = useState(false)
+    const [menuFor, setMenuFor] = useState<string | null>(null)
+    const [q, setQ] = useState("")
 
     const toggle = (id: string): void => {
         setCollapsed((prev) => {
@@ -58,6 +60,51 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
             )
     }
 
+    const duplicateRequest = (colId: string, reqId: string): void => {
+        setMenuFor(null)
+        setCollections(
+            collections.map((c) => {
+                if (c.id !== colId) return c
+                const idx = c.requests.findIndex((r) => r.id === reqId)
+                if (idx === -1) return c
+                const copy = { ...c.requests[idx], id: crypto.randomUUID(), name: c.requests[idx].name + " copy" }
+                const requests = [...c.requests]
+                requests.splice(idx + 1, 0, copy)
+                return { ...c, requests }
+            })
+        )
+    }
+
+    const moveRequest = (fromColId: string, reqId: string, toColId: string): void => {
+        setMenuFor(null)
+        if (fromColId === toColId) return
+        const req = collections.find((c) => c.id === fromColId)?.requests.find((r) => r.id === reqId)
+        if (!req) return
+        setCollections(
+            collections.map((c) => {
+                if (c.id === fromColId) return { ...c, requests: c.requests.filter((r) => r.id !== reqId) }
+                if (c.id === toColId) return { ...c, requests: [...c.requests, req] }
+                return c
+            })
+        )
+    }
+
+    // Filter requests by the search query (name / method / url). Empty collections
+    // are hidden while searching, and matches are force-expanded.
+    const searching = q.trim() !== ""
+    const view = useMemo<Collection[]>(() => {
+        if (!searching) return collections
+        const needle = q.trim().toLowerCase()
+        return collections
+            .map((c) => ({
+                ...c,
+                requests: c.requests.filter((r) =>
+                    `${r.name} ${r.method} ${r.url}`.toLowerCase().includes(needle)
+                )
+            }))
+            .filter((c) => c.requests.length > 0)
+    }, [collections, q, searching])
+
     return (
         <div className="col-sidebar">
             <div className="col-head">
@@ -71,6 +118,18 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                     </button>
                 </div>
             </div>
+            <div className="col-search">
+                <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Search requests…"
+                />
+                {searching && (
+                    <span className="col-search-clear" title="Clear" onClick={() => setQ("")}>
+                        ×
+                    </span>
+                )}
+            </div>
             {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
             <div className="col-scroll">
                 {collections.length === 0 && (
@@ -78,8 +137,11 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                         No saved requests yet. Build a request and press <strong>Save</strong>.
                     </div>
                 )}
-                {collections.map((col) => {
-                    const open = !collapsed.has(col.id)
+                {searching && view.length === 0 && (
+                    <div className="muted small col-empty">No requests match “{q}”.</div>
+                )}
+                {view.map((col) => {
+                    const open = searching || !collapsed.has(col.id)
                     return (
                         <div className="col-group" key={col.id}>
                             <div className="col-group-head">
@@ -134,12 +196,57 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                             className="col-del"
                                             onClick={(e) => {
                                                 e.stopPropagation()
-                                                deleteRequest(col.id, r.id)
+                                                setMenuFor(menuFor === r.id ? null : r.id)
                                             }}
-                                            title="Delete request"
+                                            title="More…"
                                         >
-                                            ×
+                                            ⋯
                                         </button>
+                                        {menuFor === r.id && (
+                                            <>
+                                                <div
+                                                    className="menu-backdrop"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        setMenuFor(null)
+                                                    }}
+                                                />
+                                                <div
+                                                    className="req-menu"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <div
+                                                        className="req-menu-item"
+                                                        onClick={() => duplicateRequest(col.id, r.id)}
+                                                    >
+                                                        Duplicate
+                                                    </div>
+                                                    <div
+                                                        className="req-menu-item danger"
+                                                        onClick={() => {
+                                                            setMenuFor(null)
+                                                            deleteRequest(col.id, r.id)
+                                                        }}
+                                                    >
+                                                        Delete
+                                                    </div>
+                                                    {collections.length > 1 && (
+                                                        <div className="req-menu-title">Move to</div>
+                                                    )}
+                                                    {collections
+                                                        .filter((c) => c.id !== col.id)
+                                                        .map((c) => (
+                                                            <div
+                                                                key={c.id}
+                                                                className="req-menu-item"
+                                                                onClick={() => moveRequest(col.id, r.id, c.id)}
+                                                            >
+                                                                → {c.name}
+                                                            </div>
+                                                        ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 ))}
                         </div>
