@@ -47,6 +47,6 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 
 ## Design
 
-- [x] **Design Style presets** (shape/type/depth, not just color) — COMPLETE.
-      All six shipped: Wabi-sabi + Modern Minimal (v0.2.2), Neon (v0.2.3),
-      Flat Vector (v0.2.4), Bauhaus (v0.2.5), Phosphor CRT (v0.2.6).
+- [x] **Design Style presets** — six shipped (v0.2.2–v0.2.6) + **Modern Pro**
+      (v0.3.0). **Modernization** (v0.3.0): line-icon system, Slate theme, Modern
+      Pro default. Remaining: slim icon-rail layout + top command bar (structural).

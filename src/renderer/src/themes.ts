@@ -1,7 +1,7 @@
 // Theme system: each theme is a full palette of the app's CSS custom properties
 // plus matching terminal (xterm) and editor (Monaco) colors. All wabi-sabi.
 
-export type ThemeId = "sumi" | "washi" | "zen"
+export type ThemeId = "sumi" | "washi" | "zen" | "slate"
 
 export interface XtermTheme {
     background: string
@@ -107,6 +107,25 @@ const ZEN_VARS = {
     "--danger": "#c2766a"
 }
 
+// Cool slate — modern neutral ground keeping the warm amber accent.
+const SLATE_VARS = {
+    "--bg": "#0c0e13",
+    "--bg-2": "#13161d",
+    "--bg-3": "#0a0c11",
+    "--panel": "#13161d",
+    "--border": "#252a35",
+    "--border-soft": "#1d212a",
+    "--text": "#e7eaf1",
+    "--muted": "#8b93a4",
+    "--faint": "#565d6c",
+    "--accent": "#eba65c",
+    "--accent-soft": "#f2bd83",
+    "--moss": "#5fce8f",
+    "--clay": "#eba65c",
+    "--ok": "#5fce8f",
+    "--danger": "#e9786b"
+}
+
 export const THEMES: Record<ThemeId, Theme> = {
     sumi: {
         id: "sumi",
@@ -170,6 +189,38 @@ export const THEMES: Record<ThemeId, Theme> = {
             brightCyan: "#4f7e7e",
             white: "#3a342b",
             brightWhite: "#1f1b15"
+        }
+    },
+    slate: {
+        id: "slate",
+        label: "Slate (modern)",
+        mode: "dark",
+        accent: "#eba65c",
+        vars: { ...SLATE_VARS, ...COMPACT },
+        monacoId: "devdeck-sumi",
+        termLineHeight: 1.1,
+        xterm: {
+            background: "#0a0c11",
+            foreground: "#e7eaf1",
+            cursor: "#eba65c",
+            cursorAccent: "#0a0c11",
+            selectionBackground: "#27303f",
+            black: "#0a0c11",
+            brightBlack: "#565d6c",
+            red: "#e9786b",
+            brightRed: "#f08a7e",
+            green: "#5fce8f",
+            brightGreen: "#7ad9a3",
+            yellow: "#eba65c",
+            brightYellow: "#f2bd83",
+            blue: "#6aa6ff",
+            brightBlue: "#8bbcff",
+            magenta: "#b69bf0",
+            brightMagenta: "#c9b4f5",
+            cyan: "#5fd0c4",
+            brightCyan: "#82ddd3",
+            white: "#e7eaf1",
+            brightWhite: "#f6f8fc"
         }
     },
     zen: {
@@ -236,7 +287,7 @@ export function applyTheme(id: ThemeId, accent?: string): void {
 // A *style* sets how surfaces feel: corner radius, border weight, depth, and
 // typography. It layers on top of the color themes above (style × theme are
 // orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
-export type StyleId = "wabi" | "minimal" | "neon" | "flat" | "bauhaus" | "crt"
+export type StyleId = "wabi" | "minimal" | "neon" | "flat" | "bauhaus" | "crt" | "modern"
 
 export interface DesignStyle {
     id: StyleId
@@ -274,6 +325,11 @@ export const STYLES: Record<StyleId, DesignStyle> = {
         id: "crt",
         label: "Phosphor CRT",
         description: "Retro terminal: monospace everything, scanlines, phosphor glow. Set a green accent on a dark theme."
+    },
+    modern: {
+        id: "modern",
+        label: "Modern Pro",
+        description: "Contemporary product UI: clean 8px radii, subtle elevation, tight grotesk type, line icons. Pairs with Slate."
     }
 }
 

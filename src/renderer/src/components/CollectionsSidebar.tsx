@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useSettings, type SavedRequest } from "../settings"
 import { ImportModal } from "./ImportModal"
+import { confirm } from "../confirm"
 
 interface Props {
     onLoad: (req: SavedRequest) => void
@@ -30,15 +31,31 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
     const renameCollection = (id: string, name: string): void => {
         setCollections(collections.map((c) => (c.id === id ? { ...c, name } : c)))
     }
-    const deleteCollection = (id: string): void => {
-        setCollections(collections.filter((c) => c.id !== id))
+    const deleteCollection = async (id: string): Promise<void> => {
+        const col = collections.find((c) => c.id === id)
+        const n = col?.requests.length ?? 0
+        const ok = await confirm({
+            title: "Delete collection",
+            message: `Delete "${col?.name ?? "collection"}"${n ? ` and its ${n} request${n === 1 ? "" : "s"}` : ""}? This can't be undone.`,
+            confirmLabel: "Delete",
+            danger: true
+        })
+        if (ok) setCollections(collections.filter((c) => c.id !== id))
     }
-    const deleteRequest = (colId: string, reqId: string): void => {
-        setCollections(
-            collections.map((c) =>
-                c.id === colId ? { ...c, requests: c.requests.filter((r) => r.id !== reqId) } : c
+    const deleteRequest = async (colId: string, reqId: string): Promise<void> => {
+        const req = collections.find((c) => c.id === colId)?.requests.find((r) => r.id === reqId)
+        const ok = await confirm({
+            title: "Delete request",
+            message: `Delete "${req?.name ?? "request"}"?`,
+            confirmLabel: "Delete",
+            danger: true
+        })
+        if (ok)
+            setCollections(
+                collections.map((c) =>
+                    c.id === colId ? { ...c, requests: c.requests.filter((r) => r.id !== reqId) } : c
+                )
             )
-        )
     }
 
     return (

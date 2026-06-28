@@ -3,14 +3,20 @@ import { shade, THEMES, STYLES } from "../src/renderer/src/themes"
 import { sshCommand } from "../src/renderer/src/settings"
 
 describe("design styles", () => {
-    it("registers all six design styles with labels", () => {
-        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "crt", "flat", "minimal", "neon", "wabi"])
-        expect(STYLES.wabi.label).toBeTruthy()
+    it("registers all design styles with labels", () => {
+        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "crt", "flat", "minimal", "modern", "neon", "wabi"])
         expect(STYLES.minimal.label).toBe("Modern Minimal")
         expect(STYLES.neon.label).toBe("Neon")
         expect(STYLES.flat.label).toBe("Flat Vector")
         expect(STYLES.bauhaus.label).toBe("Bauhaus")
         expect(STYLES.crt.label).toBe("Phosphor CRT")
+        expect(STYLES.modern.label).toBe("Modern Pro")
+    })
+
+    it("includes the Slate modern color theme", () => {
+        expect(THEMES.slate).toBeTruthy()
+        expect(THEMES.slate.mode).toBe("dark")
+        expect(THEMES.slate.vars["--bg"]).toBe("#0c0e13")
     })
 })
 

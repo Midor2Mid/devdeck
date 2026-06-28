@@ -26,12 +26,18 @@ A "style" is more than color. When I ask for a look, these are the knobs:
 
 ## Current direction
 
+- **Default look: Slate theme + Modern Pro style** (cool slate ground, warm amber
+  accent, clean 8px radii, line icons). This is the modern out-of-the-box identity.
+- **Icons:** a single inline-SVG line-icon set (`components/Icon.tsx`) — no Unicode
+  glyphs in chrome. Add new icons there, one 24-grid / 1.75 stroke / currentColor.
 - **Design styles (selectable, Settings → Appearance):**
-  - **Wabi-sabi** (default) — warm, soft, generous; hairline borders, soft depth.
+  - **Modern Pro** (default) — contemporary product UI; clean radii, subtle depth.
+  - **Wabi-sabi** — warm, soft, generous; hairline borders, soft depth.
   - **Modern Minimal** — crisp small radii, flat surfaces, tighter spacing/type.
   - **Neon** — glassy panels, glowing accents, scanlines (glow uses the accent;
     best on a dark theme with a cyan accent).
-- **Color themes within any style:** sumi (dark), washi (light), zen (dark).
+- **Color themes within any style:** slate (dark, default), sumi (dark),
+  washi (light), zen (dark).
 - Style × theme are independent (e.g. "Modern Minimal + zen dark").
 
 ## Do

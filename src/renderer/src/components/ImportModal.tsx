@@ -1,8 +1,16 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSettings } from "../settings"
 import { parseImport, type ImportResult } from "../importers"
 
 export function ImportModal({ onClose }: { onClose: () => void }): JSX.Element {
+    useEffect(() => {
+        const h = (e: KeyboardEvent): void => {
+            if (e.key === "Escape") onClose()
+        }
+        window.addEventListener("keydown", h)
+        return () => window.removeEventListener("keydown", h)
+    }, [onClose])
+
     const collections = useSettings((s) => s.collections)
     const setCollections = useSettings((s) => s.setCollections)
 

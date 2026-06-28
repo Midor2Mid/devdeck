@@ -209,8 +209,25 @@ select:focus {
     border: none;
     color: var(--muted);
     font-size: 15px;
-    padding: 2px 5px;
+    padding: 4px 6px;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+/* Line icons inherit text color and align cleanly inside controls. */
+.ic {
+    flex: none;
+    vertical-align: -0.14em;
+}
+button .ic,
+.sb-item .ic {
+    vertical-align: middle;
+}
+.icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 .gear-btn:hover {
     color: var(--accent-soft);
@@ -3722,6 +3739,76 @@ select:focus {
     }
 }
 
+/* ============================================================
+   DESIGN STYLE: Modern Pro — contemporary product UI. Clean 8px
+   radii, subtle elevation, snappy transitions, tight grotesk
+   type. Designed to pair with the Slate theme + line icons.
+   ============================================================ */
+[data-style="modern"] {
+    --radius: 8px;
+    letter-spacing: -0.011em;
+}
+[data-style="modern"] button,
+[data-style="modern"] input,
+[data-style="modern"] select,
+[data-style="modern"] textarea,
+[data-style="modern"] .icon-action,
+[data-style="modern"] .term-tab,
+[data-style="modern"] .tab-rename,
+[data-style="modern"] .chip,
+[data-style="modern"] .work-type,
+[data-style="modern"] .work-status {
+    border-radius: 7px;
+    transition-duration: 0.12s;
+}
+[data-style="modern"] .switcher-card,
+[data-style="modern"] .theme-card,
+[data-style="modern"] .style-card,
+[data-style="modern"] .recording-row,
+[data-style="modern"] .work-item,
+[data-style="modern"] .wt-row,
+[data-style="modern"] .pipe-edit,
+[data-style="modern"] .pipe-step,
+[data-style="modern"] .lane,
+[data-style="modern"] .trigger-row,
+[data-style="modern"] .git-account,
+[data-style="modern"] .activity-row,
+[data-style="modern"] .find-bar,
+[data-style="modern"] .term-pane,
+[data-style="modern"] .promote-commits,
+[data-style="modern"] .replay-term {
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 16px -10px rgba(0, 0, 0, 0.4);
+}
+[data-style="modern"] .modal,
+[data-style="modern"] .switcher,
+[data-style="modern"] .recordings-modal,
+[data-style="modern"] .changes-modal,
+[data-style="modern"] .release-modal,
+[data-style="modern"] .standup-modal,
+[data-style="modern"] .worktrees-modal,
+[data-style="modern"] .settings-modal {
+    border-radius: 12px;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 18px 50px -16px rgba(0, 0, 0, 0.6);
+}
+[data-style="modern"] .agent-menu,
+[data-style="modern"] .group-menu,
+[data-style="modern"] .sb-id-menu,
+[data-style="modern"] .pipeline-bar,
+[data-style="modern"] .toast {
+    border-radius: 10px;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+}
+[data-style="modern"] input:focus,
+[data-style="modern"] select:focus,
+[data-style="modern"] textarea:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+[data-style="modern"] .brand {
+    letter-spacing: -0.02em;
+    font-weight: 650;
+}
+
 /* ---------- shortcuts cheat-sheet + kbd ---------- */
 kbd {
     font-family: "Cascadia Mono", Consolas, monospace;
@@ -3816,6 +3903,43 @@ kbd {
     display: flex;
     gap: 8px;
     flex: none;
+}
+
+/* ---------- confirm dialog ---------- */
+.confirm-dialog {
+    width: 420px;
+    max-width: 90vw;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+    padding: 20px 22px;
+}
+.confirm-title {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 8px;
+}
+.confirm-message {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+}
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 20px;
+}
+.danger-btn {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+.danger-btn:hover {
+    filter: brightness(1.1);
+    border-color: var(--danger);
+    color: #fff;
 }
 
 /* ---------- Toasts ---------- */

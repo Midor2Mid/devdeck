@@ -226,9 +226,9 @@ const DEFAULTS: AppSettings = {
     activeEnvId: null,
     collections: [],
     appearance: {
-        theme: "sumi",
-        style: "wabi",
-        accent: DEFAULT_ACCENT
+        theme: "slate",
+        style: "modern",
+        accent: "#eba65c"
     },
     remote: {
         enabled: false,

@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
 import { useSettings, sshCommand } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
+import { confirm } from "../confirm"
 import { paneRegistry } from "../paneRegistry"
 import { SplitView } from "./SplitView"
 import { PromptComposer } from "./PromptComposer"
 import { CanvasView } from "./CanvasView"
+import { Icon } from "./Icon"
 
 export function TerminalView(): JSX.Element {
     const projects = useStore((s) => s.projects)
@@ -185,9 +187,19 @@ export function TerminalView(): JSX.Element {
                                 <span
                                     className="tab-close"
                                     title="Close"
-                                    onClick={(e) => {
+                                    onClick={async (e) => {
                                         e.stopPropagation()
-                                        ;[...new Set(collectLeaves(tab.root))].forEach(closePane)
+                                        const panes = [...new Set(collectLeaves(tab.root))]
+                                        if (panes.length > 1) {
+                                            const ok = await confirm({
+                                                title: "Close tab",
+                                                message: `Close "${tab.name}" and its ${panes.length} panes?`,
+                                                confirmLabel: "Close",
+                                                danger: true
+                                            })
+                                            if (!ok) return
+                                        }
+                                        panes.forEach(closePane)
                                     }}
                                 >
                                     ×
@@ -215,7 +227,7 @@ export function TerminalView(): JSX.Element {
                             onClick={() => setMenuOpen((v) => !v)}
                             title="Other agents…"
                         >
-                            ▾
+                            <Icon name="chevronDown" />
                         </button>
                         {menuOpen && (
                             <>
@@ -274,21 +286,21 @@ export function TerminalView(): JSX.Element {
                         onClick={() => setTermLayout("tabs")}
                         title="Tabs layout"
                     >
-                        ▭
+                        <Icon name="tabs" />
                     </button>
                     <button
                         className={"icon-action" + (termLayout === "grid" ? " on" : "")}
                         onClick={() => setTermLayout("grid")}
                         title="Dashboard grid — all this project's terminals at once"
                     >
-                        ▦
+                        <Icon name="grid" />
                     </button>
                     <button
                         className={"icon-action" + (termLayout === "canvas" ? " on" : "")}
                         onClick={() => setTermLayout("canvas")}
                         title="Canvas — free-form board of all terminals"
                     >
-                        ◇
+                        <Icon name="canvas" />
                     </button>
                     <span className="action-sep" />
                     <button
@@ -297,28 +309,28 @@ export function TerminalView(): JSX.Element {
                         title="Split right (Ctrl+Shift+\\)"
                         disabled={termLayout === "grid"}
                     >
-                        ⇆
+                        <Icon name="splitH" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => splitActive("col", SHELL)}
                         title="Split down (Ctrl+Shift+-)"
                     >
-                        ⇅
+                        <Icon name="splitV" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => setFindOpen((v) => !v)}
                         title="Find in terminal (Ctrl+Shift+F)"
                     >
-                        ⌕
+                        <Icon name="search" />
                     </button>
                     <button
                         className={"icon-action" + (composerOpen ? " on" : "")}
                         onClick={() => setComposerOpen(!composerOpen)}
                         title="Prompt composer (Ctrl+Shift+I)"
                     >
-                        ✎
+                        <Icon name="pencil" />
                     </button>
                     <span className="action-sep" />
                     <button
@@ -333,28 +345,28 @@ export function TerminalView(): JSX.Element {
                                   : "Record this terminal"
                         }
                     >
-                        ⏺
+                        <Icon name="record" size={13} />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => setRecordingsOpen(true)}
                         title="Recordings — replay a recorded session"
                     >
-                        ▷
+                        <Icon name="play" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => setWorktreesOpen(true)}
                         title="Worktrees — run an agent in its own worktree"
                     >
-                        ⑂
+                        <Icon name="gitBranch" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => openChanges(activeProject.path, activeProject.name)}
                         title="Review changes — stage / discard / commit"
                     >
-                        ✓
+                        <Icon name="check" />
                     </button>
                 </div>
             </div>

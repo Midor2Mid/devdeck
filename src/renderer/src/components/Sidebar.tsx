@@ -3,6 +3,8 @@ import { useStore, SHELL, type AgentStatus } from "../store"
 import { useSettings } from "../settings"
 import { collectLeaves } from "../layout"
 import type { Project } from "../../../preload/index"
+import { Icon } from "./Icon"
+import { confirm } from "../confirm"
 
 interface SessionRow {
     termId: string
@@ -113,9 +115,15 @@ export function Sidebar(): JSX.Element {
             <span
                 className="project-remove"
                 title="Remove project"
-                onClick={(e) => {
+                onClick={async (e) => {
                     e.stopPropagation()
-                    removeProject(p.id)
+                    const ok = await confirm({
+                        title: "Remove project",
+                        message: `Remove "${p.name}" from DevDeck? The folder won't be deleted, but its tabs/sessions here will close.`,
+                        confirmLabel: "Remove",
+                        danger: true
+                    })
+                    if (ok) removeProject(p.id)
                 }}
             >
                 ×
@@ -162,34 +170,34 @@ export function Sidebar(): JSX.Element {
                         title="Work — your Jira / Azure items"
                         onClick={() => setWorkOpen(true)}
                     >
-                        ◷
+                        <Icon name="work" />
                     </button>
                     <button
                         className="gear-btn"
                         title="Activity feed"
                         onClick={() => setActivityOpen(true)}
                     >
-                        ⧗
+                        <Icon name="activity" />
                     </button>
                     <button
                         className="gear-btn"
                         title="Standup / worklog"
                         onClick={() => setStandupOpen(true)}
                     >
-                        ▤
+                        <Icon name="list" />
                     </button>
                     <button className="gear-btn" title="Switch project (Ctrl+K)" onClick={openSwitcher}>
-                        ⊞
+                        <Icon name="layers" />
                     </button>
                     <button
                         className="gear-btn"
                         title="Keyboard shortcuts (F1)"
                         onClick={() => setShortcutsOpen(true)}
                     >
-                        ?
+                        <Icon name="help" />
                     </button>
                     <button className="gear-btn" title="Settings" onClick={openSettings}>
-                        ⚙
+                        <Icon name="settings" />
                     </button>
                 </div>
             </div>

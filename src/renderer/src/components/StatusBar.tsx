@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
 import type { GitStatus, GitIdentity } from "../../../preload/index"
+import { Icon } from "./Icon"
 
 export function StatusBar(): JSX.Element {
     const project = useStore((s) => s.activeProject())
@@ -62,7 +63,7 @@ export function StatusBar(): JSX.Element {
                 {git?.isRepo && (
                     <>
                         <span className="sb-item" title="Current branch">
-                            ⎇ {git.branch}
+                            <Icon name="gitBranch" size={12} /> {git.branch}
                         </span>
                         {git.changes > 0 && (
                             <span className="sb-item sb-changes" title="Uncommitted changes">
@@ -75,7 +76,7 @@ export function StatusBar(): JSX.Element {
                                 title="Git identity for this repo — click to switch account"
                                 onClick={() => setPickerOpen((v) => !v)}
                             >
-                                ⦿ {identity?.name || "set identity"}
+                                <Icon name="user" size={12} /> {identity?.name || "set identity"}
                             </span>
                             {pickerOpen && (
                                 <>
@@ -110,12 +111,12 @@ export function StatusBar(): JSX.Element {
             <div className="sb-right">
                 {attention > 0 && (
                     <span className="sb-item sb-attn" title="Agent sessions needing attention">
-                        ⚑ {attention}
+                        <Icon name="flag" size={12} /> {attention}
                     </span>
                 )}
                 {remoteEnabled && (
                     <span className="sb-item sb-remote" title="Remote access enabled">
-                        ● remote
+                        <Icon name="broadcast" size={12} /> remote
                     </span>
                 )}
                 {project && (
@@ -124,7 +125,7 @@ export function StatusBar(): JSX.Element {
                         title="Release board — promote Dev → UAT → PROD"
                         onClick={() => setReleaseOpen(true)}
                     >
-                        ⬆ release
+                        <Icon name="release" size={12} /> release
                     </span>
                 )}
                 <span className="sb-item muted">DevDeck</span>

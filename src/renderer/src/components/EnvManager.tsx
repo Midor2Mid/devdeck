@@ -1,8 +1,17 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSettings, type Environment } from "../settings"
 import { KeyValueEditor, emptyRow } from "./KeyValueEditor"
+import { confirm } from "../confirm"
 
 export function EnvManager({ onClose }: { onClose: () => void }): JSX.Element {
+    useEffect(() => {
+        const h = (e: KeyboardEvent): void => {
+            if (e.key === "Escape") onClose()
+        }
+        window.addEventListener("keydown", h)
+        return () => window.removeEventListener("keydown", h)
+    }, [onClose])
+
     const environments = useSettings((s) => s.environments)
     const setEnvironments = useSettings((s) => s.setEnvironments)
     const activeEnvId = useSettings((s) => s.activeEnvId)
@@ -26,7 +35,15 @@ export function EnvManager({ onClose }: { onClose: () => void }): JSX.Element {
         setEnvironments(environments.map((e) => (e.id === sel.id ? { ...e, ...patch } : e)))
     }
 
-    const deleteEnv = (id: string): void => {
+    const deleteEnv = async (id: string): Promise<void> => {
+        const env = environments.find((e) => e.id === id)
+        const ok = await confirm({
+            title: "Delete environment",
+            message: `Delete environment "${env?.name ?? ""}" and its variables?`,
+            confirmLabel: "Delete",
+            danger: true
+        })
+        if (!ok) return
         const remaining = environments.filter((e) => e.id !== id)
         setEnvironments(remaining)
         if (selId === id) setSelId(remaining[0]?.id ?? null)

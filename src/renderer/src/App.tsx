@@ -23,6 +23,7 @@ import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { IntroTip } from "./components/IntroTip"
+import { ConfirmDialog } from "./components/ConfirmDialog"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -186,6 +187,7 @@ export function App(): JSX.Element {
             <PipelineBar />
             <Toasts />
             <IntroTip />
+            <ConfirmDialog />
         </div>
     )
 }

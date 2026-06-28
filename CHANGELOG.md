@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0 — 2026-06-28
+
+Modernization pass — DevDeck looks like a contemporary product now.
+
+- **Line-icon system** — a new inline-SVG icon set (Lucide-derived) replaces the
+  Unicode glyphs across the sidebar, terminal toolbar, and status bar. One weight,
+  one grid, currentColor; no icon font / dependency (proxy-safe). This is the
+  single biggest "modern" upgrade.
+- **Slate theme** — a cool slate-blue color theme that keeps the warm amber accent
+  (warm-on-cool reads modern). Joins Sumi / Washi / Zen.
+- **Modern Pro style** — a clean contemporary design style: 8px radii, subtle
+  elevation, snappy transitions, a focus ring, tight type. Pairs with Slate.
+- **New default look** — fresh installs open in **Slate + Modern Pro**. Existing
+  setups can switch in Settings → Appearance (your six other styles + three other
+  themes remain). 7 styles × 4 themes now available.
+- Next: a slim icon-rail layout + top command bar (structural; coming separately).
+
 ## 0.2.6 — 2026-06-28
 
 - **Phosphor CRT style** — the sixth and final design style: monospace chrome,
