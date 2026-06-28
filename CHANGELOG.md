@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.2 - 2026-06-29
+
+- **Lacquer style** - a new opt-in design style (Settings → Appearance → Style):
+  frosted-glass surfaces, gilded gradient accent buttons, a soft accent glow on
+  active tabs / rail / the ensō, and deep layered shadows. Animated - a periodic
+  light-sheen sweep across accent buttons and a slow breathing glow on the ensō
+  (both honor `prefers-reduced-motion`). Purely additive; existing styles and the
+  default are unchanged.
+- **Local signed builds** - `npm run cert:make` then `npm run package:signed`
+  produce an Authenticode-signed build using a self-signed cert trusted on your
+  machine, to avoid unsigned-binary antivirus / SmartScreen false positives.
+  (Personal-use only; distribution needs a purchased OV/EV cert.)
+
+## 0.4.1 - 2026-06-29
+
+- **Wabi-sabi design pass** - a real ensō brand mark (rail logo + sidebar)
+  replacing the placeholder; a faint ensō watermark behind empty states so they
+  read as intentional space; lifted muted/faint text contrast across all themes
+  (the faint tier was failing WCAG AA); the Settings modal now dims + blurs its
+  backdrop for focus.
+- **Terminal toolbar declutter** - regrouped into create / layout / pane clusters,
+  with the secondary tools (record, recordings, worktrees, review changes) moved
+  into a `⋯` overflow menu and the redundant composer button dropped. 13 → 10.
+
+## 0.4.0 - 2026-06-28
+
+- **Network debugging panel (Milestone 4)** - a local loopback HTTP forward proxy
+  (off by default) that captures traffic for inspection: full HTTP with
+  gzip/deflate/br body decoding; HTTPS tunneled via CONNECT (metadata only - no
+  MITM). New **Network** view with a live request list, a headers/body inspector
+  (JSON pretty-printed), and host / method / status / project filters. Point a
+  client's `HTTP_PROXY` / `HTTPS_PROXY` at the proxy address to capture it.
+
 ## 0.3.4 - 2026-06-28
 
 - **Tooltips everywhere** - swept the rest of the icon/affordance buttons across
