@@ -4688,3 +4688,64 @@ kbd {
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 12%, transparent),
         0 24px 60px -16px rgba(0, 0, 0, 0.7);
 }
+
+/* --- Lacquer motion: a periodic light-sheen sweep + breathing ensō glow --- */
+[data-style="lacquer"] button.accent {
+    position: relative;
+    overflow: hidden;
+}
+/* A diagonal glare that sweeps across the gilded CTA every few seconds. */
+[data-style="lacquer"] button.accent::after {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -60%;
+    width: 40%;
+    height: 200%;
+    background: linear-gradient(
+        100deg,
+        transparent,
+        rgba(255, 255, 255, 0.5),
+        transparent
+    );
+    transform: skewX(-18deg);
+    pointer-events: none;
+    animation: lacquer-sheen 5.5s ease-in-out infinite;
+}
+@keyframes lacquer-sheen {
+    0% {
+        left: -60%;
+        opacity: 0;
+    }
+    8% {
+        opacity: 1;
+    }
+    22% {
+        left: 130%;
+        opacity: 0;
+    }
+    100% {
+        left: 130%;
+        opacity: 0;
+    }
+}
+/* The ensō brand mark glows in a slow, calm breath. */
+[data-style="lacquer"] .rail-logo {
+    animation: lacquer-enso-glow 4.5s ease-in-out infinite;
+}
+@keyframes lacquer-enso-glow {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 35%, transparent));
+    }
+    50% {
+        filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 75%, transparent));
+    }
+}
+/* Respect reduced-motion: keep the gloss, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+    [data-style="lacquer"] button.accent::after,
+    [data-style="lacquer"] .rail-logo {
+        animation: none;
+    }
+}
