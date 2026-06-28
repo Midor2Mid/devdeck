@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2 — 2026-06-28
+
+- **AI on the diff** — Review changes now has AI actions: **Review / Explain /
+  Commit msg / PR description** feed the working diff to an agent (in the right
+  repo or worktree) and ask for exactly that. Turns the review surface active.
+- **Open PR** — from Review changes, push the branch and open a pull request.
+  On **Azure DevOps** it creates the PR via the API (using your Work PAT) and
+  opens it; on GitHub/other it pushes and opens the host's create-PR page.
+  Detects the remote automatically, with a target-branch + title + description
+  composer (draft the description with the AI button).
+- Completes the loop: **Jira/Azure ticket → worktree → agent → review → PR →
+  release board**, all in one window.
+
 ## 0.3.1 — 2026-06-28
 
 - **Slim icon-rail layout** — primary navigation moved to a 58px icon rail on the

@@ -196,6 +196,17 @@ export interface Worktree {
     head: string
     main: boolean
 }
+
+export interface RemoteInfo {
+    host: "azure" | "github" | "other"
+    branch: string
+    orgUrl?: string
+    org?: string
+    project?: string
+    repo?: string
+    owner?: string
+    webCreateUrl?: string
+}
 export interface WorktreeAddResult {
     ok: boolean
     path?: string
@@ -307,7 +318,24 @@ const api = {
         discard: (cwd: string, path: string, untracked: boolean): Promise<boolean> =>
             ipcRenderer.invoke("git:discard", { cwd, path, untracked }),
         commit: (cwd: string, message: string): Promise<{ ok: boolean; error?: string }> =>
-            ipcRenderer.invoke("git:commit", { cwd, message })
+            ipcRenderer.invoke("git:commit", { cwd, message }),
+        fullDiff: (cwd: string): Promise<string> => ipcRenderer.invoke("git:fullDiff", cwd)
+    },
+    pr: {
+        remoteInfo: (cwd: string, target: string): Promise<RemoteInfo> =>
+            ipcRenderer.invoke("pr:remoteInfo", { cwd, target }),
+        push: (cwd: string, branch: string): Promise<{ ok: boolean; error?: string }> =>
+            ipcRenderer.invoke("pr:push", { cwd, branch }),
+        createAzure: (opts: {
+            orgUrl: string
+            project: string
+            repo: string
+            source: string
+            target: string
+            title: string
+            description: string
+        }): Promise<{ ok: boolean; url?: string; error?: string }> =>
+            ipcRenderer.invoke("pr:createAzure", opts)
     },
     browser: {
         saveShot: (projectPath: string, dataUrl: string): Promise<string> =>

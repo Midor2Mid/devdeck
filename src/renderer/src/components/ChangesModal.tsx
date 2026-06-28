@@ -32,6 +32,8 @@ function DiffView({ patch }: { patch: string }): JSX.Element {
 export function ChangesModal(): JSX.Element | null {
     const target = useStore((s) => s.changesTarget)
     const close = useStore((s) => s.closeChanges)
+    const aiOnDiff = useStore((s) => s.aiOnDiff)
+    const openPr = useStore((s) => s.openPr)
 
     const [files, setFiles] = useState<ChangeFile[]>([])
     const [sel, setSel] = useState<ChangeFile | null>(null)
@@ -145,6 +147,18 @@ export function ChangesModal(): JSX.Element | null {
                             <div className="diff-empty">Select a file to see its diff.</div>
                         )}
                     </div>
+                </div>
+
+                <div className="ch-ai">
+                    <span className="ch-ai-label">AI</span>
+                    <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "review")} title="Have an agent review this diff">Review</button>
+                    <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "explain")}>Explain</button>
+                    <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "commit")}>Commit msg</button>
+                    <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "pr")}>PR description</button>
+                    <span className="spacer" style={{ flex: 1 }} />
+                    <button className="btn-min" onClick={() => openPr(cwd, target.label)} title="Push branch and open a pull request">
+                        Open PR ↗
+                    </button>
                 </div>
 
                 <div className="ch-commit">

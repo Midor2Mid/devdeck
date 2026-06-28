@@ -432,6 +432,50 @@ export async function fetchItems(): Promise<FetchResult> {
     return { items, errors }
 }
 
+/** Create an Azure DevOps pull request using the stored Work PAT. */
+export async function createAzurePr(opts: {
+    orgUrl: string
+    project: string
+    repo: string
+    source: string
+    target: string
+    title: string
+    description: string
+}): Promise<{ ok: boolean; url?: string; error?: string }> {
+    const f = load()
+    const pat = dec(f.azure.patEnc)
+    if (!pat) return { ok: false, error: "No Azure DevOps PAT saved — add one in Work → ⚙ (needs Code: read & write)." }
+    const auth = "Basic " + Buffer.from(`:${pat}`).toString("base64")
+    const api =
+        `${opts.orgUrl}/${encodeURIComponent(opts.project)}/_apis/git/repositories/` +
+        `${encodeURIComponent(opts.repo)}/pullrequests?api-version=7.0`
+    const body = JSON.stringify({
+        sourceRefName: `refs/heads/${opts.source}`,
+        targetRefName: `refs/heads/${opts.target}`,
+        title: opts.title,
+        description: opts.description
+    })
+    try {
+        const res = await httpJson(
+            "POST",
+            api,
+            { Authorization: auth, "Content-Type": "application/json", Accept: "application/json" },
+            body,
+            f.azure.insecureTLS,
+            resolveProxy(f.proxy)
+        )
+        if (res.status < 200 || res.status >= 300)
+            return { ok: false, error: `Azure ${res.status}: ${res.body.slice(0, 300)}` }
+        const data = JSON.parse(res.body)
+        const url =
+            `${opts.orgUrl}/${encodeURIComponent(opts.project)}/_git/` +
+            `${encodeURIComponent(opts.repo)}/pullrequest/${data.pullRequestId}`
+        return { ok: true, url }
+    } catch (e) {
+        return { ok: false, error: String((e as Error).message ?? e) }
+    }
+}
+
 /** Test a single provider with the stored (just-saved) credentials. */
 export async function testProvider(provider: Provider): Promise<{ ok: boolean; count?: number; error?: string }> {
     const f = load()

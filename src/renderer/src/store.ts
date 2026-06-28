@@ -14,6 +14,7 @@ import {
 import type { PipelineRun } from "./pipeline"
 import { runnableSteps, sessionPlan } from "./pipeline"
 import { gateActive, evaluateGate, maxAttempts } from "./gate"
+import { diffPrompt, type DiffAiKind } from "./diffai"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -121,6 +122,12 @@ interface AppState extends Persisted {
     openChanges: (cwd: string, label: string) => void
     closeChanges: () => void
     newAgentInWorktree: (agentId: string, branch: string) => Promise<string | undefined>
+    aiOnDiff: (cwd: string, kind: DiffAiKind) => Promise<void>
+
+    // Pull request composer
+    prTarget: { cwd: string; label: string } | null
+    openPr: (cwd: string, label: string) => void
+    closePr: () => void
 
     // Work items (Jira / Azure DevOps)
     workOpen: boolean
@@ -376,6 +383,7 @@ export const useStore = create<AppState>((set, get) => {
         recordingsOpen: false,
         worktreesOpen: false,
         changesTarget: null,
+        prTarget: null,
         workOpen: false,
         releaseOpen: false,
         standupOpen: false,
@@ -529,6 +537,22 @@ export const useStore = create<AppState>((set, get) => {
             set({ worktreesOpen: false })
             return termId
         },
+
+        aiOnDiff: async (cwd, kind) => {
+            const agentId = useSettings.getState().agents[0]?.id ?? "claude"
+            const diff = await window.api.git.fullDiff(cwd)
+            const prompt = diffPrompt(kind, diff)
+            const label = { review: "review", explain: "explain", commit: "commit msg", pr: "PR desc" }[kind]
+            const termId = get().newTab(agentId, undefined, label, cwd)
+            if (!termId) return
+            set({ changesTarget: null })
+            await sleep(2800)
+            window.api.pty.input(termId, prompt + "\r")
+            set({ lastAgentTermId: termId })
+        },
+
+        openPr: (cwd, label) => set({ prTarget: { cwd, label } }),
+        closePr: () => set({ prTarget: null }),
 
         setWorkOpen: (workOpen) => set({ workOpen }),
         setReleaseOpen: (releaseOpen) => set({ releaseOpen }),

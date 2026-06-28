@@ -17,7 +17,8 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 ### Gaps worth closing (their features we lack)
 
 - [x] **Git worktree-per-agent** — shipped v0.1.8.
-- [x] **Unified AI diff review** — shipped v0.1.8.
+- [x] **Unified AI diff review** — shipped v0.1.8; **AI actions on the diff** +
+      **Open PR** (Azure API / web) v0.3.2 → full ticket→worktree→review→PR loop.
 - [ ] **Fire one prompt at many agents** at once (+ @mention targeting).
 - [ ] **Rich prompts** — image/drag-drop into the composer.
 - [ ] **Pipeline conditional branching / delays / checkpoints** (we have linear

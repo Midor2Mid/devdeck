@@ -120,6 +120,14 @@ export async function discardFile(cwd: string, path: string, untracked: boolean)
     return (await git(cwd, ["restore", "--", path])).ok
 }
 
+/** Combined diff of all tracked changes vs HEAD, capped for feeding to an agent. */
+export async function fullDiff(cwd: string, maxChars = 14000): Promise<string> {
+    const r = await git(cwd, ["diff", "HEAD"])
+    const out = r.stdout
+    if (out.length <= maxChars) return out
+    return out.slice(0, maxChars) + "\n\n…[diff truncated]"
+}
+
 export async function commitAll(cwd: string, message: string): Promise<{ ok: boolean; error?: string }> {
     const add = await git(cwd, ["add", "-A"])
     if (!add.ok) return { ok: false, error: add.stderr.trim() }

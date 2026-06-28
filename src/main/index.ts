@@ -21,6 +21,7 @@ import * as changes from "./changes"
 import * as work from "./work"
 import * as release from "./release"
 import * as worklog from "./worklog"
+import * as pr from "./pr"
 import { loadWindowState, saveWindowState } from "./windowState"
 
 let mainWindow: BrowserWindow | null = null
@@ -259,6 +260,21 @@ function registerIpc(): void {
         guardRepo(cwd)
         return changes.commitAll(cwd, message)
     })
+    ipcMain.handle("git:fullDiff", (_e, cwd: string) => {
+        guardRepo(cwd)
+        return changes.fullDiff(cwd)
+    })
+
+    // --- Pull requests (push + Azure API / web fallback) ---
+    ipcMain.handle("pr:remoteInfo", (_e, { cwd, target }) => {
+        guardRepo(cwd)
+        return pr.remoteInfo(cwd, target)
+    })
+    ipcMain.handle("pr:push", (_e, { cwd, branch }) => {
+        guardRepo(cwd)
+        return pr.pushBranch(cwd, branch)
+    })
+    ipcMain.handle("pr:createAzure", (_e, opts) => work.createAzurePr(opts))
 
     // --- Open a URL in the system browser ---
     ipcMain.handle("shell:open", (_e, url: string) => {
