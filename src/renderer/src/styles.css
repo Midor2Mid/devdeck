@@ -965,6 +965,10 @@ button .ic,
     cursor: pointer;
     color: var(--text);
 }
+.agent-menu-name.disabled {
+    color: var(--faint);
+    cursor: default;
+}
 .agent-menu-resume {
     padding: 7px 10px;
     color: var(--muted);

@@ -33,6 +33,7 @@ export function TerminalView(): JSX.Element {
     const [findOpen, setFindOpen] = useState(false)
     const [query, setQuery] = useState("")
     const [menuOpen, setMenuOpen] = useState(false)
+    const [toolsOpen, setToolsOpen] = useState(false)
     const composerOpen = useStore((s) => s.composerOpen)
     const setComposerOpen = useStore((s) => s.setComposerOpen)
     const recordingTermId = useStore((s) => s.recordingTermId)
@@ -325,49 +326,77 @@ export function TerminalView(): JSX.Element {
                     >
                         <Icon name="search" />
                     </button>
-                    <button
-                        className={"icon-action" + (composerOpen ? " on" : "")}
-                        onClick={() => setComposerOpen(!composerOpen)}
-                        data-tip="Prompt composer - @file & /snippet autocomplete (Ctrl+Shift+I)"
-                    >
-                        <Icon name="pencil" />
-                    </button>
                     <span className="action-sep" />
-                    <button
-                        className={"icon-action" + (recordingActive ? " rec-on" : "")}
-                        onClick={toggleRecord}
-                        disabled={!!recordingTermId && !recordingActive}
-                        data-tip={
-                            recordingActive
-                                ? "Stop recording - saves to .devdeck/recordings"
-                                : recordingTermId
-                                  ? "A recording is in progress in another session"
-                                  : "Record this terminal (replay it later)"
-                        }
-                    >
-                        <Icon name="record" size={13} />
-                    </button>
-                    <button
-                        className="icon-action"
-                        onClick={() => setRecordingsOpen(true)}
-                        data-tip="Recordings - replay a recorded session"
-                    >
-                        <Icon name="play" />
-                    </button>
-                    <button
-                        className="icon-action"
-                        onClick={() => setWorktreesOpen(true)}
-                        data-tip="Worktrees - run an agent in its own git worktree"
-                    >
-                        <Icon name="gitBranch" />
-                    </button>
-                    <button
-                        className="icon-action"
-                        onClick={() => openChanges(activeProject.path, activeProject.name)}
-                        data-tip="Review changes - diff, AI review, stage / commit, open PR"
-                    >
-                        <Icon name="check" />
-                    </button>
+                    <div className="agent-menu-wrap">
+                        <button
+                            className="icon-action"
+                            onClick={() => setToolsOpen((v) => !v)}
+                            data-tip="More - record, recordings, worktrees, review changes"
+                        >
+                            <Icon name="more" />
+                        </button>
+                        {toolsOpen && (
+                            <>
+                                <div className="menu-backdrop" onClick={() => setToolsOpen(false)} />
+                                <div className="agent-menu">
+                                    <div className="agent-menu-row">
+                                        <span
+                                            className={
+                                                "agent-menu-name" +
+                                                (!!recordingTermId && !recordingActive
+                                                    ? " disabled"
+                                                    : "")
+                                            }
+                                            onClick={() => {
+                                                if (!!recordingTermId && !recordingActive) return
+                                                toggleRecord()
+                                                setToolsOpen(false)
+                                            }}
+                                        >
+                                            <Icon name="record" size={13} />
+                                            {recordingActive ? "Stop recording" : "Record terminal"}
+                                        </span>
+                                    </div>
+                                    <div className="agent-menu-row">
+                                        <span
+                                            className="agent-menu-name"
+                                            onClick={() => {
+                                                setRecordingsOpen(true)
+                                                setToolsOpen(false)
+                                            }}
+                                        >
+                                            <Icon name="play" size={14} />
+                                            Recordings
+                                        </span>
+                                    </div>
+                                    <div className="agent-menu-row">
+                                        <span
+                                            className="agent-menu-name"
+                                            onClick={() => {
+                                                setWorktreesOpen(true)
+                                                setToolsOpen(false)
+                                            }}
+                                        >
+                                            <Icon name="gitBranch" size={14} />
+                                            Worktrees
+                                        </span>
+                                    </div>
+                                    <div className="agent-menu-row">
+                                        <span
+                                            className="agent-menu-name"
+                                            onClick={() => {
+                                                openChanges(activeProject.path, activeProject.name)
+                                                setToolsOpen(false)
+                                            }}
+                                        >
+                                            <Icon name="check" size={14} />
+                                            Review changes
+                                        </span>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
