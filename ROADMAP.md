@@ -33,11 +33,12 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Tabs for open files; dirty indicators
 - [x] Monaco workers bundled locally (offline; no CDN) + wabi-sabi editor theme
 
-## Milestone 3 — API client panel (Postman-lite)
+## Milestone 3 — API client panel (Postman-lite) ✅ (2026-06-28)
 
-- [ ] Request builder: method, URL, headers, query params, body (JSON/form)
-- [ ] Send via main process; show status, timing, headers, pretty body
-- [ ] Per-project request history + saved requests (collections)
+- [x] Request builder: method, URL, headers, query params, body (JSON/form)
+- [x] Send via main process (native `fetch`, bypasses CORS); status, timing, headers, pretty body (Monaco viewer)
+- [x] Per-project request history + saved requests (collections), persisted to `settings.json`
+- [x] **Beyond scope:** auth config, environments/variables, collections search + move/duplicate, **Import** (Postman / OpenAPI-Swagger / cURL → collections), cURL smart-paste into the URL bar
 
 ## Milestone 3.5 — Database panel ✅ (2026-06-27, partial)
 
@@ -57,11 +58,13 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - Reach from anywhere: **Tailscale** (private, recommended) — bind is 0.0.0.0 but token-gated
 - [ ] Later: TLS option, full-UI mobile client, push notification on attention
 
-## Milestone 4 — Network debugging
+## Milestone 4 — Network debugging (not built — only unbuilt panel)
 
 - [ ] Local HTTP proxy to capture requests/responses
 - [ ] Request list + inspector (headers, timing, payloads)
 - [ ] Filter by project / host
+
+> Status (2026-06-28): no standalone network panel and no proxy exist — `MainView` has no `"network"` entry. **Partly obviated by M19's browser network capture** (`src/main/browserNet.ts`), which attaches CDP to the *embedded browser webview* and folds a failed/4xx/5xx summary into the "→ Agent" payload. That covers the in-app-browser case but is not M4: no request-list UI, no inspector, no header/payload view, no project/host filter. A true M4 = a system/proxy-level interceptor for arbitrary app traffic, a bigger lift than M19.
 
 ## Milestone 5 — Deeper Claude CLI integration ✅ (2026-06-27, core)
 
