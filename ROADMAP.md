@@ -8,12 +8,12 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 
 ## Milestone 1 — Terminal + project core (the beating heart) ✅ MVP
 
-- [ ] App shell: Electron + electron-vite + React + TS, runs on Windows
-- [ ] Resizable layout (sidebar | main | terminal area) via `allotment`
-- [ ] Project sidebar: add a project (folder picker), list projects, select active project; persisted to disk
-- [ ] Multi-terminal: tabbed terminals via xterm.js + `@lydell/node-pty`, each spawned with `cwd` = active project
-- [ ] "New terminal" and "New Claude session" buttons (Claude session = pty launching `claude` in the project)
-- [ ] Terminals survive project switches (per-project terminal groups)
+- [x] App shell: Electron + electron-vite + React + TS, runs on Windows
+- [x] Resizable layout (sidebar | main | terminal area) via `allotment`
+- [x] Project sidebar: add a project (folder picker), list projects, select active project; persisted to disk
+- [x] Multi-terminal: tabbed terminals via xterm.js + `@lydell/node-pty`, each spawned with `cwd` = active project
+- [x] "New terminal" and "New Claude session" buttons (Claude session = pty launching `claude` in the project)
+- [x] Terminals survive project switches (per-project terminal groups)
 
 ### Milestone 1.5 — terminal core polish ✅ (2026-06-27)
 
@@ -46,7 +46,7 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Connect / test, list tables, run SQL (Monaco editor, Ctrl+Enter), results grid
 - [x] **SQLite via WASM** (`node-sqlite3-wasm`, 2026-06-27) — no native build; reads/writes real `.db` files, file picker in the connection form
 - [ ] Query history / saved queries per connection
-- [ ] Packaging note: unpack `node-sqlite3-wasm` `.wasm` from asar when building a distributable
+- [x] Packaging: `node-sqlite3-wasm` unpacked from asar in `electron-builder` config (`package.json` → `asarUnpack`) — done in M11
 
 ## Milestone 7 — Remote / mobile access ✅ (2026-06-27, terminals-first)
 
@@ -83,7 +83,7 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
   - Terminal: default shell (PowerShell / cmd / Git Bash / WSL / custom) + font family/size (live)
   - Editor: font size, tab size, word wrap, minimap
   - Claude: command, resume args, idle→attention timing
-- [ ] Later sections: Git multi-account, SSH, Remote (mobile access), MCP, AI, light theme
+- [ ] Later sections: **AI settings** (the rest shipped: Git multi-account → M15, SSH → M16, Remote → M7, MCP → M18, light theme → M10)
 
 ## Milestone 8 — 1DevTool-inspired depth ✅ (2026-06-27)
 
@@ -94,7 +94,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Project switcher** — Ctrl+K launchpad grid (search, live counts, keyboard nav)
 - [x] **Markdown preview** — Edit/Split/Preview + word count
 - [x] **Status bar** — git branch + change count, attention, remote, project
-- [ ] Later (from reference): agent pipelines (chain agents), embedded browser, image-preview tabs, AI diff, activity feed, more DB engines
+- [ ] Later (from reference): **image-preview tabs, more DB engines** (the rest shipped: agent pipelines → `pipeline.ts`, embedded browser → M9, AI diff → ticket→PR loop, activity feed → M20)
 
 ## Milestone 9 — more 1DevTool-inspired features ✅ (2026-06-27)
 
@@ -104,7 +104,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **In-app notifications** (toasts) when a background agent needs attention
 - [x] **Mobile DB + HTTP** — run SQL / send HTTP requests from the phone client
 - [x] **Embedded browser** panel + **Comment Mode** → click page elements, annotate, send grouped feedback to the focused agent
-- [ ] Later: browser screenshot/console/network capture into the comment payload; terminal Canvas/Dashboard layouts; AI quota display
+- [ ] Later: **AI quota display** (the rest shipped: browser screenshot/console/network capture → M14/M19, terminal Canvas → M13, Dashboard → M12)
 
 ## Milestone 10 — themes, polish & perf ✅ (2026-06-27)
 
@@ -112,7 +112,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] Accent customization derives `--accent-soft` as a proper tint (lighter on dark, darker on light)
 - [x] **Perf:** debounced disk persistence (was writing on every composer keystroke / accent drag)
 - [x] Theme-aware scrollbars
-- [ ] Later: spacing/typography theming (Zen's airiness), per-theme density
+- [x] Spacing/typography theming (Zen's airiness), per-theme density — `themes.ts` COMPACT/AIRY density vars + per-theme line height
 
 ## Milestone 11 — installable app + robustness ✅ (2026-06-27)
 
@@ -167,23 +167,21 @@ This completes every section from the original 1DevTool reference (Appearance, T
 - [x] **Activity feed** — ⧗ in the sidebar opens a drawer of agent events (started / needs-attention / closed) across all projects; click to jump
 - [x] **Canvas connectors** — ⚯ handle to link cards; SVG lines follow pan/zoom; click a line to remove; persisted
 
-The reference feature set is fully covered. Remaining ideas are open-ended (terminal record/replay, agent pipelines, embedded-browser polish).
+The reference feature set is fully covered. Remaining ideas are open-ended (terminal record/replay, embedded-browser polish).
 
 ## Later / maybe (parking lot)
 
-- Command palette (Ctrl+P) for projects/files/actions
-- Split terminals (not just tabs) within a project
-- Restore terminal layout across app restarts (which tabs, which were Claude)
-- **Git multi-account** — per-account PAT (GitHub/GitLab), custom SSH command, token verification, per-project Git identity / pinned accounts (new Settings section)
-- **SSH** profiles + remote project folders (new Settings section)
-- **Remote / mobile access** — reach DevDeck from a phone (see NOTES; security-sensitive, needs design)
-- **MCP** server management; **AI** settings (new Settings sections)
-- Per-terminal/per-project shell override (default shell is now configurable)
-- Embedded **Browser** panel (preview + simple devtools)
-- Wabi-sabi **light "washi paper" theme** + theme switching
+> Pruned 2026-06-28: command palette (M17), split terminals + layout restore (M1.5), Git multi-account (M15), SSH profiles (M16), remote/mobile (M7), MCP (M18), embedded browser (M9), light theme (M10), snippets (M12), and file-`@path`-into-session (M5) all shipped. What's left is genuinely unbuilt:
+
+- **AI settings** section (model/quota/keys) — only remaining Settings section
 - Cross-platform (macOS/Linux) polish
-- Snippets / saved command runner per project
-- Pipe an API response or file path straight into a running Claude session
+- Per-terminal / per-project shell override (default shell is configurable; per-terminal is not)
+- Saved command runner per project (snippets shipped; a runnable command list did not)
+- Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
+- Pipe an **API response / DB result** straight into a running Claude session (file `@path` shipped; response piping did not)
+- Encrypted **PAT** storage for Git HTTPS push (identities shipped in M15; token storage did not)
+- TLS + push-notification-on-attention for the remote server
+- Terminal record/replay; agent pipeline UI on top of `pipeline.ts`
 
 ## Decisions log
 
