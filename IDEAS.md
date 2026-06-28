@@ -47,6 +47,6 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 
 ## Design
 
-- [~] **Design Style presets** (shape/type/depth, not just color) — shipped
-      **Wabi-sabi** + **Modern Minimal** (v0.2.2), **Neon** (v0.2.3),
-      **Flat Vector** (v0.2.4), **Bauhaus** (v0.2.5). Remaining: Phosphor CRT.
+- [x] **Design Style presets** (shape/type/depth, not just color) — COMPLETE.
+      All six shipped: Wabi-sabi + Modern Minimal (v0.2.2), Neon (v0.2.3),
+      Flat Vector (v0.2.4), Bauhaus (v0.2.5), Phosphor CRT (v0.2.6).

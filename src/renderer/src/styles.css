@@ -3629,6 +3629,99 @@ select:focus {
     font-weight: 700;
 }
 
+/* ============================================================
+   DESIGN STYLE: Phosphor CRT — retro terminal. Monospace chrome,
+   scanline wash, phosphor glow on accents. Color is the theme's
+   accent (set a green accent on a dark theme for classic phosphor).
+   ============================================================ */
+[data-style="crt"] {
+    --radius: 2px;
+    /* The whole UI goes monospace — the strongest CRT signal. */
+    font-family: "Cascadia Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: 0.01em;
+}
+[data-style="crt"] button,
+[data-style="crt"] input,
+[data-style="crt"] select,
+[data-style="crt"] textarea,
+[data-style="crt"] .icon-action,
+[data-style="crt"] .term-tab,
+[data-style="crt"] .tab-rename {
+    border-radius: 2px;
+}
+[data-style="crt"] .switcher-card,
+[data-style="crt"] .work-item,
+[data-style="crt"] .recording-row,
+[data-style="crt"] .lane,
+[data-style="crt"] .wt-row,
+[data-style="crt"] .pipe-edit,
+[data-style="crt"] .trigger-row,
+[data-style="crt"] .modal,
+[data-style="crt"] .switcher,
+[data-style="crt"] .recordings-modal,
+[data-style="crt"] .changes-modal,
+[data-style="crt"] .release-modal,
+[data-style="crt"] .standup-modal,
+[data-style="crt"] .worktrees-modal,
+[data-style="crt"] .settings-modal,
+[data-style="crt"] .agent-menu,
+[data-style="crt"] .group-menu,
+[data-style="crt"] .toast,
+[data-style="crt"] .pipeline-bar,
+[data-style="crt"] .term-pane {
+    border-radius: 3px;
+}
+/* Phosphor glow on accents / chrome (terminal canvas is unaffected) */
+[data-style="crt"] .brand {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+[data-style="crt"] .accent,
+[data-style="crt"] button.accent,
+[data-style="crt"] .lc-sha,
+[data-style="crt"] .work-key,
+[data-style="crt"] .sb-changes,
+[data-style="crt"] .sb-identity {
+    text-shadow: 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+[data-style="crt"] button.accent,
+[data-style="crt"] .icon-action.on,
+[data-style="crt"] .term-tab.active {
+    box-shadow: 0 0 12px -4px var(--accent);
+}
+[data-style="crt"] .term-pane.focused {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
+        inset 0 0 26px -12px var(--accent);
+}
+[data-style="crt"] .tab-dot.status-working,
+[data-style="crt"] .dot.work {
+    box-shadow: 0 0 8px 1px var(--accent);
+}
+/* Scanline wash + gentle flicker */
+[data-style="crt"] .app::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 200;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.16) 0 1px,
+        transparent 1px 3px
+    );
+}
+@media (prefers-reduced-motion: no-preference) {
+    [data-style="crt"] .app::after {
+        animation: crt-flicker 3.6s steps(60) infinite;
+    }
+    @keyframes crt-flicker {
+        0%, 96%, 100% { opacity: 1; }
+        97% { opacity: 0.82; }
+        98% { opacity: 0.94; }
+    }
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;

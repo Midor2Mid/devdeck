@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.6 — 2026-06-28
+
+- **Phosphor CRT style** — the sixth and final design style: monospace chrome,
+  a scanline wash with gentle flicker, and phosphor glow on accents. Set a green
+  accent on a dark theme for the classic green-screen look. The design-style set
+  is now complete: **Wabi-sabi, Modern Minimal, Neon, Flat Vector, Bauhaus,
+  Phosphor CRT** — 6 styles × 3 color themes = 18 combinations.
+
 ## 0.2.5 — 2026-06-28
 
 - **Bauhaus style** — a fifth design style: hard square corners (0 radius), heavy

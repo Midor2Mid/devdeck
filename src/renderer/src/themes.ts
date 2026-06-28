@@ -236,7 +236,7 @@ export function applyTheme(id: ThemeId, accent?: string): void {
 // A *style* sets how surfaces feel: corner radius, border weight, depth, and
 // typography. It layers on top of the color themes above (style × theme are
 // orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
-export type StyleId = "wabi" | "minimal" | "neon" | "flat" | "bauhaus"
+export type StyleId = "wabi" | "minimal" | "neon" | "flat" | "bauhaus" | "crt"
 
 export interface DesignStyle {
     id: StyleId
@@ -269,6 +269,11 @@ export const STYLES: Record<StyleId, DesignStyle> = {
         id: "bauhaus",
         label: "Bauhaus",
         description: "Bold & structural: hard square corners, heavy frames, hard offset shadows, uppercase type."
+    },
+    crt: {
+        id: "crt",
+        label: "Phosphor CRT",
+        description: "Retro terminal: monospace everything, scanlines, phosphor glow. Set a green accent on a dark theme."
     }
 }
 
