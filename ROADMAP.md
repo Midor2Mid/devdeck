@@ -58,13 +58,15 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - Reach from anywhere: **Tailscale** (private, recommended) — bind is 0.0.0.0 but token-gated
 - [ ] Later: TLS option, full-UI mobile client, push notification on attention
 
-## Milestone 4 — Network debugging (not built — only unbuilt panel)
+## Milestone 4 — Network debugging ✅ (2026-06-28)
 
-- [ ] Local HTTP proxy to capture requests/responses
-- [ ] Request list + inspector (headers, timing, payloads)
-- [ ] Filter by project / host
+- [x] Local HTTP proxy to capture requests/responses (`src/main/proxy.ts`) — loopback-only forward proxy, off by default; full HTTP capture with gzip/deflate/br body decode; HTTPS via CONNECT tunneled end-to-end (encrypted, metadata only — no MITM)
+- [x] Request list + inspector (`NetworkPanel.tsx`) — live list (method/status/host/path/time/size); inspector tabs for request/response headers + bodies (JSON pretty-printed)
+- [x] Filter by project / host — free-text host/path/method/status filter + "this project" toggle (captures tagged with the active project at capture time)
+- [x] Start/stop toggle, persisted port (`settings.network.port`, default 8899), copy proxy address, clear; covered by `tests/proxy.test.ts`
+- [ ] Later: HTTPS MITM (generated CA) to decrypt tunneled payloads; replay/edit-and-resend a captured request into the API client
 
-> Status (2026-06-28): no standalone network panel and no proxy exist — `MainView` has no `"network"` entry. **Partly obviated by M19's browser network capture** (`src/main/browserNet.ts`), which attaches CDP to the *embedded browser webview* and folds a failed/4xx/5xx summary into the "→ Agent" payload. That covers the in-app-browser case but is not M4: no request-list UI, no inspector, no header/payload view, no project/host filter. A true M4 = a system/proxy-level interceptor for arbitrary app traffic, a bigger lift than M19.
+> Distinct from M19's **browser** network capture (`src/main/browserNet.ts`, CDP on the embedded webview, feeds the "→ Agent" payload). M4 is the general-purpose proxy for arbitrary client traffic: set `HTTP_PROXY`/`HTTPS_PROXY` to the proxy address and watch it in the Network panel.
 
 ## Milestone 5 — Deeper Claude CLI integration ✅ (2026-06-27, core)
 

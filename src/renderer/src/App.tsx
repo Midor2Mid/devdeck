@@ -10,6 +10,7 @@ import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
+import { NetworkPanel } from "./components/NetworkPanel"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
@@ -34,7 +35,8 @@ const VIEWS: { key: MainView; label: string }[] = [
     { key: "editor", label: "Editor" },
     { key: "api", label: "API" },
     { key: "database", label: "Database" },
-    { key: "browser", label: "Browser" }
+    { key: "browser", label: "Browser" },
+    { key: "network", label: "Network" }
 ]
 
 export function App(): JSX.Element {
@@ -80,6 +82,12 @@ export function App(): JSX.Element {
     useEffect(() => {
         window.api.mobile.syncSessions(sessions())
     }, [tabsByProject, agentStatus, termAgents, projects, sessions])
+
+    // Tell the capture proxy which project is active, so it can tag traffic.
+    const activeId = useStore((s) => s.activeId)
+    useEffect(() => {
+        window.api.proxy.setProject(activeId)
+    }, [activeId])
 
     useEffect(() => {
         return window.api.mobile.onNew(({ projectId }) =>
@@ -175,6 +183,12 @@ export function App(): JSX.Element {
                                 style={{ display: view === "browser" ? "flex" : "none" }}
                             >
                                 <BrowserPanel />
+                            </div>
+                            <div
+                                className="panel"
+                                style={{ display: view === "network" ? "flex" : "none" }}
+                            >
+                                <NetworkPanel />
                             </div>
                         </div>
                     </div>

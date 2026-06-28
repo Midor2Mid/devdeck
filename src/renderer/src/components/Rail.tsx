@@ -13,7 +13,8 @@ const VIEW_NAV: { view: MainView; icon: IconName; label: string }[] = [
     { view: "editor", icon: "code", label: "Editor - browse & edit project files (Monaco)" },
     { view: "api", icon: "send", label: "API client - test requests, environments & collections" },
     { view: "database", icon: "database", label: "Database - query Postgres / MySQL / SQLite" },
-    { view: "browser", icon: "appWindow", label: "Browser - embedded, with send-to-AI" }
+    { view: "browser", icon: "appWindow", label: "Browser - embedded, with send-to-AI" },
+    { view: "network", icon: "globe", label: "Network - capture HTTP(S) traffic through the local proxy" }
 ]
 
 export function Rail(): JSX.Element {

@@ -18,7 +18,7 @@ import { diffPrompt, type DiffAiKind } from "./diffai"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
-export type MainView = "terminal" | "editor" | "api" | "database" | "browser"
+export type MainView = "terminal" | "editor" | "api" | "database" | "browser" | "network"
 export type AgentStatus = "working" | "idle" | "attention"
 
 export interface Tab {

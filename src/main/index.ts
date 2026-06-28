@@ -13,6 +13,7 @@ import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus, getIdentity, setIdentity } from "./git"
 import { readMcp, writeMcp, type McpServer } from "./mcp"
 import * as browserNet from "./browserNet"
+import * as proxy from "./proxy"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -316,6 +317,17 @@ function registerIpc(): void {
         return recorder.loadRecording(path)
     })
 
+    // --- Network capture proxy (local HTTP forward proxy) ---
+    proxy.proxyEvents.on("capture", (c) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("proxy:capture", c)
+    })
+    ipcMain.handle("proxy:start", (_e, port: number) => proxy.start(port))
+    ipcMain.handle("proxy:stop", () => proxy.stop())
+    ipcMain.handle("proxy:status", () => proxy.status())
+    ipcMain.handle("proxy:list", () => proxy.list())
+    ipcMain.handle("proxy:clear", () => proxy.clear())
+    ipcMain.on("proxy:setProject", (_e, id: string | null) => proxy.setProject(id))
+
     // --- Browser network capture (CDP on the webview's webContents) ---
     ipcMain.handle("browser:netAttach", (_e, id: number) => browserNet.attach(id))
     ipcMain.handle("browser:netGet", (_e, id: number) => browserNet.getRecent(id))
@@ -366,5 +378,6 @@ app.on("window-all-closed", () => {
     ptyMgr.killAll()
     db.closeAll()
     server.stop()
+    proxy.stop()
     if (process.platform !== "darwin") app.quit()
 })

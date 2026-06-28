@@ -220,6 +220,33 @@ export interface ChangeFile {
     untracked: boolean
     label: string
 }
+export interface NetCapture {
+    id: string
+    ts: number
+    projectId: string | null
+    method: string
+    url: string
+    host: string
+    path: string
+    scheme: "http" | "https"
+    status: number
+    statusText: string
+    reqHeaders: Record<string, string>
+    resHeaders: Record<string, string>
+    reqBody: string
+    resBody: string
+    reqBodyTruncated: boolean
+    resBodyTruncated: boolean
+    bytesOut: number
+    bytesIn: number
+    timeMs: number
+    tunneled: boolean
+    error?: string
+}
+export interface ProxyStatus {
+    running: boolean
+    port: number
+}
 
 const api = {
     pty: {
@@ -344,6 +371,19 @@ const api = {
         netGet: (id: number): Promise<{ method: string; url: string; status: number; type: string; failed: boolean }[]> =>
             ipcRenderer.invoke("browser:netGet", id),
         netDetach: (id: number): Promise<void> => ipcRenderer.invoke("browser:netDetach", id)
+    },
+    proxy: {
+        start: (port: number): Promise<ProxyStatus> => ipcRenderer.invoke("proxy:start", port),
+        stop: (): Promise<ProxyStatus> => ipcRenderer.invoke("proxy:stop"),
+        status: (): Promise<ProxyStatus> => ipcRenderer.invoke("proxy:status"),
+        list: (): Promise<NetCapture[]> => ipcRenderer.invoke("proxy:list"),
+        clear: (): Promise<void> => ipcRenderer.invoke("proxy:clear"),
+        setProject: (id: string | null): void => ipcRenderer.send("proxy:setProject", id),
+        onCapture: (cb: (c: NetCapture) => void): (() => void) => {
+            const handler = (_e: unknown, c: NetCapture): void => cb(c)
+            ipcRenderer.on("proxy:capture", handler)
+            return () => ipcRenderer.removeListener("proxy:capture", handler)
+        }
     },
     mcp: {
         list: (projectPath: string): Promise<McpServer[]> => ipcRenderer.invoke("mcp:list", projectPath),

@@ -142,6 +142,9 @@ export interface AppSettings {
         port: number
         token: string
     }
+    network: {
+        port: number
+    }
 }
 
 function generateToken(): string {
@@ -234,6 +237,9 @@ const DEFAULTS: AppSettings = {
         enabled: false,
         port: 7420,
         token: ""
+    },
+    network: {
+        port: 8899
     }
 }
 
@@ -257,6 +263,7 @@ interface SettingsState extends AppSettings {
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
+    setNetwork: (patch: Partial<AppSettings["network"]>) => void
     regenerateToken: () => void
     resetAll: () => void
     openSettings: () => void
@@ -269,8 +276,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -321,7 +328,8 @@ export const useSettings = create<SettingsState>((set, get) => {
                     activeEnvId: raw.activeEnvId ?? DEFAULTS.activeEnvId,
                     collections: raw.collections ?? DEFAULTS.collections,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
-                    remote: { ...DEFAULTS.remote, ...raw.remote }
+                    remote: { ...DEFAULTS.remote, ...raw.remote },
+                    network: { ...DEFAULTS.network, ...raw.network }
                 })
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
@@ -407,6 +415,10 @@ export const useSettings = create<SettingsState>((set, get) => {
                 return { remote }
             })
             applyServer()
+            persist()
+        },
+        setNetwork: (patch) => {
+            set((s) => ({ network: { ...s.network, ...patch } }))
             persist()
         },
         regenerateToken: () => {
