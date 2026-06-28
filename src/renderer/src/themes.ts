@@ -231,3 +231,33 @@ export function applyTheme(id: ThemeId, accent?: string): void {
     root.style.setProperty("--accent-soft", shade(ac, theme.mode === "light" ? -0.18 : 0.18))
     root.dataset.theme = id
 }
+
+// ---------- Design styles (shape / depth / type — independent of color) ----------
+// A *style* sets how surfaces feel: corner radius, border weight, depth, and
+// typography. It layers on top of the color themes above (style × theme are
+// orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
+export type StyleId = "wabi" | "minimal"
+
+export interface DesignStyle {
+    id: StyleId
+    label: string
+    description: string
+}
+
+export const STYLES: Record<StyleId, DesignStyle> = {
+    wabi: {
+        id: "wabi",
+        label: "Wabi-sabi",
+        description: "Warm, soft, generous — the original feel."
+    },
+    minimal: {
+        id: "minimal",
+        label: "Modern Minimal",
+        description: "Crisp small radii, flat surfaces, tight spacing — Linear/Vercel-style."
+    }
+}
+
+/** Apply a design style (sets the `data-style` attribute the CSS keys off). */
+export function applyStyle(id: StyleId): void {
+    document.documentElement.dataset.style = STYLES[id] ? id : "wabi"
+}

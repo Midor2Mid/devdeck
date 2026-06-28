@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-06-28
+
+- **Design styles** — a new **Style** picker in Settings → Appearance, independent
+  of the color theme. Ships **Wabi-sabi** (default — warm, soft, generous) and
+  **Modern Minimal** (crisp small radii, flat surfaces, tighter spacing & snappier
+  interactions — Linear/Vercel-style). Style × color theme combine freely (e.g.
+  "Modern Minimal + Zen dark"); the choice persists. See `DESIGN.md`.
+
 ## 0.2.1 — 2026-06-28
 
 - **Standup / worklog generator** — the ▤ sidebar button (or command palette)

@@ -26,9 +26,11 @@ A "style" is more than color. When I ask for a look, these are the knobs:
 
 ## Current direction
 
-- **Design style:** Wabi-sabi (warm sumi-ink, hairline borders, soft depth,
-  humanist type, one clay accent). *← change this line when we pick a new one.*
-- **Color themes within the style:** sumi (dark), washi (light), zen (dark).
+- **Design styles (selectable, Settings → Appearance):**
+  - **Wabi-sabi** (default) — warm, soft, generous; hairline borders, soft depth.
+  - **Modern Minimal** — crisp small radii, flat surfaces, tighter spacing/type.
+- **Color themes within any style:** sumi (dark), washi (light), zen (dark).
+- Style × theme are independent (e.g. "Modern Minimal + zen dark").
 
 ## Do
 

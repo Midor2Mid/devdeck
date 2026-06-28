@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { applyTheme, THEMES, type ThemeId } from "./themes"
+import { applyTheme, applyStyle, THEMES, type ThemeId, type StyleId } from "./themes"
 import type { Pipeline, PipelineTrigger } from "./pipeline"
 import type { KvRow } from "./components/KeyValueEditor"
 
@@ -134,6 +134,7 @@ export interface AppSettings {
     collections: Collection[]
     appearance: {
         theme: ThemeId
+        style: StyleId
         accent: string
     }
     remote: {
@@ -226,6 +227,7 @@ const DEFAULTS: AppSettings = {
     collections: [],
     appearance: {
         theme: "sumi",
+        style: "wabi",
         accent: DEFAULT_ACCENT
     },
     remote: {
@@ -323,6 +325,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                 })
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
+            applyStyle(get().appearance.style)
             applyServer()
             applyTriggers()
         },
@@ -393,6 +396,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                 return { appearance }
             })
             applyTheme(get().appearance.theme, get().appearance.accent)
+            applyStyle(get().appearance.style)
             persist()
         },
         setRemote: (patch) => {
@@ -413,6 +417,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         resetAll: () => {
             set({ ...DEFAULTS })
             applyTheme(DEFAULTS.appearance.theme, DEFAULTS.appearance.accent)
+            applyStyle(DEFAULTS.appearance.style)
             applyServer()
             applyTriggers()
             persist()

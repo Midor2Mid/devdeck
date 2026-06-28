@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
 import { useSettings, type ShellKind } from "../settings"
 import { useStore } from "../store"
-import { THEMES } from "../themes"
+import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
 import { type Pipeline, type PipelineStep, type PipelineTrigger, isRunnable, moveItem } from "../pipeline"
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
 
 const THEME_LIST = Object.values(THEMES)
+const STYLE_LIST = Object.values(STYLES)
 import type { ServerStatus } from "../../../preload/index"
 
 type Section =
@@ -861,6 +862,21 @@ export function SettingsModal(): JSX.Element {
                                                 <span style={{ background: t.vars["--text"] }} />
                                             </div>
                                             <span className="theme-name">{t.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="setting-row">
+                                <label>Style</label>
+                                <div className="style-cards">
+                                    {STYLE_LIST.map((st) => (
+                                        <div
+                                            key={st.id}
+                                            className={"style-card" + (s.appearance.style === st.id ? " on" : "")}
+                                            onClick={() => s.setAppearance({ style: st.id })}
+                                        >
+                                            <span className="style-name">{st.label}</span>
+                                            <span className="style-desc">{st.description}</span>
                                         </div>
                                     ))}
                                 </div>

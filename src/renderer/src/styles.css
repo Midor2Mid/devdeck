@@ -3238,6 +3238,108 @@ select:focus {
 }
 .standup-actions { display: flex; align-items: center; gap: 12px; }
 
+/* ---------- Design style picker (settings) ---------- */
+.style-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+.style-card {
+    flex: 1;
+    min-width: 180px;
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    padding: 11px 13px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: border-color 0.12s ease;
+}
+.style-card:hover { border-color: var(--accent-soft); }
+.style-card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.style-name { font-weight: 600; font-size: 13px; }
+.style-desc { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+
+/* ============================================================
+   DESIGN STYLE: Modern Minimal — crisp radii, flat surfaces,
+   tighter spacing & type. Layers on top of any color theme.
+   ============================================================ */
+[data-style="minimal"] {
+    --radius: 5px;
+}
+/* Crisp corners on controls */
+[data-style="minimal"] button,
+[data-style="minimal"] input,
+[data-style="minimal"] select,
+[data-style="minimal"] textarea,
+[data-style="minimal"] .icon-action,
+[data-style="minimal"] .btn-min,
+[data-style="minimal"] .term-tab,
+[data-style="minimal"] .tab-rename,
+[data-style="minimal"] .chip,
+[data-style="minimal"] .work-type,
+[data-style="minimal"] .work-status {
+    border-radius: 5px;
+}
+/* Cards / rows: small uniform radius */
+[data-style="minimal"] .switcher-card,
+[data-style="minimal"] .theme-card,
+[data-style="minimal"] .style-card,
+[data-style="minimal"] .recording-row,
+[data-style="minimal"] .work-item,
+[data-style="minimal"] .wt-row,
+[data-style="minimal"] .pipe-edit,
+[data-style="minimal"] .pipe-step,
+[data-style="minimal"] .lane,
+[data-style="minimal"] .trigger-row,
+[data-style="minimal"] .git-account,
+[data-style="minimal"] .activity-row,
+[data-style="minimal"] .ch-file,
+[data-style="minimal"] .find-bar,
+[data-style="minimal"] .term-pane,
+[data-style="minimal"] .promote-commits,
+[data-style="minimal"] .replay-term {
+    border-radius: 6px;
+}
+/* Large surfaces: modest radius + flat, restrained shadow */
+[data-style="minimal"] .modal,
+[data-style="minimal"] .switcher,
+[data-style="minimal"] .recordings-modal,
+[data-style="minimal"] .changes-modal,
+[data-style="minimal"] .release-modal,
+[data-style="minimal"] .standup-modal,
+[data-style="minimal"] .worktrees-modal,
+[data-style="minimal"] .settings-modal {
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+[data-style="minimal"] .agent-menu,
+[data-style="minimal"] .group-menu,
+[data-style="minimal"] .sb-id-menu,
+[data-style="minimal"] .pipeline-bar,
+[data-style="minimal"] .toast {
+    border-radius: 7px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+}
+[data-style="minimal"] .drawer {
+    box-shadow: -6px 0 22px rgba(0, 0, 0, 0.24);
+}
+/* Snappier interactions + a touch tighter label tracking */
+[data-style="minimal"] button,
+[data-style="minimal"] .icon-action,
+[data-style="minimal"] input,
+[data-style="minimal"] select,
+[data-style="minimal"] textarea {
+    transition-duration: 0.08s;
+}
+[data-style="minimal"] .brand,
+[data-style="minimal"] .m-brand {
+    letter-spacing: -0.01em;
+    font-weight: 600;
+}
+/* Flatten the accent "on" insets to a clean 1px line */
+[data-style="minimal"] .switcher-card.active,
+[data-style="minimal"] .style-card.on {
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;

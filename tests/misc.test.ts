@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest"
-import { shade, THEMES } from "../src/renderer/src/themes"
+import { shade, THEMES, STYLES } from "../src/renderer/src/themes"
 import { sshCommand } from "../src/renderer/src/settings"
+
+describe("design styles", () => {
+    it("registers wabi (default) and minimal with labels", () => {
+        expect(Object.keys(STYLES).sort()).toEqual(["minimal", "wabi"])
+        expect(STYLES.wabi.label).toBeTruthy()
+        expect(STYLES.minimal.label).toBe("Modern Minimal")
+    })
+})
 
 describe("themes.shade", () => {
     it("lightens toward white with positive amt", () => {
