@@ -3448,6 +3448,87 @@ select:focus {
     }
 }
 
+/* ============================================================
+   DESIGN STYLE: Flat Vector — friendly & product-y. Big rounded
+   corners, soft elevation on cards, filled accent buttons, fully
+   rounded pills. Reads brightest on a light theme.
+   ============================================================ */
+[data-style="flat"] {
+    --radius: 12px;
+}
+/* Rounder, slightly chunkier controls */
+[data-style="flat"] button,
+[data-style="flat"] input,
+[data-style="flat"] select,
+[data-style="flat"] textarea,
+[data-style="flat"] .icon-action,
+[data-style="flat"] .term-tab,
+[data-style="flat"] .tab-rename {
+    border-radius: 9px;
+}
+[data-style="flat"] button {
+    padding: 6px 14px;
+}
+/* Filled accent button — the classic flat CTA */
+[data-style="flat"] button.accent {
+    background: var(--accent);
+    color: var(--bg-3);
+    border-color: var(--accent);
+}
+[data-style="flat"] button.accent:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
+    color: var(--bg-3);
+}
+/* Fully-rounded pills */
+[data-style="flat"] .chip,
+[data-style="flat"] .work-type,
+[data-style="flat"] .work-status,
+[data-style="flat"] .agent-badge,
+[data-style="flat"] .wt-tag,
+[data-style="flat"] .tab-close {
+    border-radius: 999px;
+}
+/* Cards & rows: generous radius + soft lift (elevation, not borders) */
+[data-style="flat"] .switcher-card,
+[data-style="flat"] .theme-card,
+[data-style="flat"] .style-card,
+[data-style="flat"] .recording-row,
+[data-style="flat"] .work-item,
+[data-style="flat"] .wt-row,
+[data-style="flat"] .pipe-edit,
+[data-style="flat"] .pipe-step,
+[data-style="flat"] .lane,
+[data-style="flat"] .trigger-row,
+[data-style="flat"] .git-account,
+[data-style="flat"] .find-bar,
+[data-style="flat"] .term-pane,
+[data-style="flat"] .promote-commits,
+[data-style="flat"] .replay-term {
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 6px 18px -8px rgba(0, 0, 0, 0.22);
+}
+/* Big surfaces: extra-generous radius + soft, diffuse elevation */
+[data-style="flat"] .modal,
+[data-style="flat"] .switcher,
+[data-style="flat"] .recordings-modal,
+[data-style="flat"] .changes-modal,
+[data-style="flat"] .release-modal,
+[data-style="flat"] .standup-modal,
+[data-style="flat"] .worktrees-modal,
+[data-style="flat"] .settings-modal {
+    border-radius: 16px;
+    box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.34);
+}
+[data-style="flat"] .agent-menu,
+[data-style="flat"] .group-menu,
+[data-style="flat"] .sb-id-menu,
+[data-style="flat"] .pipeline-bar,
+[data-style="flat"] .toast {
+    border-radius: 12px;
+    box-shadow: 0 8px 26px -6px rgba(0, 0, 0, 0.28);
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;

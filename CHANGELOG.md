@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.4 — 2026-06-28
+
+- **Flat Vector style** — a fourth design style: big rounded corners, **filled
+  accent buttons**, fully-rounded pill badges, and soft card elevation that lifts
+  surfaces off the background. Friendly and product-y; reads brightest on the
+  Washi (light) theme. Four styles now ship: Wabi-sabi, Modern Minimal, Neon,
+  Flat Vector — each combinable with any of the three color themes.
+
 ## 0.2.3 — 2026-06-28
 
 - **Neon style** — a third design style: glassy blurred panels, glowing accents
