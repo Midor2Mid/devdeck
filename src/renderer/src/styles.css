@@ -3529,6 +3529,106 @@ select:focus {
     box-shadow: 0 8px 26px -6px rgba(0, 0, 0, 0.28);
 }
 
+/* ============================================================
+   DESIGN STYLE: Bauhaus — bold & structural. Hard square corners,
+   heavy frames, hard *offset* shadows (no blur), uppercase
+   geometric chrome. Poster-like; strong on any theme.
+   ============================================================ */
+[data-style="bauhaus"] {
+    --radius: 0;
+}
+/* Everything is rectangular — including status dots (square is on-brand) */
+[data-style="bauhaus"] * {
+    border-radius: 0 !important;
+}
+/* Heavy framed, uppercase controls */
+[data-style="bauhaus"] button,
+[data-style="bauhaus"] input,
+[data-style="bauhaus"] select,
+[data-style="bauhaus"] textarea {
+    border-width: 2px;
+}
+[data-style="bauhaus"] button {
+    border-color: var(--text);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+[data-style="bauhaus"] button.accent {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--text);
+}
+[data-style="bauhaus"] button.accent:hover {
+    background: var(--accent-soft);
+    color: var(--bg);
+}
+/* Active tab = solid accent block with a hard frame */
+[data-style="bauhaus"] .term-tab {
+    border: 2px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 700;
+}
+[data-style="bauhaus"] .term-tab.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--text);
+}
+/* Cards & rows: 2px frame, flat (the frame is the statement) */
+[data-style="bauhaus"] .switcher-card,
+[data-style="bauhaus"] .theme-card,
+[data-style="bauhaus"] .style-card,
+[data-style="bauhaus"] .recording-row,
+[data-style="bauhaus"] .work-item,
+[data-style="bauhaus"] .wt-row,
+[data-style="bauhaus"] .pipe-edit,
+[data-style="bauhaus"] .pipe-step,
+[data-style="bauhaus"] .lane,
+[data-style="bauhaus"] .trigger-row,
+[data-style="bauhaus"] .git-account,
+[data-style="bauhaus"] .activity-row,
+[data-style="bauhaus"] .find-bar,
+[data-style="bauhaus"] .term-pane {
+    border-width: 2px;
+}
+/* Floating surfaces: heavy frame + hard offset shadow (no blur) */
+[data-style="bauhaus"] .modal,
+[data-style="bauhaus"] .switcher,
+[data-style="bauhaus"] .recordings-modal,
+[data-style="bauhaus"] .changes-modal,
+[data-style="bauhaus"] .release-modal,
+[data-style="bauhaus"] .standup-modal,
+[data-style="bauhaus"] .worktrees-modal,
+[data-style="bauhaus"] .settings-modal {
+    border: 2px solid var(--text);
+    box-shadow: 8px 8px 0 0 var(--accent);
+}
+[data-style="bauhaus"] .agent-menu,
+[data-style="bauhaus"] .group-menu,
+[data-style="bauhaus"] .sb-id-menu,
+[data-style="bauhaus"] .pipeline-bar,
+[data-style="bauhaus"] .toast {
+    border: 2px solid var(--text);
+    box-shadow: 5px 5px 0 0 var(--accent);
+}
+[data-style="bauhaus"] .drawer {
+    border-left: 2px solid var(--text);
+    box-shadow: none;
+}
+/* Uppercase geometric chrome */
+[data-style="bauhaus"] .brand,
+[data-style="bauhaus"] .m-brand,
+[data-style="bauhaus"] .settings-section h3,
+[data-style="bauhaus"] .modal-head,
+[data-style="bauhaus"] .drawer-head,
+[data-style="bauhaus"] .tab-title,
+[data-style="bauhaus"] .lane-name {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+}
+
 /* ---------- Toasts ---------- */
 .toasts {
     position: fixed;

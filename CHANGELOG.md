@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5 — 2026-06-28
+
+- **Bauhaus style** — a fifth design style: hard square corners (0 radius), heavy
+  2px frames, filled uppercase accent blocks, square dots/pills, and a signature
+  **hard offset shadow** (solid accent block, no blur) behind floating surfaces.
+  Bold, structural, poster-like. Five styles now ship: Wabi-sabi, Modern Minimal,
+  Neon, Flat Vector, Bauhaus — each combinable with any color theme.
+
 ## 0.2.4 — 2026-06-28
 
 - **Flat Vector style** — a fourth design style: big rounded corners, **filled

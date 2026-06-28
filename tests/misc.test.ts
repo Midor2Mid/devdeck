@@ -3,12 +3,13 @@ import { shade, THEMES, STYLES } from "../src/renderer/src/themes"
 import { sshCommand } from "../src/renderer/src/settings"
 
 describe("design styles", () => {
-    it("registers all four design styles with labels", () => {
-        expect(Object.keys(STYLES).sort()).toEqual(["flat", "minimal", "neon", "wabi"])
+    it("registers all five design styles with labels", () => {
+        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "flat", "minimal", "neon", "wabi"])
         expect(STYLES.wabi.label).toBeTruthy()
         expect(STYLES.minimal.label).toBe("Modern Minimal")
         expect(STYLES.neon.label).toBe("Neon")
         expect(STYLES.flat.label).toBe("Flat Vector")
+        expect(STYLES.bauhaus.label).toBe("Bauhaus")
     })
 })
 
