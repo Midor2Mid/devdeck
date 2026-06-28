@@ -67,9 +67,15 @@ ideally against a throwaway local server so the run is offline + deterministic.
 - **React re-render race.** After `cdp.click()` that flips React state (e.g. an
   inspector tab), the DOM updates on the *next* render. Query it in a **separate**
   `evalu` after a short `sleep`, not in the same expression as the click.
-- **Always kill the process.** The harness spawns Electron and `proc.kill()`s in a
-  `finally`; if you bypass it, a hidden Electron window leaks. Use a unique
-  `debugPort` if running concurrently.
+- **Teardown is force-killed (handled).** `proc.kill()` alone does *not* reap
+  Electron's GPU/renderer/utility children on Windows — they keep Node's child
+  handle open and the run hangs until the outer timeout, leaving stray
+  `electron.exe`. The harness now `taskkill /T /F`s the whole tree, `ws.terminate()`s
+  (no close handshake with a dying process), and `unref()`s — so runs exit in ~3s.
+  Still pass a **unique `debugPort`** if running concurrently.
+- **Everything is timeout-guarded.** Each CDP `send()` rejects after 15s, `ws`
+  open after 10s, and `getJson` after 4s — a stuck call fails the run instead of
+  wedging it. Wrap your own long waits similarly.
 - **Wait for the page target.** The renderer takes ~1–2s; the harness polls
   `/json/list` for a `type:"page"` target before attaching.
 

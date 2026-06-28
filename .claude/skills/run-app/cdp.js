@@ -10,7 +10,7 @@
 //       console.log(await cdp.evalu("window.api.proxy.status()", true))
 //       await cdp.screenshot("C:/path/to/shot.png")
 //   })
-const { spawn } = require("child_process")
+const { spawn, execFileSync } = require("child_process")
 const http = require("http")
 const fs = require("fs")
 const path = require("path")
@@ -23,13 +23,22 @@ const electronPath = require(path.join(PROJ, "node_modules/electron"))
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-function getJson(url) {
+// GET JSON with a hard timeout so a stalled CDP endpoint can't hang the run.
+function getJson(url, timeoutMs = 4000) {
     return new Promise((resolve, reject) => {
-        http.get(url, (res) => {
+        const req = http.get(url, (res) => {
             let b = ""
             res.on("data", (d) => (b += d))
-            res.on("end", () => resolve(JSON.parse(b)))
-        }).on("error", reject)
+            res.on("end", () => {
+                try {
+                    resolve(JSON.parse(b))
+                } catch (e) {
+                    reject(e)
+                }
+            })
+        })
+        req.on("error", reject)
+        req.setTimeout(timeoutMs, () => req.destroy(new Error("getJson timeout")))
     })
 }
 
@@ -39,18 +48,37 @@ class CDP {
         this.id = 0
         this.pending = new Map()
         ws.on("message", (raw) => {
-            const m = JSON.parse(raw)
+            let m
+            try {
+                m = JSON.parse(raw)
+            } catch {
+                return
+            }
             if (m.id && this.pending.has(m.id)) {
                 this.pending.get(m.id)(m)
                 this.pending.delete(m.id)
             }
         })
     }
-    send(method, params = {}) {
+    // Every command rejects after timeoutMs so one stuck call can't wedge the run.
+    send(method, params = {}, timeoutMs = 15000) {
         const id = ++this.id
-        return new Promise((resolve) => {
-            this.pending.set(id, resolve)
-            this.ws.send(JSON.stringify({ id, method, params }))
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.pending.delete(id)
+                reject(new Error(`CDP ${method} timed out after ${timeoutMs}ms`))
+            }, timeoutMs)
+            this.pending.set(id, (m) => {
+                clearTimeout(timer)
+                resolve(m)
+            })
+            try {
+                this.ws.send(JSON.stringify({ id, method, params }))
+            } catch (e) {
+                clearTimeout(timer)
+                this.pending.delete(id)
+                reject(e)
+            }
         })
     }
     // Evaluate JS in the renderer. Set awaitPromise for `window.api.*` calls.
@@ -86,14 +114,52 @@ class CDP {
     }
 }
 
-// Launch the built app, attach to the renderer, run `fn(cdp)`, then clean up.
-// Requires a current build: run `npx electron-vite build` first.
+// Force-kill the Electron process *tree*. On Windows `proc.kill()` only signals
+// the launcher; Electron's GPU/renderer/utility children survive and keep Node's
+// child handle open, so the run never exits. taskkill /T /F reaps the whole tree.
+function killTree(proc) {
+    if (proc.pid) {
+        try {
+            execFileSync("taskkill", ["/pid", String(proc.pid), "/t", "/f"], { stdio: "ignore" })
+            return
+        } catch {
+            /* fall through to a plain kill */
+        }
+    }
+    try {
+        proc.kill("SIGKILL")
+    } catch {
+        /* already gone */
+    }
+}
+
+// Launch the built app, attach to the renderer, run `fn(cdp)`, then tear down
+// hard so Node exits promptly. Requires a current build (`npx electron-vite build`).
 async function withApp(fn, { debugPort = 9222 } = {}) {
     const proc = spawn(electronPath, [".", `--remote-debugging-port=${debugPort}`], {
         cwd: PROJ,
         env: process.env,
         stdio: "ignore"
     })
+    proc.on("error", () => {}) // don't let a spawn error become unhandled
+    let ws = null
+    const cleanup = () => {
+        if (ws) {
+            try {
+                ws.removeAllListeners()
+                ws.terminate() // immediate close - don't wait on a handshake from a dying process
+            } catch {
+                /* ignore */
+            }
+            ws = null
+        }
+        killTree(proc)
+        try {
+            proc.unref()
+        } catch {
+            /* ignore */
+        }
+    }
     try {
         let page = null
         for (let i = 0; i < 40 && !page; i++) {
@@ -106,17 +172,28 @@ async function withApp(fn, { debugPort = 9222 } = {}) {
             }
         }
         if (!page) throw new Error("renderer target never appeared (is the app built?)")
-        const ws = new WebSocket(page.webSocketDebuggerUrl, { perMessageDeflate: false })
-        await new Promise((r) => ws.on("open", r))
+
+        ws = new WebSocket(page.webSocketDebuggerUrl, { perMessageDeflate: false })
+        await new Promise((resolve, reject) => {
+            const t = setTimeout(() => reject(new Error("ws open timed out")), 10000)
+            ws.once("open", () => {
+                clearTimeout(t)
+                resolve()
+            })
+            ws.once("error", (e) => {
+                clearTimeout(t)
+                reject(e)
+            })
+        })
+
         const cdp = new CDP(ws)
         await cdp.send("Runtime.enable")
         await cdp.send("Page.enable")
         await sleep(1500) // let React mount
         await fn(cdp)
-        ws.close()
     } finally {
-        proc.kill()
+        cleanup()
     }
 }
 
-module.exports = { withApp, sleep, PROJ }
+module.exports = { withApp, sleep, PROJ, killTree }
