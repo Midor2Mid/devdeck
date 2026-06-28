@@ -8,6 +8,7 @@ import { KeyValueEditor, KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor
 import { splitUrl, parseQueryPairs, buildUrl } from "../httpParams"
 import { useSettings, type SavedRequest, type AuthConfig, defaultAuth } from "../settings"
 import { buildVarMap, substitute, findUnresolved } from "../vars"
+import { confirm } from "../confirm"
 import { EnvManager } from "./EnvManager"
 import { CollectionsSidebar } from "./CollectionsSidebar"
 
@@ -134,6 +135,16 @@ export function ApiPanel(): JSX.Element {
 
     const send = async (): Promise<void> => {
         if (!url.trim()) return
+        // Warn before firing a request that still has unresolved {{variables}} —
+        // they'd be sent literally and almost certainly fail.
+        if (unresolved.length > 0) {
+            const ok = await confirm({
+                title: "Unresolved variables",
+                message: `${unresolved.length} variable${unresolved.length === 1 ? "" : "s"} not defined in the active environment: ${unresolved.map((v) => "{{" + v + "}}").join(", ")}. Send anyway?`,
+                confirmLabel: "Send anyway"
+            })
+            if (!ok) return
+        }
         setSending(true)
         setResp(null)
         try {

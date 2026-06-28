@@ -1371,6 +1371,66 @@ button .ic,
     color: var(--accent-soft);
     background: transparent;
 }
+.col-search {
+    position: relative;
+    padding: 0 10px 8px;
+}
+.col-search input {
+    width: 100%;
+    padding: 5px 24px 5px 9px;
+    font-size: 12px;
+}
+.col-search-clear {
+    position: absolute;
+    right: 18px;
+    top: 5px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+}
+.col-search-clear:hover {
+    color: var(--text);
+}
+.col-req {
+    position: relative;
+}
+.req-menu {
+    position: absolute;
+    z-index: 20;
+    top: 100%;
+    right: 6px;
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+}
+.req-menu-item {
+    padding: 6px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.req-menu-item:hover {
+    background: var(--bg-3);
+}
+.req-menu-item.danger {
+    color: var(--danger);
+}
+.req-menu-title {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--faint);
+    padding: 6px 9px 3px;
+}
+
 .col-scroll {
     flex: 1;
     overflow-y: auto;
