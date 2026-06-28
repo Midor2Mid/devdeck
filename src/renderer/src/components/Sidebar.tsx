@@ -4,6 +4,7 @@ import { useSettings } from "../settings"
 import { collectLeaves } from "../layout"
 import type { Project } from "../../../preload/index"
 import { Icon } from "./Icon"
+import { Enso } from "./Enso"
 import { confirm } from "../confirm"
 
 interface SessionRow {
@@ -158,7 +159,10 @@ export function Sidebar(): JSX.Element {
     return (
         <div className="sidebar">
             <div className="sidebar-header">
-                <span className="brand">DevDeck</span>
+                <span className="brand">
+                    <Enso size={15} strokeWidth={2.25} className="brand-enso" />
+                    DevDeck
+                </span>
                 <button className="gear-btn" data-tip="Switch project (Ctrl+K)" data-tip-pos="bottom" onClick={openSwitcher}>
                     <Icon name="layers" />
                 </button>

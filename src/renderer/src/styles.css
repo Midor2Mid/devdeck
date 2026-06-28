@@ -20,6 +20,8 @@
     --clay: #c4855d; /* claude */
     --ok: #8c9a68;
     --danger: #b66b5f;
+    /* Ensō silhouette used as a faint watermark behind empty states. */
+    --enso-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'><circle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-dasharray='48%2060' transform='rotate(120%2012%2012)'/></svg>");
 }
 
 * {
@@ -134,14 +136,11 @@ select:focus {
 .rail-logo {
     width: 32px;
     height: 32px;
-    border-radius: 9px;
     display: grid;
     place-items: center;
     margin-bottom: 10px;
-    font-weight: 800;
-    font-size: 15px;
-    color: var(--bg);
-    background: linear-gradient(145deg, var(--accent), var(--accent-soft));
+    /* The ensō brand mark - a quiet clay brush-ring, no filled tile. */
+    color: var(--accent);
 }
 .rail-group {
     display: flex;
@@ -547,15 +546,9 @@ button .ic,
     align-items: center;
     gap: 9px;
 }
-.brand::before {
-    content: "";
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    border: 1.5px solid var(--accent);
-    /* ensō-ish: an open ring, quietly imperfect */
-    border-right-color: transparent;
-    transform: rotate(35deg);
+.brand-enso {
+    flex: none;
+    color: var(--accent);
 }
 .sidebar-section-title {
     display: flex;
@@ -833,6 +826,26 @@ button .ic,
     text-align: center;
     padding: 32px;
     color: var(--muted);
+    position: relative;
+}
+/* A large, faint ensō behind empty states - turns void into intentional ma. */
+.empty-state::before,
+.resp-placeholder::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200px;
+    height: 200px;
+    transform: translate(-50%, -50%);
+    background: var(--accent);
+    opacity: 0.07;
+    -webkit-mask: var(--enso-mask) center / contain no-repeat;
+    mask: var(--enso-mask) center / contain no-repeat;
+    pointer-events: none;
+}
+.empty-state > * {
+    position: relative;
 }
 
 /* ---------- Terminal view ---------- */
@@ -1890,6 +1903,13 @@ button .ic,
 }
 .resp-placeholder {
     padding: 18px;
+    min-height: 240px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    position: relative;
 }
 .resp-meta {
     display: flex;
@@ -2362,7 +2382,8 @@ button .ic,
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(10, 9, 8, 0.55);
+    background: rgba(10, 9, 8, 0.72);
+    backdrop-filter: blur(3px);
     display: flex;
     align-items: center;
     justify-content: center;

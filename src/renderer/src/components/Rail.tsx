@@ -1,6 +1,7 @@
 import { useStore, type MainView } from "../store"
 import { useSettings } from "../settings"
 import { Icon, type IconName } from "./Icon"
+import { Enso } from "./Enso"
 
 /**
  * Slim icon rail - the app's primary navigation. Top group switches the main
@@ -30,7 +31,7 @@ export function Rail(): JSX.Element {
     return (
         <nav className="rail" aria-label="Primary">
             <div className="rail-logo" data-tip="DevDeck">
-                D
+                <Enso size={24} strokeWidth={2} />
             </div>
             <div className="rail-group">
                 {VIEW_NAV.map((v) => (
