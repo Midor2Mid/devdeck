@@ -128,7 +128,7 @@ export function App(): JSX.Element {
                                     <span className="crumb-sep">/</span>
                                 ) : null}
                                 {project ? (
-                                    <span className="crumb-proj" title={project.path}>{project.name}</span>
+                                    <span className="crumb-proj" data-tip={project.path}>{project.name}</span>
                                 ) : (
                                     <span className="muted">No project</span>
                                 )}
@@ -136,7 +136,7 @@ export function App(): JSX.Element {
                             <button
                                 className="cmd-pill"
                                 onClick={() => useStore.getState().setPaletteOpen(true)}
-                                title="Command palette (Ctrl+Shift+P)"
+                                data-tip="Command palette (Ctrl+Shift+P)"
                             >
                                 <Icon name="search" size={14} />
                                 <span>Search or run…</span>

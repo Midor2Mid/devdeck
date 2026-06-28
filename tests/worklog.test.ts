@@ -34,7 +34,7 @@ describe("buildWorklog", () => {
             repos: [repo({ name: "api", commits: [{ sha: "a1", subject: "feat: board", when: "1h" }] })],
             sessions: []
         })
-        expect(md).toContain("# Standup — Fri")
+        expect(md).toContain("# Standup - Fri")
         expect(md).toContain("## Done")
         expect(md).toContain("- **api**")
         expect(md).toContain("    - feat: board (a1)")

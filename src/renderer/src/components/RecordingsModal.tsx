@@ -215,7 +215,7 @@ export function RecordingsModal(): JSX.Element {
                             <button className="icon-action" onClick={togglePlay}>
                                 {playing ? "⏸" : "▶"}
                             </button>
-                            <button className="icon-action" onClick={restart} title="Restart">
+                            <button className="icon-action" onClick={restart} data-tip="Restart">
                                 ↺
                             </button>
                             <div className="replay-progress">

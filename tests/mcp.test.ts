@@ -42,7 +42,7 @@ describe("mcp .mcp.json round-trip", () => {
         const p = join(dir, ".mcp.json")
         const raw = JSON.parse(readFileSync(p, "utf8"))
         raw.somethingElse = 1
-        writeMcp(dir, readMcp(dir)) // rewrite — but somethingElse was added out-of-band
+        writeMcp(dir, readMcp(dir)) // rewrite - but somethingElse was added out-of-band
         // simulate external key by writing again through readMcp path:
         expect(readMcp(dir).map((s) => s.name)).toContain("a")
     })

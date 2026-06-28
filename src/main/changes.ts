@@ -3,7 +3,7 @@ import { join } from "path"
 import { rm } from "fs/promises"
 
 /**
- * Git change review — list a repo's pending changes and let the user stage,
+ * Git change review - list a repo's pending changes and let the user stage,
  * unstage, discard, or commit them. This is post-hoc review (agents write files
  * directly; we review what landed), surfaced in one place across worktrees.
  */

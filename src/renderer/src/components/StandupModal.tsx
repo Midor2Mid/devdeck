@@ -4,7 +4,7 @@ import { buildWorklog } from "../worklog"
 import type { WorklogRepo } from "../../../preload/index"
 
 /**
- * Standup / worklog generator — collects commits you authored across all
+ * Standup / worklog generator - collects commits you authored across all
  * projects in a time window (+ live agent sessions from the activity feed) and
  * renders an editable markdown summary to paste into Jira / standup.
  */

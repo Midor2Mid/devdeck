@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { parseRemote } from "../src/main/pr"
 import { diffPrompt } from "../src/renderer/src/diffai"
 
-describe("parseRemote — Azure DevOps", () => {
+describe("parseRemote - Azure DevOps", () => {
     it("parses dev.azure.com URLs", () => {
         const r = parseRemote("https://dev.azure.com/myorg/My Project/_git/my-repo", "fix/x", "main")
         expect(r.host).toBe("azure")
@@ -23,7 +23,7 @@ describe("parseRemote — Azure DevOps", () => {
     })
 })
 
-describe("parseRemote — GitHub & other", () => {
+describe("parseRemote - GitHub & other", () => {
     it("parses https GitHub URLs and builds a compare URL", () => {
         const r = parseRemote("https://github.com/owner/repo.git", "feature/y", "main")
         expect(r.host).toBe("github")

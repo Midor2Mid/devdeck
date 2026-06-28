@@ -118,7 +118,7 @@ export function BrowserPanel(): JSX.Element {
         for (const [url, list] of Object.entries(byUrl)) {
             text += `\nPage: ${url}\n`
             list.forEach((c, i) => {
-                text += `  ${i + 1}. [${c.selector}] "${c.text}"${c.note ? " — " + c.note : ""}\n`
+                text += `  ${i + 1}. [${c.selector}] "${c.text}"${c.note ? " - " + c.note : ""}\n`
             })
         }
 
@@ -166,19 +166,19 @@ export function BrowserPanel(): JSX.Element {
     return (
         <div className="browser-panel">
             <div className="browser-bar">
-                <button className="icon-action" title="Back" onClick={() => wvRef.current?.goBack()}>
+                <button className="icon-action" data-tip="Back" onClick={() => wvRef.current?.goBack()}>
                     ‹
                 </button>
                 <button
                     className="icon-action"
-                    title="Forward"
+                    data-tip="Forward"
                     onClick={() => wvRef.current?.goForward()}
                 >
                     ›
                 </button>
                 <button
                     className="icon-action"
-                    title="Reload"
+                    data-tip="Reload"
                     onClick={() => wvRef.current?.reload()}
                 >
                     ↻
@@ -196,7 +196,7 @@ export function BrowserPanel(): JSX.Element {
                 <button
                     className={"icon-action" + (commentMode ? " on" : "")}
                     onClick={toggleComment}
-                    title="Comment mode — click elements to annotate"
+                    data-tip="Comment mode - click elements to annotate"
                 >
                     💬
                 </button>
@@ -204,7 +204,7 @@ export function BrowserPanel(): JSX.Element {
                     className="accent"
                     onClick={sendToAI}
                     disabled={!comments.length || !lastAgent}
-                    title={lastAgent ? "Send comments to the agent" : "No agent session yet"}
+                    data-tip={lastAgent ? "Send comments to the agent" : "No agent session yet"}
                 >
                     {sent ? "Sent ✓" : `→ Agent (${comments.length})`}
                 </button>
@@ -218,7 +218,7 @@ export function BrowserPanel(): JSX.Element {
                 />
                 {commentMode && (
                     <div className="comment-hint">
-                        Comment mode on — click any element on the page to annotate it.
+                        Comment mode on - click any element on the page to annotate it.
                     </div>
                 )}
             </div>

@@ -281,7 +281,7 @@ async function httpJson(
             return
         }
 
-        // No proxy — direct.
+        // No proxy - direct.
         const fn = isHttps ? httpsRequest : httpRequest
         const req = fn(
             u,
@@ -444,7 +444,7 @@ export async function createAzurePr(opts: {
 }): Promise<{ ok: boolean; url?: string; error?: string }> {
     const f = load()
     const pat = dec(f.azure.patEnc)
-    if (!pat) return { ok: false, error: "No Azure DevOps PAT saved — add one in Work → ⚙ (needs Code: read & write)." }
+    if (!pat) return { ok: false, error: "No Azure DevOps PAT saved - add one in Work → ⚙ (needs Code: read & write)." }
     const auth = "Basic " + Buffer.from(`:${pat}`).toString("base64")
     const api =
         `${opts.orgUrl}/${encodeURIComponent(opts.project)}/_apis/git/repositories/` +

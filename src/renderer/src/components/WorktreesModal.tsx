@@ -108,7 +108,7 @@ export function WorktreesModal(): JSX.Element {
                                         {wt.branch || "(detached)"}
                                         {wt.main && <span className="wt-tag">main</span>}
                                     </div>
-                                    <div className="wt-path" title={wt.path}>{wt.path}</div>
+                                    <div className="wt-path" data-tip={wt.path}>{wt.path}</div>
                                 </div>
                                 <button className="btn-min" onClick={() => openChanges(wt.path, wt.branch || wt.head)}>
                                     review

@@ -3,17 +3,17 @@ import { useSettings } from "../settings"
 import { Icon, type IconName } from "./Icon"
 
 /**
- * Slim icon rail — the app's primary navigation. Top group switches the main
+ * Slim icon rail - the app's primary navigation. Top group switches the main
  * view (terminal / editor / API / database / browser); bottom group opens the
  * cross-cutting tools (work, activity, standup, release, shortcuts, settings).
  * Replaces the old text view-tabs + sidebar header buttons.
  */
 const VIEW_NAV: { view: MainView; icon: IconName; label: string }[] = [
-    { view: "terminal", icon: "terminal", label: "Terminals — multi-agent sessions, splits & layouts" },
-    { view: "editor", icon: "code", label: "Editor — browse & edit project files (Monaco)" },
-    { view: "api", icon: "send", label: "API client — test requests, environments & collections" },
-    { view: "database", icon: "database", label: "Database — query Postgres / MySQL / SQLite" },
-    { view: "browser", icon: "appWindow", label: "Browser — embedded, with send-to-AI" }
+    { view: "terminal", icon: "terminal", label: "Terminals - multi-agent sessions, splits & layouts" },
+    { view: "editor", icon: "code", label: "Editor - browse & edit project files (Monaco)" },
+    { view: "api", icon: "send", label: "API client - test requests, environments & collections" },
+    { view: "database", icon: "database", label: "Database - query Postgres / MySQL / SQLite" },
+    { view: "browser", icon: "appWindow", label: "Browser - embedded, with send-to-AI" }
 ]
 
 export function Rail(): JSX.Element {
@@ -28,7 +28,7 @@ export function Rail(): JSX.Element {
 
     return (
         <nav className="rail" aria-label="Primary">
-            <div className="rail-logo" title="DevDeck">
+            <div className="rail-logo" data-tip="DevDeck">
                 D
             </div>
             <div className="rail-group">
@@ -46,22 +46,22 @@ export function Rail(): JSX.Element {
             </div>
             <div className="rail-spacer" />
             <div className="rail-group">
-                <button className="rail-btn" data-tip="Work — your assigned Jira / Azure DevOps tickets; start a session from one" data-tip-pos="right" onClick={() => setWorkOpen(true)}>
+                <button className="rail-btn" data-tip="Work - your assigned Jira / Azure DevOps tickets; start a session from one" data-tip-pos="right" onClick={() => setWorkOpen(true)}>
                     <Icon name="work" size={20} />
                 </button>
-                <button className="rail-btn" data-tip="Activity — agent events across all projects" data-tip-pos="right" onClick={() => setActivityOpen(true)}>
+                <button className="rail-btn" data-tip="Activity - agent events across all projects" data-tip-pos="right" onClick={() => setActivityOpen(true)}>
                     <Icon name="activity" size={20} />
                 </button>
-                <button className="rail-btn" data-tip="Standup — generate today's worklog from git + activity" data-tip-pos="right" onClick={() => setStandupOpen(true)}>
+                <button className="rail-btn" data-tip="Standup - generate today's worklog from git + activity" data-tip-pos="right" onClick={() => setStandupOpen(true)}>
                     <Icon name="list" size={20} />
                 </button>
-                <button className="rail-btn" data-tip="Release board — promote Dev → UAT → PROD" data-tip-pos="right" onClick={() => setReleaseOpen(true)}>
+                <button className="rail-btn" data-tip="Release board - promote Dev → UAT → PROD" data-tip-pos="right" onClick={() => setReleaseOpen(true)}>
                     <Icon name="release" size={20} />
                 </button>
                 <button className="rail-btn" data-tip="Keyboard shortcuts (F1)" data-tip-pos="right" onClick={() => setShortcutsOpen(true)}>
                     <Icon name="help" size={20} />
                 </button>
-                <button className="rail-btn" data-tip="Settings — appearance, agents, snippets, remote…" data-tip-pos="right" onClick={() => openSettings()}>
+                <button className="rail-btn" data-tip="Settings - appearance, agents, snippets, remote…" data-tip-pos="right" onClick={() => openSettings()}>
                     <Icon name="settings" size={20} />
                 </button>
             </div>

@@ -51,7 +51,7 @@ function startOne(t: PipelineTrigger): void {
             a.timer = setTimeout(() => notifyFn(t.id), Math.max(200, t.debounceMs || 800))
         })
     } catch {
-        return // path gone / not watchable — skip silently
+        return // path gone / not watchable - skip silently
     }
     watcher.on("error", () => stopOne(t.id))
     active.set(t.id, { watcher, timer: null })

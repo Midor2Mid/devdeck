@@ -3,7 +3,7 @@ import { useStore } from "../store"
 import type { WorkConfigPublic, WorkItem } from "../../../preload/index"
 
 /**
- * "Work" drawer — lists the developer's assigned Jira / Azure DevOps items and
+ * "Work" drawer - lists the developer's assigned Jira / Azure DevOps items and
  * starts a session straight from a ticket (optionally in a fresh worktree),
  * pre-seeding the agent with the ticket brief. First run shows a setup form;
  * tokens are stored encrypted in main and never read back here.
@@ -50,11 +50,11 @@ export function WorkPanel(): JSX.Element {
                     <span>Work {project ? `· → ${project.name}` : ""}</span>
                     <div>
                         {!setup && (
-                            <button className="btn-min" onClick={refresh} title="Refresh">
+                            <button className="btn-min" onClick={refresh} data-tip="Refresh">
                                 refresh
                             </button>
                         )}
-                        <button className="btn-min" onClick={() => setSetup((v) => !v)} title="Connections">
+                        <button className="btn-min" onClick={() => setSetup((v) => !v)} data-tip="Connections">
                             {setup ? "done" : "⚙"}
                         </button>
                         <button className="btn-min" onClick={() => close(false)}>
@@ -68,7 +68,7 @@ export function WorkPanel(): JSX.Element {
                 ) : (
                     <div className="drawer-body">
                         {!project && (
-                            <div className="work-warn">Pick a project first — "Start work" opens a session in the active project.</div>
+                            <div className="work-warn">Pick a project first - "Start work" opens a session in the active project.</div>
                         )}
                         <label className="work-wt-toggle">
                             <input type="checkbox" checked={useWorktree} onChange={(e) => setUseWorktree(e.target.checked)} />
@@ -163,7 +163,7 @@ function SetupForm({
             <label className="work-en"><input type="checkbox" checked={j.enabled} onChange={(e) => setJ({ ...j, enabled: e.target.checked })} /> Enable Jira</label>
             <input placeholder="https://yourco.atlassian.net" value={j.baseUrl} onChange={(e) => setJ({ ...j, baseUrl: e.target.value })} />
             <input placeholder="you@company.com" value={j.email} onChange={(e) => setJ({ ...j, email: e.target.value })} />
-            <input type="password" placeholder={j.hasToken ? "API token saved — leave blank to keep" : "API token"} value={j.token} onChange={(e) => setJ({ ...j, token: e.target.value })} />
+            <input type="password" placeholder={j.hasToken ? "API token saved - leave blank to keep" : "API token"} value={j.token} onChange={(e) => setJ({ ...j, token: e.target.value })} />
             <textarea className="work-jql" placeholder="JQL" value={j.jql} onChange={(e) => setJ({ ...j, jql: e.target.value })} />
             <label className="work-en"><input type="checkbox" checked={j.insecureTLS} onChange={(e) => setJ({ ...j, insecureTLS: e.target.checked })} /> Ignore TLS errors (corporate proxy)</label>
             <button className="btn-min" onClick={() => test("jira")}>Test Jira</button>
@@ -172,7 +172,7 @@ function SetupForm({
             <label className="work-en"><input type="checkbox" checked={a.enabled} onChange={(e) => setA({ ...a, enabled: e.target.checked })} /> Enable Azure DevOps</label>
             <input placeholder="https://dev.azure.com/yourorg" value={a.orgUrl} onChange={(e) => setA({ ...a, orgUrl: e.target.value })} />
             <input placeholder="Project name" value={a.project} onChange={(e) => setA({ ...a, project: e.target.value })} />
-            <input type="password" placeholder={a.hasToken ? "PAT saved — leave blank to keep" : "Personal Access Token"} value={a.pat} onChange={(e) => setA({ ...a, pat: e.target.value })} />
+            <input type="password" placeholder={a.hasToken ? "PAT saved - leave blank to keep" : "Personal Access Token"} value={a.pat} onChange={(e) => setA({ ...a, pat: e.target.value })} />
             <textarea className="work-jql" placeholder="WIQL" value={a.wiql} onChange={(e) => setA({ ...a, wiql: e.target.value })} />
             <label className="work-en"><input type="checkbox" checked={a.insecureTLS} onChange={(e) => setA({ ...a, insecureTLS: e.target.checked })} /> Ignore TLS errors (corporate proxy)</label>
             <button className="btn-min" onClick={() => test("azure")}>Test Azure</button>

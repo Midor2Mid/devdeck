@@ -9,7 +9,7 @@ import { Database as SqliteDatabase } from "node-sqlite3-wasm"
 
 export type DbKind = "postgres" | "mysql" | "sqlite"
 
-/** Connection profile as seen by the renderer — never includes the password. */
+/** Connection profile as seen by the renderer - never includes the password. */
 export interface ConnProfile {
     id: string
     projectId: string

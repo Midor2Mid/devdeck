@@ -1,7 +1,7 @@
 import { execFile } from "child_process"
 
 /**
- * Worklog collector — gathers what you did across your projects (commits you
+ * Worklog collector - gathers what you did across your projects (commits you
  * authored in a time window, current branch, uncommitted change count) so the
  * renderer can turn it into a standup summary. Read-only; no mutation.
  */

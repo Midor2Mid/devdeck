@@ -22,7 +22,7 @@ function Toast({ n }: { n: AppNotification }): JSX.Element {
             <span className="toast-text">{n.text}</span>
             <span
                 className="toast-close"
-                title="Dismiss"
+                data-tip="Dismiss"
                 onClick={(e) => {
                     e.stopPropagation()
                     dismiss(n.id)

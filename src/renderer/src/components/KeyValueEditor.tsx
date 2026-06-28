@@ -2,7 +2,7 @@
 // Each row has an enable/disable checkbox; there is always one trailing empty
 // row so typing into it adds a new entry without losing focus.
 
-// Collision-safe ids — rows may be persisted (e.g. environment variables) and
+// Collision-safe ids - rows may be persisted (e.g. environment variables) and
 // later mixed with freshly minted rows in the same list.
 const nextId = (): string => `kv-${crypto.randomUUID()}`
 
@@ -63,7 +63,7 @@ export function KeyValueEditor({
                             checked={r.enabled}
                             disabled={isGhost}
                             onChange={(e) => patch(r.id, { enabled: e.target.checked })}
-                            title={r.enabled ? "Enabled" : "Disabled"}
+                            data-tip={r.enabled ? "Enabled" : "Disabled"}
                         />
                         <input
                             className="kv-key"
@@ -82,7 +82,7 @@ export function KeyValueEditor({
                             tabIndex={-1}
                             onClick={() => remove(r.id)}
                             disabled={isGhost}
-                            title="Remove"
+                            data-tip="Remove"
                         >
                             ×
                         </button>

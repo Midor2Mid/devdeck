@@ -20,7 +20,7 @@ export interface DirEntry {
     isDir: boolean
 }
 
-// Directories we never want to expand in the file tree — too large / noisy.
+// Directories we never want to expand in the file tree - too large / noisy.
 const IGNORE = new Set([
     "node_modules",
     ".git",
@@ -85,9 +85,9 @@ export function readFileText(path: string): string {
         throw new Error(`File too large to open (${Math.round(size / 1024)} KB).`)
     }
     const buf = readFileSync(path)
-    // Refuse binary files — opening them as text would corrupt them on save.
+    // Refuse binary files - opening them as text would corrupt them on save.
     if (buf.subarray(0, 8000).includes(0)) {
-        throw new Error("Binary file — not opened in the text editor.")
+        throw new Error("Binary file - not opened in the text editor.")
     }
     return buf.toString("utf8")
 }

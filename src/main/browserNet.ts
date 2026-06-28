@@ -26,7 +26,7 @@ export function attach(id: number): void {
     try {
         wc.debugger.attach("1.3")
     } catch {
-        return // already attached (e.g. devtools open) — skip
+        return // already attached (e.g. devtools open) - skip
     }
     attached.add(id)
     buffers.set(id, [])

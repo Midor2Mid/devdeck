@@ -19,7 +19,7 @@ interface Props {
 /**
  * One xterm.js instance bound to one pty (by termId). On mount it attaches to
  * the pty (the main process spawns it, or replays its buffer if it already
- * exists). On unmount it detaches but does NOT kill the pty — the session lives
+ * exists). On unmount it detaches but does NOT kill the pty - the session lives
  * on so it survives split/tab/project switches. Killing is explicit (close).
  */
 export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: Props): JSX.Element {
@@ -100,7 +100,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             ro.disconnect()
             paneRegistry.delete(termId)
             term.dispose()
-            // NOTE: intentionally NOT killing the pty — session persists.
+            // NOTE: intentionally NOT killing the pty - session persists.
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])

@@ -206,7 +206,7 @@ function badgeFor(agentId: string): string {
 }
 
 export const useStore = create<AppState>((set, get) => {
-    // Debounced disk persistence — coalesces bursts (e.g. composer keystrokes).
+    // Debounced disk persistence - coalesces bursts (e.g. composer keystrokes).
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
         const s = get()
@@ -258,7 +258,7 @@ export const useStore = create<AppState>((set, get) => {
             const tab = tabs.find((t) => hasLeaf(t.root, termId))
             if (tab) {
                 const project = s.projects.find((p) => p.id === pid)
-                return `${tab.name} · ${project?.name ?? "—"}`
+                return `${tab.name} · ${project?.name ?? "-"}`
             }
         }
         return "agent session"
@@ -349,7 +349,7 @@ export const useStore = create<AppState>((set, get) => {
                     out.push({
                         termId,
                         projectId: pid,
-                        projectName: project?.name ?? "—",
+                        projectName: project?.name ?? "-",
                         projectPath: project?.path ?? "",
                         tabName: tab.name,
                         agentId,
@@ -716,7 +716,7 @@ export const useStore = create<AppState>((set, get) => {
                             break
                         }
                         if (attempt < attempts) {
-                            setRun({ gateMsg: `✗ gate failed — retrying (${attempt}/${attempts - 1})` })
+                            setRun({ gateMsg: `✗ gate failed - retrying (${attempt}/${attempts - 1})` })
                             pushActivity("pipeline", termId, `${step.title} · gate failed, retrying`)
                             await sleep(800)
                         }
@@ -726,10 +726,10 @@ export const useStore = create<AppState>((set, get) => {
                         const onFail = step.gate?.onFail ?? "stop"
                         pushActivity("pipeline", termId, `${step.title} · gate failed`)
                         if (onFail === "stop") {
-                            setRun({ status: "error", gateMsg: "✗ gate failed — stopped" })
+                            setRun({ status: "error", gateMsg: "✗ gate failed - stopped" })
                             return
                         }
-                        setRun({ gateMsg: "✗ gate failed — continued" })
+                        setRun({ gateMsg: "✗ gate failed - continued" })
                     }
                 }
                 if (stale()) return

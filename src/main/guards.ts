@@ -2,7 +2,7 @@
 
 /**
  * Block remote-initiated requests to local/private/link-local hosts (SSRF guard).
- * The desktop API panel is unaffected — this only gates the phone's relayed requests.
+ * The desktop API panel is unaffected - this only gates the phone's relayed requests.
  */
 export function isBlockedRemoteUrl(raw: string): boolean {
     try {
@@ -26,7 +26,7 @@ export function isBlockedRemoteUrl(raw: string): boolean {
     }
 }
 
-/** Remote DB access is read-only — only data-returning statements are allowed. */
+/** Remote DB access is read-only - only data-returning statements are allowed. */
 export function isReadOnlySql(sql: string): boolean {
     return /^\s*(select|with|explain|pragma|show|desc|describe)\b/i.test(sql)
 }

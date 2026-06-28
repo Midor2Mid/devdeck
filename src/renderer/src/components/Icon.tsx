@@ -2,7 +2,7 @@ import type { JSX } from "react"
 
 /**
  * Inline line-icon set (Lucide-derived, MIT). One consistent 24-grid, 1.75
- * stroke, currentColor — replaces the Unicode glyphs that made the UI feel
+ * stroke, currentColor - replaces the Unicode glyphs that made the UI feel
  * dated. No icon font / CDN (works behind the corporate proxy, no dependency).
  */
 export type IconName =

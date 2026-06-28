@@ -148,7 +148,7 @@ export function EditorPanel(): JSX.Element {
         return { words, minutes: Math.max(1, Math.round(words / 200)) }
     }, [active])
 
-    // Sanitize — a .md file must never run script in this privileged renderer.
+    // Sanitize - a .md file must never run script in this privileged renderer.
     const previewHtml = useMemo(
         () => (active && md ? DOMPurify.sanitize(marked.parse(active.content) as string) : ""),
         [active, md]
@@ -236,7 +236,7 @@ export function EditorPanel(): JSX.Element {
                                 key={f.path}
                                 className={"editor-tab" + (f.path === activePath ? " active" : "")}
                                 onClick={() => setActivePath(f.path)}
-                                title={f.path}
+                                data-tip={f.path}
                             >
                                 <span className="editor-tab-name">{f.name}</span>
                                 <span className="editor-tab-state">
@@ -276,10 +276,10 @@ export function EditorPanel(): JSX.Element {
                             className="send-claude"
                             onClick={sendActiveToClaude}
                             disabled={!active || !lastClaude}
-                            title={
+                            data-tip={
                                 lastClaude
                                     ? "Send @path of this file to the last-focused agent session"
-                                    : "No agent session yet — start one first"
+                                    : "No agent session yet - start one first"
                             }
                         >
                             {sent ? "Sent ✓" : "→ Agent"}

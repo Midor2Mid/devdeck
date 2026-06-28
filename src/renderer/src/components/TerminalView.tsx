@@ -130,7 +130,7 @@ export function TerminalView(): JSX.Element {
         setEditingId(null)
     }
 
-    // All terminals across the project's tabs — used by Grid + Canvas layouts.
+    // All terminals across the project's tabs - used by Grid + Canvas layouts.
     const allPanes = tabs.flatMap((tab) =>
         collectLeaves(tab.root).map((termId) => ({ termId, tabName: tab.name, tabId: tab.id }))
     )
@@ -160,7 +160,7 @@ export function TerminalView(): JSX.Element {
                                     setEditingId(tab.id)
                                     setDraft(tab.name)
                                 }}
-                                title="Double-click to rename"
+                                data-tip="Double-click to rename"
                             >
                                 <span
                                     className={
@@ -186,7 +186,7 @@ export function TerminalView(): JSX.Element {
                                 )}
                                 <span
                                     className="tab-close"
-                                    title="Close"
+                                    data-tip="Close"
                                     onClick={async (e) => {
                                         e.stopPropagation()
                                         const panes = [...new Set(collectLeaves(tab.root))]
@@ -209,14 +209,14 @@ export function TerminalView(): JSX.Element {
                     })}
                 </div>
                 <div className="term-actions">
-                    <button onClick={() => newTab(SHELL)} title="New shell tab (Ctrl+Shift+T)">
+                    <button onClick={() => newTab(SHELL)} data-tip="New shell tab (Ctrl+Shift+T)">
                         + Terminal
                     </button>
                     {primaryAgent && (
                         <button
                             className="accent"
                             onClick={() => newTab(primaryAgent.id)}
-                            title={`New ${primaryAgent.name} session (Ctrl+Shift+Enter)`}
+                            data-tip={`New ${primaryAgent.name} session (Ctrl+Shift+Enter)`}
                         >
                             + {primaryAgent.name}
                         </button>
@@ -248,7 +248,7 @@ export function TerminalView(): JSX.Element {
                                             {a.resumeArgs && (
                                                 <span
                                                     className="agent-menu-resume"
-                                                    title={`Resume (${a.command} ${a.resumeArgs})`}
+                                                    data-tip={`Resume (${a.command} ${a.resumeArgs})`}
                                                     onClick={() => {
                                                         newTab(a.id, `${a.command} ${a.resumeArgs}`)
                                                         setMenuOpen(false)
@@ -284,21 +284,21 @@ export function TerminalView(): JSX.Element {
                     <button
                         className={"icon-action" + (termLayout === "tabs" ? " on" : "")}
                         onClick={() => setTermLayout("tabs")}
-                        data-tip="Tabs — one terminal at a time"
+                        data-tip="Tabs - one terminal at a time"
                     >
                         <Icon name="tabs" />
                     </button>
                     <button
                         className={"icon-action" + (termLayout === "grid" ? " on" : "")}
                         onClick={() => setTermLayout("grid")}
-                        data-tip="Grid — all this project's terminals at once"
+                        data-tip="Grid - all this project's terminals at once"
                     >
                         <Icon name="grid" />
                     </button>
                     <button
                         className={"icon-action" + (termLayout === "canvas" ? " on" : "")}
                         onClick={() => setTermLayout("canvas")}
-                        data-tip="Canvas — free-form board of all terminals"
+                        data-tip="Canvas - free-form board of all terminals"
                     >
                         <Icon name="canvas" />
                     </button>
@@ -328,7 +328,7 @@ export function TerminalView(): JSX.Element {
                     <button
                         className={"icon-action" + (composerOpen ? " on" : "")}
                         onClick={() => setComposerOpen(!composerOpen)}
-                        data-tip="Prompt composer — @file & /snippet autocomplete (Ctrl+Shift+I)"
+                        data-tip="Prompt composer - @file & /snippet autocomplete (Ctrl+Shift+I)"
                     >
                         <Icon name="pencil" />
                     </button>
@@ -339,7 +339,7 @@ export function TerminalView(): JSX.Element {
                         disabled={!!recordingTermId && !recordingActive}
                         data-tip={
                             recordingActive
-                                ? "Stop recording — saves to .devdeck/recordings"
+                                ? "Stop recording - saves to .devdeck/recordings"
                                 : recordingTermId
                                   ? "A recording is in progress in another session"
                                   : "Record this terminal (replay it later)"
@@ -350,21 +350,21 @@ export function TerminalView(): JSX.Element {
                     <button
                         className="icon-action"
                         onClick={() => setRecordingsOpen(true)}
-                        data-tip="Recordings — replay a recorded session"
+                        data-tip="Recordings - replay a recorded session"
                     >
                         <Icon name="play" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => setWorktreesOpen(true)}
-                        data-tip="Worktrees — run an agent in its own git worktree"
+                        data-tip="Worktrees - run an agent in its own git worktree"
                     >
                         <Icon name="gitBranch" />
                     </button>
                     <button
                         className="icon-action"
                         onClick={() => openChanges(activeProject.path, activeProject.name)}
-                        data-tip="Review changes — diff, AI review, stage / commit, open PR"
+                        data-tip="Review changes - diff, AI review, stage / commit, open PR"
                     >
                         <Icon name="check" />
                     </button>
@@ -384,13 +384,13 @@ export function TerminalView(): JSX.Element {
                                 if (e.key === "Escape") setFindOpen(false)
                             }}
                         />
-                        <button onClick={() => runFind(false)} title="Previous">
+                        <button onClick={() => runFind(false)} data-tip="Previous">
                             ↑
                         </button>
-                        <button onClick={() => runFind(true)} title="Next">
+                        <button onClick={() => runFind(true)} data-tip="Next">
                             ↓
                         </button>
-                        <button onClick={() => setFindOpen(false)} title="Close">
+                        <button onClick={() => setFindOpen(false)} data-tip="Close">
                             ×
                         </button>
                     </div>
@@ -423,7 +423,7 @@ export function TerminalView(): JSX.Element {
                                             <span className="grid-card-name">{tabName}</span>
                                             <span
                                                 className="grid-card-open"
-                                                title="Open in tabs view"
+                                                data-tip="Open in tabs view"
                                                 onClick={() => {
                                                     setActiveTab(activeProject.id, tabId)
                                                     focusPane(activeProject.id, termId)
@@ -434,7 +434,7 @@ export function TerminalView(): JSX.Element {
                                             </span>
                                             <span
                                                 className="tab-close"
-                                                title="Close"
+                                                data-tip="Close"
                                                 onClick={() => closePane(termId)}
                                             >
                                                 ×
@@ -472,7 +472,7 @@ export function TerminalView(): JSX.Element {
                 <div
                     className="composer-launcher"
                     onClick={() => setComposerOpen(true)}
-                    title="Open the prompt composer (Ctrl+Shift+I)"
+                    data-tip="Open the prompt composer (Ctrl+Shift+I)"
                 >
                     <span className="cl-icon">✎</span>
                     <span className="cl-text">

@@ -90,7 +90,7 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
         setPan({ x: 0, y: 0 })
     }
 
-    // Resolved position for each pane (drag override wins) — shared by cards + links.
+    // Resolved position for each pane (drag override wins) - shared by cards + links.
     const posMap: Record<string, { x: number; y: number }> = {}
     panes.forEach((p, i) => {
         posMap[p.termId] = drag && drag.termId === p.termId ? { x: drag.x, y: drag.y } : posOf(p.termId, i)
@@ -151,7 +151,7 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
                                 <span className="grid-card-name">{p.tabName}</span>
                                 <span
                                     className={"grid-card-open" + (linkSrc ? " arm" : "")}
-                                    title={
+                                    data-tip={
                                         linkSrc === p.termId
                                             ? "Click another card to link (or here to cancel)"
                                             : linkSrc
@@ -172,7 +172,7 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
                                 </span>
                                 <span
                                     className="grid-card-open"
-                                    title="Open in tabs view"
+                                    data-tip="Open in tabs view"
                                     onMouseDown={(e) => e.stopPropagation()}
                                     onClick={() => {
                                         setActiveTab(projectId, p.tabId)
@@ -184,7 +184,7 @@ export function CanvasView({ panes, projectId, cwd }: Props): JSX.Element {
                                 </span>
                                 <span
                                     className="tab-close"
-                                    title="Close"
+                                    data-tip="Close"
                                     onMouseDown={(e) => e.stopPropagation()}
                                     onClick={() => closePane(p.termId)}
                                 >

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 - 2026-06-28
+
+- **Tooltips everywhere** - swept the rest of the icon/affordance buttons across
+  all modals and panels onto the custom `data-tip` tooltip (status-bar items show
+  theirs upward so they don't clip).
+- **Plain hyphens** - replaced em-dashes ("—") with regular hyphens ("-") in all
+  UI text and labels, per preference.
+
 ## 0.3.3 — 2026-06-28
 
 - **Tooltips** — hover any icon button (the rail, terminal toolbar, sidebar,

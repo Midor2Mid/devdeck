@@ -7,7 +7,7 @@ export type DiffAiKind = "review" | "explain" | "commit" | "pr"
 const INTRO: Record<DiffAiKind, string> = {
     review:
         "Review the following diff for correctness, bugs, edge cases, and clarity. " +
-        "Be concise and cite file:line. Do not change anything yet — just report.",
+        "Be concise and cite file:line. Do not change anything yet - just report.",
     explain: "Explain what the following diff changes and why, as a short bulleted summary.",
     commit:
         "Write a single conventional-commit message (a concise subject line, then a short " +

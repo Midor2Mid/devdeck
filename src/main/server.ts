@@ -390,7 +390,7 @@ const CLIENT_HTML = `<!doctype html>
     var proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(proto + '://' + location.host + '/ws?token=' + encodeURIComponent(token));
     ws.onopen = function(){ statusEl.textContent = 'connected'; };
-    ws.onclose = function(){ statusEl.textContent = 'disconnected — retrying'; setTimeout(connect, 1500); };
+    ws.onclose = function(){ statusEl.textContent = 'disconnected - retrying'; setTimeout(connect, 1500); };
     ws.onmessage = function(e){
       var m = JSON.parse(e.data);
       if(m.t === 'sessions'){ sessions = m.sessions; if(!attachedId) renderList(); }

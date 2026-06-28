@@ -29,10 +29,10 @@ export function ActivityPanel(): JSX.Element {
                 <div className="drawer-head">
                     <span>Activity</span>
                     <div>
-                        <button className="btn-min" onClick={clear} title="Clear">
+                        <button className="btn-min" onClick={clear} data-tip="Clear">
                             clear
                         </button>
-                        <button className="btn-min" onClick={() => close(false)} title="Close">
+                        <button className="btn-min" onClick={() => close(false)} data-tip="Close">
                             ×
                         </button>
                     </div>

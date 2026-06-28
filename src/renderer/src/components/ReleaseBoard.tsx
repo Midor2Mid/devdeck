@@ -6,7 +6,7 @@ import type { ReleaseConfig, ReleaseStage, ReleaseCommit, StageStatus } from "..
  * Release / promotion board. Shows each deploy stage (Dev → UAT → PROD) mapped
  * to a git ref, what commit sits there, and how many commits are waiting to be
  * promoted to the next stage. Promotion is explicit: it generates the git
- * commands (send to a terminal or copy) or tags the release — it never pushes.
+ * commands (send to a terminal or copy) or tags the release - it never pushes.
  */
 export function ReleaseBoard(): JSX.Element {
     const close = useStore((s) => s.setReleaseOpen)
@@ -90,14 +90,14 @@ export function ReleaseBoard(): JSX.Element {
                                                 <span className="lc-meta">{s.commit.author} · {s.commit.when}</span>
                                             </div>
                                         ) : (
-                                            <div className="lane-missing">ref not found — edit stages</div>
+                                            <div className="lane-missing">ref not found - edit stages</div>
                                         )}
                                     </div>
                                     {i < status.length - 1 && (
                                         <button
                                             className={"promote-arrow" + (s.aheadOfNext > 0 ? " hot" : "")}
                                             onClick={() => setPromoteIdx(promoteIdx === i ? null : i)}
-                                            title={s.aheadOfNext > 0 ? `${s.aheadOfNext} commit(s) ready to promote` : "Up to date"}
+                                            data-tip={s.aheadOfNext > 0 ? `${s.aheadOfNext} commit(s) ready to promote` : "Up to date"}
                                         >
                                             <span className="pa-count">{s.aheadOfNext || "✓"}</span>
                                             <span className="pa-tip">▸</span>
@@ -176,7 +176,7 @@ function PromotePanel({
             <div className="promote-cols">
                 <div className="promote-commits">
                     {commits.length === 0 ? (
-                        <div className="muted small">Nothing to promote — {target.name} is up to date.</div>
+                        <div className="muted small">Nothing to promote - {target.name} is up to date.</div>
                     ) : (
                         commits.map((c) => (
                             <div key={c.sha} className="pc-row">
@@ -210,7 +210,7 @@ function PromotePanel({
                         <button
                             className="accent"
                             disabled={!allChecked || commits.length === 0}
-                            title={allChecked ? "" : "Tick the pre-flight items first"}
+                            data-tip={allChecked ? "" : "Tick the pre-flight items first"}
                             onClick={() => onSendTerminal(cmds)}
                         >
                             ▸ Send commands to terminal
@@ -229,7 +229,7 @@ function PromotePanel({
                         {msg && <div className="promote-msg">{msg}</div>}
                     </div>
                     <p className="settings-hint">
-                        DevDeck never pushes for you — it hands you the exact commands (review,
+                        DevDeck never pushes for you - it hands you the exact commands (review,
                         then run) or tags the release. Real deploys still go through your pipeline.
                     </p>
                 </div>

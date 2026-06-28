@@ -35,7 +35,7 @@ export interface Theme {
     vars: Record<string, string>
     xterm: XtermTheme
     monacoId: string
-    /** xterm line spacing — higher = airier. */
+    /** xterm line spacing - higher = airier. */
     termLineHeight: number
 }
 
@@ -107,7 +107,7 @@ const ZEN_VARS = {
     "--danger": "#c2766a"
 }
 
-// Cool slate — modern neutral ground keeping the warm amber accent.
+// Cool slate - modern neutral ground keeping the warm amber accent.
 const SLATE_VARS = {
     "--bg": "#0c0e13",
     "--bg-2": "#13161d",
@@ -257,7 +257,7 @@ export const THEMES: Record<ThemeId, Theme> = {
     }
 }
 
-/** Shift a hex color toward white (amt>0) or black (amt<0) — derives accent-soft. */
+/** Shift a hex color toward white (amt>0) or black (amt<0) - derives accent-soft. */
 export function shade(hex: string, amt: number): string {
     const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
     if (!m) return hex
@@ -283,7 +283,7 @@ export function applyTheme(id: ThemeId, accent?: string): void {
     root.dataset.theme = id
 }
 
-// ---------- Design styles (shape / depth / type — independent of color) ----------
+// ---------- Design styles (shape / depth / type - independent of color) ----------
 // A *style* sets how surfaces feel: corner radius, border weight, depth, and
 // typography. It layers on top of the color themes above (style × theme are
 // orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
@@ -299,17 +299,17 @@ export const STYLES: Record<StyleId, DesignStyle> = {
     wabi: {
         id: "wabi",
         label: "Wabi-sabi",
-        description: "Warm, soft, generous — the original feel."
+        description: "Warm, soft, generous - the original feel."
     },
     minimal: {
         id: "minimal",
         label: "Modern Minimal",
-        description: "Crisp small radii, flat surfaces, tight spacing — Linear/Vercel-style."
+        description: "Crisp small radii, flat surfaces, tight spacing - Linear/Vercel-style."
     },
     neon: {
         id: "neon",
         label: "Neon",
-        description: "Glassy panels, glowing accents & scanlines. Best on a dark theme — set a cyan accent for classic neon."
+        description: "Glassy panels, glowing accents & scanlines. Best on a dark theme - set a cyan accent for classic neon."
     },
     flat: {
         id: "flat",

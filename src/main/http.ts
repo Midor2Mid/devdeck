@@ -17,7 +17,7 @@ export interface HttpResponse {
 
 const BODYLESS = new Set(["GET", "HEAD"])
 
-// Runs in the main process, so it is free of browser CORS restrictions —
+// Runs in the main process, so it is free of browser CORS restrictions -
 // the whole point of a Postman-style client.
 export async function httpSend(req: HttpRequest): Promise<HttpResponse> {
     const start = Date.now()

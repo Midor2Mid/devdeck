@@ -135,7 +135,7 @@ export function ApiPanel(): JSX.Element {
 
     const send = async (): Promise<void> => {
         if (!url.trim()) return
-        // Warn before firing a request that still has unresolved {{variables}} —
+        // Warn before firing a request that still has unresolved {{variables}} -
         // they'd be sent literally and almost certainly fail.
         if (unresolved.length > 0) {
             const ok = await confirm({
@@ -320,7 +320,7 @@ export function ApiPanel(): JSX.Element {
                 <button
                     className="api-toggle"
                     onClick={() => setSidebarOpen((v) => !v)}
-                    title={sidebarOpen ? "Hide collections" : "Show collections"}
+                    data-tip={sidebarOpen ? "Hide collections" : "Show collections"}
                 >
                     ☰
                 </button>
@@ -333,20 +333,20 @@ export function ApiPanel(): JSX.Element {
                 </select>
                 <input
                     className="api-url"
-                    placeholder="https://api.example.com/endpoint  —  or paste a curl command"
+                    placeholder="https://api.example.com/endpoint  -  or paste a curl command"
                     value={url}
                     onChange={(e) => onUrlChange(e.target.value)}
                     onKeyDown={(e) => {
                         if (e.key === "Enter") send()
                     }}
                 />
-                {imported && <span className="api-imported" title="Imported from cURL">cURL ✓</span>}
-                {saved && <span className="api-imported" title="Saved">Saved ✓</span>}
-                <button onClick={onSaveClick} disabled={!url.trim()} title={loadedReqId ? "Update saved request" : "Save request"}>
+                {imported && <span className="api-imported" data-tip="Imported from cURL">cURL ✓</span>}
+                {saved && <span className="api-imported" data-tip="Saved">Saved ✓</span>}
+                <button onClick={onSaveClick} disabled={!url.trim()} data-tip={loadedReqId ? "Update saved request" : "Save request"}>
                     Save
                 </button>
                 {loadedReqId && (
-                    <button onClick={openSaveDialog} disabled={!url.trim()} title="Save as a new request">
+                    <button onClick={openSaveDialog} disabled={!url.trim()} data-tip="Save as a new request">
                         as…
                     </button>
                 )}
@@ -371,7 +371,7 @@ export function ApiPanel(): JSX.Element {
                 </select>
                 <button onClick={() => setEnvOpen(true)}>Manage…</button>
                 {unresolved.length > 0 && (
-                    <span className="api-unresolved" title="Variables not defined in the active environment">
+                    <span className="api-unresolved" data-tip="Variables not defined in the active environment">
                         unresolved: {unresolved.join(", ")}
                     </span>
                 )}
@@ -519,7 +519,7 @@ export function ApiPanel(): JSX.Element {
             <div className="api-resp">
                 {resp === null ? (
                     <div className="muted resp-placeholder">
-                        Response will appear here. (Requests run in the main process — no CORS
+                        Response will appear here. (Requests run in the main process - no CORS
                         limits.)
                     </div>
                 ) : resp.ok ? (
@@ -550,7 +550,7 @@ export function ApiPanel(): JSX.Element {
                                         <button
                                             className={respPretty ? "tool on" : "tool"}
                                             onClick={() => setRespPretty((v) => !v)}
-                                            title="Pretty-print JSON"
+                                            data-tip="Pretty-print JSON"
                                         >
                                             Pretty
                                         </button>
@@ -558,11 +558,11 @@ export function ApiPanel(): JSX.Element {
                                     <button
                                         className={respWrap ? "tool on" : "tool"}
                                         onClick={() => setRespWrap((v) => !v)}
-                                        title="Wrap long lines"
+                                        data-tip="Wrap long lines"
                                     >
                                         Wrap
                                     </button>
-                                    <button className="tool" onClick={copyBody} title="Copy body">
+                                    <button className="tool" onClick={copyBody} data-tip="Copy body">
                                         {copied ? "Copied ✓" : "Copy"}
                                     </button>
                                 </div>

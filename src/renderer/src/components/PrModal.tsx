@@ -3,7 +3,7 @@ import { useStore } from "../store"
 import type { RemoteInfo } from "../../../preload/index"
 
 /**
- * Pull-request composer — pushes the current branch and opens a PR. On Azure
+ * Pull-request composer - pushes the current branch and opens a PR. On Azure
  * DevOps it creates the PR via the API (using the stored Work PAT) and opens it;
  * on GitHub/other it pushes, then opens the host's "create PR" page. Completes
  * the ticket → branch → review → PR loop.
@@ -59,7 +59,7 @@ export function PrModal(): JSX.Element | null {
             setBusy(false)
             if (res.ok && res.url) {
                 window.api.shell.open(res.url)
-                setMsg("✓ PR created — opening in browser")
+                setMsg("✓ PR created - opening in browser")
                 setTimeout(close, 1200)
             } else {
                 setMsg("✗ " + (res.error ?? "failed"))
@@ -68,7 +68,7 @@ export function PrModal(): JSX.Element | null {
             // GitHub / other: branch is pushed; open the host's create-PR page.
             window.api.shell.open(info.webCreateUrl)
             setBusy(false)
-            setMsg("Branch pushed — opening the create-PR page")
+            setMsg("Branch pushed - opening the create-PR page")
             setTimeout(close, 1200)
         } else {
             setBusy(false)
@@ -100,7 +100,7 @@ export function PrModal(): JSX.Element | null {
                             className="pr-target"
                             value={targetBranch}
                             onChange={(e) => setTargetBranch(e.target.value)}
-                            title="Target branch"
+                            data-tip="Target branch"
                         />
                         <span className="pr-host">{hostLabel}</span>
                     </div>
@@ -117,7 +117,7 @@ export function PrModal(): JSX.Element | null {
                         onChange={(e) => setDesc(e.target.value)}
                     />
                     <div className="pr-actions">
-                        <button className="btn-min" onClick={() => aiOnDiff(cwd, "pr")} title="Draft a description with an agent (opens a terminal)">
+                        <button className="btn-min" onClick={() => aiOnDiff(cwd, "pr")} data-tip="Draft a description with an agent (opens a terminal)">
                             ✎ Draft with AI
                         </button>
                         <span style={{ flex: 1 }} />

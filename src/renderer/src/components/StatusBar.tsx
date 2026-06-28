@@ -62,18 +62,19 @@ export function StatusBar(): JSX.Element {
                 )}
                 {git?.isRepo && (
                     <>
-                        <span className="sb-item" title="Current branch">
+                        <span className="sb-item" data-tip="Current branch" data-tip-pos="top">
                             <Icon name="gitBranch" size={12} /> {git.branch}
                         </span>
                         {git.changes > 0 && (
-                            <span className="sb-item sb-changes" title="Uncommitted changes">
+                            <span className="sb-item sb-changes" data-tip="Uncommitted changes" data-tip-pos="top">
                                 ● {git.changes} change{git.changes === 1 ? "" : "s"}
                             </span>
                         )}
                         <span className="sb-git-id">
                             <span
                                 className="sb-item sb-identity"
-                                title="Git identity for this repo — click to switch account"
+                                data-tip="Git identity for this repo - click to switch account"
+                                data-tip-pos="top"
                                 onClick={() => setPickerOpen((v) => !v)}
                             >
                                 <Icon name="user" size={12} /> {identity?.name || "set identity"}
@@ -110,19 +111,19 @@ export function StatusBar(): JSX.Element {
             </div>
             <div className="sb-right">
                 {attention > 0 && (
-                    <span className="sb-item sb-attn" title="Agent sessions needing attention">
+                    <span className="sb-item sb-attn" data-tip="Agent sessions needing attention" data-tip-pos="top">
                         <Icon name="flag" size={12} /> {attention}
                     </span>
                 )}
                 {remoteEnabled && (
-                    <span className="sb-item sb-remote" title="Remote access enabled">
+                    <span className="sb-item sb-remote" data-tip="Remote access enabled" data-tip-pos="top">
                         <Icon name="broadcast" size={12} /> remote
                     </span>
                 )}
                 {project && (
                     <span
                         className="sb-item sb-identity"
-                        data-tip="Release board — promote Dev → UAT → PROD"
+                        data-tip="Release board - promote Dev → UAT → PROD"
                         data-tip-pos="top"
                         onClick={() => setReleaseOpen(true)}
                     >

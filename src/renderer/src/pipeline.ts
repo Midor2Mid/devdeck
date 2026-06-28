@@ -1,5 +1,5 @@
 /**
- * Agent pipelines — ordered, repeatable multi-agent workflows. Each step sends
+ * Agent pipelines - ordered, repeatable multi-agent workflows. Each step sends
  * a prompt to an agent session, waits for that agent to settle (go idle), then
  * advances. Same-agent steps reuse one session so context carries across them;
  * a step can force a fresh session. This module holds the pure data shape +
@@ -18,7 +18,7 @@ export interface PipelineStep {
     prompt: string
     /** Force a brand-new agent session instead of reusing the agent's session. */
     fresh: boolean
-    /** Optional success gate — only advance if the agent's output passes. */
+    /** Optional success gate - only advance if the agent's output passes. */
     gate?: StepGate
 }
 
@@ -60,7 +60,7 @@ export function isRunnable(p: Pipeline): boolean {
     return !!p.name.trim() && p.steps.some((s) => s.prompt.trim().length > 0)
 }
 
-/** Drop empty steps (no prompt) — they would stall the runner waiting on nothing. */
+/** Drop empty steps (no prompt) - they would stall the runner waiting on nothing. */
 export function runnableSteps(p: Pipeline): PipelineStep[] {
     return p.steps.filter((s) => s.prompt.trim().length > 0)
 }

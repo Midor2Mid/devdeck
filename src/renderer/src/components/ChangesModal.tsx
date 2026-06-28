@@ -99,7 +99,7 @@ export function ChangesModal(): JSX.Element | null {
                 <div className="changes-body">
                     <div className="ch-files">
                         {files.length === 0 ? (
-                            <div className="muted sidebar-empty">Working tree clean — nothing to review.</div>
+                            <div className="muted sidebar-empty">Working tree clean - nothing to review.</div>
                         ) : (
                             files.map((f) => (
                                 <div
@@ -108,8 +108,8 @@ export function ChangesModal(): JSX.Element | null {
                                     onClick={() => setSel(f)}
                                 >
                                     <span className={"ch-stat s-" + f.label.toLowerCase()}>{f.code.trim() || "??"}</span>
-                                    <span className="ch-path" title={f.path}>{f.path}</span>
-                                    {f.staged && <span className="ch-staged" title="Staged">●</span>}
+                                    <span className="ch-path" data-tip={f.path}>{f.path}</span>
+                                    {f.staged && <span className="ch-staged" data-tip="Staged">●</span>}
                                 </div>
                             ))
                         )}
@@ -151,12 +151,12 @@ export function ChangesModal(): JSX.Element | null {
 
                 <div className="ch-ai">
                     <span className="ch-ai-label">AI</span>
-                    <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "review")} title="Have an agent review this diff">Review</button>
+                    <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "review")} data-tip="Have an agent review this diff">Review</button>
                     <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "explain")}>Explain</button>
                     <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "commit")}>Commit msg</button>
                     <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "pr")}>PR description</button>
                     <span className="spacer" style={{ flex: 1 }} />
-                    <button className="btn-min" onClick={() => openPr(cwd, target.label)} title="Push branch and open a pull request">
+                    <button className="btn-min" onClick={() => openPr(cwd, target.label)} data-tip="Push branch and open a pull request">
                         Open PR ↗
                     </button>
                 </div>

@@ -3,7 +3,7 @@ import { join } from "path"
 import { readFileSync } from "fs"
 import { atomicWrite } from "./atomic"
 
-// Opaque settings blob — shape is owned by the renderer; main just persists it.
+// Opaque settings blob - shape is owned by the renderer; main just persists it.
 function storeFile(): string {
     return join(app.getPath("userData"), "settings.json")
 }

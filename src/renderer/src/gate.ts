@@ -21,7 +21,7 @@ export interface StepGate {
 export const DEFAULT_GATE: StepGate = { mode: "none", pattern: "", retries: 1, onFail: "stop" }
 
 // Canonical ansi-regex pattern (control chars written as \x escapes): matches
-// CSI / OSC / single-char escape sequences. Not a full terminal emulator —
+// CSI / OSC / single-char escape sequences. Not a full terminal emulator -
 // just enough to clean output for substring/regex matching.
 // eslint-disable-next-line no-control-regex
 const ANSI =

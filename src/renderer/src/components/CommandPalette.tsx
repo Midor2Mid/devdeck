@@ -114,10 +114,10 @@ export function CommandPalette(): JSX.Element {
                 title: "Run pipeline: " + p.name,
                 run: () => store.runPipeline(p.id)
             })
-        cmds.push({ id: "act:work", section: "Actions", title: "Work — Jira / Azure items", run: () => store.setWorkOpen(true) })
-        cmds.push({ id: "act:release", section: "Actions", title: "Release board — promote Dev → UAT → PROD", run: () => store.setReleaseOpen(true) })
-        cmds.push({ id: "act:standup", section: "Actions", title: "Standup — generate today's worklog", run: () => store.setStandupOpen(true) })
-        cmds.push({ id: "act:worktrees", section: "Actions", title: "Worktrees — new agent in a worktree", run: () => store.setWorktreesOpen(true) })
+        cmds.push({ id: "act:work", section: "Actions", title: "Work - Jira / Azure items", run: () => store.setWorkOpen(true) })
+        cmds.push({ id: "act:release", section: "Actions", title: "Release board - promote Dev → UAT → PROD", run: () => store.setReleaseOpen(true) })
+        cmds.push({ id: "act:standup", section: "Actions", title: "Standup - generate today's worklog", run: () => store.setStandupOpen(true) })
+        cmds.push({ id: "act:worktrees", section: "Actions", title: "Worktrees - new agent in a worktree", run: () => store.setWorktreesOpen(true) })
         cmds.push({
             id: "act:review",
             section: "Actions",
@@ -127,7 +127,7 @@ export function CommandPalette(): JSX.Element {
                 if (p) store.openChanges(p.path, p.name)
             }
         })
-        cmds.push({ id: "act:recordings", section: "Actions", title: "Recordings — replay a session", run: () => store.setRecordingsOpen(true) })
+        cmds.push({ id: "act:recordings", section: "Actions", title: "Recordings - replay a session", run: () => store.setRecordingsOpen(true) })
         cmds.push({ id: "act:activity", section: "Actions", title: "Open activity feed", run: () => store.setActivityOpen(true) })
         cmds.push({ id: "act:shortcuts", section: "Help", title: "Keyboard shortcuts (F1)", run: () => store.setShortcutsOpen(true) })
         return cmds

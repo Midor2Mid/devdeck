@@ -292,7 +292,7 @@ export function DbPanel(): JSX.Element {
                             <span>CONNECTIONS</span>
                             <button
                                 className="icon-btn"
-                                title="New connection"
+                                data-tip="New connection"
                                 onClick={() => setEditing(blankInput(activeProject.id))}
                             >
                                 +
@@ -313,7 +313,7 @@ export function DbPanel(): JSX.Element {
                                         "db-conn" + (c.id === activeId ? " active" : "")
                                     }
                                     onClick={() => selectConn(c.id)}
-                                    title={
+                                    data-tip={
                                         c.kind === "sqlite"
                                             ? c.database
                                             : `${c.user}@${c.host}:${c.port}/${c.database}`
@@ -323,7 +323,7 @@ export function DbPanel(): JSX.Element {
                                     <span className="db-conn-name">{c.name}</span>
                                     <span
                                         className="db-conn-edit"
-                                        title="Edit"
+                                        data-tip="Edit"
                                         onClick={(e) => {
                                             e.stopPropagation()
                                             setEditing({ ...c, password: "" })
@@ -333,7 +333,7 @@ export function DbPanel(): JSX.Element {
                                     </span>
                                     <span
                                         className="project-remove"
-                                        title="Remove"
+                                        data-tip="Remove"
                                         onClick={(e) => {
                                             e.stopPropagation()
                                             removeConn(c.id)
@@ -359,7 +359,7 @@ export function DbPanel(): JSX.Element {
                                             key={t}
                                             className="db-table"
                                             onClick={() => openTable(t)}
-                                            title={`SELECT * FROM ${t} LIMIT 100`}
+                                            data-tip={`SELECT * FROM ${t} LIMIT 100`}
                                         >
                                             {t}
                                         </div>
@@ -377,7 +377,7 @@ export function DbPanel(): JSX.Element {
                                     Select or add a connection to run SQL.
                                 </p>
                                 <p className="muted small">
-                                    PostgreSQL, MySQL & SQLite (WASM — no native build) supported.
+                                    PostgreSQL, MySQL & SQLite (WASM - no native build) supported.
                                 </p>
                             </div>
                         ) : (
@@ -392,7 +392,7 @@ export function DbPanel(): JSX.Element {
                                                 className="accent"
                                                 onClick={run}
                                                 disabled={running}
-                                                title="Run (Ctrl+Enter)"
+                                                data-tip="Run (Ctrl+Enter)"
                                             >
                                                 {running ? "Running…" : "Run ▸"}
                                             </button>

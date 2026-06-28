@@ -197,7 +197,7 @@ const DEFAULTS: AppSettings = {
                     id: "s1",
                     title: "Investigate",
                     agentId: "claude",
-                    prompt: "Investigate the issue I just described. Find the root cause and the exact files/lines involved. Don't change anything yet — report findings.",
+                    prompt: "Investigate the issue I just described. Find the root cause and the exact files/lines involved. Don't change anything yet - report findings.",
                     fresh: false
                 },
                 {
@@ -266,7 +266,7 @@ interface SettingsState extends AppSettings {
 }
 
 export const useSettings = create<SettingsState>((set, get) => {
-    // Debounced — accent dragging and rapid edits shouldn't hammer the disk.
+    // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
         const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote } = get()

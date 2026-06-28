@@ -12,9 +12,9 @@ export interface WorklogInput {
 }
 
 export function buildWorklog({ title, repos, sessions }: WorklogInput): string {
-    const out: string[] = [`# Standup — ${title}`, ""]
+    const out: string[] = [`# Standup - ${title}`, ""]
 
-    // Done — commits authored in range, grouped by project.
+    // Done - commits authored in range, grouped by project.
     out.push("## Done")
     const withCommits = repos.filter((r) => r.commits.length > 0)
     if (withCommits.length === 0) {
@@ -27,7 +27,7 @@ export function buildWorklog({ title, repos, sessions }: WorklogInput): string {
     }
     out.push("")
 
-    // In progress — uncommitted work + live agent sessions.
+    // In progress - uncommitted work + live agent sessions.
     const dirty = repos.filter((r) => r.changes > 0)
     if (dirty.length > 0 || sessions.length > 0) {
         out.push("## In progress")

@@ -43,11 +43,11 @@ export function PipelineBar(): JSX.Element | null {
                 </div>
             </div>
             {live ? (
-                <button className="btn-min" onClick={stop} title="Stop pipeline">
+                <button className="btn-min" onClick={stop} data-tip="Stop pipeline">
                     stop
                 </button>
             ) : (
-                <button className="btn-min" onClick={stop} title="Dismiss">
+                <button className="btn-min" onClick={stop} data-tip="Dismiss">
                     ×
                 </button>
             )}

@@ -110,10 +110,10 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
             <div className="col-head">
                 <span>Collections</span>
                 <div className="col-head-actions">
-                    <button className="col-new" onClick={() => setImportOpen(true)} title="Import (Postman / OpenAPI / curl)">
+                    <button className="col-new" onClick={() => setImportOpen(true)} data-tip="Import (Postman / OpenAPI / curl)">
                         ↓
                     </button>
-                    <button className="col-new" onClick={newCollection} title="New collection">
+                    <button className="col-new" onClick={newCollection} data-tip="New collection">
                         +
                     </button>
                 </div>
@@ -125,7 +125,7 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                     placeholder="Search requests…"
                 />
                 {searching && (
-                    <span className="col-search-clear" title="Clear" onClick={() => setQ("")}>
+                    <span className="col-search-clear" data-tip="Clear" onClick={() => setQ("")}>
                         ×
                     </span>
                 )}
@@ -166,7 +166,7 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                         className="col-name"
                                         onClick={() => toggle(col.id)}
                                         onDoubleClick={() => setEditId(col.id)}
-                                        title="Double-click to rename"
+                                        data-tip="Double-click to rename"
                                     >
                                         {col.name}
                                     </span>
@@ -175,7 +175,7 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                 <button
                                     className="col-del"
                                     onClick={() => deleteCollection(col.id)}
-                                    title="Delete collection"
+                                    data-tip="Delete collection"
                                 >
                                     ×
                                 </button>
@@ -186,7 +186,7 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                         className={"col-req" + (r.id === activeReqId ? " active" : "")}
                                         key={r.id}
                                         onClick={() => onLoad(r)}
-                                        title={r.url}
+                                        data-tip={r.url}
                                     >
                                         <span className={"col-method m-" + r.method.toLowerCase()}>
                                             {r.method}
@@ -198,7 +198,7 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                                 e.stopPropagation()
                                                 setMenuFor(menuFor === r.id ? null : r.id)
                                             }}
-                                            title="More…"
+                                            data-tip="More…"
                                         >
                                             ⋯
                                         </button>

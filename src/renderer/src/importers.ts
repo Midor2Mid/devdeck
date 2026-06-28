@@ -48,7 +48,7 @@ export function parseImport(text: string): ImportResult {
     try {
         doc = JSON.parse(trimmed)
     } catch {
-        throw new Error("Could not parse — paste a Postman collection, OpenAPI (JSON), or a curl command.")
+        throw new Error("Could not parse - paste a Postman collection, OpenAPI (JSON), or a curl command.")
     }
 
     const d = doc as Record<string, any>

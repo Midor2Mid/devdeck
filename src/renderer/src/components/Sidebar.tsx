@@ -62,7 +62,7 @@ export function Sidebar(): JSX.Element {
                     if (agentId === SHELL) continue
                     out.push({
                         termId,
-                        projectName: project?.name ?? "—",
+                        projectName: project?.name ?? "-",
                         tabName: tab.name,
                         badge: badgeOf(agentId),
                         status: agentStatus[termId] ?? "idle"
@@ -94,12 +94,12 @@ export function Sidebar(): JSX.Element {
             key={p.id}
             className={"project-item" + (p.id === activeId ? " active" : "")}
             onClick={() => setActiveProject(p.id)}
-            title={p.path}
+            data-tip={p.path}
         >
             <span className="project-name">{p.name}</span>
             <span
                 className="project-menu-btn"
-                title="Move to group"
+                data-tip="Move to group"
                 onClick={(e) => {
                     e.stopPropagation()
                     setMenuFor(menuFor === p.id ? null : p.id)
@@ -109,7 +109,7 @@ export function Sidebar(): JSX.Element {
             </span>
             <span
                 className="project-remove"
-                title="Remove project"
+                data-tip="Remove project"
                 onClick={async (e) => {
                     e.stopPropagation()
                     const ok = await confirm({
@@ -166,7 +166,7 @@ export function Sidebar(): JSX.Element {
 
             <div className="sidebar-section-title">
                 <span>PROJECTS</span>
-                <button className="icon-btn" title="Add a project folder" onClick={addProject}>
+                <button className="icon-btn" data-tip="Add a project folder" onClick={addProject}>
                     +
                 </button>
             </div>
@@ -200,7 +200,7 @@ export function Sidebar(): JSX.Element {
             <div className="sidebar-section-title claude-title">
                 <span>AGENT SESSIONS</span>
                 {attention > 0 && (
-                    <span className="attention-badge" title={`${attention} need attention`}>
+                    <span className="attention-badge" data-tip={`${attention} need attention`}>
                         {attention}
                     </span>
                 )}
@@ -218,7 +218,7 @@ export function Sidebar(): JSX.Element {
                             key={s.termId}
                             className="claude-session"
                             onClick={() => jumpToTerm(s.termId)}
-                            title={`${s.tabName} · ${s.projectName} — ${s.status}`}
+                            data-tip={`${s.tabName} · ${s.projectName} - ${s.status}`}
                         >
                             <span className={"tab-dot claude status-" + s.status} />
                             <span className="claude-session-text">

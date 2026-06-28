@@ -61,12 +61,12 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
             .slice(0, 8)
             .map((s) => ({
                 key: s.id,
-                label: "/" + s.name + " — " + s.body.slice(0, 48),
+                label: "/" + s.name + " - " + s.body.slice(0, 48),
                 insert: s.body + " "
             }))
     }, [token, files, snippets])
 
-    // Detect a trigger word (@file or /snippet) at the caret — the whitespace-
+    // Detect a trigger word (@file or /snippet) at the caret - the whitespace-
     // delimited word the caret is in, if it starts with @ or /.
     const detectToken = (value: string, caret: number): void => {
         let i = caret - 1
@@ -146,7 +146,7 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
                             → {target.tabName} <span className="agent-badge sm">{target.badge}</span>
                         </>
                     ) : (
-                        "No agent session — start one to send a prompt"
+                        "No agent session - start one to send a prompt"
                     )}
                 </span>
                 <span className="muted small">@ file · / snippet · Ctrl+Enter send · Esc close</span>

@@ -66,7 +66,7 @@ function McpSection(): JSX.Element {
         return (
             <div className="settings-section">
                 <h3>MCP servers</h3>
-                <p className="muted">Select a project first — MCP servers are per-project.</p>
+                <p className="muted">Select a project first - MCP servers are per-project.</p>
             </div>
         )
     }
@@ -83,7 +83,7 @@ function McpSection(): JSX.Element {
                             placeholder="server-name"
                             onChange={(e) => update(i, { name: e.target.value })}
                         />
-                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                        <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
                             ×
                         </button>
                     </div>
@@ -122,7 +122,7 @@ function McpSection(): JSX.Element {
                 </button>
             </div>
             <p className="settings-hint">
-                Writes <code>{project.name}/.mcp.json</code> — the standard project MCP config read
+                Writes <code>{project.name}/.mcp.json</code> - the standard project MCP config read
                 by Claude Code (and other agents). Args/env are space-separated.
             </p>
         </div>
@@ -154,7 +154,7 @@ function SshSection(): JSX.Element {
                             placeholder="my-vps"
                             onChange={(e) => update(i, { label: e.target.value })}
                         />
-                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                        <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
                             ×
                         </button>
                     </div>
@@ -178,7 +178,7 @@ function SshSection(): JSX.Element {
                 + Add host
             </button>
             <p className="settings-hint">
-                Launch an SSH session from the terminal's <b>▾</b> menu — it opens a shell running
+                Launch an SSH session from the terminal's <b>▾</b> menu - it opens a shell running
                 the <code>ssh</code> command for the host.
             </p>
         </div>
@@ -210,7 +210,7 @@ function GitSection(): JSX.Element {
                             placeholder="Work / Personal…"
                             onChange={(e) => update(i, { label: e.target.value })}
                         />
-                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                        <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
                             ×
                         </button>
                     </div>
@@ -234,7 +234,7 @@ function GitSection(): JSX.Element {
             <p className="settings-hint">
                 Apply an account to the active project from the <b>status bar</b> (click the
                 identity next to the branch). It writes the project's local <code>git config</code>{" "}
-                (name, email, and optional <code>core.sshCommand</code>) — so each repo can use a
+                (name, email, and optional <code>core.sshCommand</code>) - so each repo can use a
                 different identity/key. Tokens (PAT) aren't stored yet.
             </p>
         </div>
@@ -265,7 +265,7 @@ function SnippetsSection(): JSX.Element {
                                 update(i, { name: e.target.value.replace(/\s+/g, "-") })
                             }
                         />
-                        <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                        <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
                             ×
                         </button>
                     </div>
@@ -281,7 +281,7 @@ function SnippetsSection(): JSX.Element {
                 + Add snippet
             </button>
             <p className="settings-hint">
-                Type <code>/name</code> in the prompt composer to insert a snippet's text —
+                Type <code>/name</code> in the prompt composer to insert a snippet's text -
                 reusable prompts for reviews, commits, explanations, etc.
             </p>
         </div>
@@ -326,7 +326,7 @@ function GateEditor({
                         placeholder={g.mode === "regex" ? "e.g. \\b0 errors?\\b" : "e.g. All tests passed"}
                         onChange={(e) => patch({ pattern: e.target.value })}
                     />
-                    <label className="pipe-gate-retries" title="Extra attempts if the gate fails">
+                    <label className="pipe-gate-retries" data-tip="Extra attempts if the gate fails">
                         retries
                         <input
                             type="number"
@@ -340,7 +340,7 @@ function GateEditor({
                         className="pipe-gate-onfail"
                         value={g.onFail}
                         onChange={(e) => patch({ onFail: e.target.value as StepGate["onFail"] })}
-                        title="What to do if the gate ultimately fails"
+                        data-tip="What to do if the gate ultimately fails"
                     >
                         <option value="stop">then stop</option>
                         <option value="continue">then continue</option>
@@ -377,7 +377,7 @@ function TriggersEditor({ pipelines }: { pipelines: Pipeline[] }): JSX.Element {
             <h3 style={{ marginTop: 22 }}>File triggers</h3>
             <p className="settings-hint" style={{ marginTop: 0 }}>
                 Auto-run a pipeline when files matching a glob change in a project. Triggers are
-                <b> off by default</b> — enable one only when you want hands-free runs. A run won't
+                <b> off by default</b> - enable one only when you want hands-free runs. A run won't
                 start while another is already in progress.
             </p>
             {triggers.length === 0 && (
@@ -385,7 +385,7 @@ function TriggersEditor({ pipelines }: { pipelines: Pipeline[] }): JSX.Element {
             )}
             {triggers.map((t, i) => (
                 <div key={t.id} className={"trigger-row" + (t.enabled ? " on" : "")}>
-                    <label className="trigger-enable" title="Enable this trigger">
+                    <label className="trigger-enable" data-tip="Enable this trigger">
                         <input
                             type="checkbox"
                             checked={t.enabled}
@@ -421,7 +421,7 @@ function TriggersEditor({ pipelines }: { pipelines: Pipeline[] }): JSX.Element {
                             </option>
                         ))}
                     </select>
-                    <label className="trigger-debounce" title="Quiet period after the last change before firing">
+                    <label className="trigger-debounce" data-tip="Quiet period after the last change before firing">
                         <input
                             type="number"
                             min={200}
@@ -431,7 +431,7 @@ function TriggersEditor({ pipelines }: { pipelines: Pipeline[] }): JSX.Element {
                         />
                         ms
                     </label>
-                    <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                    <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
                         ×
                     </button>
                 </div>
@@ -511,11 +511,11 @@ function PipelinesSection(): JSX.Element {
                             className="btn-min"
                             onClick={() => run(pi)}
                             disabled={!isRunnable(p)}
-                            title="Run now"
+                            data-tip="Run now"
                         >
                             ▶ run
                         </button>
-                        <button className="row-remove" title="Remove" onClick={() => removePipe(pi)}>
+                        <button className="row-remove" data-tip="Remove" onClick={() => removePipe(pi)}>
                             ×
                         </button>
                     </div>
@@ -540,7 +540,7 @@ function PipelinesSection(): JSX.Element {
                                         </option>
                                     ))}
                                 </select>
-                                <label className="pipe-fresh" title="Start a new session for this step instead of reusing the agent's">
+                                <label className="pipe-fresh" data-tip="Start a new session for this step instead of reusing the agent's">
                                     <input
                                         type="checkbox"
                                         checked={st.fresh}
@@ -548,13 +548,13 @@ function PipelinesSection(): JSX.Element {
                                     />
                                     fresh
                                 </label>
-                                <button className="btn-min" disabled={si === 0} onClick={() => moveStep(pi, si, -1)} title="Move up">
+                                <button className="btn-min" disabled={si === 0} onClick={() => moveStep(pi, si, -1)} data-tip="Move up">
                                     ↑
                                 </button>
-                                <button className="btn-min" disabled={si === p.steps.length - 1} onClick={() => moveStep(pi, si, 1)} title="Move down">
+                                <button className="btn-min" disabled={si === p.steps.length - 1} onClick={() => moveStep(pi, si, 1)} data-tip="Move down">
                                     ↓
                                 </button>
-                                <button className="row-remove" title="Remove step" onClick={() => removeStep(pi, si)}>
+                                <button className="row-remove" data-tip="Remove step" onClick={() => removeStep(pi, si)}>
                                     ×
                                 </button>
                             </div>
@@ -658,13 +658,13 @@ function AgentsSection(): JSX.Element {
                                 className={overridden ? "warn-field" : ""}
                                 onChange={(e) => update(i, { apiKeyEnv: e.target.value.trim() })}
                             />
-                            <button className="row-remove" title="Remove" onClick={() => remove(i)}>
+                            <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
                                 ×
                             </button>
                         </div>
                         {overridden && (
                             <div className="agent-warn">
-                                ⚠ <b>{a.apiKeyEnv}</b> is set — {a.name} will bill pay-as-you-go
+                                ⚠ <b>{a.apiKeyEnv}</b> is set - {a.name} will bill pay-as-you-go
                                 <b> API usage</b> instead of a subscription login. Unset it (and
                                 restart DevDeck) to use your subscription.
                             </div>
@@ -689,7 +689,7 @@ function AgentsSection(): JSX.Element {
             <p className="settings-hint">
                 Each agent is a CLI launched in a terminal. The first is the one-click <b>+</b>{" "}
                 button; the rest are in the ▾ menu. "Key env var" is the API key that would
-                override that CLI's subscription login — DevDeck warns when it's present in the
+                override that CLI's subscription login - DevDeck warns when it's present in the
                 environment.
             </p>
         </div>
@@ -766,7 +766,7 @@ function RemoteSection(): JSX.Element {
                                 <code className="token url">{url}</code>
                                 {status && status.tailscale.length === 0 && (
                                     <div className="settings-hint">
-                                        No Tailscale address found — this URL is LAN-only (same
+                                        No Tailscale address found - this URL is LAN-only (same
                                         Wi-Fi). Install Tailscale on this PC and your phone to
                                         reach it from anywhere.
                                     </div>
@@ -834,7 +834,7 @@ export function SettingsModal(): JSX.Element {
                 </div>
 
                 <div className="settings-content">
-                    <button className="settings-close" title="Close" onClick={s.closeSettings}>
+                    <button className="settings-close" data-tip="Close" onClick={s.closeSettings}>
                         ×
                     </button>
 
@@ -913,7 +913,7 @@ export function SettingsModal(): JSX.Element {
                                 </div>
                             </div>
                             <p className="settings-hint">
-                                Three wabi-sabi themes — Sumi &amp; Zen (dark), Washi (light) —
+                                Three wabi-sabi themes - Sumi &amp; Zen (dark), Washi (light) -
                                 applied across the UI, terminal, and editor. Accent tints the one
                                 highlight color.
                             </p>
@@ -1061,7 +1061,7 @@ export function SettingsModal(): JSX.Element {
                         <div className="settings-section">
                             <h3>DevDeck</h3>
                             <p className="settings-hint">
-                                A command deck for terminal-first, Claude-driven development —
+                                A command deck for terminal-first, Claude-driven development -
                                 multiple terminals, fast project switching, editor, API client,
                                 and database in one window.
                             </p>
