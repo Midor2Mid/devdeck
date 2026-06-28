@@ -8,4 +8,3 @@ release/
 .env
 .env.*
 .gstack/
-PUSH.md
