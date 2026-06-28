@@ -49,3 +49,13 @@ fc04ca3  chore(release): bump version to 0.4.0
 ```
 
 Expected tags: `v0.4.0` → `fc04ca3`, `v0.4.1` → `857b236` (plus the older `v0.1.x`–`v0.3.x`).
+
+## Cleanup (do this last, once the push is verified)
+
+This file has served its purpose — remove it:
+
+```powershell
+git rm PUSH.md
+git commit -m "docs: remove PUSH.md (pushed)"
+git push
+```
