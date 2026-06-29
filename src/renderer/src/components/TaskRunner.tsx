@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react"
 import { useStore, SHELL } from "../store"
 
+// A script name is interpolated into a shell command (`npm run <name>`), so a
+// hostile package.json (e.g. a cloned repo) could smuggle metacharacters like
+// `build; rm -rf ~`. Only surface names that match npm's conventional charset —
+// letters, digits, and `:_.-` — which can't break out of the command line.
+const SAFE_SCRIPT = /^[A-Za-z0-9:._-]+$/
+
 // A per-project task launcher: reads the active project's package.json scripts and
 // runs the chosen one (`npm run <script>`) in a fresh terminal. Hidden when the
 // project has no package.json / scripts.
@@ -22,7 +28,7 @@ export function TaskRunner(): JSX.Element | null {
                 if (!alive) return
                 try {
                     const s = (JSON.parse(txt) as { scripts?: Record<string, string> }).scripts
-                    setScripts(s ? Object.keys(s) : [])
+                    setScripts(s ? Object.keys(s).filter((n) => SAFE_SCRIPT.test(n)) : [])
                 } catch {
                     setScripts([])
                 }
