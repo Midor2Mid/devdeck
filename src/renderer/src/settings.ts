@@ -189,7 +189,12 @@ export interface AppSettings {
     }
     workspacePresets: WorkspacePreset[]
     usageLog: UsageEvent[]
+    /** Recent SQL per DB connection id, most-recent-first. */
+    dbQueryHistory: Record<string, string[]>
 }
+
+/** Cap recent queries kept per connection. */
+export const DB_HISTORY_CAP = 25
 
 function generateToken(): string {
     const bytes = new Uint8Array(24)
@@ -286,7 +291,8 @@ const DEFAULTS: AppSettings = {
         port: 8899
     },
     workspacePresets: [],
-    usageLog: []
+    usageLog: [],
+    dbQueryHistory: {}
 }
 
 interface SettingsState extends AppSettings {
@@ -315,6 +321,9 @@ interface SettingsState extends AppSettings {
     logUsageStart: (id: string, agentId: string, projectId: string) => void
     /** Stamp an agent session as ended. No-op if unknown/already ended. */
     logUsageEnd: (id: string) => void
+    /** Record a successfully-run query for a connection (deduped, capped). */
+    pushDbQuery: (connId: string, sql: string) => void
+    clearDbHistory: (connId: string) => void
     regenerateToken: () => void
     resetAll: () => void
     openSettings: () => void
@@ -327,8 +336,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -389,7 +398,8 @@ export const useSettings = create<SettingsState>((set, get) => {
                     // it counts as a launch without inflating "running now".
                     usageLog: (raw.usageLog ?? DEFAULTS.usageLog).map((e) =>
                         e.endedAt ? e : { ...e, endedAt: e.startedAt }
-                    )
+                    ),
+                    dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory
                 })
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
@@ -500,6 +510,25 @@ export const useSettings = create<SettingsState>((set, get) => {
                     e.id === id && !e.endedAt ? { ...e, endedAt: Date.now() } : e
                 )
             }))
+            persist()
+        },
+        pushDbQuery: (connId, sql) => {
+            const q = sql.trim()
+            if (!connId || !q) return
+            set((s) => {
+                const prev = s.dbQueryHistory[connId] ?? []
+                if (prev[0] === q) return s // skip consecutive duplicate
+                const next = [q, ...prev.filter((x) => x !== q)].slice(0, DB_HISTORY_CAP)
+                return { dbQueryHistory: { ...s.dbQueryHistory, [connId]: next } }
+            })
+            persist()
+        },
+        clearDbHistory: (connId) => {
+            set((s) => {
+                const next = { ...s.dbQueryHistory }
+                delete next[connId]
+                return { dbQueryHistory: next }
+            })
             persist()
         },
         regenerateToken: () => {

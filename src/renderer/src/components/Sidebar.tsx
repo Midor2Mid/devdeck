@@ -12,7 +12,7 @@ import { contextMenu } from "../contextmenu"
 interface SessionRow {
     termId: string
     projectName: string
-    tabName: string
+    sessionName: string
     badge: string
     status: AgentStatus
 }
@@ -40,10 +40,14 @@ export function Sidebar(): JSX.Element {
     const tabsByProject = useStore((s) => s.tabsByProject)
     const termAgents = useStore((s) => s.termAgents)
     const agentStatus = useStore((s) => s.agentStatus)
+    const termNames = useStore((s) => s.termNames)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const dragPayload = useStore((s) => s.dragPayload)
     const setDragPayload = useStore((s) => s.setDragPayload)
     const [overSession, setOverSession] = useState<string | null>(null)
+    const [renamingTerm, setRenamingTerm] = useState<string | null>(null)
+    const [renameText, setRenameText] = useState("")
+    const renameSession = useStore((s) => s.renameSession)
 
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
     const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -85,7 +89,7 @@ export function Sidebar(): JSX.Element {
                     out.push({
                         termId,
                         projectName: project?.name ?? "-",
-                        tabName: tab.name,
+                        sessionName: termNames[termId] ?? tab.name,
                         badge: badgeOf(agentId),
                         status: agentStatus[termId] ?? "idle"
                     })
@@ -93,7 +97,7 @@ export function Sidebar(): JSX.Element {
             }
         }
         return out
-    }, [tabsByProject, termAgents, agentStatus, projects, agents])
+    }, [tabsByProject, termAgents, agentStatus, termNames, projects, agents])
 
     const attention = sessions.filter((s) => s.status === "attention").length
 
@@ -362,7 +366,7 @@ export function Sidebar(): JSX.Element {
                             data-tip={
                                 dragPayload
                                     ? "Drop to insert into this session"
-                                    : `${s.tabName} · ${s.projectName} - ${s.status}`
+                                    : `${s.sessionName} · ${s.projectName} - ${s.status}`
                             }
                             onDragOver={(e) => {
                                 if (dragPayload) {
@@ -382,7 +386,39 @@ export function Sidebar(): JSX.Element {
                         >
                             <span className={"tab-dot claude status-" + s.status} />
                             <span className="claude-session-text">
-                                <span className="claude-session-tab">{s.tabName}</span>
+                                {renamingTerm === s.termId ? (
+                                    <input
+                                        className="session-rename"
+                                        autoFocus
+                                        value={renameText}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => setRenameText(e.target.value)}
+                                        onBlur={() => {
+                                            renameSession(s.termId, renameText)
+                                            setRenamingTerm(null)
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                renameSession(s.termId, renameText)
+                                                setRenamingTerm(null)
+                                            } else if (e.key === "Escape") {
+                                                setRenamingTerm(null)
+                                            }
+                                        }}
+                                    />
+                                ) : (
+                                    <span
+                                        className="claude-session-tab"
+                                        onDoubleClick={(e) => {
+                                            e.stopPropagation()
+                                            setRenameText(s.sessionName)
+                                            setRenamingTerm(s.termId)
+                                        }}
+                                        data-tip="Double-click to rename this session"
+                                    >
+                                        {s.sessionName}
+                                    </span>
+                                )}
                                 <span className="claude-session-project">{s.projectName}</span>
                             </span>
                             <span className="agent-badge sm">{s.badge}</span>

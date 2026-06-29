@@ -208,7 +208,7 @@ export function UsagePanel(): JSX.Element {
                                         >
                                             <span className={"tab-dot claude status-" + s.status} />
                                             <span className="usage-live-agent">{s.badge}</span>
-                                            <span className="usage-live-tab">{s.tabName}</span>
+                                            <span className="usage-live-tab">{s.sessionName}</span>
                                             <span className="usage-live-proj muted small">
                                                 {s.projectName}
                                             </span>

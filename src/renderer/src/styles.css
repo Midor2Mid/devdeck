@@ -676,6 +676,16 @@ button .ic,
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.session-rename {
+    width: 100%;
+    background: var(--bg-3);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 12px;
+    font-family: inherit;
+}
 .claude-session-project {
     font-size: 10px;
     color: var(--faint);
@@ -2310,10 +2320,52 @@ button .ic,
 .db-query-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
     padding: 6px 12px;
     border-bottom: 1px solid var(--border-soft);
     background: var(--bg);
+}
+.db-history {
+    position: relative;
+}
+.db-history-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 20;
+    margin-top: 4px;
+    min-width: 280px;
+    max-width: 460px;
+    max-height: 320px;
+    overflow: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 4px;
+}
+.db-history-item {
+    padding: 7px 9px;
+    border-radius: 6px;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+.db-history-item:hover {
+    background: var(--bg-3);
+}
+.db-history-item.danger {
+    color: var(--muted);
+    border-top: 1px solid var(--border-soft);
+    margin-top: 4px;
+    font-family: inherit;
+}
+.db-history-item.danger:hover {
+    color: var(--accent);
 }
 .db-editor-host {
     flex: 1;

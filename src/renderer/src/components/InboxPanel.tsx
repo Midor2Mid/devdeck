@@ -56,7 +56,7 @@ export function InboxPanel(): JSX.Element {
                             <div key={s.termId} className={"inbox-row status-" + s.status}>
                                 <div className="inbox-row-head">
                                     <span className={"tab-dot claude status-" + s.status} />
-                                    <span className="inbox-tab">{s.tabName}</span>
+                                    <span className="inbox-tab">{s.sessionName}</span>
                                     <span className="inbox-project">{s.projectName}</span>
                                     <span className="agent-badge sm">{s.badge}</span>
                                     {s.status === "attention" && <span className="claude-attn">!</span>}

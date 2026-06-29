@@ -243,8 +243,12 @@ export function DbPanel(): JSX.Element {
     const [result, setResult] = useState<QueryResult | null>(null)
     const [running, setRunning] = useState(false)
     const [sentToAgent, setSentToAgent] = useState(false)
+    const [histOpen, setHistOpen] = useState(false)
     const sendToAgent = useStore((s) => s.sendToAgent)
     const lastAgent = useStore((s) => s.lastAgentTermId)
+    const pushDbQuery = useSettings((s) => s.pushDbQuery)
+    const clearDbHistory = useSettings((s) => s.clearDbHistory)
+    const dbQueryHistory = useSettings((s) => s.dbQueryHistory)
     const runRef = useRef<() => void>(() => undefined)
     const editorFontSize = useSettings((s) => s.editor.fontSize)
     const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
@@ -279,7 +283,9 @@ export function DbPanel(): JSX.Element {
     const run = async (): Promise<void> => {
         if (!activeId || !sql.trim()) return
         setRunning(true)
-        setResult(await window.api.db.query(activeId, sql))
+        const res = await window.api.db.query(activeId, sql)
+        setResult(res)
+        if (res.ok) pushDbQuery(activeId, sql)
         setRunning(false)
     }
     runRef.current = run
@@ -318,6 +324,7 @@ export function DbPanel(): JSX.Element {
             setRunning(true)
             window.api.db.query(activeId, q).then((r) => {
                 setResult(r)
+                if (r.ok && activeId) pushDbQuery(activeId, q)
                 setRunning(false)
             })
         }
@@ -454,6 +461,44 @@ export function DbPanel(): JSX.Element {
                                             <span className="muted small">
                                                 {conns.find((c) => c.id === activeId)?.name}
                                             </span>
+                                            <span className="spacer" />
+                                            <div className="db-history">
+                                                <button
+                                                    onClick={() => setHistOpen((v) => !v)}
+                                                    disabled={!(dbQueryHistory[activeId]?.length)}
+                                                    data-tip="Recent queries on this connection"
+                                                >
+                                                    History ▾
+                                                </button>
+                                                {histOpen && (
+                                                    <div
+                                                        className="db-history-menu"
+                                                        onMouseLeave={() => setHistOpen(false)}
+                                                    >
+                                                        {(dbQueryHistory[activeId] ?? []).map((q, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className="db-history-item"
+                                                                onClick={() => {
+                                                                    setSql(q)
+                                                                    setHistOpen(false)
+                                                                }}
+                                                            >
+                                                                {q.replace(/\s+/g, " ").slice(0, 90)}
+                                                            </div>
+                                                        ))}
+                                                        <div
+                                                            className="db-history-item danger"
+                                                            onClick={() => {
+                                                                clearDbHistory(activeId)
+                                                                setHistOpen(false)
+                                                            }}
+                                                        >
+                                                            Clear history
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <button
                                                 className="accent"
                                                 onClick={run}

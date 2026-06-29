@@ -54,7 +54,10 @@ export interface AnySession {
     projectId: string
     projectName: string
     projectPath: string
+    /** The owning tab's name. */
     tabName: string
+    /** Display label for the session — a per-session rename, else the tab name. */
+    sessionName: string
     agentId: string
     badge: string
     isAgent: boolean
@@ -67,6 +70,8 @@ interface Persisted {
     termInit: Record<string, string>
     /** Per-terminal working-dir override (e.g. a git worktree path). */
     termCwd: Record<string, string>
+    /** Per-session display-name override, independent of the tab name. */
+    termNames: Record<string, string>
     tabsByProject: Record<string, Tab[]>
     activeTabByProject: Record<string, string | undefined>
     activePaneByProject: Record<string, string | undefined>
@@ -196,6 +201,8 @@ interface AppState extends Persisted {
     setActiveTab: (projectId: string, tabId: string) => void
 
     // Workspace presets (saved layouts) — stored in settings
+    /** Rename a single session independently of its tab (empty clears the override). */
+    renameSession: (termId: string, name: string) => void
     saveWorkspacePreset: (projectId: string) => void
     openWorkspacePreset: (presetId: string) => void
     deleteWorkspacePreset: (presetId: string) => void
@@ -251,6 +258,7 @@ export const useStore = create<AppState>((set, get) => {
             termAgents: s.termAgents,
             termInit: s.termInit,
             termCwd: s.termCwd,
+            termNames: s.termNames,
             tabsByProject: s.tabsByProject,
             activeTabByProject: s.activeTabByProject,
             activePaneByProject: s.activePaneByProject,
@@ -360,6 +368,8 @@ export const useStore = create<AppState>((set, get) => {
             delete termAgents[termId]
             const termCwd = { ...s.termCwd }
             delete termCwd[termId]
+            const termNames = { ...s.termNames }
+            delete termNames[termId]
             const canvasPos = { ...s.canvasPos }
             delete canvasPos[termId]
             return {
@@ -367,6 +377,7 @@ export const useStore = create<AppState>((set, get) => {
                 termInit,
                 termAgents,
                 termCwd,
+                termNames,
                 canvasPos,
                 canvasLinks: s.canvasLinks.filter((l) => l.a !== termId && l.b !== termId),
                 lastAgentTermId: s.lastAgentTermId === termId ? null : s.lastAgentTermId
@@ -390,6 +401,7 @@ export const useStore = create<AppState>((set, get) => {
                         projectName: project?.name ?? "-",
                         projectPath: project?.path ?? "",
                         tabName: tab.name,
+                        sessionName: s.termNames[termId] ?? tab.name,
                         agentId,
                         badge: badgeFor(agentId),
                         isAgent: agent,
@@ -407,6 +419,7 @@ export const useStore = create<AppState>((set, get) => {
         termAgents: {},
         termInit: {},
         termCwd: {},
+        termNames: {},
         tabsByProject: {},
         activeTabByProject: {},
         activePaneByProject: {},
@@ -459,6 +472,7 @@ export const useStore = create<AppState>((set, get) => {
                 termAgents: w.termAgents ?? w.termKinds ?? {},
                 termInit: w.termInit ?? {},
                 termCwd: w.termCwd ?? {},
+                termNames: w.termNames ?? {},
                 tabsByProject: w.tabsByProject ?? {},
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
@@ -569,6 +583,17 @@ export const useStore = create<AppState>((set, get) => {
         clearActivity: () => set({ activity: [] }),
         setInboxOpen: (inboxOpen) => set({ inboxOpen }),
         setUsageOpen: (usageOpen) => set({ usageOpen }),
+
+        renameSession: (termId, name) => {
+            const trimmed = name.trim()
+            set((s) => {
+                const termNames = { ...s.termNames }
+                if (trimmed) termNames[termId] = trimmed
+                else delete termNames[termId]
+                return { termNames }
+            })
+            persist()
+        },
         setRecordingTermId: (recordingTermId) => set({ recordingTermId }),
         setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
         noteRecording: (termId, label) => pushActivity("record", termId, label),
