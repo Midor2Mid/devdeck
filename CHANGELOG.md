@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.8 - 2026-06-29
+
+- **Network → API** - the Network inspector has a **→ API** button that loads the
+  selected captured request (method, URL, headers, body) into the API client to
+  replay or edit. Disabled for tunneled HTTPS captures.
+- **DESIGN.md** rewritten in Google's DESIGN.md token+rationale format (front-matter
+  design tokens + canonical sections), and a repo **CLAUDE.md** added that points
+  agents at it for UI work. (Docs only.)
+
 ## 0.4.7 - 2026-06-29
 
 - **Right-click context menus** - on projects (Open / Move to group / Remove),
