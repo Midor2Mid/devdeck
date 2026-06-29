@@ -22,6 +22,10 @@ export function Rail(): JSX.Element {
     const view = useStore((s) => s.view)
     const setView = useStore((s) => s.setView)
     const setWorkOpen = useStore((s) => s.setWorkOpen)
+    const setInboxOpen = useStore((s) => s.setInboxOpen)
+    const attention = useStore(
+        (s) => Object.values(s.agentStatus).filter((x) => x === "attention").length
+    )
     const setActivityOpen = useStore((s) => s.setActivityOpen)
     const setStandupOpen = useStore((s) => s.setStandupOpen)
     const setReleaseOpen = useStore((s) => s.setReleaseOpen)
@@ -48,6 +52,10 @@ export function Rail(): JSX.Element {
             </div>
             <div className="rail-spacer" />
             <div className="rail-group">
+                <button className="rail-btn rail-inbox" data-tip="Agents inbox - every session, attention-first, with quick reply" data-tip-pos="right" onClick={() => setInboxOpen(true)}>
+                    <Icon name="inbox" size={20} />
+                    {attention > 0 && <span className="rail-badge">{attention}</span>}
+                </button>
                 <button className="rail-btn" data-tip="Work - your assigned Jira / Azure DevOps tickets; start a session from one" data-tip-pos="right" onClick={() => setWorkOpen(true)}>
                     <Icon name="work" size={20} />
                 </button>

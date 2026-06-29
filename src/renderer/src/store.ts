@@ -112,6 +112,10 @@ interface AppState extends Persisted {
     setActivityOpen: (open: boolean) => void
     clearActivity: () => void
 
+    // Agent inbox / triage drawer
+    inboxOpen: boolean
+    setInboxOpen: (open: boolean) => void
+
     // Terminal record & replay (runtime-only)
     recordingTermId: string | null
     setRecordingTermId: (id: string | null) => void
@@ -403,6 +407,7 @@ export const useStore = create<AppState>((set, get) => {
         canvasLinks: [],
         activity: [],
         activityOpen: false,
+        inboxOpen: false,
         recordingTermId: null,
         recordingsOpen: false,
         worktreesOpen: false,
@@ -551,6 +556,7 @@ export const useStore = create<AppState>((set, get) => {
         },
         setActivityOpen: (activityOpen) => set({ activityOpen }),
         clearActivity: () => set({ activity: [] }),
+        setInboxOpen: (inboxOpen) => set({ inboxOpen }),
         setRecordingTermId: (recordingTermId) => set({ recordingTermId }),
         setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
         noteRecording: (termId, label) => pushActivity("record", termId, label),
