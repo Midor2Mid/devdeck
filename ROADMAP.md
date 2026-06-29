@@ -46,7 +46,7 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Connect / test, list tables, run SQL (Monaco editor, Ctrl+Enter), results grid
 - [x] **SQLite via WASM** (`node-sqlite3-wasm`, 2026-06-27) — no native build; reads/writes real `.db` files, file picker in the connection form
 - [x] **SQL Server** (`mssql`/`tedious`, 2026-06-29) — pure-JS, no native build; the SSL toggle maps to `encrypt` with trust-server-certificate so local/dev instances work
-- [ ] Query history / saved queries per connection
+- [x] **Query history per connection** (2026-06-29) — each successful query recorded per connection (deduped, capped 25), reloadable from a **History ▾** dropdown; persisted in `settings.json`
 - [x] Packaging: `node-sqlite3-wasm` unpacked from asar in `electron-builder` config (`package.json` → `asarUnpack`) — done in M11
 
 ## Milestone 7 — Remote / mobile access ✅ (2026-06-27, terminals-first)
@@ -57,7 +57,9 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Settings → Remote: enable, port, token (regen), Tailscale/LAN URL + QR
 - [x] Verified end-to-end headlessly (auth 401/reject, session broadcast, shell output over WS)
 - Reach from anywhere: **Tailscale** (private, recommended) — bind is 0.0.0.0 but token-gated
-- [ ] Later: TLS option, full-UI mobile client, push notification on attention
+- [x] **Push-on-attention** (2026-06-29) — mobile client title-badge + beep + best-effort OS notification when an agent flips to *attention* and you're not looking; the no-Tailscale case now warns that a plain-LAN link is unencrypted
+- [x] **Constant-time token auth** (2026-06-29) — `tokenOk` (sha256 + `timingSafeEqual`) closes the `!==` timing side-channel; mobile-client `esc()` now escapes quotes (latent attribute XSS). Covered by `tests/server-guards.test.ts`
+- [ ] Later: TLS option (the only thing still gating a fully-encrypted plain-LAN link + reliable OS push), full-UI mobile client
 
 ## Milestone 4 — Network debugging ✅ (2026-06-28)
 
@@ -76,7 +78,8 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Tab-level status dots; attention badge
 - [x] Quick-resume (`claude --continue`)
 - [x] Cross-pane action: send a file's `@path` from the editor into the last-focused Claude session
-- [ ] Later: send API response / DB result into a session; rename sessions independently of tabs
+- [x] **Send API response / DB result into a session** (2026-06-29) — "→ Agent" button on the API response view and DB results grid pipes the captured response / query+result into the focused agent (capped 12k chars / 100 rows)
+- [x] **Rename sessions independently of tabs** (2026-06-29) — double-click a session in the sidebar for a per-session label (`termNames` override, persisted); inbox + usage dashboard use it too
 
 ## Milestone 6 — Settings hub ✅ (2026-06-27)
 
@@ -186,21 +189,33 @@ From a live-app design review against the wabi-sabi north star:
 - [x] **Settings → AI** section — per-agent **default model** (injected at spawn via the agent's model env var, e.g. `ANTHROPIC_MODEL`) and **API key**
 - [x] **Encrypted key storage** (`main/aikeys.ts`) — keys encrypted at rest via `safeStorage`/DPAPI (base64 fallback), keyed by agent id; never written to `settings.json`, never sent to the renderer; decrypted in main and injected into that agent's terminal env at launch (`pty.create` env merge). Covered by `tests/aikeys.test.ts`
 - [x] Billing note — a stored key flips that agent to pay-as-you-go API usage (the Agents tab already warns when one leaks in from the environment)
-- [ ] Later: **usage / quota display** (needs per-provider APIs)
+- [x] **Usage/activity dashboard** (2026-06-29, M23) — session activity by agent & project; live token/cost still needs per-provider APIs
+
+## Milestone 23 — daily-driver feature batch + hardening ✅ (2026-06-29)
+
+Shipped as **v0.5.0** (signed), plus follow-on hardening:
+- [x] **Per-project task runner** — runs `package.json` scripts as sidebar chips. Script names are allowlisted (`/^[A-Za-z0-9:._-]+$/`) so a hostile repo can't inject a shell command.
+- [x] **Agent triage inbox** — every session across projects, attention-first, with quick reply + jump
+- [x] **Workspace presets** — save/restore a project's tab/split layout (regenerates fresh pty ids); project context menu
+- [x] **AI usage/activity dashboard** — sessions launched, agent time, running-now by agent & project over today/7d/all; honest that it tracks activity, not API tokens/cost
+- [x] **Pipe result → agent** — "→ Agent" on the API response & DB result views (capped)
+- [x] **Remote hardening** — constant-time token auth, mobile-client quote-escaping, push-on-attention, cleartext-LAN warning
+- [x] **DB query history** per connection; **rename sessions** independently of tabs
 
 ## Later / maybe (parking lot)
 
-> Pruned 2026-06-28: command palette (M17), split terminals + layout restore (M1.5), Git multi-account (M15), SSH profiles (M16), remote/mobile (M7), MCP (M18), embedded browser (M9), light theme (M10), snippets (M12), and file-`@path`-into-session (M5) all shipped. What's left is genuinely unbuilt:
+> Pruned 2026-06-28: command palette (M17), split terminals + layout restore (M1.5), Git multi-account (M15), SSH profiles (M16), remote/mobile (M7), MCP (M18), embedded browser (M9), light theme (M10), snippets (M12), and file-`@path`-into-session (M5) all shipped.
+> Pruned 2026-06-29: the v0.5.0 four-feature batch (task runner, agent triage inbox, workspace presets, AI **usage/activity** dashboard) + pipe-result-into-session + push-on-attention + DB query history + rename-sessions all shipped (see M5/M3.5/M7 above and M23 below). What's left is genuinely unbuilt:
 
-- **AI usage / quota display** — the rest of AI settings (model + encrypted keys) shipped in M22; live quota needs per-provider APIs
+- **Live AI quota/cost display** — the activity dashboard (M23) tracks sessions/time, not tokens or dollars; real quota needs per-provider APIs (DevDeck only spawns the CLI, so it can't see the API)
 - Cross-platform (macOS/Linux) polish
 - Per-terminal / per-project shell override (default shell is configurable; per-terminal is not)
-- Saved command runner per project (snippets shipped; a runnable command list did not)
+- Saved command runner per project (snippets + per-project package.json **task runner** (M23) shipped; an arbitrary saved-command list did not)
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
-- Pipe an **API response / DB result** straight into a running Claude session (file `@path` shipped; response piping did not)
 - Encrypted **PAT** storage for Git HTTPS push (identities shipped in M15; token storage did not)
-- TLS + push-notification-on-attention for the remote server
-- Terminal record/replay; agent pipeline UI on top of `pipeline.ts`
+- **TLS** for the remote server (the last gap: encrypts a plain-LAN link and unlocks reliable OS push on mobile)
+- Agent pipeline UI on top of `pipeline.ts`
+- **Coordinated Electron/deps bump** — see Maintenance/security; blocked on a Node 22.11 → ≥22.12 runtime upgrade
 
 ## Maintenance / security
 
