@@ -191,6 +191,8 @@ export interface AppSettings {
         enabled: boolean
         port: number
         token: string
+        /** Serve over HTTPS/WSS with a self-signed cert. */
+        tls: boolean
     }
     network: {
         port: number
@@ -293,7 +295,8 @@ const DEFAULTS: AppSettings = {
     remote: {
         enabled: false,
         port: 7420,
-        token: ""
+        token: "",
+        tls: false
     },
     network: {
         port: 8899
@@ -361,8 +364,8 @@ export const useSettings = create<SettingsState>((set, get) => {
 
     // Reflect the remote config into the actual server (start/stop).
     const applyServer = (): void => {
-        const { enabled, port, token } = get().remote
-        if (enabled && token) window.api.server.start({ port, token })
+        const { enabled, port, token, tls } = get().remote
+        if (enabled && token) window.api.server.start({ port, token, tls })
         else window.api.server.stop()
     }
 

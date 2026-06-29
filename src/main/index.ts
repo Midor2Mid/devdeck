@@ -160,8 +160,8 @@ function registerIpc(): void {
         latestSessions = sessions
         if (server.isRunning()) server.broadcastSessions(serverDeps)
     })
-    ipcMain.handle("server:start", (_e, cfg) => {
-        server.start(cfg, serverDeps)
+    ipcMain.handle("server:start", async (_e, cfg) => {
+        await server.start(cfg, serverDeps)
         return server.isRunning()
     })
     ipcMain.handle("server:stop", () => {

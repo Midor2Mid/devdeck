@@ -1,5 +1,7 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "http"
+import { createServer as createHttpsServer } from "https"
 import { WebSocketServer, WebSocket } from "ws"
+import { getCert } from "./tlscert"
 import { app } from "electron"
 import { readFileSync, writeFileSync, mkdirSync } from "fs"
 import { join, dirname, basename } from "path"
@@ -23,6 +25,8 @@ export interface RemoteSession {
 export interface ServerConfig {
     port: number
     token: string
+    /** Serve over HTTPS/WSS with a cached self-signed cert. */
+    tls?: boolean
 }
 
 export interface ServerDeps {
@@ -78,10 +82,10 @@ export function isRunning(): boolean {
     return httpServer !== null
 }
 
-export function start(config: ServerConfig, deps: ServerDeps): void {
+export async function start(config: ServerConfig, deps: ServerDeps): Promise<void> {
     stop()
 
-    httpServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+    const handleRequest = (req: IncomingMessage, res: ServerResponse): void => {
         const url = new URL(req.url ?? "/", "http://localhost")
         // Static library assets are harmless; everything else requires the token.
         if (url.pathname === "/xterm.js") {
@@ -101,7 +105,15 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
         }
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
         res.end(CLIENT_HTML)
-    })
+    }
+
+    const addrs = localAddresses()
+    if (config.tls) {
+        const { key, cert } = await getCert([...addrs.tailscale, ...addrs.lan])
+        httpServer = createHttpsServer({ key, cert }, handleRequest)
+    } else {
+        httpServer = createServer(handleRequest)
+    }
 
     wss = new WebSocketServer({
         server: httpServer,
@@ -227,10 +239,10 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
 
     httpServer.on("error", (err) => console.error("[server] error:", err.message))
     // Prefer binding to the Tailscale interface (private) over all-interfaces (LAN).
-    const tailscale = localAddresses().tailscale[0]
-    const host = tailscale ?? "0.0.0.0"
+    const host = addrs.tailscale[0] ?? "0.0.0.0"
     httpServer.listen(config.port, host)
-    console.log(`[server] DevDeck remote listening on ${host}:${config.port}`)
+    const scheme = config.tls ? "https" : "http"
+    console.log(`[server] DevDeck remote listening on ${scheme}://${host}:${config.port}`)
 }
 
 export function stop(): void {

@@ -294,7 +294,7 @@ const api = {
         save: (data: unknown): void => ipcRenderer.send("settings:save", data)
     },
     server: {
-        start: (cfg: { port: number; token: string }): Promise<boolean> =>
+        start: (cfg: { port: number; token: string; tls?: boolean }): Promise<boolean> =>
             ipcRenderer.invoke("server:start", cfg),
         stop: (): Promise<boolean> => ipcRenderer.invoke("server:stop"),
         status: (): Promise<ServerStatus> => ipcRenderer.invoke("server:status")

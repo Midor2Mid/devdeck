@@ -902,7 +902,8 @@ function RemoteSection(): JSX.Element {
     const [qr, setQr] = useState<string>("")
 
     const host = status?.tailscale[0] ?? status?.lan[0] ?? ""
-    const url = host ? `http://${host}:${remote.port}/?token=${remote.token}` : ""
+    const scheme = remote.tls ? "https" : "http"
+    const url = host ? `${scheme}://${host}:${remote.port}/?token=${remote.token}` : ""
 
     useEffect(() => {
         let on = true
@@ -949,6 +950,15 @@ function RemoteSection(): JSX.Element {
                     <button onClick={regenerateToken}>Regenerate</button>
                 </div>
             </div>
+            <div className="setting-row">
+                <label>HTTPS (self-signed)</label>
+                <input
+                    type="checkbox"
+                    className="checkbox"
+                    checked={remote.tls}
+                    onChange={(e) => setRemote({ tls: e.target.checked })}
+                />
+            </div>
 
             {remote.enabled && (
                 <div className="remote-connect">
@@ -962,13 +972,20 @@ function RemoteSection(): JSX.Element {
                             <div>
                                 <div className="muted small">Open on your phone:</div>
                                 <code className="token url">{url}</code>
-                                {status && status.tailscale.length === 0 && (
+                                {status && status.tailscale.length === 0 && !remote.tls && (
                                     <div className="settings-hint warn">
                                         ⚠ No Tailscale address - this is a plain-LAN <code>http://</code>{" "}
                                         link, so the token and everything you type travel{" "}
                                         <b>unencrypted</b> over Wi-Fi. Use it only on a network you
-                                        trust; install Tailscale on this PC and your phone for an
+                                        trust; turn on <b>HTTPS</b> above, or install Tailscale for an
                                         encrypted link (and to reach it from anywhere).
+                                    </div>
+                                )}
+                                {remote.tls && (
+                                    <div className="settings-hint">
+                                        Self-signed HTTPS: your phone will warn “connection not
+                                        private” the first time - accept it once. The link (and token)
+                                        are then encrypted even on plain LAN, and mobile push works.
                                     </div>
                                 )}
                             </div>
