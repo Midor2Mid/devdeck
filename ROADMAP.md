@@ -45,6 +45,7 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Per-project saved connections (PostgreSQL, MySQL) with encrypted passwords (`safeStorage`)
 - [x] Connect / test, list tables, run SQL (Monaco editor, Ctrl+Enter), results grid
 - [x] **SQLite via WASM** (`node-sqlite3-wasm`, 2026-06-27) — no native build; reads/writes real `.db` files, file picker in the connection form
+- [x] **SQL Server** (`mssql`/`tedious`, 2026-06-29) — pure-JS, no native build; the SSL toggle maps to `encrypt` with trust-server-certificate so local/dev instances work
 - [ ] Query history / saved queries per connection
 - [x] Packaging: `node-sqlite3-wasm` unpacked from asar in `electron-builder` config (`package.json` → `asarUnpack`) — done in M11
 

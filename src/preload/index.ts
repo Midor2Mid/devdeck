@@ -50,7 +50,7 @@ export interface HttpResponse {
     error?: string
 }
 
-export type DbKind = "postgres" | "mysql" | "sqlite"
+export type DbKind = "postgres" | "mysql" | "sqlite" | "sqlserver"
 export interface ConnProfile {
     id: string
     projectId: string

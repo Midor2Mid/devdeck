@@ -6,8 +6,9 @@ import { randomUUID } from "crypto"
 import { Pool as PgPool, Client as PgClient } from "pg"
 import mysql from "mysql2/promise"
 import { Database as SqliteDatabase } from "node-sqlite3-wasm"
+import sql from "mssql"
 
-export type DbKind = "postgres" | "mysql" | "sqlite"
+export type DbKind = "postgres" | "mysql" | "sqlite" | "sqlserver"
 
 /** Connection profile as seen by the renderer - never includes the password. */
 export interface ConnProfile {
@@ -159,6 +160,9 @@ interface LivePool {
     pg?: PgPool
     my?: mysql.Pool
     sqlite?: SqliteDatabase
+    ms?: sql.ConnectionPool
+    /** SQL Server pools connect asynchronously - await this before querying. */
+    msReady?: Promise<sql.ConnectionPool>
 }
 const pools = new Map<string, LivePool>()
 
@@ -187,6 +191,20 @@ function buildMyConfig(p: StoredProfile): mysql.PoolOptions {
     }
 }
 
+function buildMssqlConfig(p: StoredProfile): sql.config {
+    return {
+        server: p.host,
+        port: p.port,
+        user: p.user,
+        password: decryptPassword(p.passwordEnc),
+        database: p.database,
+        connectionTimeout: 8000,
+        pool: { max: 4, min: 0, idleTimeoutMillis: 30000 },
+        // ssl toggle maps to TLS; trust self-signed dev certs so localhost works.
+        options: { encrypt: !!p.ssl, trustServerCertificate: true }
+    }
+}
+
 function getPool(profileId: string): LivePool {
     const existing = pools.get(profileId)
     if (existing) return existing
@@ -197,6 +215,12 @@ function getPool(profileId: string): LivePool {
         live = { kind: "postgres", pg: new PgPool(buildPgConfig(profile)) }
     } else if (profile.kind === "mysql") {
         live = { kind: "mysql", my: mysql.createPool(buildMyConfig(profile)) }
+    } else if (profile.kind === "sqlserver") {
+        const ms = new sql.ConnectionPool(buildMssqlConfig(profile))
+        ms.on("error", (e) => console.error("[db] mssql pool error:", e.message))
+        const msReady = ms.connect()
+        msReady.catch(() => undefined) // surfaced on the first query's await; avoid an unhandled rejection
+        live = { kind: "sqlserver", ms, msReady }
     } else {
         // SQLite: the `database` field holds the .db file path.
         live = { kind: "sqlite", sqlite: new SqliteDatabase(profile.database) }
@@ -212,6 +236,7 @@ function closePool(profileId: string): void {
     if (!live) return
     live.pg?.end().catch(() => undefined)
     live.my?.end().catch(() => undefined)
+    live.ms?.close().catch(() => undefined)
     try {
         live.sqlite?.close()
     } catch {
@@ -238,6 +263,23 @@ export async function testConnection(input: ConnInput): Promise<QueryResult> {
                 db.all("SELECT 1")
             } finally {
                 db.close()
+            }
+            return { ok: true, timeMs: Date.now() - start }
+        }
+        if (input.kind === "sqlserver") {
+            const pool = await new sql.ConnectionPool({
+                server: input.host,
+                port: input.port,
+                user: input.user,
+                password: input.password,
+                database: input.database,
+                connectionTimeout: 8000,
+                options: { encrypt: !!input.ssl, trustServerCertificate: true }
+            }).connect()
+            try {
+                await pool.request().query("SELECT 1")
+            } finally {
+                await pool.close()
             }
             return { ok: true, timeMs: Date.now() - start }
         }
@@ -313,6 +355,26 @@ export async function runQuery(profileId: string, sql: string): Promise<QueryRes
                 timeMs: Date.now() - start
             }
         }
+        if (live.kind === "sqlserver" && live.ms) {
+            await live.msReady
+            const res = await live.ms.request().query(sql)
+            const rows = (res.recordset ?? []) as unknown as Record<string, unknown>[]
+            const columns = res.recordset?.columns
+                ? Object.keys(res.recordset.columns)
+                : rows[0]
+                  ? Object.keys(rows[0])
+                  : []
+            const affected = Array.isArray(res.rowsAffected)
+                ? res.rowsAffected.reduce((a, b) => a + b, 0)
+                : 0
+            return {
+                ok: true,
+                columns,
+                rows,
+                rowCount: res.recordset ? rows.length : affected,
+                timeMs: Date.now() - start
+            }
+        }
         if (live.my) {
             const [result, fields] = await live.my.query(sql)
             if (Array.isArray(result)) {
@@ -350,6 +412,15 @@ export async function listTables(profileId: string): Promise<string[]> {
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name"
         )
         return res.rows.map((r) => String((r as { table_name: string }).table_name))
+    }
+    if (live.kind === "sqlserver" && live.ms) {
+        await live.msReady
+        const res = await live.ms
+            .request()
+            .query(
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' ORDER BY TABLE_NAME"
+            )
+        return (res.recordset ?? []).map((r) => String((r as { TABLE_NAME: string }).TABLE_NAME))
     }
     if (live.my) {
         const [rows] = await live.my.query("SHOW TABLES")

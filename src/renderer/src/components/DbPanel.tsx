@@ -7,7 +7,12 @@ import { THEMES } from "../themes"
 import "../monaco-setup"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
-const DEFAULT_PORT: Record<DbKind, number> = { postgres: 5432, mysql: 3306, sqlite: 0 }
+const DEFAULT_PORT: Record<DbKind, number> = {
+    postgres: 5432,
+    mysql: 3306,
+    sqlite: 0,
+    sqlserver: 1433
+}
 
 function blankInput(projectId: string): ConnInput {
     return {
@@ -83,6 +88,7 @@ function ConnForm({
                     >
                         <option value="postgres">PostgreSQL</option>
                         <option value="mysql">MySQL</option>
+                        <option value="sqlserver">SQL Server</option>
                         <option value="sqlite">SQLite</option>
                     </select>
                     {form.kind === "sqlite" ? (
@@ -377,7 +383,8 @@ export function DbPanel(): JSX.Element {
                                     Select or add a connection to run SQL.
                                 </p>
                                 <p className="muted small">
-                                    PostgreSQL, MySQL & SQLite (WASM - no native build) supported.
+                                    PostgreSQL, MySQL, SQL Server & SQLite (WASM - no native build)
+                                    supported.
                                 </p>
                             </div>
                         ) : (
