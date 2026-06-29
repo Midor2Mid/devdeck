@@ -3,7 +3,9 @@ import { useStore, SHELL } from "../store"
 import { useSettings, sshCommand } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { confirm } from "../confirm"
+import { contextMenu } from "../contextmenu"
 import { paneRegistry } from "../paneRegistry"
+import type { Tab } from "../store"
 import { SplitView } from "./SplitView"
 import { PromptComposer } from "./PromptComposer"
 import { CanvasView } from "./CanvasView"
@@ -135,6 +137,21 @@ export function TerminalView(): JSX.Element {
         setEditingId(null)
     }
 
+    // Close a whole tab (confirm only when it holds multiple panes).
+    const closeTab = async (tab: Tab): Promise<void> => {
+        const panes = [...new Set(collectLeaves(tab.root))]
+        if (panes.length > 1) {
+            const ok = await confirm({
+                title: "Close tab",
+                message: `Close "${tab.name}" and its ${panes.length} panes?`,
+                confirmLabel: "Close",
+                danger: true
+            })
+            if (!ok) return
+        }
+        panes.forEach(closePane)
+    }
+
     // All terminals across the project's tabs - used by Grid + Canvas layouts.
     const allPanes = tabs.flatMap((tab) =>
         collectLeaves(tab.root).map((termId) => ({ termId, tabName: tab.name, tabId: tab.id }))
@@ -171,6 +188,33 @@ export function TerminalView(): JSX.Element {
                                     setDraft(tab.name)
                                 }}
                                 data-tip="Drag to reorder, or onto a pane to split. Double-click to rename."
+                                onContextMenu={(e) =>
+                                    contextMenu(e, [
+                                        {
+                                            label: "Rename",
+                                            onClick: () => {
+                                                setEditingId(tab.id)
+                                                setDraft(tab.name)
+                                            }
+                                        },
+                                        {
+                                            label: "Split right",
+                                            onClick: () => {
+                                                setActiveTab(activeProject.id, tab.id)
+                                                splitActive("row", SHELL)
+                                            }
+                                        },
+                                        {
+                                            label: "Split down",
+                                            onClick: () => {
+                                                setActiveTab(activeProject.id, tab.id)
+                                                splitActive("col", SHELL)
+                                            }
+                                        },
+                                        { separator: true },
+                                        { label: "Close", danger: true, onClick: () => closeTab(tab) }
+                                    ])
+                                }
                                 draggable={editingId !== tab.id}
                                 onDragStart={(e) => {
                                     setDraggingTabId(tab.id)
@@ -221,19 +265,9 @@ export function TerminalView(): JSX.Element {
                                 <span
                                     className="tab-close"
                                     data-tip="Close"
-                                    onClick={async (e) => {
+                                    onClick={(e) => {
                                         e.stopPropagation()
-                                        const panes = [...new Set(collectLeaves(tab.root))]
-                                        if (panes.length > 1) {
-                                            const ok = await confirm({
-                                                title: "Close tab",
-                                                message: `Close "${tab.name}" and its ${panes.length} panes?`,
-                                                confirmLabel: "Close",
-                                                danger: true
-                                            })
-                                            if (!ok) return
-                                        }
-                                        panes.forEach(closePane)
+                                        closeTab(tab)
                                     }}
                                 >
                                     ×

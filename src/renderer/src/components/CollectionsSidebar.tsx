@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react"
 import { useSettings, type SavedRequest, type Collection } from "../settings"
 import { ImportModal } from "./ImportModal"
-import { confirm } from "../confirm"
+import { contextMenu } from "../contextmenu"
+import { undoToast } from "../toast"
 
 interface Props {
     onLoad: (req: SavedRequest) => void
@@ -42,31 +43,43 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
     const renameCollection = (id: string, name: string): void => {
         setCollections(collections.map((c) => (c.id === id ? { ...c, name } : c)))
     }
-    const deleteCollection = async (id: string): Promise<void> => {
-        const col = collections.find((c) => c.id === id)
-        const n = col?.requests.length ?? 0
-        const ok = await confirm({
-            title: "Delete collection",
-            message: `Delete "${col?.name ?? "collection"}"${n ? ` and its ${n} request${n === 1 ? "" : "s"}` : ""}? This can't be undone.`,
-            confirmLabel: "Delete",
-            danger: true
+    // Reversible deletes: remove immediately, offer Undo (no blocking confirm).
+    const deleteCollection = (id: string): void => {
+        setMenuFor(null)
+        const idx = collections.findIndex((c) => c.id === id)
+        const col = collections[idx]
+        if (!col) return
+        setCollections(collections.filter((c) => c.id !== id))
+        undoToast(`Deleted collection "${col.name}"`, () => {
+            const cur = useSettings.getState().collections
+            const next = [...cur]
+            next.splice(Math.min(idx, next.length), 0, col)
+            useSettings.getState().setCollections(next)
         })
-        if (ok) setCollections(collections.filter((c) => c.id !== id))
     }
-    const deleteRequest = async (colId: string, reqId: string): Promise<void> => {
-        const req = collections.find((c) => c.id === colId)?.requests.find((r) => r.id === reqId)
-        const ok = await confirm({
-            title: "Delete request",
-            message: `Delete "${req?.name ?? "request"}"?`,
-            confirmLabel: "Delete",
-            danger: true
-        })
-        if (ok)
-            setCollections(
-                collections.map((c) =>
-                    c.id === colId ? { ...c, requests: c.requests.filter((r) => r.id !== reqId) } : c
-                )
+    const deleteRequest = (colId: string, reqId: string): void => {
+        setMenuFor(null)
+        const col = collections.find((c) => c.id === colId)
+        const idx = col?.requests.findIndex((r) => r.id === reqId) ?? -1
+        const req = idx >= 0 ? col!.requests[idx] : undefined
+        if (!req) return
+        setCollections(
+            collections.map((c) =>
+                c.id === colId ? { ...c, requests: c.requests.filter((r) => r.id !== reqId) } : c
             )
+        )
+        undoToast(`Deleted "${req.name}"`, () => {
+            const cur = useSettings.getState().collections
+            if (!cur.some((c) => c.id === colId)) return // collection gone too
+            useSettings.getState().setCollections(
+                cur.map((c) => {
+                    if (c.id !== colId) return c
+                    const reqs = [...c.requests]
+                    reqs.splice(Math.min(idx, reqs.length), 0, req)
+                    return { ...c, requests: reqs }
+                })
+            )
+        })
     }
 
     const duplicateRequest = (colId: string, reqId: string): void => {
@@ -227,6 +240,17 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                         onClick={() => toggle(col.id)}
                                         onDoubleClick={() => setEditId(col.id)}
                                         data-tip="Double-click to rename"
+                                        onContextMenu={(e) =>
+                                            contextMenu(e, [
+                                                { label: "Rename", onClick: () => setEditId(col.id) },
+                                                { separator: true },
+                                                {
+                                                    label: "Delete collection",
+                                                    danger: true,
+                                                    onClick: () => deleteCollection(col.id)
+                                                }
+                                            ])
+                                        }
                                     >
                                         {col.name}
                                     </span>
@@ -273,6 +297,33 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                             }
                                             clearDrag()
                                         }}
+                                        onContextMenu={(e) =>
+                                            contextMenu(e, [
+                                                { label: "Open", onClick: () => onLoad(r) },
+                                                {
+                                                    label: "Duplicate",
+                                                    onClick: () => duplicateRequest(col.id, r.id)
+                                                },
+                                                ...(collections.length > 1
+                                                    ? [
+                                                          { separator: true },
+                                                          ...collections
+                                                              .filter((c) => c.id !== col.id)
+                                                              .map((c) => ({
+                                                                  label: "Move to " + c.name,
+                                                                  onClick: () =>
+                                                                      moveRequest(col.id, r.id, c.id)
+                                                              }))
+                                                      ]
+                                                    : []),
+                                                { separator: true },
+                                                {
+                                                    label: "Delete",
+                                                    danger: true,
+                                                    onClick: () => deleteRequest(col.id, r.id)
+                                                }
+                                            ])
+                                        }
                                     >
                                         <span className={"col-method m-" + r.method.toLowerCase()}>
                                             {r.method}

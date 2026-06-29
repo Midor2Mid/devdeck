@@ -6,6 +6,7 @@ import type { Project } from "../../../preload/index"
 import { Icon } from "./Icon"
 import { Enso } from "./Enso"
 import { confirm } from "../confirm"
+import { contextMenu } from "../contextmenu"
 
 interface SessionRow {
     termId: string
@@ -105,6 +106,27 @@ export function Sidebar(): JSX.Element {
         setNewGroup("")
     }
 
+    const removeWithConfirm = async (p: Project): Promise<void> => {
+        const ok = await confirm({
+            title: "Remove project",
+            message: `Remove "${p.name}" from DevDeck? The folder won't be deleted, but its tabs/sessions here will close.`,
+            confirmLabel: "Remove",
+            danger: true
+        })
+        if (ok) removeProject(p.id)
+    }
+
+    const projectMenu = (p: Project): { label?: string; onClick?: () => void; danger?: boolean; separator?: boolean }[] => [
+        { label: "Open", onClick: () => setActiveProject(p.id) },
+        { separator: true },
+        ...existingGroups
+            .filter((g) => g !== p.group)
+            .map((g) => ({ label: "Move to " + g, onClick: () => setProjectGroup(p.id, g) })),
+        ...(p.group ? [{ label: "Ungroup", onClick: () => setProjectGroup(p.id, "") }] : []),
+        { separator: true },
+        { label: "Remove project", danger: true, onClick: () => removeWithConfirm(p) }
+    ]
+
     const projectRow = (p: Project): JSX.Element => (
         <div
             key={p.id}
@@ -116,6 +138,7 @@ export function Sidebar(): JSX.Element {
             }
             onClick={() => setActiveProject(p.id)}
             data-tip={p.path}
+            onContextMenu={(e) => contextMenu(e, projectMenu(p))}
             draggable
             onDragStart={(e) => {
                 setDragId(p.id)

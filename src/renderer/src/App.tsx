@@ -29,6 +29,7 @@ import { ShortcutsModal } from "./components/ShortcutsModal"
 import { IntroTip } from "./components/IntroTip"
 import { ConfirmDialog } from "./components/ConfirmDialog"
 import { TooltipLayer } from "./components/Tooltip"
+import { ContextMenuLayer } from "./components/ContextMenu"
 
 const VIEWS: { key: MainView; label: string }[] = [
     { key: "terminal", label: "Terminal" },
@@ -214,6 +215,7 @@ export function App(): JSX.Element {
             <IntroTip />
             <ConfirmDialog />
             <TooltipLayer />
+            <ContextMenuLayer />
         </div>
     )
 }
