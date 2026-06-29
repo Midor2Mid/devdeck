@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isBlockedRemoteUrl, isReadOnlySql } from "../src/main/guards"
+import { isBlockedRemoteUrl, isReadOnlySql, tokenOk } from "../src/main/guards"
 
 describe("isBlockedRemoteUrl (SSRF guard)", () => {
     it("blocks loopback / localhost", () => {
@@ -35,5 +35,24 @@ describe("isReadOnlySql (remote read-only)", () => {
         expect(isReadOnlySql("drop table t")).toBe(false)
         expect(isReadOnlySql("UPDATE t SET a=1")).toBe(false)
         expect(isReadOnlySql("insert into t values (1)")).toBe(false)
+    })
+})
+
+describe("tokenOk (constant-time remote auth)", () => {
+    const secret = "a".repeat(48)
+    it("accepts the exact token", () => {
+        expect(tokenOk(secret, secret)).toBe(true)
+    })
+    it("rejects wrong, partial, and superstring tokens", () => {
+        expect(tokenOk("b".repeat(48), secret)).toBe(false)
+        expect(tokenOk(secret.slice(0, 47), secret)).toBe(false)
+        expect(tokenOk(secret + "a", secret)).toBe(false)
+    })
+    it("rejects missing/empty tokens, and never matches an empty secret", () => {
+        expect(tokenOk(null, secret)).toBe(false)
+        expect(tokenOk(undefined, secret)).toBe(false)
+        expect(tokenOk("", secret)).toBe(false)
+        expect(tokenOk("", "")).toBe(false)
+        expect(tokenOk("anything", "")).toBe(false)
     })
 })

@@ -1,5 +1,19 @@
 // Pure security guards for the remote server (no Electron/native deps, so unit-testable).
 
+import { timingSafeEqual, createHash } from "crypto"
+
+/**
+ * Constant-time token check for the remote server. Both sides are hashed to
+ * fixed-length digests first, so the comparison can't leak the token's length
+ * or contents via timing; a missing/empty token never matches.
+ */
+export function tokenOk(provided: string | null | undefined, expected: string): boolean {
+    if (!provided || !expected) return false
+    const a = createHash("sha256").update(provided).digest()
+    const b = createHash("sha256").update(expected).digest()
+    return timingSafeEqual(a, b)
+}
+
 /**
  * Block remote-initiated requests to local/private/link-local hosts (SSRF guard).
  * The desktop API panel is unaffected - this only gates the phone's relayed requests.

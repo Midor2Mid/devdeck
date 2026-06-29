@@ -7,7 +7,7 @@ import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
-import { isBlockedRemoteUrl, isReadOnlySql } from "./guards"
+import { isBlockedRemoteUrl, isReadOnlySql, tokenOk } from "./guards"
 
 export interface RemoteSession {
     termId: string
@@ -94,7 +94,7 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
             res.end(xtermAsset("xterm.css"))
             return
         }
-        if (url.searchParams.get("token") !== config.token) {
+        if (!tokenOk(url.searchParams.get("token"), config.token)) {
             res.writeHead(401, { "Content-Type": "text/plain" })
             res.end("Unauthorized")
             return
@@ -109,7 +109,7 @@ export function start(config: ServerConfig, deps: ServerDeps): void {
         maxPayload: 25 * 1024 * 1024,
         verifyClient: (info, cb) => {
             const url = new URL(info.req.url ?? "/", "http://localhost")
-            cb(url.searchParams.get("token") === config.token, 1008, "Unauthorized")
+            cb(tokenOk(url.searchParams.get("token"), config.token), 1008, "Unauthorized")
         }
     })
 
@@ -485,7 +485,7 @@ const CLIENT_HTML = `<!doctype html>
   document.getElementById('inp').addEventListener('keydown',function(e){ if(e.key==='Enter'){ document.getElementById('send').click(); }});
   [].forEach.call(document.querySelectorAll('.keys button'),function(b){ b.onclick=function(){ if(attachedId) sendMsg({t:'input',id:attachedId,data:b.getAttribute('data-k')}); }; });
   window.addEventListener('resize',function(){ if(attachedId) fit(); });
-  function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+  function esc(s){ return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   connect();
 </script>
 </body>
