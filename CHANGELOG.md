@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.5 - 2026-06-29
+
+- **Modern look (opt-in)** - a new **Graphite** theme (cool near-black neutrals
+  with a vivid indigo accent) and **Modern+** style (crisp radii, hairline borders
+  with soft elevation, vivid filled accent buttons, focus rings, snappy
+  micro-interactions). Settings → Appearance; the warm wabi-sabi default is
+  unchanged.
+- **Drag & drop** - reorder projects (drag onto another project, or onto a group
+  header to move it); drop an OS folder onto the project list to add it as a
+  project; reorder API requests and collections; and **drag terminal tabs to
+  reorder, or drop one onto a pane to split** (VS Code-style 4-way drop zones).
+  Terminal sessions persist across a tab move - no restarts.
+
 ## 0.4.4 - 2026-06-29
 
 - **SQL Server support** - a fourth database engine (Database panel → New
