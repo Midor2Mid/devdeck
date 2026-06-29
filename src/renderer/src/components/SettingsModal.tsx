@@ -754,7 +754,7 @@ function AISection(): JSX.Element {
                         </label>
                         <input
                             value={a.modelEnv}
-                            placeholder="ANTHROPIC_MODEL"
+                            placeholder={a.id === "claude" ? "ANTHROPIC_MODEL" : "(model env var)"}
                             onChange={(e) => update(i, { modelEnv: e.target.value.trim() })}
                         />
                     </div>
