@@ -369,7 +369,24 @@ const CLIENT_HTML = `<!doctype html>
   var titleEl = document.getElementById('title');
   var backBtn = document.getElementById('back');
   var httpView=document.getElementById('http-view'), dbView=document.getElementById('db-view');
-  var ws, term, attachedId = null, sessions = [];
+  var ws, term, attachedId = null, sessions = [], prevStatus = {}, notifyAsked = false;
+
+  // Ask for OS-notification permission on the first user gesture (browsers
+  // require one). Notifications only fire on a secure context (https / Tailscale
+  // with TLS); on a plain-http LAN link the title badge + beep still work.
+  function ensureNotify(){ if(notifyAsked) return; notifyAsked=true; try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }catch(e){} }
+  document.addEventListener('click', ensureNotify, true);
+
+  function beep(){ try{ var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; var a=new AC(); var o=a.createOscillator(), g=a.createGain(); o.connect(g); g.connect(a.destination); o.type='sine'; o.frequency.value=660; g.gain.value=0.06; o.start(); setTimeout(function(){ try{o.stop();a.close();}catch(e){} },180); }catch(e){} }
+
+  function updateBadge(){ var n=sessions.filter(function(s){return s.status==='attention';}).length; document.title=(n?('('+n+') '):'')+'DevDeck Remote'; }
+
+  // Alert when an agent needs you and you're not already looking at it.
+  function notifyAttention(s){
+    if(!document.hidden && attachedId===s.termId) return;
+    beep();
+    try{ if('Notification' in window && Notification.permission==='granted'){ var n=new Notification(s.tabName+' needs you', {body:(s.projectName||'')+' · '+(s.badge||'agent'), tag:s.termId}); n.onclick=function(){ window.focus(); openTerm(s.termId); n.close(); }; } }catch(e){}
+  }
 
   function showView(v){
     listEl.style.display = v==='list'?'block':'none';
@@ -393,7 +410,11 @@ const CLIENT_HTML = `<!doctype html>
     ws.onclose = function(){ statusEl.textContent = 'disconnected - retrying'; setTimeout(connect, 1500); };
     ws.onmessage = function(e){
       var m = JSON.parse(e.data);
-      if(m.t === 'sessions'){ sessions = m.sessions; if(!attachedId) renderList(); }
+      if(m.t === 'sessions'){
+        m.sessions.forEach(function(s){ if(s.status==='attention' && prevStatus[s.termId]!=='attention') notifyAttention(s); });
+        prevStatus={}; m.sessions.forEach(function(s){ prevStatus[s.termId]=s.status; });
+        sessions = m.sessions; updateBadge(); if(!attachedId) renderList();
+      }
       else if(m.t === 'data' && m.id === attachedId && term){ term.write(m.data); }
       else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m[process exited]\\x1b[0m\\r\\n'); }
       else if(m.t === 'upload:done'){ statusEl.textContent = m.error ? ('upload failed: '+m.error) : ('attached → path inserted'); setTimeout(function(){statusEl.textContent='connected';},2500); }

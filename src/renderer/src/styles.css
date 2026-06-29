@@ -2541,6 +2541,14 @@ button .ic,
     margin-top: 18px;
     max-width: 440px;
 }
+.settings-hint.warn {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+    border-radius: 8px;
+    padding: 9px 11px;
+    margin-top: 10px;
+}
 .theme-cards {
     display: flex;
     gap: 10px;

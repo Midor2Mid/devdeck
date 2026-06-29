@@ -873,10 +873,12 @@ function RemoteSection(): JSX.Element {
                                 <div className="muted small">Open on your phone:</div>
                                 <code className="token url">{url}</code>
                                 {status && status.tailscale.length === 0 && (
-                                    <div className="settings-hint">
-                                        No Tailscale address found - this URL is LAN-only (same
-                                        Wi-Fi). Install Tailscale on this PC and your phone to
-                                        reach it from anywhere.
+                                    <div className="settings-hint warn">
+                                        ⚠ No Tailscale address - this is a plain-LAN <code>http://</code>{" "}
+                                        link, so the token and everything you type travel{" "}
+                                        <b>unencrypted</b> over Wi-Fi. Use it only on a network you
+                                        trust; install Tailscale on this PC and your phone for an
+                                        encrypted link (and to reach it from anywhere).
                                     </div>
                                 )}
                             </div>
