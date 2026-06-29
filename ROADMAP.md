@@ -39,6 +39,7 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Send via main process (native `fetch`, bypasses CORS); status, timing, headers, pretty body (Monaco viewer)
 - [x] Per-project request history + saved requests (collections), persisted to `settings.json`
 - [x] **Beyond scope:** auth config, environments/variables, collections search + move/duplicate, **Import** (Postman / OpenAPI-Swagger / cURL → collections), cURL smart-paste into the URL bar
+- [x] **Response tests/assertions** (2026-06-30, M24) — per-request checks (status/time/body/header/JSON-path) with a pass/fail Tests tab
 
 ## Milestone 3.5 — Database panel ✅ (2026-06-27, partial)
 
@@ -59,7 +60,8 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - Reach from anywhere: **Tailscale** (private, recommended) — bind is 0.0.0.0 but token-gated
 - [x] **Push-on-attention** (2026-06-29) — mobile client title-badge + beep + best-effort OS notification when an agent flips to *attention* and you're not looking; the no-Tailscale case now warns that a plain-LAN link is unencrypted
 - [x] **Constant-time token auth** (2026-06-29) — `tokenOk` (sha256 + `timingSafeEqual`) closes the `!==` timing side-channel; mobile-client `esc()` now escapes quotes (latent attribute XSS). Covered by `tests/server-guards.test.ts`
-- [ ] Later: TLS option (the only thing still gating a fully-encrypted plain-LAN link + reliable OS push), full-UI mobile client
+- [x] **TLS / HTTPS option** (2026-06-30) — opt-in self-signed cert (`tlscert.ts` via `selfsigned`, SANs for localhost + LAN/Tailscale IPs, cached + reused); serves https/wss so the link + token are encrypted even on plain LAN and the mobile client gets a secure context. Verified live (200 with token, 401 without, over TLS)
+- [ ] Later: full-UI mobile client
 
 ## Milestone 4 — Network debugging ✅ (2026-06-28)
 
@@ -145,7 +147,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 
 - [x] **Git accounts** in Settings → Git (label, user.name, user.email, custom SSH command)
 - [x] Apply an account to the active project from the **status bar** (writes the repo's local `git config` incl. `core.sshCommand`); status bar shows the current identity
-- [ ] Later: store PATs (encrypted) for HTTPS push; token verification
+- [x] **PATs (encrypted) for HTTPS push + token verification** (2026-06-30, M24) — `gitpat.ts`; cache into Git's credential manager, GitHub verify
 
 ## Milestone 16 — SSH hosts ✅ (2026-06-27)
 
@@ -212,10 +214,15 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 - Per-terminal / per-project shell override (default shell is configurable; per-terminal is not)
 - Saved command runner per project (snippets + per-project package.json **task runner** (M23) shipped; an arbitrary saved-command list did not)
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
-- Encrypted **PAT** storage for Git HTTPS push (identities shipped in M15; token storage did not)
-- **TLS** for the remote server (the last gap: encrypts a plain-LAN link and unlocks reliable OS push on mobile)
 - Agent pipeline UI on top of `pipeline.ts`
+- Image-preview tabs in the editor; auto-update (`electron-updater`); API request scripting beyond assertions
 - **Coordinated Electron/deps bump** — see Maintenance/security; blocked on a Node 22.11 → ≥22.12 runtime upgrade
+
+## Milestone 24 — Git PATs · API tests · remote TLS ✅ (2026-06-30)
+
+- [x] **Encrypted Git PATs** (M15 close-out) — per-account tokens encrypted at rest (`gitpat.ts`, DPAPI), "Cache for HTTPS push" via `git credential approve`, GitHub "Verify". `tests/gitpat.test.ts`
+- [x] **API response tests/assertions** — status/time/body/header/JSON-path checks per request; pass/fail Tests tab + summary. Pure engine `apiTests.ts`, `tests/apiTests.test.ts`
+- [x] **Remote TLS** (M7 close-out) — opt-in self-signed HTTPS/WSS (`tlscert.ts`)
 
 ## Maintenance / security
 
