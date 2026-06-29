@@ -8,3 +8,6 @@ release/
 .env
 .env.*
 .gstack/
+
+# git-bash crash dumps
+*.stackdump
