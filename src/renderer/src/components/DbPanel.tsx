@@ -162,7 +162,17 @@ function ConnForm({
     )
 }
 
-function ResultsGrid({ result }: { result: QueryResult | null }): JSX.Element {
+function ResultsGrid({
+    result,
+    onSend,
+    canSend,
+    sent
+}: {
+    result: QueryResult | null
+    onSend?: () => void
+    canSend?: boolean
+    sent?: boolean
+}): JSX.Element {
     if (!result) {
         return <div className="muted resp-placeholder">Run a query to see results.</div>
     }
@@ -179,6 +189,17 @@ function ResultsGrid({ result }: { result: QueryResult | null }): JSX.Element {
                     {result.rowCount ?? rows.length} row{(result.rowCount ?? rows.length) === 1 ? "" : "s"}
                 </span>
                 <span className="muted">{result.timeMs} ms</span>
+                {onSend && (
+                    <button
+                        className="tool"
+                        style={{ marginLeft: "auto" }}
+                        onClick={onSend}
+                        disabled={!canSend}
+                        data-tip={canSend ? "Send this result to the focused agent session" : "No agent session yet"}
+                    >
+                        {sent ? "Sent ✓" : "→ Agent"}
+                    </button>
+                )}
             </div>
             <div className="grid-scroll">
                 <table className="result-grid">
@@ -221,6 +242,9 @@ export function DbPanel(): JSX.Element {
     const [sql, setSql] = useState("SELECT 1;")
     const [result, setResult] = useState<QueryResult | null>(null)
     const [running, setRunning] = useState(false)
+    const [sentToAgent, setSentToAgent] = useState(false)
+    const sendToAgent = useStore((s) => s.sendToAgent)
+    const lastAgent = useStore((s) => s.lastAgentTermId)
     const runRef = useRef<() => void>(() => undefined)
     const editorFontSize = useSettings((s) => s.editor.fontSize)
     const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
@@ -259,6 +283,33 @@ export function DbPanel(): JSX.Element {
         setRunning(false)
     }
     runRef.current = run
+
+    // Hand the query + its result table to the focused agent session. Rows are
+    // capped so a big result set can't flood the terminal.
+    const sendResultToAgent = (): void => {
+        if (!result || !result.ok) return
+        const columns = result.columns ?? []
+        const rows = result.rows ?? []
+        const cap = 100
+        const fmt = (v: unknown): string =>
+            v == null ? "NULL" : typeof v === "object" ? JSON.stringify(v) : String(v)
+        const header = columns.join(" | ")
+        const body = rows
+            .slice(0, cap)
+            .map((r) => columns.map((c) => fmt((r as Record<string, unknown>)[c])).join(" | "))
+            .join("\n")
+        const total = result.rowCount ?? rows.length
+        let text =
+            `Here's a SQL query and its result from DevDeck:\n\n` +
+            "```sql\n" + sql.trim() + "\n```\n\n" +
+            `${total} row${total === 1 ? "" : "s"}:\n\n` +
+            "```\n" + header + "\n" + body + "\n```\n"
+        if (rows.length > cap) text += `\n…(showing first ${cap} of ${rows.length} rows)\n`
+        if (sendToAgent(text)) {
+            setSentToAgent(true)
+            setTimeout(() => setSentToAgent(false), 1500)
+        }
+    }
 
     const openTable = (t: string): void => {
         const q = `SELECT * FROM ${t} LIMIT 100;`
@@ -442,7 +493,12 @@ export function DbPanel(): JSX.Element {
                                 </Allotment.Pane>
                                 <Allotment.Pane>
                                     <div className="db-results">
-                                        <ResultsGrid result={result} />
+                                        <ResultsGrid
+                                            result={result}
+                                            onSend={sendResultToAgent}
+                                            canSend={!!lastAgent}
+                                            sent={sentToAgent}
+                                        />
                                     </div>
                                 </Allotment.Pane>
                             </Allotment>

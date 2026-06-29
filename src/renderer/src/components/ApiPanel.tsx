@@ -64,7 +64,10 @@ export function ApiPanel(): JSX.Element {
     const [respPretty, setRespPretty] = useState(true)
     const [respWrap, setRespWrap] = useState(true)
     const [copied, setCopied] = useState(false)
+    const [sentToAgent, setSentToAgent] = useState(false)
     const [sending, setSending] = useState(false)
+    const sendToAgent = useStore((s) => s.sendToAgent)
+    const lastAgent = useStore((s) => s.lastAgentTermId)
     const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
     const [imported, setImported] = useState(false)
     const [envOpen, setEnvOpen] = useState(false)
@@ -323,6 +326,25 @@ export function ApiPanel(): JSX.Element {
         }
     }
 
+    // Hand the response to the focused agent session as context to reason about.
+    // The body is capped so a huge payload can't flood the terminal.
+    const sendRespToAgent = (): void => {
+        if (!resp) return
+        const cap = 12000
+        const body = shownRespBody.length > cap
+            ? shownRespBody.slice(0, cap) + `\n…(truncated, ${shownRespBody.length - cap} more chars)`
+            : shownRespBody
+        const text =
+            `Here's an HTTP response I captured in DevDeck:\n\n` +
+            `REQUEST: ${method} ${url}\n` +
+            `RESPONSE: ${resp.status} ${resp.statusText} (${resp.timeMs} ms)\n\n` +
+            "```\n" + body + "\n```\n"
+        if (sendToAgent(text)) {
+            setSentToAgent(true)
+            setTimeout(() => setSentToAgent(false), 1500)
+        }
+    }
+
     return (
         <div className="api-panel">
             {sidebarOpen && <CollectionsSidebar onLoad={loadRequest} activeReqId={loadedReqId} />}
@@ -575,6 +597,18 @@ export function ApiPanel(): JSX.Element {
                                     </button>
                                     <button className="tool" onClick={copyBody} data-tip="Copy body">
                                         {copied ? "Copied ✓" : "Copy"}
+                                    </button>
+                                    <button
+                                        className="tool"
+                                        onClick={sendRespToAgent}
+                                        disabled={!lastAgent}
+                                        data-tip={
+                                            lastAgent
+                                                ? "Send this response to the focused agent session"
+                                                : "No agent session yet"
+                                        }
+                                    >
+                                        {sentToAgent ? "Sent ✓" : "→ Agent"}
                                     </button>
                                 </div>
                             )}
