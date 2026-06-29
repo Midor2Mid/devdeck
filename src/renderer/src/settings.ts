@@ -3,6 +3,7 @@ import { applyTheme, applyStyle, THEMES, type ThemeId, type StyleId } from "./th
 import type { Pipeline, PipelineTrigger } from "./pipeline"
 import type { KvRow } from "./components/KeyValueEditor"
 import type { SplitDir } from "./layout"
+import type { ApiTest } from "./apiTests"
 
 // A saved project layout. Leaves store the agent + its launch command (not a live
 // terminal id) so a preset can be re-opened with fresh sessions.
@@ -65,6 +66,8 @@ export interface SavedRequest {
     bodyText: string
     formRows: KvRow[]
     auth: AuthConfig
+    /** Assertions evaluated against the response after Send. */
+    tests?: ApiTest[]
 }
 
 /** A named folder of saved requests. */

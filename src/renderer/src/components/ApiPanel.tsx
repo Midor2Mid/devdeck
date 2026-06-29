@@ -8,13 +8,24 @@ import "../monaco-setup"
 import { KeyValueEditor, KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor"
 import { splitUrl, parseQueryPairs, buildUrl } from "../httpParams"
 import { useSettings, type SavedRequest, type AuthConfig, defaultAuth } from "../settings"
+import {
+    evalTests,
+    opsFor,
+    describeTest,
+    OP_LABEL,
+    SOURCE_LABEL,
+    type ApiTest,
+    type TestSource,
+    type TestOp,
+    type TestResult
+} from "../apiTests"
 import { buildVarMap, substitute, findUnresolved } from "../vars"
 import { confirm } from "../confirm"
 import { EnvManager } from "./EnvManager"
 import { CollectionsSidebar } from "./CollectionsSidebar"
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
-type ReqTab = "params" | "auth" | "headers" | "body"
+type ReqTab = "params" | "auth" | "headers" | "body" | "tests"
 type BodyType = "none" | "json" | "form"
 
 function prettify(body: string, contentType?: string): string {
@@ -49,6 +60,88 @@ const activeCount = (rows: KvRow[]): number =>
 const hasHeader = (hdrs: Record<string, string>, name: string): boolean =>
     Object.keys(hdrs).some((k) => k.toLowerCase() === name.toLowerCase())
 
+const TEST_SOURCES: TestSource[] = ["status", "time", "body", "header", "json"]
+
+/** Editor for a request's response assertions (the "Tests" subtab). */
+function TestsEditor({
+    tests,
+    onChange
+}: {
+    tests: ApiTest[]
+    onChange: (t: ApiTest[]) => void
+}): JSX.Element {
+    const update = (i: number, patch: Partial<ApiTest>): void =>
+        onChange(tests.map((t, idx) => (idx === i ? { ...t, ...patch } : t)))
+    const remove = (i: number): void => onChange(tests.filter((_, idx) => idx !== i))
+    const add = (): void =>
+        onChange([
+            ...tests,
+            { id: crypto.randomUUID(), source: "status", target: "", op: "eq", value: "200" }
+        ])
+
+    return (
+        <div className="tests-pane">
+            {tests.length === 0 && (
+                <div className="muted small tests-hint">
+                    Add assertions checked against the response after Send - status code, time,
+                    body text, a header, or a JSON path (e.g. <code>data.id</code>).
+                </div>
+            )}
+            {tests.map((t, i) => {
+                const needsTarget = t.source === "header" || t.source === "json"
+                return (
+                    <div className="test-row" key={t.id}>
+                        <select
+                            value={t.source}
+                            onChange={(e) => {
+                                const source = e.target.value as TestSource
+                                const ops = opsFor(source)
+                                update(i, { source, op: ops.includes(t.op) ? t.op : ops[0] })
+                            }}
+                        >
+                            {TEST_SOURCES.map((s) => (
+                                <option key={s} value={s}>
+                                    {SOURCE_LABEL[s]}
+                                </option>
+                            ))}
+                        </select>
+                        {needsTarget && (
+                            <input
+                                className="test-target"
+                                value={t.target}
+                                placeholder={t.source === "header" ? "Header name" : "data.id"}
+                                onChange={(e) => update(i, { target: e.target.value })}
+                            />
+                        )}
+                        <select
+                            value={t.op}
+                            onChange={(e) => update(i, { op: e.target.value as TestOp })}
+                        >
+                            {opsFor(t.source).map((o) => (
+                                <option key={o} value={o}>
+                                    {OP_LABEL[o]}
+                                </option>
+                            ))}
+                        </select>
+                        <input
+                            className="test-value"
+                            value={t.value}
+                            placeholder="value"
+                            onChange={(e) => update(i, { value: e.target.value })}
+                        />
+                        <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
+                            ×
+                        </button>
+                    </div>
+                )
+            })}
+            <button onClick={add} style={{ marginTop: 6 }}>
+                + Add assertion
+            </button>
+        </div>
+    )
+}
+
 export function ApiPanel(): JSX.Element {
     const [method, setMethod] = useState("GET")
     const [url, setUrl] = useState("")
@@ -60,7 +153,9 @@ export function ApiPanel(): JSX.Element {
     const [auth, setAuth] = useState<AuthConfig>(defaultAuth())
     const [reqTab, setReqTab] = useState<ReqTab>("params")
     const [resp, setResp] = useState<HttpResponse | null>(null)
-    const [respTab, setRespTab] = useState<"body" | "headers">("body")
+    const [tests, setTests] = useState<ApiTest[]>([])
+    const [testResults, setTestResults] = useState<TestResult[]>([])
+    const [respTab, setRespTab] = useState<"body" | "headers" | "tests">("body")
     const [respPretty, setRespPretty] = useState(true)
     const [respWrap, setRespWrap] = useState(true)
     const [copied, setCopied] = useState(false)
@@ -151,6 +246,7 @@ export function ApiPanel(): JSX.Element {
         }
         setSending(true)
         setResp(null)
+        setTestResults([])
         try {
             const sub = (s: string): string => substitute(s, varMap)
 
@@ -200,6 +296,10 @@ export function ApiPanel(): JSX.Element {
                 body: outBody
             })
             setResp(res)
+            if (tests.length) {
+                setTestResults(evalTests(tests, res))
+                if (res.ok) setRespTab("tests")
+            }
         } finally {
             setSending(false)
         }
@@ -227,7 +327,8 @@ export function ApiPanel(): JSX.Element {
         bodyType,
         bodyText,
         formRows,
-        auth
+        auth,
+        tests
     })
 
     const loadRequest = (req: SavedRequest): void => {
@@ -239,6 +340,8 @@ export function ApiPanel(): JSX.Element {
         setBodyText(req.bodyText ?? "")
         setFormRows(req.formRows?.length ? req.formRows : [emptyRow()])
         setAuth({ ...defaultAuth(), ...req.auth })
+        setTests(req.tests ?? [])
+        setTestResults([])
         setLoadedReqId(req.id)
         setResp(null)
         setReqTab("params")
@@ -424,6 +527,9 @@ export function ApiPanel(): JSX.Element {
                     <span className={reqTab === "body" ? "active" : ""} onClick={() => setReqTab("body")}>
                         Body{bodyDot ? " •" : ""}
                     </span>
+                    <span className={reqTab === "tests" ? "active" : ""} onClick={() => setReqTab("tests")}>
+                        Tests{tests.length ? ` (${tests.length})` : ""}
+                    </span>
                 </div>
 
                 {reqTab === "params" && (
@@ -547,6 +653,9 @@ export function ApiPanel(): JSX.Element {
                         {bodyType === "none" && <div className="muted body-none">No request body.</div>}
                     </div>
                 )}
+                {reqTab === "tests" && (
+                    <TestsEditor tests={tests} onChange={setTests} />
+                )}
             </div>
 
             <div className="api-resp">
@@ -576,6 +685,18 @@ export function ApiPanel(): JSX.Element {
                                 >
                                     Headers{respHeaderEntries.length ? ` (${respHeaderEntries.length})` : ""}
                                 </span>
+                                {testResults.length > 0 && (
+                                    <span
+                                        className={
+                                            (respTab === "tests" ? "active " : "") +
+                                            (testResults.every((r) => r.pass) ? "tests-pass" : "tests-fail")
+                                        }
+                                        onClick={() => setRespTab("tests")}
+                                    >
+                                        Tests {testResults.filter((r) => r.pass).length}/{testResults.length}
+                                        {testResults.every((r) => r.pass) ? " ✓" : " ✗"}
+                                    </span>
+                                )}
                             </div>
                             {respTab === "body" && (
                                 <div className="resp-tools">
@@ -634,12 +755,27 @@ export function ApiPanel(): JSX.Element {
                                     }}
                                 />
                             </div>
-                        ) : (
+                        ) : respTab === "headers" ? (
                             <div className="resp-headers">
                                 {respHeaderEntries.map(([k, v]) => (
                                     <div className="resp-hrow" key={k}>
                                         <span className="resp-hkey">{k}</span>
                                         <span className="resp-hval">{v}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="resp-tests">
+                                {testResults.map((r, i) => (
+                                    <div
+                                        key={i}
+                                        className={"test-result " + (r.pass ? "pass" : "fail")}
+                                    >
+                                        <span className="test-icon">{r.pass ? "✓" : "✗"}</span>
+                                        <span className="test-desc">{describeTest(r.test)}</span>
+                                        <span className="test-actual" data-tip={r.actual}>
+                                            got: {r.actual.slice(0, 120) || "(empty)"}
+                                        </span>
                                     </div>
                                 ))}
                             </div>

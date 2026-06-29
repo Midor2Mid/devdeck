@@ -2004,6 +2004,75 @@ button .ic,
     flex: 1;
     word-break: break-all;
 }
+
+/* ---------- API request tests / assertions ---------- */
+.tests-pane {
+    padding: 10px 12px;
+    overflow: auto;
+}
+.tests-hint {
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+.test-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.test-row select {
+    flex: none;
+}
+.test-row .test-target {
+    width: 120px;
+}
+.test-row .test-value {
+    flex: 1;
+    min-width: 60px;
+}
+.resp-tabs span.tests-pass {
+    color: var(--moss, #8c9a68);
+    font-weight: 600;
+}
+.resp-tabs span.tests-fail {
+    color: var(--clay, #c4855d);
+    font-weight: 600;
+}
+.resp-tests {
+    flex: 1;
+    overflow: auto;
+    padding: 10px 14px;
+    font-size: 12px;
+}
+.test-result {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-soft);
+}
+.test-icon {
+    flex: none;
+    font-weight: 700;
+}
+.test-result.pass .test-icon {
+    color: var(--moss, #8c9a68);
+}
+.test-result.fail .test-icon {
+    color: var(--clay, #c4855d);
+}
+.test-desc {
+    flex: 1;
+    color: var(--text);
+}
+.test-actual {
+    color: var(--muted);
+    font-family: "Cascadia Mono", Consolas, monospace;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .status {
     font-weight: 600;
 }
