@@ -25,6 +25,29 @@ export function splitLeaf(
     return { ...node, children: node.children.map((c) => splitLeaf(c, targetId, dir, newTermId)) }
 }
 
+/**
+ * Replace the leaf for `targetId` with a split that places `insert` (an arbitrary
+ * subtree) beside it. `side` is where `insert` goes relative to the target.
+ * Used to drop one tab's whole layout into a pane of another tab (drag-to-split).
+ */
+export function splitLeafWith(
+    node: LayoutNode,
+    targetId: string,
+    dir: SplitDir,
+    side: "before" | "after",
+    insert: LayoutNode
+): LayoutNode {
+    if (node.kind === "leaf") {
+        if (node.termId !== targetId) return node
+        const children = side === "before" ? [insert, leaf(targetId)] : [leaf(targetId), insert]
+        return { kind: "split", dir, children }
+    }
+    return {
+        ...node,
+        children: node.children.map((c) => splitLeafWith(c, targetId, dir, side, insert))
+    }
+}
+
 /** Remove a leaf, collapsing any split left with a single child. Returns null if empty. */
 export function removeLeaf(node: LayoutNode, termId: string): LayoutNode | null {
     if (node.kind === "leaf") {

@@ -4926,3 +4926,54 @@ kbd {
     outline-offset: -4px;
     border-radius: 8px;
 }
+
+/* ---------- Tab drag-to-split ---------- */
+.term-tab.tab-dragging {
+    opacity: 0.45;
+}
+.term-tab.tab-over {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+/* Pane wrapper hosts the directional drop overlay during a tab drag. */
+.pane-host {
+    position: relative;
+    height: 100%;
+    width: 100%;
+}
+.drop-zones {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+}
+.drop-zone {
+    position: absolute;
+    transition: background 0.1s ease, box-shadow 0.1s ease;
+}
+.drop-zone.on {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    box-shadow: inset 0 0 0 2px var(--accent);
+}
+.dz-left {
+    left: 0;
+    top: 0;
+    width: 30%;
+    height: 100%;
+}
+.dz-right {
+    right: 0;
+    top: 0;
+    width: 30%;
+    height: 100%;
+}
+.dz-top {
+    left: 30%;
+    right: 30%;
+    top: 0;
+    height: 50%;
+}
+.dz-bottom {
+    left: 30%;
+    right: 30%;
+    bottom: 0;
+    height: 50%;
+}

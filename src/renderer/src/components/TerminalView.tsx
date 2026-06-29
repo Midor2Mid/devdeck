@@ -34,6 +34,10 @@ export function TerminalView(): JSX.Element {
     const [query, setQuery] = useState("")
     const [menuOpen, setMenuOpen] = useState(false)
     const [toolsOpen, setToolsOpen] = useState(false)
+    const [overTabId, setOverTabId] = useState<string | null>(null)
+    const reorderTabs = useStore((s) => s.reorderTabs)
+    const setDraggingTabId = useStore((s) => s.setDraggingTabId)
+    const draggingTabId = useStore((s) => s.draggingTabId)
     const composerOpen = useStore((s) => s.composerOpen)
     const setComposerOpen = useStore((s) => s.setComposerOpen)
     const recordingTermId = useStore((s) => s.recordingTermId)
@@ -155,13 +159,42 @@ export function TerminalView(): JSX.Element {
                         return (
                             <div
                                 key={tab.id}
-                                className={"term-tab" + (isActive ? " active" : "")}
+                                className={
+                                    "term-tab" +
+                                    (isActive ? " active" : "") +
+                                    (overTabId === tab.id ? " tab-over" : "") +
+                                    (draggingTabId === tab.id ? " tab-dragging" : "")
+                                }
                                 onClick={() => setActiveTab(activeProject.id, tab.id)}
                                 onDoubleClick={() => {
                                     setEditingId(tab.id)
                                     setDraft(tab.name)
                                 }}
-                                data-tip="Double-click to rename"
+                                data-tip="Drag to reorder, or onto a pane to split. Double-click to rename."
+                                draggable={editingId !== tab.id}
+                                onDragStart={(e) => {
+                                    setDraggingTabId(tab.id)
+                                    e.dataTransfer.effectAllowed = "move"
+                                    e.dataTransfer.setData("text/devdeck-tab", tab.id)
+                                }}
+                                onDragEnd={() => {
+                                    setDraggingTabId(null)
+                                    setOverTabId(null)
+                                }}
+                                onDragOver={(e) => {
+                                    if (draggingTabId && draggingTabId !== tab.id) {
+                                        e.preventDefault()
+                                        setOverTabId(tab.id)
+                                    }
+                                }}
+                                onDragLeave={() => setOverTabId((o) => (o === tab.id ? null : o))}
+                                onDrop={(e) => {
+                                    if (draggingTabId && draggingTabId !== tab.id) {
+                                        e.preventDefault()
+                                        reorderTabs(activeProject.id, draggingTabId, tab.id)
+                                    }
+                                    setOverTabId(null)
+                                }}
                             >
                                 <span
                                     className={
@@ -491,6 +524,7 @@ export function TerminalView(): JSX.Element {
                             node={activeTab.root}
                             projectId={activeProject.id}
                             cwd={activeProject.path}
+                            tabId={activeTab.id}
                         />
                     )}
                 </div>

@@ -6,6 +6,7 @@ import {
     type SplitDir,
     leaf,
     splitLeaf,
+    splitLeafWith,
     removeLeaf,
     collectLeaves,
     firstLeaf,
@@ -184,6 +185,18 @@ interface AppState extends Persisted {
     closeActivePane: () => void
     renameTab: (projectId: string, tabId: string, name: string) => void
     setActiveTab: (projectId: string, tabId: string) => void
+
+    // Tab drag-and-drop (runtime-only)
+    draggingTabId: string | null
+    setDraggingTabId: (id: string | null) => void
+    reorderTabs: (projectId: string, fromTabId: string, toTabId: string) => void
+    moveTabToPane: (
+        projectId: string,
+        sourceTabId: string,
+        targetPaneId: string,
+        dir: SplitDir,
+        side: "before" | "after"
+    ) => void
     focusPane: (projectId: string, termId: string) => void
     cycleTab: (dir: 1 | -1) => void
 }
@@ -394,6 +407,7 @@ export const useStore = create<AppState>((set, get) => {
         composerOpen: false,
         paletteOpen: false,
         shortcutsOpen: false,
+        draggingTabId: null,
         agentStatus: {},
         lastAgentTermId: null,
         notifications: [],
@@ -943,6 +957,44 @@ export const useStore = create<AppState>((set, get) => {
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: pane }
             })
             ack(pane)
+            persist()
+        },
+
+        setDraggingTabId: (draggingTabId) => set({ draggingTabId }),
+
+        reorderTabs: (projectId, fromTabId, toTabId) => {
+            const tabs = get().tabsByProject[projectId] ?? []
+            const from = tabs.findIndex((t) => t.id === fromTabId)
+            const to = tabs.findIndex((t) => t.id === toTabId)
+            if (from < 0 || to < 0 || from === to) return
+            const next = [...tabs]
+            const [moved] = next.splice(from, 1)
+            next.splice(to, 0, moved)
+            set((s) => ({ tabsByProject: { ...s.tabsByProject, [projectId]: next } }))
+            persist()
+        },
+
+        // Graft the source tab's whole layout into a pane of another tab, then
+        // drop the now-empty source tab. Ptys persist (panes re-attach on remount).
+        moveTabToPane: (projectId, sourceTabId, targetPaneId, dir, side) => {
+            const s = get()
+            const tabs = s.tabsByProject[projectId] ?? []
+            const source = tabs.find((t) => t.id === sourceTabId)
+            const targetTab = tabs.find((t) => hasLeaf(t.root, targetPaneId))
+            if (!source || !targetTab || targetTab.id === sourceTabId) return
+            const newRoot = splitLeafWith(targetTab.root, targetPaneId, dir, side, source.root)
+            const next = tabs
+                .filter((t) => t.id !== sourceTabId)
+                .map((t) => (t.id === targetTab.id ? { ...t, root: newRoot } : t))
+            set({
+                tabsByProject: { ...s.tabsByProject, [projectId]: next },
+                activeTabByProject: { ...s.activeTabByProject, [projectId]: targetTab.id },
+                activePaneByProject: {
+                    ...s.activePaneByProject,
+                    [projectId]: firstLeaf(source.root)
+                },
+                draggingTabId: null
+            })
             persist()
         },
 
