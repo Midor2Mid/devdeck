@@ -16,6 +16,7 @@ type Section =
     | "terminal"
     | "editor"
     | "agents"
+    | "ai"
     | "snippets"
     | "pipelines"
     | "git"
@@ -30,6 +31,7 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "terminal", label: "Terminal" },
     { key: "editor", label: "Editor" },
     { key: "agents", label: "Agents" },
+    { key: "ai", label: "AI" },
     { key: "snippets", label: "Snippets" },
     { key: "pipelines", label: "Pipelines" },
     { key: "git", label: "Git" },
@@ -614,7 +616,9 @@ function AgentsSection(): JSX.Element {
                 command: "",
                 resumeArgs: "",
                 badge: "AGENT",
-                apiKeyEnv: ""
+                apiKeyEnv: "",
+                model: "",
+                modelEnv: ""
             }
         ])
 
@@ -691,6 +695,110 @@ function AgentsSection(): JSX.Element {
                 button; the rest are in the ▾ menu. "Key env var" is the API key that would
                 override that CLI's subscription login - DevDeck warns when it's present in the
                 environment.
+            </p>
+        </div>
+    )
+}
+
+function AISection(): JSX.Element {
+    const agents = useSettings((s) => s.agents)
+    const setAgents = useSettings((s) => s.setAgents)
+    const [keySet, setKeySet] = useState<Record<string, boolean>>({})
+    const [draft, setDraft] = useState<Record<string, string>>({})
+
+    const refresh = (): void => {
+        window.api.ai.status().then(setKeySet)
+    }
+    useEffect(refresh, [])
+
+    const update = (i: number, patch: Partial<(typeof agents)[number]>): void =>
+        setAgents(agents.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
+
+    const saveKey = async (id: string): Promise<void> => {
+        const key = (draft[id] ?? "").trim()
+        if (!key) return
+        await window.api.ai.setKey(id, key)
+        setDraft((d) => ({ ...d, [id]: "" }))
+        refresh()
+    }
+    const clearKey = async (id: string): Promise<void> => {
+        await window.api.ai.clearKey(id)
+        refresh()
+    }
+
+    return (
+        <div className="settings-section">
+            <h3>AI</h3>
+            <p className="settings-hint">
+                Per-agent default <b>model</b> and <b>API key</b>. The key is encrypted on disk
+                (DPAPI) and injected into that agent's terminal at launch - it never touches{" "}
+                <code>settings.json</code> and is never sent back to the UI.
+            </p>
+            {agents.map((a, i) => (
+                <div key={a.id} className="ai-agent">
+                    <div className="ai-agent-head">
+                        <span className="agent-badge">{a.badge}</span>
+                        {a.name}
+                    </div>
+                    <div className="setting-row">
+                        <label>Default model</label>
+                        <input
+                            value={a.model}
+                            placeholder={a.id === "claude" ? "claude-opus-4-8" : "(provider model id)"}
+                            onChange={(e) => update(i, { model: e.target.value.trim() })}
+                        />
+                    </div>
+                    <div className="setting-row">
+                        <label data-tip="Env var the model is passed through to the CLI">
+                            Model env var
+                        </label>
+                        <input
+                            value={a.modelEnv}
+                            placeholder="ANTHROPIC_MODEL"
+                            onChange={(e) => update(i, { modelEnv: e.target.value.trim() })}
+                        />
+                    </div>
+                    <div className="setting-row">
+                        <label>API key{a.apiKeyEnv ? ` (${a.apiKeyEnv})` : ""}</label>
+                        {keySet[a.id] ? (
+                            <span className="ai-key-set">
+                                <span className="ai-key-dot" /> stored
+                                <button className="ai-key-clear" onClick={() => clearKey(a.id)}>
+                                    Clear
+                                </button>
+                            </span>
+                        ) : (
+                            <span className="ai-key-input">
+                                <input
+                                    type="password"
+                                    value={draft[a.id] ?? ""}
+                                    placeholder={a.apiKeyEnv ? "paste key…" : "set a key env var first"}
+                                    disabled={!a.apiKeyEnv}
+                                    onChange={(e) =>
+                                        setDraft((d) => ({ ...d, [a.id]: e.target.value }))
+                                    }
+                                />
+                                <button
+                                    className="accent"
+                                    disabled={!a.apiKeyEnv || !(draft[a.id] ?? "").trim()}
+                                    onClick={() => saveKey(a.id)}
+                                >
+                                    Save
+                                </button>
+                            </span>
+                        )}
+                    </div>
+                    {keySet[a.id] && (
+                        <div className="agent-warn">
+                            ⚠ A stored key makes <b>{a.name}</b> bill <b>pay-as-you-go API usage</b>{" "}
+                            instead of a subscription login. Clear it to fall back to the CLI's own
+                            auth.
+                        </div>
+                    )}
+                </div>
+            ))}
+            <p className="settings-hint">
+                Usage / quota display is planned but not built yet - it needs per-provider APIs.
             </p>
         </div>
     )
@@ -1026,6 +1134,8 @@ export function SettingsModal(): JSX.Element {
                     )}
 
                     {section === "agents" && <AgentsSection />}
+
+                    {section === "ai" && <AISection />}
 
                     {section === "snippets" && <SnippetsSection />}
 

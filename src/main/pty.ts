@@ -26,6 +26,8 @@ export interface CreateOpts {
     shell?: { file: string; args: string[] }
     cols?: number
     rows?: number
+    /** Extra env vars merged over the inherited environment (e.g. model, API key). */
+    env?: Record<string, string>
 }
 
 function defaultShell(): { file: string; args: string[] } {
@@ -53,7 +55,7 @@ export function createPty(opts: CreateOpts): void {
         cwd: opts.cwd || process.env.USERPROFILE || process.cwd(),
         cols: opts.cols ?? 80,
         rows: opts.rows ?? 24,
-        env: process.env as Record<string, string>
+        env: { ...(process.env as Record<string, string>), ...(opts.env ?? {}) }
     })
     const session: Session = { proc, buffer: "" }
     sessions.set(id, session)

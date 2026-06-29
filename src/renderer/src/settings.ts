@@ -68,6 +68,10 @@ export interface AgentPreset {
     badge: string
     /** Env var that, if set, makes this CLI bill pay-as-you-go instead of a subscription. */
     apiKeyEnv: string
+    /** Default model to run this agent with (injected at spawn via modelEnv). "" = leave to the CLI. */
+    model: string
+    /** Env var that carries the model (e.g. ANTHROPIC_MODEL for Claude Code). */
+    modelEnv: string
 }
 
 /** Default API-key env var per built-in agent (for migrating older saved settings). */
@@ -75,6 +79,11 @@ export const KNOWN_KEY_ENV: Record<string, string> = {
     claude: "ANTHROPIC_API_KEY",
     codex: "OPENAI_API_KEY",
     gemini: "GEMINI_API_KEY"
+}
+
+/** Default model env var per built-in agent. Only Claude Code's is well-known. */
+export const KNOWN_MODEL_ENV: Record<string, string> = {
+    claude: "ANTHROPIC_MODEL"
 }
 
 export interface Snippet {
@@ -169,9 +178,9 @@ const DEFAULTS: AppSettings = {
         minimap: false
     },
     agents: [
-        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY" },
-        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY" },
-        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY" }
+        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL" },
+        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY", model: "", modelEnv: "" },
+        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY", model: "", modelEnv: "" }
     ],
     agentIdleMs: 1000,
     snippets: [
@@ -316,7 +325,9 @@ export const useSettings = create<SettingsState>((set, get) => {
                     editor: { ...DEFAULTS.editor, ...raw.editor },
                     agents: (raw.agents?.length ? raw.agents : DEFAULTS.agents).map((a) => ({
                         ...a,
-                        apiKeyEnv: a.apiKeyEnv ?? KNOWN_KEY_ENV[a.id] ?? ""
+                        apiKeyEnv: a.apiKeyEnv ?? KNOWN_KEY_ENV[a.id] ?? "",
+                        model: a.model ?? "",
+                        modelEnv: a.modelEnv ?? KNOWN_MODEL_ENV[a.id] ?? ""
                     })),
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     snippets: raw.snippets ?? DEFAULTS.snippets,

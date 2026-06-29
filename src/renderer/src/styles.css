@@ -4749,3 +4749,43 @@ kbd {
         animation: none;
     }
 }
+
+/* ---------- Settings → AI ---------- */
+.ai-agent {
+    border: 1px solid var(--border-soft);
+    border-radius: 9px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: var(--bg);
+}
+.ai-agent-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+.ai-key-set {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+}
+.ai-key-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    flex: none;
+}
+.ai-key-clear {
+    padding: 3px 10px;
+}
+.ai-key-input {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+}
+.ai-key-input input {
+    flex: 1;
+}

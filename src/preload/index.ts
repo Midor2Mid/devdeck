@@ -27,6 +27,12 @@ export interface PtyCreateOpts {
     shell?: { file: string; args: string[] }
     cols?: number
     rows?: number
+    /** Non-secret env to inject (e.g. the model var). */
+    env?: Record<string, string>
+    /** Agent this terminal runs; main injects that agent's stored API key. */
+    agentId?: string
+    /** Env var name to inject the decrypted API key under (e.g. ANTHROPIC_API_KEY). */
+    keyEnv?: string
 }
 export interface HttpRequest {
     method: string
@@ -300,6 +306,12 @@ const api = {
     },
     http: {
         send: (req: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke("http:send", req)
+    },
+    ai: {
+        setKey: (agentId: string, key: string): Promise<void> =>
+            ipcRenderer.invoke("ai:setKey", { agentId, key }),
+        status: (): Promise<Record<string, boolean>> => ipcRenderer.invoke("ai:status"),
+        clearKey: (agentId: string): Promise<void> => ipcRenderer.invoke("ai:clearKey", agentId)
     },
     db: {
         list: (projectId: string): Promise<ConnProfile[]> =>

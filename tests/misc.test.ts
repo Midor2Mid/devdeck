@@ -4,13 +4,14 @@ import { sshCommand } from "../src/renderer/src/settings"
 
 describe("design styles", () => {
     it("registers all design styles with labels", () => {
-        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "crt", "flat", "minimal", "modern", "neon", "wabi"])
+        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "crt", "flat", "lacquer", "minimal", "modern", "neon", "wabi"])
         expect(STYLES.minimal.label).toBe("Modern Minimal")
         expect(STYLES.neon.label).toBe("Neon")
         expect(STYLES.flat.label).toBe("Flat Vector")
         expect(STYLES.bauhaus.label).toBe("Bauhaus")
         expect(STYLES.crt.label).toBe("Phosphor CRT")
         expect(STYLES.modern.label).toBe("Modern Pro")
+        expect(STYLES.lacquer.label).toBe("Lacquer")
     })
 
     it("includes the Slate modern color theme", () => {

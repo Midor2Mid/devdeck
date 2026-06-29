@@ -80,13 +80,22 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             }
             // Spawn (first time) or re-attach + replay (already running).
             // A per-terminal cwd override (e.g. a git worktree) wins over the project dir.
+            // For agent terminals, inject the configured model (env) + API key (main
+            // decrypts it from agentId + keyEnv); plain shells get neither.
+            const agentId = useStore.getState().agentOf(termId)
+            const preset = useSettings.getState().agentById(agentId)
+            const extraEnv: Record<string, string> = {}
+            if (preset?.model && preset?.modelEnv) extraEnv[preset.modelEnv] = preset.model
             window.api.pty.create({
                 id: termId,
                 cwd: useStore.getState().termCwd[termId] ?? cwd,
                 initialCommand,
                 shell: useSettings.getState().resolveShell(),
                 cols: term.cols,
-                rows: term.rows
+                rows: term.rows,
+                env: Object.keys(extraEnv).length ? extraEnv : undefined,
+                agentId: preset ? agentId : undefined,
+                keyEnv: preset?.apiKeyEnv || undefined
             })
         })
 

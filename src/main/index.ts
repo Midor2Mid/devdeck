@@ -14,6 +14,7 @@ import { gitStatus, getIdentity, setIdentity } from "./git"
 import { readMcp, writeMcp, type McpServer } from "./mcp"
 import * as browserNet from "./browserNet"
 import * as proxy from "./proxy"
+import * as aikeys from "./aikeys"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -72,7 +73,14 @@ function registerIpc(): void {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("pty:exit", d)
     })
     ipcMain.on("pty:create", (e, opts) => {
-        ptyMgr.createPty(opts)
+        // Merge per-agent env: the model (passed plainly by the renderer) plus the
+        // API key (decrypted here so the plaintext never leaves the main process).
+        const env: Record<string, string> = { ...(opts.env ?? {}) }
+        if (opts.agentId && opts.keyEnv) {
+            const key = aikeys.getKey(opts.agentId)
+            if (key) env[opts.keyEnv] = key
+        }
+        ptyMgr.createPty({ ...opts, env })
         // Replay the buffer to the requesting window (per-client re-attach).
         const buf = ptyMgr.getBuffer(opts.id)
         if (buf && !e.sender.isDestroyed()) e.sender.send("pty:data", { id: opts.id, data: buf })
@@ -109,6 +117,13 @@ function registerIpc(): void {
 
     // --- API client ---
     ipcMain.handle("http:send", (_e, req) => httpSend(req))
+
+    // --- AI agent keys (encrypted at rest; injected at pty spawn) ---
+    ipcMain.handle("ai:setKey", (_e, { agentId, key }: { agentId: string; key: string }) =>
+        aikeys.setKey(agentId, key)
+    )
+    ipcMain.handle("ai:status", () => aikeys.status())
+    ipcMain.handle("ai:clearKey", (_e, agentId: string) => aikeys.clearKey(agentId))
 
     // --- Remote / mobile server ---
     // Session metadata lives in the renderer; it pushes a snapshot here, and the

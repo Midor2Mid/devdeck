@@ -180,11 +180,18 @@ From a live-app design review against the wabi-sabi north star:
 - [x] **Lacquer style** — a new opt-in design style (Settings → Appearance → Style): frosted-glass surfaces, gilded gradient accent buttons, soft accent glow on active tabs / rail / ensō, deep layered shadows, plus an animated sheen sweep + breathing ensō glow (honors `prefers-reduced-motion`). Additive — existing styles and the default are unchanged.
 - [x] **Local signed builds** — `npm run cert:make` + `npm run package:signed` produce a self-signed Authenticode build (personal-use) to avoid unsigned-binary AV false positives; shipped as the signed **v0.4.2** release.
 
+## Milestone 22 — AI settings ✅ (2026-06-29)
+
+- [x] **Settings → AI** section — per-agent **default model** (injected at spawn via the agent's model env var, e.g. `ANTHROPIC_MODEL`) and **API key**
+- [x] **Encrypted key storage** (`main/aikeys.ts`) — keys encrypted at rest via `safeStorage`/DPAPI (base64 fallback), keyed by agent id; never written to `settings.json`, never sent to the renderer; decrypted in main and injected into that agent's terminal env at launch (`pty.create` env merge). Covered by `tests/aikeys.test.ts`
+- [x] Billing note — a stored key flips that agent to pay-as-you-go API usage (the Agents tab already warns when one leaks in from the environment)
+- [ ] Later: **usage / quota display** (needs per-provider APIs)
+
 ## Later / maybe (parking lot)
 
 > Pruned 2026-06-28: command palette (M17), split terminals + layout restore (M1.5), Git multi-account (M15), SSH profiles (M16), remote/mobile (M7), MCP (M18), embedded browser (M9), light theme (M10), snippets (M12), and file-`@path`-into-session (M5) all shipped. What's left is genuinely unbuilt:
 
-- **AI settings** section (model/quota/keys) — only remaining Settings section
+- **AI usage / quota display** — the rest of AI settings (model + encrypted keys) shipped in M22; live quota needs per-provider APIs
 - Cross-platform (macOS/Linux) polish
 - Per-terminal / per-project shell override (default shell is configurable; per-terminal is not)
 - Saved command runner per project (snippets shipped; a runnable command list did not)
