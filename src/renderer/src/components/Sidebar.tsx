@@ -28,10 +28,14 @@ export function Sidebar(): JSX.Element {
         setActiveProject,
         setProjectGroup,
         moveProject,
-        addProjectByPath
+        addProjectByPath,
+        saveWorkspacePreset,
+        openWorkspacePreset,
+        deleteWorkspacePreset
     } = useStore()
     const openSwitcher = useStore((s) => s.openSwitcher)
     const agents = useSettings((s) => s.agents)
+    const presets = useSettings((s) => s.workspacePresets)
 
     const tabsByProject = useStore((s) => s.tabsByProject)
     const termAgents = useStore((s) => s.termAgents)
@@ -117,16 +121,33 @@ export function Sidebar(): JSX.Element {
         if (ok) removeProject(p.id)
     }
 
-    const projectMenu = (p: Project): { label?: string; onClick?: () => void; danger?: boolean; separator?: boolean }[] => [
-        { label: "Open", onClick: () => setActiveProject(p.id) },
-        { separator: true },
-        ...existingGroups
-            .filter((g) => g !== p.group)
-            .map((g) => ({ label: "Move to " + g, onClick: () => setProjectGroup(p.id, g) })),
-        ...(p.group ? [{ label: "Ungroup", onClick: () => setProjectGroup(p.id, "") }] : []),
-        { separator: true },
-        { label: "Remove project", danger: true, onClick: () => removeWithConfirm(p) }
-    ]
+    const projectMenu = (p: Project): { label?: string; onClick?: () => void; danger?: boolean; separator?: boolean }[] => {
+        const projPresets = presets.filter((pr) => pr.projectId === p.id)
+        const hasTabs = (tabsByProject[p.id] ?? []).length > 0
+        return [
+            { label: "Open", onClick: () => setActiveProject(p.id) },
+            { separator: true },
+            ...existingGroups
+                .filter((g) => g !== p.group)
+                .map((g) => ({ label: "Move to " + g, onClick: () => setProjectGroup(p.id, g) })),
+            ...(p.group ? [{ label: "Ungroup", onClick: () => setProjectGroup(p.id, "") }] : []),
+            { separator: true },
+            ...(hasTabs
+                ? [{ label: "Save layout as preset", onClick: () => saveWorkspacePreset(p.id) }]
+                : []),
+            ...projPresets.map((pr) => ({
+                label: `Open ${pr.name}`,
+                onClick: () => openWorkspacePreset(pr.id)
+            })),
+            ...projPresets.map((pr) => ({
+                label: `Delete ${pr.name}`,
+                danger: true,
+                onClick: () => deleteWorkspacePreset(pr.id)
+            })),
+            { separator: true },
+            { label: "Remove project", danger: true, onClick: () => removeWithConfirm(p) }
+        ]
+    }
 
     const projectRow = (p: Project): JSX.Element => (
         <div

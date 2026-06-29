@@ -2,6 +2,23 @@ import { create } from "zustand"
 import { applyTheme, applyStyle, THEMES, type ThemeId, type StyleId } from "./themes"
 import type { Pipeline, PipelineTrigger } from "./pipeline"
 import type { KvRow } from "./components/KeyValueEditor"
+import type { SplitDir } from "./layout"
+
+// A saved project layout. Leaves store the agent + its launch command (not a live
+// terminal id) so a preset can be re-opened with fresh sessions.
+export type PresetNode =
+    | { kind: "leaf"; agentId: string; init?: string }
+    | { kind: "split"; dir: SplitDir; children: PresetNode[] }
+export interface PresetTab {
+    name: string
+    root: PresetNode
+}
+export interface WorkspacePreset {
+    id: string
+    projectId: string
+    name: string
+    tabs: PresetTab[]
+}
 
 /** A named set of {{variables}} for the API client (e.g. dev / UAT / PROD). */
 export interface Environment {
@@ -154,6 +171,7 @@ export interface AppSettings {
     network: {
         port: number
     }
+    workspacePresets: WorkspacePreset[]
 }
 
 function generateToken(): string {
@@ -249,7 +267,8 @@ const DEFAULTS: AppSettings = {
     },
     network: {
         port: 8899
-    }
+    },
+    workspacePresets: []
 }
 
 interface SettingsState extends AppSettings {
@@ -273,6 +292,7 @@ interface SettingsState extends AppSettings {
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
     setNetwork: (patch: Partial<AppSettings["network"]>) => void
+    setWorkspacePresets: (presets: WorkspacePreset[]) => void
     regenerateToken: () => void
     resetAll: () => void
     openSettings: () => void
@@ -285,8 +305,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -340,7 +360,8 @@ export const useSettings = create<SettingsState>((set, get) => {
                     collections: raw.collections ?? DEFAULTS.collections,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote },
-                    network: { ...DEFAULTS.network, ...raw.network }
+                    network: { ...DEFAULTS.network, ...raw.network },
+                    workspacePresets: raw.workspacePresets ?? DEFAULTS.workspacePresets
                 })
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
@@ -430,6 +451,10 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         setNetwork: (patch) => {
             set((s) => ({ network: { ...s.network, ...patch } }))
+            persist()
+        },
+        setWorkspacePresets: (workspacePresets) => {
+            set({ workspacePresets })
             persist()
         },
         regenerateToken: () => {

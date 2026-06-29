@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import type { Project, WorkItem } from "../../preload/index"
 import { useSettings } from "./settings"
-import type { SavedRequest } from "./settings"
+import type { SavedRequest, PresetNode, PresetTab } from "./settings"
 import {
     type LayoutNode,
     type SplitDir,
@@ -190,6 +190,11 @@ interface AppState extends Persisted {
     closeActivePane: () => void
     renameTab: (projectId: string, tabId: string, name: string) => void
     setActiveTab: (projectId: string, tabId: string) => void
+
+    // Workspace presets (saved layouts) — stored in settings
+    saveWorkspacePreset: (projectId: string) => void
+    openWorkspacePreset: (presetId: string) => void
+    deleteWorkspacePreset: (presetId: string) => void
 
     // Cross-panel drag (runtime-only): text a dragged file/table carries to an agent.
     dragPayload: string | null
@@ -975,6 +980,72 @@ export const useStore = create<AppState>((set, get) => {
             })
             ack(pane)
             persist()
+        },
+
+        // Snapshot the active project's layout (tabs/splits + each pane's agent +
+        // launch command) as a named preset.
+        saveWorkspacePreset: (projectId) => {
+            const tabs = get().tabsByProject[projectId] ?? []
+            if (tabs.length === 0) return
+            const s = get()
+            const toPreset = (n: LayoutNode): PresetNode =>
+                n.kind === "leaf"
+                    ? { kind: "leaf", agentId: s.termAgents[n.termId] ?? SHELL, init: s.termInit[n.termId] }
+                    : { kind: "split", dir: n.dir, children: n.children.map(toPreset) }
+            const presetTabs: PresetTab[] = tabs.map((t) => ({ name: t.name, root: toPreset(t.root) }))
+            const all = useSettings.getState().workspacePresets
+            const count = all.filter((p) => p.projectId === projectId).length + 1
+            useSettings.getState().setWorkspacePresets([
+                ...all,
+                { id: newId(), projectId, name: `Layout ${count}`, tabs: presetTabs }
+            ])
+        },
+
+        // Re-open a saved layout as fresh tabs/sessions (new pty ids) appended to
+        // the project; panes spawn on mount with their stored launch command.
+        openWorkspacePreset: (presetId) => {
+            const preset = useSettings.getState().workspacePresets.find((p) => p.id === presetId)
+            if (!preset) return
+            const pid = preset.projectId
+            const termAgents = { ...get().termAgents }
+            const termInit = { ...get().termInit }
+            const agentStatus = { ...get().agentStatus }
+            const toLayout = (n: PresetNode): LayoutNode => {
+                if (n.kind === "leaf") {
+                    const termId = newId()
+                    termAgents[termId] = n.agentId
+                    if (n.init) termInit[termId] = n.init
+                    if (isAgentId(n.agentId)) agentStatus[termId] = "working"
+                    return leaf(termId)
+                }
+                return { kind: "split", dir: n.dir, children: n.children.map(toLayout) }
+            }
+            const restored: Tab[] = preset.tabs.map((t) => ({
+                id: newId(),
+                name: t.name,
+                root: toLayout(t.root)
+            }))
+            const first = restored[0]
+            set((s) => ({
+                activeId: pid,
+                termAgents,
+                termInit,
+                agentStatus,
+                tabsByProject: {
+                    ...s.tabsByProject,
+                    [pid]: [...(s.tabsByProject[pid] ?? []), ...restored]
+                },
+                activeTabByProject: { ...s.activeTabByProject, [pid]: first.id },
+                activePaneByProject: { ...s.activePaneByProject, [pid]: firstLeaf(first.root) },
+                view: "terminal"
+            }))
+            window.api.projects.setActive(pid)
+            persist()
+        },
+
+        deleteWorkspacePreset: (presetId) => {
+            const all = useSettings.getState().workspacePresets
+            useSettings.getState().setWorkspacePresets(all.filter((p) => p.id !== presetId))
         },
 
         setDraggingTabId: (draggingTabId) => set({ draggingTabId }),
