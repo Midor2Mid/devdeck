@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.7 - 2026-06-29
+
+- **Right-click context menus** - on projects (Open / Move to group / Remove),
+  terminal tabs (Rename / Split right / Split down / Close), and API requests &
+  collections (Open / Duplicate / Move to / Delete). Cursor-positioned, dismissed
+  by clicking away.
+- **Undo toasts** - deleting an API request or collection now removes it instantly
+  and shows a "Deleted X · Undo" toast (restoring it at its original spot) instead
+  of a blocking confirm dialog.
+
 ## 0.4.6 - 2026-06-29
 
 - **Cross-panel drag** - drag an editor file, or a database table, onto a running
