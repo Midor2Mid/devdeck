@@ -5048,3 +5048,16 @@ kbd {
     background: color-mix(in srgb, var(--accent) 16%, transparent);
     color: var(--accent-soft);
 }
+
+/* "→ API" button in the Network inspector (send a captured request to the API client) */
+.net-to-api {
+    padding: 3px 10px;
+    font-size: 11px;
+    border-color: var(--accent);
+    color: var(--accent-soft);
+    flex: none;
+}
+.net-to-api:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent-soft);
+}

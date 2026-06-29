@@ -1,10 +1,31 @@
 import { useEffect, useMemo, useState } from "react"
 import { Allotment } from "allotment"
 import { useStore } from "../store"
-import { useSettings } from "../settings"
+import { useSettings, type SavedRequest, defaultAuth } from "../settings"
+import { rowsFromPairs } from "./KeyValueEditor"
 import type { NetCapture } from "../../../preload/index"
 
 const UI_CAP = 2000
+
+/** Convert a captured request into an editable API-client request to replay. */
+function toApiRequest(c: NetCapture): SavedRequest {
+    const headers = rowsFromPairs(
+        Object.entries(c.reqHeaders ?? {}).map(([key, value]) => ({ key, value }))
+    )
+    const hasBody = !!c.reqBody && c.method !== "GET" && c.method !== "HEAD"
+    return {
+        id: crypto.randomUUID(),
+        name: `${c.method} ${c.host}${c.path}`.slice(0, 60),
+        method: c.method,
+        url: c.url,
+        params: [],
+        headers,
+        bodyType: hasBody ? "json" : "none",
+        bodyText: hasBody ? c.reqBody : "",
+        formRows: [],
+        auth: defaultAuth()
+    }
+}
 
 function fmtBytes(n: number): string {
     if (n < 1024) return `${n} B`
@@ -54,7 +75,13 @@ function HeaderTable({ headers }: { headers: Record<string, string> }): JSX.Elem
 
 type InspectorTab = "headers" | "request" | "response"
 
-function Inspector({ capture }: { capture: NetCapture | null }): JSX.Element {
+function Inspector({
+    capture,
+    onSendToApi
+}: {
+    capture: NetCapture | null
+    onSendToApi: (c: NetCapture) => void
+}): JSX.Element {
     const [tab, setTab] = useState<InspectorTab>("headers")
     if (!capture) {
         return (
@@ -80,6 +107,15 @@ function Inspector({ capture }: { capture: NetCapture | null }): JSX.Element {
                     {capture.url}
                 </span>
                 <span className="spacer" />
+                {!capture.tunneled && (
+                    <button
+                        className="net-to-api"
+                        onClick={() => onSendToApi(capture)}
+                        data-tip="Load this request into the API client to replay / edit"
+                    >
+                        → API
+                    </button>
+                )}
                 <span className="muted small">{capture.timeMs} ms</span>
             </div>
             {capture.error && <div className="resp-error">{capture.error}</div>}
@@ -137,8 +173,15 @@ function Inspector({ capture }: { capture: NetCapture | null }): JSX.Element {
 
 export function NetworkPanel(): JSX.Element {
     const activeId = useStore((s) => s.activeId)
+    const setView = useStore((s) => s.setView)
+    const setPendingApiRequest = useStore((s) => s.setPendingApiRequest)
     const port = useSettings((s) => s.network.port)
     const setNetwork = useSettings((s) => s.setNetwork)
+
+    const sendToApi = (c: NetCapture): void => {
+        setPendingApiRequest(toApiRequest(c))
+        setView("api")
+    }
 
     const [running, setRunning] = useState(false)
     const [captures, setCaptures] = useState<NetCapture[]>([])
@@ -313,7 +356,7 @@ export function NetworkPanel(): JSX.Element {
                     </div>
                 </Allotment.Pane>
                 <Allotment.Pane>
-                    <Inspector capture={selected} />
+                    <Inspector capture={selected} onSendToApi={sendToApi} />
                 </Allotment.Pane>
             </Allotment>
         </div>

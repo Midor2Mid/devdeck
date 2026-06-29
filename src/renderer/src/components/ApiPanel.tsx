@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Editor from "@monaco-editor/react"
+import { useStore } from "../store"
 import type { HttpResponse } from "../../../preload/index"
 import { parseCurl } from "../curl"
 import { THEMES } from "../themes"
@@ -239,6 +240,16 @@ export function ApiPanel(): JSX.Element {
         setResp(null)
         setReqTab("params")
     }
+
+    // A request handed over from the Network panel ("→ API"): load it, then clear.
+    const pendingApiRequest = useStore((s) => s.pendingApiRequest)
+    const setPendingApiRequest = useStore((s) => s.setPendingApiRequest)
+    useEffect(() => {
+        if (!pendingApiRequest) return
+        loadRequest(pendingApiRequest)
+        setPendingApiRequest(null)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pendingApiRequest])
 
     // Update the currently-loaded saved request in place.
     const saveExisting = (): void => {

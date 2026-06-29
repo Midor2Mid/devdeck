@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import type { Project, WorkItem } from "../../preload/index"
 import { useSettings } from "./settings"
+import type { SavedRequest } from "./settings"
 import {
     type LayoutNode,
     type SplitDir,
@@ -189,6 +190,10 @@ interface AppState extends Persisted {
     // Cross-panel drag (runtime-only): text a dragged file/table carries to an agent.
     dragPayload: string | null
     setDragPayload: (text: string | null) => void
+
+    // A request handed from the Network panel to the API client to load (runtime-only).
+    pendingApiRequest: SavedRequest | null
+    setPendingApiRequest: (req: SavedRequest | null) => void
 
     // Tab drag-and-drop (runtime-only)
     draggingTabId: string | null
@@ -413,6 +418,7 @@ export const useStore = create<AppState>((set, get) => {
         shortcutsOpen: false,
         draggingTabId: null,
         dragPayload: null,
+        pendingApiRequest: null,
         agentStatus: {},
         lastAgentTermId: null,
         notifications: [],
@@ -967,6 +973,7 @@ export const useStore = create<AppState>((set, get) => {
 
         setDraggingTabId: (draggingTabId) => set({ draggingTabId }),
         setDragPayload: (dragPayload) => set({ dragPayload }),
+        setPendingApiRequest: (pendingApiRequest) => set({ pendingApiRequest }),
 
         reorderTabs: (projectId, fromTabId, toTabId) => {
             const tabs = get().tabsByProject[projectId] ?? []
