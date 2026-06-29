@@ -202,6 +202,14 @@ From a live-app design review against the wabi-sabi north star:
 - TLS + push-notification-on-attention for the remote server
 - Terminal record/replay; agent pipeline UI on top of `pipeline.ts`
 
+## Maintenance / security
+
+- **Coordinated dependency bump** (deferred, noted 2026-06-29) — `npm audit` reports 15 advisories. Triage:
+  - **Shipped to users:** only **Electron** (≤39.8.4, ~11 high — UAF / ASAR-integrity / protocol-handler issues, many macOS-specific). Fix is Electron 41, **gated on Node 22.11 → ≥22.12** (the reason Electron 33 is pinned — see Decisions log).
+  - **Dev/build-only (never shipped):** esbuild/vite/vitest (moderate) and the electron-builder → `tar`/`node-gyp` chain (high + the 1 critical) run only at dev/package time.
+  - **Plan:** one coordinated bump — Node LTS → Electron latest → Vite / electron-builder — clears the shipped Electron CVEs and most of the rest. **Do not** `npm audit fix --force` (it forces breaking Electron 41 on Node 22.11, plus Vite 6 + electron-builder 26).
+  - For the record: `mssql`/`tedious` (M3.5 SQL Server) added **zero** advisories.
+
 ## Decisions log
 
 | Date | Decision | Why |
