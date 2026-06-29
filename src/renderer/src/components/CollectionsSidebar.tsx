@@ -16,6 +16,15 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
     const [importOpen, setImportOpen] = useState(false)
     const [menuFor, setMenuFor] = useState<string | null>(null)
     const [q, setQ] = useState("")
+    // Drag-and-drop: a dragged request or collection, + hovered drop targets.
+    const [drag, setDrag] = useState<{ kind: "req" | "col"; colId?: string; id: string } | null>(null)
+    const [overReq, setOverReq] = useState<string | null>(null)
+    const [overCol, setOverCol] = useState<string | null>(null)
+    const clearDrag = (): void => {
+        setDrag(null)
+        setOverReq(null)
+        setOverCol(null)
+    }
 
     const toggle = (id: string): void => {
         setCollapsed((prev) => {
@@ -89,6 +98,36 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
         )
     }
 
+    // Move the dragged request to just before `targetReqId` in `targetColId`
+    // (works within a collection or across them).
+    const reorderRequest = (targetColId: string, targetReqId: string): void => {
+        if (!drag || drag.kind !== "req") return
+        if (drag.colId === targetColId && drag.id === targetReqId) return
+        const req = collections.find((c) => c.id === drag.colId)?.requests.find((r) => r.id === drag.id)
+        if (!req) return
+        setCollections(
+            collections.map((c) => {
+                let requests = c.id === drag.colId ? c.requests.filter((r) => r.id !== drag.id) : c.requests
+                if (c.id === targetColId) {
+                    requests = [...requests]
+                    const idx = requests.findIndex((r) => r.id === targetReqId)
+                    requests.splice(idx < 0 ? requests.length : idx, 0, req)
+                }
+                return { ...c, requests }
+            })
+        )
+    }
+    // Move the dragged collection to just before `targetColId`.
+    const reorderCollection = (targetColId: string): void => {
+        if (!drag || drag.kind !== "col" || drag.id === targetColId) return
+        const dragged = collections.find((c) => c.id === drag.id)
+        if (!dragged) return
+        const rest = collections.filter((c) => c.id !== drag.id)
+        const ti = rest.findIndex((c) => c.id === targetColId)
+        rest.splice(ti < 0 ? rest.length : ti, 0, dragged)
+        setCollections(rest)
+    }
+
     // Filter requests by the search query (name / method / url). Empty collections
     // are hidden while searching, and matches are force-expanded.
     const searching = q.trim() !== ""
@@ -144,7 +183,28 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                     const open = searching || !collapsed.has(col.id)
                     return (
                         <div className="col-group" key={col.id}>
-                            <div className="col-group-head">
+                            <div
+                                className={"col-group-head" + (overCol === col.id ? " drag-over" : "")}
+                                draggable={!searching && editId !== col.id}
+                                onDragStart={(e) => {
+                                    setDrag({ kind: "col", id: col.id })
+                                    e.dataTransfer.effectAllowed = "move"
+                                }}
+                                onDragEnd={clearDrag}
+                                onDragOver={(e) => {
+                                    if (drag) {
+                                        e.preventDefault()
+                                        setOverCol(col.id)
+                                    }
+                                }}
+                                onDragLeave={() => setOverCol((o) => (o === col.id ? null : o))}
+                                onDrop={(e) => {
+                                    e.preventDefault()
+                                    if (drag?.kind === "req") moveRequest(drag.colId!, drag.id, col.id)
+                                    else if (drag?.kind === "col") reorderCollection(col.id)
+                                    clearDrag()
+                                }}
+                            >
                                 <span className="col-caret" onClick={() => toggle(col.id)}>
                                     {open ? "▾" : "▸"}
                                 </span>
@@ -183,10 +243,36 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                             {open &&
                                 col.requests.map((r) => (
                                     <div
-                                        className={"col-req" + (r.id === activeReqId ? " active" : "")}
+                                        className={
+                                            "col-req" +
+                                            (r.id === activeReqId ? " active" : "") +
+                                            (overReq === r.id ? " drag-over" : "")
+                                        }
                                         key={r.id}
                                         onClick={() => onLoad(r)}
                                         data-tip={r.url}
+                                        draggable={!searching}
+                                        onDragStart={(e) => {
+                                            e.stopPropagation()
+                                            setDrag({ kind: "req", colId: col.id, id: r.id })
+                                            e.dataTransfer.effectAllowed = "move"
+                                        }}
+                                        onDragEnd={clearDrag}
+                                        onDragOver={(e) => {
+                                            if (drag?.kind === "req") {
+                                                e.preventDefault()
+                                                setOverReq(r.id)
+                                            }
+                                        }}
+                                        onDragLeave={() => setOverReq((o) => (o === r.id ? null : o))}
+                                        onDrop={(e) => {
+                                            if (drag?.kind === "req") {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                reorderRequest(col.id, r.id)
+                                            }
+                                            clearDrag()
+                                        }}
                                     >
                                         <span className={"col-method m-" + r.method.toLowerCase()}>
                                             {r.method}

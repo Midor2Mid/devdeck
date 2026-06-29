@@ -90,6 +90,8 @@ interface AppState extends Persisted {
     removeProject: (id: string) => Promise<void>
     setActiveProject: (id: string) => Promise<void>
     setProjectGroup: (id: string, group: string) => Promise<void>
+    moveProject: (draggedId: string, targetId: string) => Promise<void>
+    addProjectByPath: (path: string) => Promise<void>
     activeProject: () => Project | undefined
 
     view: MainView
@@ -466,6 +468,16 @@ export const useStore = create<AppState>((set, get) => {
         setProjectGroup: async (id, group) => {
             const store = await window.api.projects.setGroup(id, group)
             set({ projects: store.projects })
+        },
+
+        moveProject: async (draggedId, targetId) => {
+            const store = await window.api.projects.move(draggedId, targetId)
+            set({ projects: store.projects })
+        },
+
+        addProjectByPath: async (path) => {
+            const store = await window.api.projects.addPath(path)
+            set({ projects: store.projects, activeId: store.activeId })
         },
 
         openSwitcher: () => set({ switcherOpen: true }),

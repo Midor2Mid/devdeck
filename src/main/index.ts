@@ -106,6 +106,10 @@ function registerIpc(): void {
     ipcMain.handle("projects:remove", (_e, id: string) => projects.removeProject(id))
     ipcMain.handle("projects:setActive", (_e, id: string) => projects.setActive(id))
     ipcMain.handle("projects:setGroup", (_e, { id, group }) => projects.setGroup(id, group))
+    ipcMain.handle("projects:move", (_e, { draggedId, targetId }) =>
+        projects.moveProject(draggedId, targetId)
+    )
+    ipcMain.handle("projects:addPath", (_e, path: string) => projects.addProjectByPath(path))
 
     // --- Workspace (terminal layout persistence) ---
     ipcMain.handle("workspace:load", () => loadWorkspace())

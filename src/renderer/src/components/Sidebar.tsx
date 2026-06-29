@@ -18,8 +18,16 @@ interface SessionRow {
 const UNGROUPED = "__ungrouped__"
 
 export function Sidebar(): JSX.Element {
-    const { projects, activeId, addProject, removeProject, setActiveProject, setProjectGroup } =
-        useStore()
+    const {
+        projects,
+        activeId,
+        addProject,
+        removeProject,
+        setActiveProject,
+        setProjectGroup,
+        moveProject,
+        addProjectByPath
+    } = useStore()
     const openSwitcher = useStore((s) => s.openSwitcher)
     const agents = useSettings((s) => s.agents)
 
@@ -31,6 +39,10 @@ export function Sidebar(): JSX.Element {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
     const [menuFor, setMenuFor] = useState<string | null>(null)
     const [newGroup, setNewGroup] = useState("")
+    // Drag-and-drop: which project is being dragged / hovered, + OS folder-drop.
+    const [dragId, setDragId] = useState<string | null>(null)
+    const [overId, setOverId] = useState<string | null>(null)
+    const [folderOver, setFolderOver] = useState(false)
 
     // Group projects: named groups (sorted) with ungrouped first.
     const grouped = useMemo(() => {
@@ -93,9 +105,39 @@ export function Sidebar(): JSX.Element {
     const projectRow = (p: Project): JSX.Element => (
         <div
             key={p.id}
-            className={"project-item" + (p.id === activeId ? " active" : "")}
+            className={
+                "project-item" +
+                (p.id === activeId ? " active" : "") +
+                (p.id === overId ? " drag-over" : "") +
+                (p.id === dragId ? " dragging" : "")
+            }
             onClick={() => setActiveProject(p.id)}
             data-tip={p.path}
+            draggable
+            onDragStart={(e) => {
+                setDragId(p.id)
+                e.dataTransfer.effectAllowed = "move"
+                e.dataTransfer.setData("text/devdeck-project", p.id)
+            }}
+            onDragEnd={() => {
+                setDragId(null)
+                setOverId(null)
+            }}
+            onDragOver={(e) => {
+                if (dragId && dragId !== p.id) {
+                    e.preventDefault()
+                    setOverId(p.id)
+                }
+            }}
+            onDragLeave={() => setOverId((o) => (o === p.id ? null : o))}
+            onDrop={(e) => {
+                if (!dragId || dragId === p.id) return // OS file drop / self: let it bubble
+                e.preventDefault()
+                e.stopPropagation()
+                moveProject(dragId, p.id)
+                setDragId(null)
+                setOverId(null)
+            }}
         >
             <span className="project-name">{p.name}</span>
             <span
@@ -175,7 +217,26 @@ export function Sidebar(): JSX.Element {
                 </button>
             </div>
 
-            <div className="project-list">
+            <div
+                className={"project-list" + (folderOver ? " folder-drop" : "")}
+                onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes("Files")) {
+                        e.preventDefault()
+                        setFolderOver(true)
+                    }
+                }}
+                onDragLeave={() => setFolderOver(false)}
+                onDrop={(e) => {
+                    if (e.dataTransfer.files.length) {
+                        e.preventDefault()
+                        for (const f of Array.from(e.dataTransfer.files)) {
+                            const path = (f as unknown as { path?: string }).path
+                            if (path) addProjectByPath(path)
+                        }
+                    }
+                    setFolderOver(false)
+                }}
+            >
                 {projects.length === 0 && (
                     <div className="muted sidebar-empty">
                         No projects yet.
@@ -188,7 +249,29 @@ export function Sidebar(): JSX.Element {
                         g.items.map(projectRow)
                     ) : (
                         <div key={g.name} className="project-group">
-                            <div className="project-group-head" onClick={() => toggle(g.name)}>
+                            <div
+                                className={
+                                    "project-group-head" + (overId === "grp:" + g.name ? " drag-over" : "")
+                                }
+                                onClick={() => toggle(g.name)}
+                                onDragOver={(e) => {
+                                    if (dragId) {
+                                        e.preventDefault()
+                                        setOverId("grp:" + g.name)
+                                    }
+                                }}
+                                onDragLeave={() =>
+                                    setOverId((o) => (o === "grp:" + g.name ? null : o))
+                                }
+                                onDrop={(e) => {
+                                    if (!dragId) return
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setProjectGroup(dragId, g.name)
+                                    setDragId(null)
+                                    setOverId(null)
+                                }}
+                            >
                                 <span className="caret">{collapsed.has(g.name) ? "▸" : "▾"}</span>
                                 {g.name}
                                 <span className="group-count">{g.items.length}</span>

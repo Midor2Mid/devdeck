@@ -1,6 +1,6 @@
 import { app, dialog, BrowserWindow } from "electron"
 import { join, basename } from "path"
-import { readFileSync } from "fs"
+import { readFileSync, statSync } from "fs"
 import { randomUUID } from "crypto"
 import { atomicWrite } from "./atomic"
 
@@ -63,6 +63,46 @@ export async function addProject(win: BrowserWindow): Promise<ProjectStore> {
         store.projects.push(project)
         store.activeId = project.id
     }
+    save(store)
+    return store
+}
+
+/** Add a project from a known folder path (e.g. a drag-and-drop onto the window). */
+export function addProjectByPath(path: string): ProjectStore {
+    const store = load()
+    try {
+        if (!statSync(path).isDirectory()) return store
+    } catch {
+        return store // not a real directory
+    }
+    const existing = store.projects.find((p) => p.path === path)
+    if (existing) {
+        store.activeId = existing.id
+    } else {
+        const project: Project = {
+            id: randomUUID(),
+            name: basename(path) || path,
+            path,
+            addedAt: Date.now()
+        }
+        store.projects.push(project)
+        store.activeId = project.id
+    }
+    save(store)
+    return store
+}
+
+/** Move `draggedId` to just before `targetId`, adopting the target's group. */
+export function moveProject(draggedId: string, targetId: string): ProjectStore {
+    const store = load()
+    if (draggedId === targetId) return store
+    const dragged = store.projects.find((p) => p.id === draggedId)
+    const target = store.projects.find((p) => p.id === targetId)
+    if (!dragged || !target) return store
+    dragged.group = target.group // dropping into another group moves it there
+    store.projects = store.projects.filter((p) => p.id !== draggedId)
+    const ti = store.projects.findIndex((p) => p.id === targetId)
+    store.projects.splice(ti, 0, dragged)
     save(store)
     return store
 }

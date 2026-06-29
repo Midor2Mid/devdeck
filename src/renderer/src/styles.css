@@ -4900,3 +4900,29 @@ kbd {
     border-radius: 11px;
     box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.6);
 }
+
+/* ---------- Drag & drop affordances ---------- */
+.project-item,
+.col-req,
+.col-group-head {
+    cursor: grab;
+}
+.project-item.dragging {
+    opacity: 0.45;
+}
+/* Drop indicator: an accent line at the top edge of the hovered target. */
+.project-item.drag-over,
+.col-req.drag-over {
+    box-shadow: inset 0 2px 0 var(--accent);
+}
+.project-group-head.drag-over,
+.col-group-head.drag-over {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* OS folder dragged over the project list. */
+.project-list.folder-drop {
+    outline: 2px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+    outline-offset: -4px;
+    border-radius: 8px;
+}
