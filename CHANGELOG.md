@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3 - 2026-06-29
+
+- **AI settings** - new Settings → AI section: per-agent **default model** (injected
+  at launch via the agent's model env var, e.g. `ANTHROPIC_MODEL`) and **API key**.
+  Keys are encrypted at rest (DPAPI/`safeStorage`) and injected into the agent's
+  terminal env at spawn - never written to `settings.json` or sent back to the UI.
+  A stored key flips that agent to pay-as-you-go API billing. (Usage/quota display
+  is deferred - it needs per-provider APIs.)
+
 ## 0.4.2 - 2026-06-29
 
 - **Lacquer style** - a new opt-in design style (Settings → Appearance → Style):
