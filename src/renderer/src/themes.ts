@@ -1,7 +1,7 @@
 // Theme system: each theme is a full palette of the app's CSS custom properties
 // plus matching terminal (xterm) and editor (Monaco) colors. All wabi-sabi.
 
-export type ThemeId = "sumi" | "washi" | "zen" | "slate"
+export type ThemeId = "sumi" | "washi" | "zen" | "slate" | "graphite"
 
 export interface XtermTheme {
     background: string
@@ -126,6 +126,26 @@ const SLATE_VARS = {
     "--danger": "#e9786b"
 }
 
+// Graphite - a modern, cool near-black palette with a vivid indigo accent.
+// The contemporary counterpoint to the warm wabi-sabi themes (opt-in).
+const GRAPHITE_VARS = {
+    "--bg": "#0c0e12",
+    "--bg-2": "#13161c",
+    "--bg-3": "#090a0e",
+    "--panel": "#13161c",
+    "--border": "#242a33",
+    "--border-soft": "#1a1f27",
+    "--text": "#e7eaf0",
+    "--muted": "#9aa3b2",
+    "--faint": "#646e7e",
+    "--accent": "#7c83ff",
+    "--accent-soft": "#9ba0ff",
+    "--moss": "#56c98a",
+    "--clay": "#a78bfa",
+    "--ok": "#56c98a",
+    "--danger": "#f0616d"
+}
+
 export const THEMES: Record<ThemeId, Theme> = {
     sumi: {
         id: "sumi",
@@ -223,6 +243,38 @@ export const THEMES: Record<ThemeId, Theme> = {
             brightWhite: "#f6f8fc"
         }
     },
+    graphite: {
+        id: "graphite",
+        label: "Graphite (modern)",
+        mode: "dark",
+        accent: "#7c83ff",
+        vars: { ...GRAPHITE_VARS, ...COMPACT },
+        monacoId: "devdeck-graphite",
+        termLineHeight: 1.15,
+        xterm: {
+            background: "#090a0e",
+            foreground: "#e7eaf0",
+            cursor: "#7c83ff",
+            cursorAccent: "#090a0e",
+            selectionBackground: "#252b3a",
+            black: "#090a0e",
+            brightBlack: "#646e7e",
+            red: "#f0616d",
+            brightRed: "#ff7d88",
+            green: "#56c98a",
+            brightGreen: "#74d9a1",
+            yellow: "#e0b85c",
+            brightYellow: "#edc878",
+            blue: "#6aa6ff",
+            brightBlue: "#8bbcff",
+            magenta: "#a78bfa",
+            brightMagenta: "#c0a9fc",
+            cyan: "#56cfd0",
+            brightCyan: "#7adedf",
+            white: "#e7eaf0",
+            brightWhite: "#f6f8fc"
+        }
+    },
     zen: {
         id: "zen",
         label: "Zen (dark)",
@@ -287,7 +339,16 @@ export function applyTheme(id: ThemeId, accent?: string): void {
 // A *style* sets how surfaces feel: corner radius, border weight, depth, and
 // typography. It layers on top of the color themes above (style × theme are
 // orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
-export type StyleId = "wabi" | "minimal" | "neon" | "flat" | "bauhaus" | "crt" | "modern" | "lacquer"
+export type StyleId =
+    | "wabi"
+    | "minimal"
+    | "neon"
+    | "flat"
+    | "bauhaus"
+    | "crt"
+    | "modern"
+    | "lacquer"
+    | "modernplus"
 
 export interface DesignStyle {
     id: StyleId
@@ -335,6 +396,11 @@ export const STYLES: Record<StyleId, DesignStyle> = {
         id: "lacquer",
         label: "Lacquer",
         description: "Opulent urushi gloss: frosted-glass surfaces, gilded gradient buttons, a soft accent glow and deep layered shadows. Elegant, not flashy."
+    },
+    modernplus: {
+        id: "modernplus",
+        label: "Modern+",
+        description: "Contemporary & alive: crisp radii, hairline borders with soft elevation, vivid filled accent buttons, focus rings and snappy hover/press micro-interactions. Pairs with Graphite."
     }
 }
 

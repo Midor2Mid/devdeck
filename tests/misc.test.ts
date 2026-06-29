@@ -4,7 +4,7 @@ import { sshCommand } from "../src/renderer/src/settings"
 
 describe("design styles", () => {
     it("registers all design styles with labels", () => {
-        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "crt", "flat", "lacquer", "minimal", "modern", "neon", "wabi"])
+        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "crt", "flat", "lacquer", "minimal", "modern", "modernplus", "neon", "wabi"])
         expect(STYLES.minimal.label).toBe("Modern Minimal")
         expect(STYLES.neon.label).toBe("Neon")
         expect(STYLES.flat.label).toBe("Flat Vector")
@@ -12,12 +12,20 @@ describe("design styles", () => {
         expect(STYLES.crt.label).toBe("Phosphor CRT")
         expect(STYLES.modern.label).toBe("Modern Pro")
         expect(STYLES.lacquer.label).toBe("Lacquer")
+        expect(STYLES.modernplus.label).toBe("Modern+")
     })
 
     it("includes the Slate modern color theme", () => {
         expect(THEMES.slate).toBeTruthy()
         expect(THEMES.slate.mode).toBe("dark")
         expect(THEMES.slate.vars["--bg"]).toBe("#0c0e13")
+    })
+
+    it("includes the Graphite modern theme", () => {
+        expect(THEMES.graphite).toBeTruthy()
+        expect(THEMES.graphite.mode).toBe("dark")
+        expect(THEMES.graphite.accent).toBe("#7c83ff")
+        expect(THEMES.graphite.monacoId).toBe("devdeck-graphite")
     })
 })
 

@@ -4789,3 +4789,114 @@ kbd {
 .ai-key-input input {
     flex: 1;
 }
+
+/* ============================================================
+   DESIGN STYLE: Modern+ — contemporary & alive. Crisp radii,
+   hairline borders with soft elevation, vivid filled accent CTAs,
+   focus rings, and snappy hover/press micro-interactions. The
+   cool/modern counterpart to wabi-sabi. Pairs with Graphite.
+   ============================================================ */
+[data-style="modernplus"] {
+    --radius: 9px;
+}
+[data-style="modernplus"] button,
+[data-style="modernplus"] input,
+[data-style="modernplus"] select,
+[data-style="modernplus"] textarea,
+[data-style="modernplus"] .icon-action,
+[data-style="modernplus"] .term-tab,
+[data-style="modernplus"] .tab-rename {
+    border-radius: 8px;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease,
+        box-shadow 0.14s ease, transform 0.08s ease;
+}
+/* Clear keyboard focus rings (accessibility + modern feel). */
+[data-style="modernplus"] button:focus-visible,
+[data-style="modernplus"] input:focus-visible,
+[data-style="modernplus"] select:focus-visible,
+[data-style="modernplus"] textarea:focus-visible,
+[data-style="modernplus"] .icon-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* Inputs get a soft accent ring on focus. */
+[data-style="modernplus"] input:focus,
+[data-style="modernplus"] select:focus,
+[data-style="modernplus"] textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+/* Vivid filled accent CTA with hover lift + press feedback. */
+[data-style="modernplus"] button.accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+[data-style="modernplus"] button.accent:hover {
+    background: color-mix(in srgb, var(--accent) 86%, white);
+    border-color: color-mix(in srgb, var(--accent) 86%, white);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+[data-style="modernplus"] button.accent:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+/* Active tab: crisp accent underline (no glow). */
+[data-style="modernplus"] .term-tab.active {
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+[data-style="modernplus"] .rail-btn.on {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+/* Cards & rows: hairline border + soft elevation; hover raises. */
+[data-style="modernplus"] .switcher-card,
+[data-style="modernplus"] .theme-card,
+[data-style="modernplus"] .style-card,
+[data-style="modernplus"] .recording-row,
+[data-style="modernplus"] .work-item,
+[data-style="modernplus"] .wt-row,
+[data-style="modernplus"] .pipe-edit,
+[data-style="modernplus"] .pipe-step,
+[data-style="modernplus"] .lane,
+[data-style="modernplus"] .trigger-row,
+[data-style="modernplus"] .git-account,
+[data-style="modernplus"] .ai-agent,
+[data-style="modernplus"] .find-bar {
+    border-radius: 10px;
+    border: 1px solid var(--border-soft);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 6px 16px -10px rgba(0, 0, 0, 0.5);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+[data-style="modernplus"] .switcher-card:hover,
+[data-style="modernplus"] .theme-card:hover,
+[data-style="modernplus"] .style-card:hover,
+[data-style="modernplus"] .work-item:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.24), 0 14px 28px -12px rgba(0, 0, 0, 0.6);
+}
+/* Floating surfaces: crisp, well-elevated (no blur). */
+[data-style="modernplus"] .modal,
+[data-style="modernplus"] .switcher,
+[data-style="modernplus"] .recordings-modal,
+[data-style="modernplus"] .changes-modal,
+[data-style="modernplus"] .release-modal,
+[data-style="modernplus"] .standup-modal,
+[data-style="modernplus"] .worktrees-modal,
+[data-style="modernplus"] .settings-modal {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.7);
+}
+[data-style="modernplus"] .agent-menu,
+[data-style="modernplus"] .group-menu,
+[data-style="modernplus"] .sb-id-menu,
+[data-style="modernplus"] .pipeline-bar,
+[data-style="modernplus"] .toast {
+    border-radius: 11px;
+    box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.6);
+}
