@@ -171,6 +171,15 @@ This completes every section from the original 1DevTool reference (Appearance, T
 
 The reference feature set is fully covered. Remaining ideas are open-ended (terminal record/replay, embedded-browser polish).
 
+## Milestone 21 — design pass + Lacquer style ✅ (2026-06-29)
+
+From a live-app design review against the wabi-sabi north star:
+- [x] **Ensō brand mark** — a real single-stroke ensō (`Enso.tsx`) for the rail logo + sidebar wordmark, replacing the placeholder "D" and the spinner-like ring
+- [x] **Empty-state ensō watermark** — a faint accent ensō behind empty panels so they read as intentional space; muted/faint text contrast lifted to WCAG AA across themes; Settings modal backdrop now dims + blurs
+- [x] **Terminal toolbar declutter** — grouped into create / layout / pane clusters; secondary tools (record, recordings, worktrees, review changes) moved into a `⋯` overflow; 13 → 10 controls
+- [x] **Lacquer style** — a new opt-in design style (Settings → Appearance → Style): frosted-glass surfaces, gilded gradient accent buttons, soft accent glow on active tabs / rail / ensō, deep layered shadows, plus an animated sheen sweep + breathing ensō glow (honors `prefers-reduced-motion`). Additive — existing styles and the default are unchanged.
+- [x] **Local signed builds** — `npm run cert:make` + `npm run package:signed` produce a self-signed Authenticode build (personal-use) to avoid unsigned-binary AV false positives; shipped as the signed **v0.4.2** release.
+
 ## Later / maybe (parking lot)
 
 > Pruned 2026-06-28: command palette (M17), split terminals + layout restore (M1.5), Git multi-account (M15), SSH profiles (M16), remote/mobile (M7), MCP (M18), embedded browser (M9), light theme (M10), snippets (M12), and file-`@path`-into-session (M5) all shipped. What's left is genuinely unbuilt:
