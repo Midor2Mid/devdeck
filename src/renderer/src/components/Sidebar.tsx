@@ -5,6 +5,7 @@ import { collectLeaves } from "../layout"
 import type { Project } from "../../../preload/index"
 import { Icon } from "./Icon"
 import { Enso } from "./Enso"
+import { TaskRunner } from "./TaskRunner"
 import { confirm } from "../confirm"
 import { contextMenu } from "../contextmenu"
 
@@ -309,6 +310,8 @@ export function Sidebar(): JSX.Element {
                     )
                 )}
             </div>
+
+            <TaskRunner />
 
             <div className="sidebar-section-title claude-title">
                 <span>AGENT SESSIONS</span>

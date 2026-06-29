@@ -5061,3 +5061,25 @@ kbd {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
     color: var(--accent-soft);
 }
+
+/* ---------- Per-project task runner (sidebar) ---------- */
+.task-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 12px 10px;
+}
+.task-chip {
+    font-size: 11px;
+    padding: 4px 9px;
+    color: var(--muted);
+    border-radius: 6px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.task-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent-soft);
+}
