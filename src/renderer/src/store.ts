@@ -186,6 +186,10 @@ interface AppState extends Persisted {
     renameTab: (projectId: string, tabId: string, name: string) => void
     setActiveTab: (projectId: string, tabId: string) => void
 
+    // Cross-panel drag (runtime-only): text a dragged file/table carries to an agent.
+    dragPayload: string | null
+    setDragPayload: (text: string | null) => void
+
     // Tab drag-and-drop (runtime-only)
     draggingTabId: string | null
     setDraggingTabId: (id: string | null) => void
@@ -408,6 +412,7 @@ export const useStore = create<AppState>((set, get) => {
         paletteOpen: false,
         shortcutsOpen: false,
         draggingTabId: null,
+        dragPayload: null,
         agentStatus: {},
         lastAgentTermId: null,
         notifications: [],
@@ -961,6 +966,7 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         setDraggingTabId: (draggingTabId) => set({ draggingTabId }),
+        setDragPayload: (dragPayload) => set({ dragPayload }),
 
         reorderTabs: (projectId, fromTabId, toTabId) => {
             const tabs = get().tabsByProject[projectId] ?? []

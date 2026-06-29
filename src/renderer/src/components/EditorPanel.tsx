@@ -67,13 +67,16 @@ function langFor(name: string): string {
 
 function FileTree({
     dir,
+    projectPath,
     onOpen
 }: {
     dir: string
+    projectPath: string
     onOpen: (entry: DirEntry) => void
 }): JSX.Element {
     const [entries, setEntries] = useState<DirEntry[]>([])
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    const setDragPayload = useStore((s) => s.setDragPayload)
 
     useEffect(() => {
         let cancelled = false
@@ -108,7 +111,7 @@ function FileTree({
                         </div>
                         {expanded.has(entry.path) && (
                             <div className="tree-children">
-                                <FileTree dir={entry.path} onOpen={onOpen} />
+                                <FileTree dir={entry.path} projectPath={projectPath} onOpen={onOpen} />
                             </div>
                         )}
                     </div>
@@ -117,6 +120,18 @@ function FileTree({
                         key={entry.path}
                         className="tree-row file"
                         onClick={() => onOpen(entry)}
+                        draggable
+                        data-tip="Drag onto an agent session to insert @path"
+                        onDragStart={(e) => {
+                            const rel = entry.path.startsWith(projectPath)
+                                ? entry.path.slice(projectPath.length).replace(/^[\\/]/, "")
+                                : entry.path
+                            const payload = "@" + rel.replace(/\\/g, "/") + " "
+                            setDragPayload(payload)
+                            e.dataTransfer.effectAllowed = "copy"
+                            e.dataTransfer.setData("text/plain", payload)
+                        }}
+                        onDragEnd={() => setDragPayload(null)}
                     >
                         <span className="caret" />
                         {entry.name}
@@ -224,7 +239,7 @@ export function EditorPanel(): JSX.Element {
         <div className="editor-panel">
             <div className="editor-tree">
                 <div className="tree-root-label">{activeProject.name}</div>
-                <FileTree dir={activeProject.path} onOpen={open} />
+                <FileTree dir={activeProject.path} projectPath={activeProject.path} onOpen={open} />
             </div>
             <div className="editor-main">
                 {error && <div className="resp-error">{error}</div>}

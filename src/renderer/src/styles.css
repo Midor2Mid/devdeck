@@ -4977,3 +4977,18 @@ kbd {
     bottom: 0;
     height: 50%;
 }
+
+/* ---------- Cross-panel drag: drop a file/table onto an agent session ---------- */
+.tree-row.file,
+.db-table {
+    cursor: grab;
+}
+/* While a payload is in flight, hint that sessions accept it. */
+.claude-session.drop-active {
+    outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+    outline-offset: -2px;
+}
+.claude-session.drag-over {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}

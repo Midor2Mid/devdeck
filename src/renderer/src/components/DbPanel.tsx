@@ -365,7 +365,15 @@ export function DbPanel(): JSX.Element {
                                             key={t}
                                             className="db-table"
                                             onClick={() => openTable(t)}
-                                            data-tip={`SELECT * FROM ${t} LIMIT 100`}
+                                            data-tip={`Click to query · drag onto an agent session to send "SELECT * FROM ${t}"`}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                const payload = `SELECT * FROM ${t}`
+                                                useStore.getState().setDragPayload(payload)
+                                                e.dataTransfer.effectAllowed = "copy"
+                                                e.dataTransfer.setData("text/plain", payload)
+                                            }}
+                                            onDragEnd={() => useStore.getState().setDragPayload(null)}
                                         >
                                             {t}
                                         </div>

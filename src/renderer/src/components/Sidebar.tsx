@@ -35,6 +35,9 @@ export function Sidebar(): JSX.Element {
     const termAgents = useStore((s) => s.termAgents)
     const agentStatus = useStore((s) => s.agentStatus)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
+    const dragPayload = useStore((s) => s.dragPayload)
+    const setDragPayload = useStore((s) => s.setDragPayload)
+    const [overSession, setOverSession] = useState<string | null>(null)
 
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
     const [menuFor, setMenuFor] = useState<string | null>(null)
@@ -303,9 +306,32 @@ export function Sidebar(): JSX.Element {
                     sessions.map((s) => (
                         <div
                             key={s.termId}
-                            className="claude-session"
+                            className={
+                                "claude-session" +
+                                (dragPayload ? " drop-active" : "") +
+                                (overSession === s.termId ? " drag-over" : "")
+                            }
                             onClick={() => jumpToTerm(s.termId)}
-                            data-tip={`${s.tabName} · ${s.projectName} - ${s.status}`}
+                            data-tip={
+                                dragPayload
+                                    ? "Drop to insert into this session"
+                                    : `${s.tabName} · ${s.projectName} - ${s.status}`
+                            }
+                            onDragOver={(e) => {
+                                if (dragPayload) {
+                                    e.preventDefault()
+                                    setOverSession(s.termId)
+                                }
+                            }}
+                            onDragLeave={() => setOverSession((o) => (o === s.termId ? null : o))}
+                            onDrop={(e) => {
+                                if (!dragPayload) return
+                                e.preventDefault()
+                                window.api.pty.input(s.termId, dragPayload)
+                                jumpToTerm(s.termId)
+                                setDragPayload(null)
+                                setOverSession(null)
+                            }}
                         >
                             <span className={"tab-dot claude status-" + s.status} />
                             <span className="claude-session-text">
