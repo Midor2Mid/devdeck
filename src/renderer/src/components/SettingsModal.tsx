@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
-import { useSettings, type ShellKind } from "../settings"
+import { useSettings, type ShellKind, type GitAccount } from "../settings"
 import { useStore } from "../store"
 import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
@@ -190,15 +190,59 @@ function SshSection(): JSX.Element {
 function GitSection(): JSX.Element {
     const accounts = useSettings((s) => s.gitAccounts)
     const setGitAccounts = useSettings((s) => s.setGitAccounts)
+    const [pats, setPats] = useState<Record<string, boolean>>({})
+    const [drafts, setDrafts] = useState<Record<string, string>>({})
+    const [msg, setMsg] = useState<Record<string, string>>({})
 
-    const update = (i: number, patch: Record<string, string>): void =>
+    const refreshPats = (): void => {
+        window.api.git.patStatus().then(setPats)
+    }
+    useEffect(refreshPats, [])
+
+    const update = (i: number, patch: Partial<GitAccount>): void =>
         setGitAccounts(accounts.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
-    const remove = (i: number): void => setGitAccounts(accounts.filter((_, idx) => idx !== i))
+    const remove = (i: number): void => {
+        window.api.git.clearPat(accounts[i].id)
+        setGitAccounts(accounts.filter((_, idx) => idx !== i))
+    }
     const add = (): void =>
         setGitAccounts([
             ...accounts,
-            { id: crypto.randomUUID(), label: "New account", name: "", email: "", sshCommand: "" }
+            {
+                id: crypto.randomUUID(),
+                label: "New account",
+                name: "",
+                email: "",
+                sshCommand: "",
+                host: "github.com",
+                username: ""
+            }
         ])
+
+    const flash = (id: string, text: string): void => {
+        setMsg((m) => ({ ...m, [id]: text }))
+        setTimeout(() => setMsg((m) => ({ ...m, [id]: "" })), 4000)
+    }
+    const saveToken = async (id: string): Promise<void> => {
+        await window.api.git.setPat(id, (drafts[id] ?? "").trim())
+        setDrafts((d) => ({ ...d, [id]: "" }))
+        refreshPats()
+        flash(id, "token saved")
+    }
+    const clearToken = async (id: string): Promise<void> => {
+        await window.api.git.clearPat(id)
+        refreshPats()
+        flash(id, "token cleared")
+    }
+    const cache = async (a: GitAccount): Promise<void> => {
+        const r = await window.api.git.cacheCredential(a.id, a.host ?? "github.com", a.username ?? "")
+        flash(a.id, r.ok ? "✓ cached for HTTPS push" : `✗ ${r.error ?? "failed"}`)
+    }
+    const verify = async (id: string): Promise<void> => {
+        flash(id, "verifying…")
+        const r = await window.api.git.verifyPat(id)
+        flash(id, r.ok ? `✓ valid${r.login ? " · " + r.login : ""}` : `✗ ${r.error ?? "invalid"}`)
+    }
 
     return (
         <div className="settings-section">
@@ -227,7 +271,51 @@ function GitSection(): JSX.Element {
                             placeholder={'ssh -i ~/.ssh/id_work -o IdentitiesOnly=yes'}
                             onChange={(e) => update(i, { sshCommand: e.target.value })}
                         />
+                        <label>HTTPS host</label>
+                        <input
+                            value={a.host ?? ""}
+                            placeholder="github.com"
+                            onChange={(e) => update(i, { host: e.target.value })}
+                        />
+                        <label>HTTPS user</label>
+                        <input
+                            value={a.username ?? ""}
+                            placeholder="x-access-token (GitHub ignores it)"
+                            onChange={(e) => update(i, { username: e.target.value })}
+                        />
+                        <label>Token (PAT)</label>
+                        <div className="accent-controls">
+                            <input
+                                type="password"
+                                autoComplete="off"
+                                value={drafts[a.id] ?? ""}
+                                placeholder={pats[a.id] ? "•••••••• (stored)" : "paste a PAT"}
+                                onChange={(e) =>
+                                    setDrafts((d) => ({ ...d, [a.id]: e.target.value }))
+                                }
+                            />
+                            <button onClick={() => saveToken(a.id)} disabled={!(drafts[a.id] ?? "").trim()}>
+                                Save
+                            </button>
+                            {pats[a.id] && (
+                                <button onClick={() => clearToken(a.id)} data-tip="Remove stored token">
+                                    Clear
+                                </button>
+                            )}
+                        </div>
                     </div>
+                    {pats[a.id] && (
+                        <div className="git-pat-actions">
+                            <button onClick={() => cache(a)} data-tip="Store in Git's credential manager for HTTPS push">
+                                Cache for HTTPS push
+                            </button>
+                            <button onClick={() => verify(a.id)} data-tip="Check the token against GitHub">
+                                Verify (GitHub)
+                            </button>
+                            {msg[a.id] && <span className="git-pat-msg">{msg[a.id]}</span>}
+                        </div>
+                    )}
+                    {!pats[a.id] && msg[a.id] && <div className="git-pat-msg standalone">{msg[a.id]}</div>}
                 </div>
             ))}
             <button onClick={add} style={{ marginTop: 8 }}>
@@ -235,9 +323,11 @@ function GitSection(): JSX.Element {
             </button>
             <p className="settings-hint">
                 Apply an account to the active project from the <b>status bar</b> (click the
-                identity next to the branch). It writes the project's local <code>git config</code>{" "}
-                (name, email, and optional <code>core.sshCommand</code>) - so each repo can use a
-                different identity/key. Tokens (PAT) aren't stored yet.
+                identity next to the branch) - it writes the repo's local <code>git config</code>{" "}
+                (name, email, optional <code>core.sshCommand</code>). The <b>PAT is encrypted at
+                rest</b> (DPAPI) and never stored in <code>settings.json</code>; <b>Cache for HTTPS
+                push</b> hands it to Git's credential manager so <code>git push</code> over HTTPS
+                just works.
             </p>
         </div>
     )

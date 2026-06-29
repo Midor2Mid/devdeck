@@ -362,7 +362,21 @@ const api = {
             ipcRenderer.invoke("git:discard", { cwd, path, untracked }),
         commit: (cwd: string, message: string): Promise<{ ok: boolean; error?: string }> =>
             ipcRenderer.invoke("git:commit", { cwd, message }),
-        fullDiff: (cwd: string): Promise<string> => ipcRenderer.invoke("git:fullDiff", cwd)
+        fullDiff: (cwd: string): Promise<string> => ipcRenderer.invoke("git:fullDiff", cwd),
+        // Personal access tokens (encrypted at rest; plaintext never returns here)
+        setPat: (accountId: string, pat: string): Promise<void> =>
+            ipcRenderer.invoke("git:setPat", { accountId, pat }),
+        patStatus: (): Promise<Record<string, boolean>> => ipcRenderer.invoke("git:patStatus"),
+        clearPat: (accountId: string): Promise<void> =>
+            ipcRenderer.invoke("git:clearPat", accountId),
+        cacheCredential: (
+            accountId: string,
+            host: string,
+            username: string
+        ): Promise<{ ok: boolean; error?: string }> =>
+            ipcRenderer.invoke("git:cacheCredential", { accountId, host, username }),
+        verifyPat: (accountId: string): Promise<{ ok: boolean; login?: string; error?: string }> =>
+            ipcRenderer.invoke("git:verifyPat", accountId)
     },
     pr: {
         remoteInfo: (cwd: string, target: string): Promise<RemoteInfo> =>

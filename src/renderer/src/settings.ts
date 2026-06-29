@@ -115,6 +115,11 @@ export interface GitAccount {
     name: string
     email: string
     sshCommand: string
+    /** Host for HTTPS credential caching (e.g. github.com). The PAT itself is
+     *  stored encrypted in the main process, never here. */
+    host?: string
+    /** HTTPS username paired with the PAT (GitHub ignores it; defaults to x-access-token). */
+    username?: string
 }
 
 export interface SshProfile {

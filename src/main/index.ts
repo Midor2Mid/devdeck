@@ -10,11 +10,12 @@ import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
-import { gitStatus, getIdentity, setIdentity } from "./git"
+import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken } from "./git"
 import { readMcp, writeMcp, type McpServer } from "./mcp"
 import * as browserNet from "./browserNet"
 import * as proxy from "./proxy"
 import * as aikeys from "./aikeys"
+import * as gitpat from "./gitpat"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -128,6 +129,21 @@ function registerIpc(): void {
     )
     ipcMain.handle("ai:status", () => aikeys.status())
     ipcMain.handle("ai:clearKey", (_e, agentId: string) => aikeys.clearKey(agentId))
+
+    // --- Git PATs (encrypted at rest; cached into Git's credential store on demand) ---
+    ipcMain.handle("git:setPat", (_e, { accountId, pat }: { accountId: string; pat: string }) =>
+        gitpat.setPat(accountId, pat)
+    )
+    ipcMain.handle("git:patStatus", () => gitpat.status())
+    ipcMain.handle("git:clearPat", (_e, accountId: string) => gitpat.clearPat(accountId))
+    ipcMain.handle(
+        "git:cacheCredential",
+        (_e, { accountId, host, username }: { accountId: string; host: string; username: string }) =>
+            cacheCredential(host, username, gitpat.getPat(accountId))
+    )
+    ipcMain.handle("git:verifyPat", (_e, accountId: string) =>
+        verifyGitHubToken(gitpat.getPat(accountId))
+    )
 
     // --- Remote / mobile server ---
     // Session metadata lives in the renderer; it pushes a snapshot here, and the
