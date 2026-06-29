@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.6 - 2026-06-29
+
+- **Cross-panel drag** - drag an editor file, or a database table, onto a running
+  agent session in the sidebar to feed it to that agent: a file inserts its
+  `@path`, a table inserts `SELECT * FROM <table>`, and the view jumps to that
+  terminal. Generalizes the old "send @path to the last agent" button into a
+  gesture that can target any specific session.
+
 ## 0.4.5 - 2026-06-29
 
 - **Modern look (opt-in)** - a new **Graphite** theme (cool near-black neutrals
