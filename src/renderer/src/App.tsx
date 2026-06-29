@@ -16,6 +16,7 @@ import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
 import { ActivityPanel } from "./components/ActivityPanel"
 import { InboxPanel } from "./components/InboxPanel"
+import { UsagePanel } from "./components/UsagePanel"
 import { RecordingsModal } from "./components/RecordingsModal"
 import { PipelineBar } from "./components/PipelineBar"
 import { WorktreesModal } from "./components/WorktreesModal"
@@ -53,6 +54,7 @@ export function App(): JSX.Element {
     const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const activityOpen = useStore((s) => s.activityOpen)
     const inboxOpen = useStore((s) => s.inboxOpen)
+    const usageOpen = useStore((s) => s.usageOpen)
     const recordingsOpen = useStore((s) => s.recordingsOpen)
     const worktreesOpen = useStore((s) => s.worktreesOpen)
     const changesTarget = useStore((s) => s.changesTarget)
@@ -206,6 +208,7 @@ export function App(): JSX.Element {
             {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
             {activityOpen && <ActivityPanel />}
             {inboxOpen && <InboxPanel />}
+            {usageOpen && <UsagePanel />}
             {recordingsOpen && <RecordingsModal />}
             {worktreesOpen && <WorktreesModal />}
             {changesTarget && <ChangesModal />}

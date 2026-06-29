@@ -135,6 +135,22 @@ export function sshCommand(p: SshProfile): string {
     return parts.join(" ")
 }
 
+/**
+ * One agent session, for the usage/activity dashboard. DevDeck spawns the CLI
+ * rather than calling an API, so we can't see tokens or dollars — what we *can*
+ * record honestly is which agent ran, in which project, and for how long.
+ */
+export interface UsageEvent {
+    id: string
+    agentId: string
+    projectId: string
+    startedAt: number
+    endedAt?: number
+}
+
+/** Keep the log bounded — the dashboard only needs recent history. */
+export const USAGE_LOG_CAP = 1000
+
 export interface AppSettings {
     terminal: {
         shell: ShellKind
@@ -172,6 +188,7 @@ export interface AppSettings {
         port: number
     }
     workspacePresets: WorkspacePreset[]
+    usageLog: UsageEvent[]
 }
 
 function generateToken(): string {
@@ -268,7 +285,8 @@ const DEFAULTS: AppSettings = {
     network: {
         port: 8899
     },
-    workspacePresets: []
+    workspacePresets: [],
+    usageLog: []
 }
 
 interface SettingsState extends AppSettings {
@@ -293,6 +311,10 @@ interface SettingsState extends AppSettings {
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
     setNetwork: (patch: Partial<AppSettings["network"]>) => void
     setWorkspacePresets: (presets: WorkspacePreset[]) => void
+    /** Record the start of an agent session (id = the pty/term id). */
+    logUsageStart: (id: string, agentId: string, projectId: string) => void
+    /** Stamp an agent session as ended. No-op if unknown/already ended. */
+    logUsageEnd: (id: string) => void
     regenerateToken: () => void
     resetAll: () => void
     openSettings: () => void
@@ -305,8 +327,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -361,7 +383,13 @@ export const useSettings = create<SettingsState>((set, get) => {
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote },
                     network: { ...DEFAULTS.network, ...raw.network },
-                    workspacePresets: raw.workspacePresets ?? DEFAULTS.workspacePresets
+                    workspacePresets: raw.workspacePresets ?? DEFAULTS.workspacePresets,
+                    // Fresh process → no pty is actually running, so any event left
+                    // open by a previous run is stale. Close it at its start time so
+                    // it counts as a launch without inflating "running now".
+                    usageLog: (raw.usageLog ?? DEFAULTS.usageLog).map((e) =>
+                        e.endedAt ? e : { ...e, endedAt: e.startedAt }
+                    )
                 })
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
@@ -455,6 +483,23 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         setWorkspacePresets: (workspacePresets) => {
             set({ workspacePresets })
+            persist()
+        },
+        logUsageStart: (id, agentId, projectId) => {
+            set((s) => ({
+                usageLog: [
+                    ...s.usageLog.slice(-(USAGE_LOG_CAP - 1)),
+                    { id, agentId, projectId, startedAt: Date.now() }
+                ]
+            }))
+            persist()
+        },
+        logUsageEnd: (id) => {
+            set((s) => ({
+                usageLog: s.usageLog.map((e) =>
+                    e.id === id && !e.endedAt ? { ...e, endedAt: Date.now() } : e
+                )
+            }))
             persist()
         },
         regenerateToken: () => {

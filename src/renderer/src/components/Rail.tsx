@@ -23,6 +23,7 @@ export function Rail(): JSX.Element {
     const setView = useStore((s) => s.setView)
     const setWorkOpen = useStore((s) => s.setWorkOpen)
     const setInboxOpen = useStore((s) => s.setInboxOpen)
+    const setUsageOpen = useStore((s) => s.setUsageOpen)
     const attention = useStore(
         (s) => Object.values(s.agentStatus).filter((x) => x === "attention").length
     )
@@ -61,6 +62,9 @@ export function Rail(): JSX.Element {
                 </button>
                 <button className="rail-btn" data-tip="Activity - agent events across all projects" data-tip-pos="right" onClick={() => setActivityOpen(true)}>
                     <Icon name="activity" size={20} />
+                </button>
+                <button className="rail-btn" data-tip="AI usage - session activity by agent & project" data-tip-pos="right" onClick={() => setUsageOpen(true)}>
+                    <Icon name="chart" size={20} />
                 </button>
                 <button className="rail-btn" data-tip="Standup - generate today's worklog from git + activity" data-tip-pos="right" onClick={() => setStandupOpen(true)}>
                     <Icon name="list" size={20} />

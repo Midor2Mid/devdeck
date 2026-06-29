@@ -116,6 +116,10 @@ interface AppState extends Persisted {
     inboxOpen: boolean
     setInboxOpen: (open: boolean) => void
 
+    // AI usage / activity dashboard
+    usageOpen: boolean
+    setUsageOpen: (open: boolean) => void
+
     // Terminal record & replay (runtime-only)
     recordingTermId: string | null
     setRecordingTermId: (id: string | null) => void
@@ -346,6 +350,7 @@ export const useStore = create<AppState>((set, get) => {
         const t = idleTimers.get(termId)
         if (t) clearTimeout(t)
         idleTimers.delete(termId)
+        if (isAgentId(get().termAgents[termId] ?? SHELL)) useSettings.getState().logUsageEnd(termId)
         set((s) => {
             const agentStatus = { ...s.agentStatus }
             delete agentStatus[termId]
@@ -413,6 +418,7 @@ export const useStore = create<AppState>((set, get) => {
         activity: [],
         activityOpen: false,
         inboxOpen: false,
+        usageOpen: false,
         recordingTermId: null,
         recordingsOpen: false,
         worktreesOpen: false,
@@ -562,6 +568,7 @@ export const useStore = create<AppState>((set, get) => {
         setActivityOpen: (activityOpen) => set({ activityOpen }),
         clearActivity: () => set({ activity: [] }),
         setInboxOpen: (inboxOpen) => set({ inboxOpen }),
+        setUsageOpen: (usageOpen) => set({ usageOpen }),
         setRecordingTermId: (recordingTermId) => set({ recordingTermId }),
         setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
         noteRecording: (termId, label) => pushActivity("record", termId, label),
@@ -867,7 +874,10 @@ export const useStore = create<AppState>((set, get) => {
                 lastAgentTermId: isAgentId(agentId) ? termId : s.lastAgentTermId,
                 view: "terminal"
             }))
-            if (isAgentId(agentId)) pushActivity("start", termId, `${tab.name} · started`)
+            if (isAgentId(agentId)) {
+                pushActivity("start", termId, `${tab.name} · started`)
+                useSettings.getState().logUsageStart(termId, agentId, projectId)
+            }
             persist()
             return termId
         },
@@ -897,6 +907,8 @@ export const useStore = create<AppState>((set, get) => {
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: newTermId },
                 lastAgentTermId: isAgentId(agentId) ? newTermId : s.lastAgentTermId
             })
+            if (isAgentId(agentId))
+                useSettings.getState().logUsageStart(newTermId, agentId, projectId)
             persist()
         },
 
@@ -1010,12 +1022,16 @@ export const useStore = create<AppState>((set, get) => {
             const termAgents = { ...get().termAgents }
             const termInit = { ...get().termInit }
             const agentStatus = { ...get().agentStatus }
+            const startedAgents: string[] = []
             const toLayout = (n: PresetNode): LayoutNode => {
                 if (n.kind === "leaf") {
                     const termId = newId()
                     termAgents[termId] = n.agentId
                     if (n.init) termInit[termId] = n.init
-                    if (isAgentId(n.agentId)) agentStatus[termId] = "working"
+                    if (isAgentId(n.agentId)) {
+                        agentStatus[termId] = "working"
+                        startedAgents.push(termId)
+                    }
                     return leaf(termId)
                 }
                 return { kind: "split", dir: n.dir, children: n.children.map(toLayout) }
@@ -1040,6 +1056,8 @@ export const useStore = create<AppState>((set, get) => {
                 view: "terminal"
             }))
             window.api.projects.setActive(pid)
+            for (const termId of startedAgents)
+                useSettings.getState().logUsageStart(termId, termAgents[termId], pid)
             persist()
         },
 
