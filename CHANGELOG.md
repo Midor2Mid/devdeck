@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.4 - 2026-06-29
+
+- **SQL Server support** - a fourth database engine (Database panel → New
+  connection → **SQL Server**) via the pure-JS `mssql`/`tedious` driver (no
+  native build, like `pg`/`mysql2`). Connect / test / list tables / run SQL
+  like the others; the **SSL** toggle maps to `encrypt` with
+  trust-server-certificate so local/dev instances work. Default port 1433.
+  Also usable from the mobile/remote DB client.
+
 ## 0.4.3 - 2026-06-29
 
 - **AI settings** - new Settings → AI section: per-agent **default model** (injected
