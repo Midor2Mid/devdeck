@@ -19,13 +19,21 @@ import {
     type TestOp,
     type TestResult
 } from "../apiTests"
+import {
+    runExtractors,
+    EXTRACT_SOURCE_LABEL,
+    type Extractor,
+    type ExtractSource,
+    type ExtractResult
+} from "../apiChain"
+import { useChainVars } from "../chain"
 import { buildVarMap, substitute, findUnresolved } from "../vars"
 import { confirm } from "../confirm"
 import { EnvManager } from "./EnvManager"
 import { CollectionsSidebar } from "./CollectionsSidebar"
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
-type ReqTab = "params" | "auth" | "headers" | "body" | "tests"
+type ReqTab = "params" | "auth" | "headers" | "body" | "tests" | "chain"
 type BodyType = "none" | "json" | "form"
 
 function prettify(body: string, contentType?: string): string {
@@ -61,6 +69,82 @@ const hasHeader = (hdrs: Record<string, string>, name: string): boolean =>
     Object.keys(hdrs).some((k) => k.toLowerCase() === name.toLowerCase())
 
 const TEST_SOURCES: TestSource[] = ["status", "time", "body", "header", "json"]
+
+const EXTRACT_SOURCES: ExtractSource[] = ["json", "header", "status", "regex"]
+
+/** Editor for a request's response extractors (the "Chain" subtab). */
+function ExtractorsEditor({
+    extractors,
+    onChange
+}: {
+    extractors: Extractor[]
+    onChange: (e: Extractor[]) => void
+}): JSX.Element {
+    const update = (i: number, patch: Partial<Extractor>): void =>
+        onChange(extractors.map((e, idx) => (idx === i ? { ...e, ...patch } : e)))
+    const remove = (i: number): void => onChange(extractors.filter((_, idx) => idx !== i))
+    const add = (): void =>
+        onChange([
+            ...extractors,
+            { id: crypto.randomUUID(), varName: "", source: "json", path: "" }
+        ])
+
+    return (
+        <div className="tests-pane">
+            {extractors.length === 0 && (
+                <div className="muted small tests-hint">
+                    After Send, pull a value from the response into a variable later requests can
+                    use as <code>{"{{name}}"}</code> - a JSON path (<code>data.token</code>), a
+                    header, the status, or a body regex (1st group).
+                </div>
+            )}
+            {extractors.map((e, i) => {
+                const needsPath = e.source !== "status"
+                return (
+                    <div className="test-row" key={e.id}>
+                        <input
+                            className="test-target"
+                            value={e.varName}
+                            placeholder="varName"
+                            onChange={(ev) => update(i, { varName: ev.target.value })}
+                        />
+                        <span className="muted small">=</span>
+                        <select
+                            value={e.source}
+                            onChange={(ev) => update(i, { source: ev.target.value as ExtractSource })}
+                        >
+                            {EXTRACT_SOURCES.map((s) => (
+                                <option key={s} value={s}>
+                                    {EXTRACT_SOURCE_LABEL[s]}
+                                </option>
+                            ))}
+                        </select>
+                        {needsPath && (
+                            <input
+                                className="test-value"
+                                value={e.path}
+                                placeholder={
+                                    e.source === "header"
+                                        ? "Header name"
+                                        : e.source === "regex"
+                                          ? "pattern with (group)"
+                                          : "data.token"
+                                }
+                                onChange={(ev) => update(i, { path: ev.target.value })}
+                            />
+                        )}
+                        <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
+                            ×
+                        </button>
+                    </div>
+                )
+            })}
+            <button onClick={add} style={{ marginTop: 6 }}>
+                + Add extractor
+            </button>
+        </div>
+    )
+}
 
 /** Editor for a request's response assertions (the "Tests" subtab). */
 function TestsEditor({
@@ -155,6 +239,12 @@ export function ApiPanel(): JSX.Element {
     const [resp, setResp] = useState<HttpResponse | null>(null)
     const [tests, setTests] = useState<ApiTest[]>([])
     const [testResults, setTestResults] = useState<TestResult[]>([])
+    const [extractors, setExtractors] = useState<Extractor[]>([])
+    const [extractResults, setExtractResults] = useState<ExtractResult[]>([])
+    const chainVars = useChainVars((s) => s.vars)
+    const setChainVar = useChainVars((s) => s.set)
+    const removeChainVar = useChainVars((s) => s.remove)
+    const clearChainVars = useChainVars((s) => s.clear)
     const [respTab, setRespTab] = useState<"body" | "headers" | "tests">("body")
     const [respPretty, setRespPretty] = useState(true)
     const [respWrap, setRespWrap] = useState(true)
@@ -180,7 +270,8 @@ export function ApiPanel(): JSX.Element {
     const collections = useSettings((s) => s.collections)
     const setCollections = useSettings((s) => s.setCollections)
     const env = environments.find((e) => e.id === activeEnvId)
-    const varMap = buildVarMap(env?.vars)
+    // Chain vars (extracted from prior responses) override the active environment.
+    const varMap = { ...buildVarMap(env?.vars), ...chainVars }
 
     // Variables referenced but not defined in the active env (for a gentle warning).
     const unresolved = (() => {
@@ -247,6 +338,7 @@ export function ApiPanel(): JSX.Element {
         setSending(true)
         setResp(null)
         setTestResults([])
+        setExtractResults([])
         try {
             const sub = (s: string): string => substitute(s, varMap)
 
@@ -300,6 +392,12 @@ export function ApiPanel(): JSX.Element {
                 setTestResults(evalTests(tests, res))
                 if (res.ok) setRespTab("tests")
             }
+            // Chain: pull values from a successful response into chain variables.
+            if (res.ok && extractors.length) {
+                const results = runExtractors(extractors, res)
+                setExtractResults(results)
+                results.filter((r) => r.ok).forEach((r) => setChainVar(r.extractor.varName.trim(), r.value))
+            }
         } finally {
             setSending(false)
         }
@@ -328,7 +426,8 @@ export function ApiPanel(): JSX.Element {
         bodyText,
         formRows,
         auth,
-        tests
+        tests,
+        extractors
     })
 
     const loadRequest = (req: SavedRequest): void => {
@@ -342,6 +441,8 @@ export function ApiPanel(): JSX.Element {
         setAuth({ ...defaultAuth(), ...req.auth })
         setTests(req.tests ?? [])
         setTestResults([])
+        setExtractors(req.extractors ?? [])
+        setExtractResults([])
         setLoadedReqId(req.id)
         setResp(null)
         setReqTab("params")
@@ -511,6 +612,26 @@ export function ApiPanel(): JSX.Element {
                         unresolved: {unresolved.join(", ")}
                     </span>
                 )}
+                {Object.keys(chainVars).length > 0 && (
+                    <span className="chain-vars" data-tip="Chain variables extracted from responses">
+                        <span className="muted small">chain:</span>
+                        {Object.keys(chainVars).map((name) => (
+                            <span key={name} className="chain-chip">
+                                {name}
+                                <button
+                                    className="chain-chip-x"
+                                    data-tip={`Forget ${name}`}
+                                    onClick={() => removeChainVar(name)}
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        ))}
+                        <button className="chain-clear" onClick={() => clearChainVars()} data-tip="Clear all chain variables">
+                            clear
+                        </button>
+                    </span>
+                )}
             </div>
 
             <div className="api-req">
@@ -529,6 +650,9 @@ export function ApiPanel(): JSX.Element {
                     </span>
                     <span className={reqTab === "tests" ? "active" : ""} onClick={() => setReqTab("tests")}>
                         Tests{tests.length ? ` (${tests.length})` : ""}
+                    </span>
+                    <span className={reqTab === "chain" ? "active" : ""} onClick={() => setReqTab("chain")}>
+                        Chain{extractors.length ? ` (${extractors.length})` : ""}
                     </span>
                 </div>
 
@@ -656,6 +780,9 @@ export function ApiPanel(): JSX.Element {
                 {reqTab === "tests" && (
                     <TestsEditor tests={tests} onChange={setTests} />
                 )}
+                {reqTab === "chain" && (
+                    <ExtractorsEditor extractors={extractors} onChange={setExtractors} />
+                )}
             </div>
 
             <div className="api-resp">
@@ -672,6 +799,14 @@ export function ApiPanel(): JSX.Element {
                             </span>
                             <span className="muted">{resp.timeMs} ms</span>
                             <span className="muted">{respSize}</span>
+                            {extractResults.some((r) => r.ok) && (
+                                <span
+                                    className="resp-extracted"
+                                    data-tip="Saved to chain variables"
+                                >
+                                    ⛓ {extractResults.filter((r) => r.ok).map((r) => r.extractor.varName.trim()).join(", ")}
+                                </span>
+                            )}
                             <div className="resp-tabs">
                                 <span
                                     className={respTab === "body" ? "active" : ""}

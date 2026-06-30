@@ -4,6 +4,7 @@ import type { Pipeline, PipelineTrigger } from "./pipeline"
 import type { KvRow } from "./components/KeyValueEditor"
 import type { SplitDir } from "./layout"
 import type { ApiTest } from "./apiTests"
+import type { Extractor } from "./apiChain"
 
 // A saved project layout. Leaves store the agent + its launch command (not a live
 // terminal id) so a preset can be re-opened with fresh sessions.
@@ -68,6 +69,8 @@ export interface SavedRequest {
     auth: AuthConfig
     /** Assertions evaluated against the response after Send. */
     tests?: ApiTest[]
+    /** Values pulled from the response into chain variables for later requests. */
+    extractors?: Extractor[]
 }
 
 /** A named folder of saved requests. */

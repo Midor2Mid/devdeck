@@ -2061,6 +2061,42 @@ button .ic,
     color: var(--clay, #c4855d);
     font-weight: 600;
 }
+.chain-vars {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+.chain-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    background: var(--bg-3);
+    border: 1px solid var(--border-soft);
+    border-radius: 5px;
+    padding: 1px 4px 1px 6px;
+    color: var(--text);
+}
+.chain-chip-x,
+.chain-clear {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 11px;
+}
+.chain-chip-x:hover,
+.chain-clear:hover {
+    color: var(--accent);
+}
+.resp-extracted {
+    font-size: 11px;
+    color: var(--moss, #8c9a68);
+    font-family: "Cascadia Mono", Consolas, monospace;
+}
 .resp-tests {
     flex: 1;
     overflow: auto;
