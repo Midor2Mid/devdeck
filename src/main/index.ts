@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from "electron"
+import { app, BrowserWindow, ipcMain, dialog, shell, session } from "electron"
 import { join } from "path"
 import { mkdirSync, writeFileSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
@@ -31,6 +31,63 @@ import * as updater from "./updater"
 
 let mainWindow: BrowserWindow | null = null
 
+/**
+ * Renderer hardening (per the electron-best-practices security checklist):
+ *  - Deny every Chromium permission request - DevDeck needs none (no camera /
+ *    mic / geolocation / notifications in the desktop renderer).
+ *  - Enforce a strict CSP on the app's own file:// content, so a renderer XSS
+ *    can't pull in remote scripts or exfiltrate. Scoped to file:// only, so the
+ *    embedded <webview> browser keeps working; skipped under the dev server
+ *    (vite HMR needs unsafe-inline/eval + ws).
+ */
+function applySecurity(): void {
+    const ses = session.defaultSession
+    ses.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
+    ses.setPermissionCheckHandler(() => false)
+
+    if (process.env["ELECTRON_RENDERER_URL"]) return
+    const csp = [
+        "default-src 'self'",
+        "script-src 'self' blob:", // blob: for Monaco's Vite-bundled web workers
+        "style-src 'self' 'unsafe-inline'", // Monaco + inline style attrs
+        "img-src 'self' data:", // image-preview tabs, QR codes
+        "font-src 'self' data:",
+        "connect-src 'self'", // all network egress goes through main via IPC
+        "worker-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'"
+    ].join("; ")
+    ses.webRequest.onHeadersReceived((details, cb) => {
+        // Only the app's own content - never the <webview>'s browsed pages.
+        if (!(details.url || "").startsWith("file://")) {
+            cb({ responseHeaders: details.responseHeaders })
+            return
+        }
+        cb({
+            responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [csp] }
+        })
+    })
+}
+
+/**
+ * Keep the main window pinned to the app; deny popups (open http(s) in the
+ * system browser instead). The embedded <webview> browser navigates freely.
+ */
+function applyNavigationGuards(): void {
+    app.on("web-contents-created", (_e, contents) => {
+        contents.setWindowOpenHandler(({ url }) => {
+            if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+            return { action: "deny" }
+        })
+        contents.on("will-navigate", (event, url) => {
+            if (contents.getType() === "webview") return // the browser panel
+            const devUrl = process.env["ELECTRON_RENDERER_URL"]
+            const ok = url.startsWith("file://") || (!!devUrl && url.startsWith(devUrl))
+            if (!ok) event.preventDefault()
+        })
+    })
+}
+
 function createWindow(): void {
     const saved = loadWindowState()
     mainWindow = new BrowserWindow({
@@ -47,7 +104,7 @@ function createWindow(): void {
             preload: join(__dirname, "../preload/index.js"),
             contextIsolation: true,
             nodeIntegration: false,
-            sandbox: false,
+            sandbox: true,
             webviewTag: true
         }
     })
@@ -466,6 +523,8 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
     registerIpc()
+    applyNavigationGuards()
+    applySecurity()
     createWindow()
     updater.initUpdater(() => mainWindow)
     // Best-effort check shortly after launch; failures (e.g. private repo) are
