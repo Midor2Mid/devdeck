@@ -5659,3 +5659,55 @@ kbd {
     padding-top: 12px;
     line-height: 1.5;
 }
+
+/* ============================================================
+   Global motion layer
+   Purposeful, brief motion so the app feels alive without fighting the calm
+   default: floating surfaces ease/scale in, interactions give press feedback.
+   Pure-additive (entrance animations + transforms; no transition overrides).
+   Fully disabled under prefers-reduced-motion.
+   ============================================================ */
+@keyframes dd-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes dd-pop-in {
+    from { opacity: 0; transform: translateY(7px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes dd-menu-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes dd-slide-in-right {
+    from { opacity: 0; transform: translateX(18px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* Floating surfaces */
+.modal-backdrop { animation: dd-fade-in 0.14s ease; }
+.modal { animation: dd-pop-in 0.19s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.drawer-backdrop { animation: dd-fade-in 0.14s ease; }
+.drawer { animation: dd-slide-in-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.ctx-menu,
+.agent-menu,
+.db-history-menu { animation: dd-menu-in 0.13s ease; transform-origin: top; }
+
+/* Press feedback — transform only, so it never clobbers a component's own
+   transition. A snappy 1px press reads as responsive across every button. */
+button:not(:disabled):active { transform: translateY(1px); }
+.task-chip:not(:disabled):active,
+.rail-btn:active { transform: scale(0.96); }
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-backdrop,
+    .modal,
+    .drawer-backdrop,
+    .drawer,
+    .ctx-menu,
+    .agent-menu,
+    .db-history-menu { animation: none; }
+    button:not(:disabled):active,
+    .task-chip:not(:disabled):active,
+    .rail-btn:active { transform: none; }
+}
