@@ -43,6 +43,10 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] **Request chaining** (2026-06-30) — a "Chain" subtab extracts a response value (JSON path / header / status / body regex) into a session variable later requests use as `{{name}}`; chain vars merge over the active environment, shown as removable chips. `apiChain.ts` + `chain.ts`, `tests/apiChain.test.ts`
 - [x] **Export results to file** (2026-06-30) — DB grid → CSV/JSON, API response body → file, via a save-as dialog (`dialog:saveFile`). Pure serializers `exporters.ts`, `tests/exporters.test.ts`
 
+## Agent pipelines — live UI (2026-06-30)
+
+- [x] **Run timeline + launcher** — the run model tracks per-step status (pending/running/done/failed/skipped) + the session each step ran in; the floating PipelineBar expands into a step timeline (status dots, gate notes, jump-to-session). Pipelines launch from the new-terminal menu's PIPELINES section, not just Settings / command palette. (Editor + gates already shipped in M8/Settings.)
+
 ## Milestone 3.5 — Database panel ✅ (2026-06-27, partial)
 
 - [x] Per-project saved connections (PostgreSQL, MySQL) with encrypted passwords (`safeStorage`)
@@ -215,7 +219,7 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 - Cross-platform (macOS/Linux) polish
 - Saved command runner per project (snippets + per-project package.json **task runner** (M23) shipped; an arbitrary saved-command list did not)
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
-- Agent pipeline UI on top of `pipeline.ts`; image-preview tabs in the editor
+- Image-preview tabs in the editor
 - **Auto-update is wired but dormant** (M25) — `electron-updater` + the in-app flow ship now; it only fetches once the **repo/releases are public** (private repo has no embedded token, by design). Make releases public to activate, and upload `latest.yml` with each release.
 - **Coordinated Electron/deps bump** — see Maintenance/security; blocked on a Node 22.11 → ≥22.12 runtime upgrade
 
