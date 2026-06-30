@@ -40,6 +40,7 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] Per-project request history + saved requests (collections), persisted to `settings.json`
 - [x] **Beyond scope:** auth config, environments/variables, collections search + move/duplicate, **Import** (Postman / OpenAPI-Swagger / cURL → collections), cURL smart-paste into the URL bar
 - [x] **Response tests/assertions** (2026-06-30, M24) — per-request checks (status/time/body/header/JSON-path) with a pass/fail Tests tab
+- [x] **Request chaining** (2026-06-30) — a "Chain" subtab extracts a response value (JSON path / header / status / body regex) into a session variable later requests use as `{{name}}`; chain vars merge over the active environment, shown as removable chips. `apiChain.ts` + `chain.ts`, `tests/apiChain.test.ts`
 
 ## Milestone 3.5 — Database panel ✅ (2026-06-27, partial)
 
@@ -213,7 +214,7 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 - Cross-platform (macOS/Linux) polish
 - Saved command runner per project (snippets + per-project package.json **task runner** (M23) shipped; an arbitrary saved-command list did not)
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
-- Agent pipeline UI on top of `pipeline.ts`; image-preview tabs in the editor; API request chaining/scripting
+- Agent pipeline UI on top of `pipeline.ts`; image-preview tabs in the editor; export DB/HTTP results to file
 - **Auto-update is wired but dormant** (M25) — `electron-updater` + the in-app flow ship now; it only fetches once the **repo/releases are public** (private repo has no embedded token, by design). Make releases public to activate, and upload `latest.yml` with each release.
 - **Coordinated Electron/deps bump** — see Maintenance/security; blocked on a Node 22.11 → ≥22.12 runtime upgrade
 
