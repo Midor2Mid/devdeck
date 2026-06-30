@@ -419,6 +419,29 @@ function registerIpc(): void {
         guardPath(path)
         return files.writeFileText(path, content)
     })
+
+    // "Save As" export: the user picks the destination via the OS dialog (so no
+    // path confinement is needed - the location is user-chosen), then we write it.
+    ipcMain.handle(
+        "dialog:saveFile",
+        async (
+            _e,
+            {
+                defaultName,
+                content,
+                filters
+            }: { defaultName: string; content: string; filters?: { name: string; extensions: string[] }[] }
+        ) => {
+            const res = await dialog.showSaveDialog(mainWindow!, {
+                title: "Export",
+                defaultPath: defaultName,
+                filters: filters ?? [{ name: "All files", extensions: ["*"] }]
+            })
+            if (res.canceled || !res.filePath) return ""
+            writeFileSync(res.filePath, content, "utf8")
+            return res.filePath
+        }
+    )
 }
 
 app.whenReady().then(() => {

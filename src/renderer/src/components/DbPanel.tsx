@@ -4,6 +4,7 @@ import { Allotment } from "allotment"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
 import { THEMES } from "../themes"
+import { toCsv, toJson } from "../exporters"
 import "../monaco-setup"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
@@ -180,7 +181,15 @@ function ResultsGrid({
         return <div className="resp-error">{result.error}</div>
     }
     const columns = result.columns ?? []
-    const rows = result.rows ?? []
+    const rows = (result.rows ?? []) as Record<string, unknown>[]
+    const exportRows = (fmt: "csv" | "json"): void => {
+        const content = fmt === "csv" ? toCsv(columns, rows) : toJson(rows)
+        const filters =
+            fmt === "csv"
+                ? [{ name: "CSV", extensions: ["csv"] }]
+                : [{ name: "JSON", extensions: ["json"] }]
+        void window.api.fs.saveFile(`query-result.${fmt}`, content, filters)
+    }
     return (
         <div className="grid-wrap">
             <div className="grid-meta">
@@ -189,17 +198,36 @@ function ResultsGrid({
                     {result.rowCount ?? rows.length} row{(result.rowCount ?? rows.length) === 1 ? "" : "s"}
                 </span>
                 <span className="muted">{result.timeMs} ms</span>
-                {onSend && (
-                    <button
-                        className="tool"
-                        style={{ marginLeft: "auto" }}
-                        onClick={onSend}
-                        disabled={!canSend}
-                        data-tip={canSend ? "Send this result to the focused agent session" : "No agent session yet"}
-                    >
-                        {sent ? "Sent ✓" : "→ Agent"}
-                    </button>
-                )}
+                <span style={{ marginLeft: "auto", display: "inline-flex", gap: 6 }}>
+                    {rows.length > 0 && (
+                        <>
+                            <button
+                                className="tool"
+                                onClick={() => exportRows("csv")}
+                                data-tip="Export rows as CSV"
+                            >
+                                CSV
+                            </button>
+                            <button
+                                className="tool"
+                                onClick={() => exportRows("json")}
+                                data-tip="Export rows as JSON"
+                            >
+                                JSON
+                            </button>
+                        </>
+                    )}
+                    {onSend && (
+                        <button
+                            className="tool"
+                            onClick={onSend}
+                            disabled={!canSend}
+                            data-tip={canSend ? "Send this result to the focused agent session" : "No agent session yet"}
+                        >
+                            {sent ? "Sent ✓" : "→ Agent"}
+                        </button>
+                    )}
+                </span>
             </div>
             <div className="grid-scroll">
                 <table className="result-grid">

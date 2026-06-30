@@ -520,6 +520,14 @@ export function ApiPanel(): JSX.Element {
     const respSize = formatSize(new TextEncoder().encode(rawRespBody).length)
     const respHeaderEntries: Array<[string, string]> = resp?.headers ? Object.entries(resp.headers) : []
 
+    const exportBody = (): void => {
+        const ext = respLang === "json" ? "json" : respLang === "html" ? "html" : "txt"
+        void window.api.fs.saveFile(`response.${ext}`, shownRespBody, [
+            { name: ext.toUpperCase(), extensions: [ext] },
+            { name: "All files", extensions: ["*"] }
+        ])
+    }
+
     const copyBody = async (): Promise<void> => {
         try {
             await navigator.clipboard.writeText(shownRespBody)
@@ -853,6 +861,9 @@ export function ApiPanel(): JSX.Element {
                                     </button>
                                     <button className="tool" onClick={copyBody} data-tip="Copy body">
                                         {copied ? "Copied ✓" : "Copy"}
+                                    </button>
+                                    <button className="tool" onClick={exportBody} data-tip="Save response body to a file">
+                                        Export
                                     </button>
                                     <button
                                         className="tool"

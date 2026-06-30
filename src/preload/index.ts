@@ -368,7 +368,14 @@ const api = {
         allFiles: (root: string): Promise<string[]> => ipcRenderer.invoke("fs:allFiles", root),
         read: (path: string): Promise<string> => ipcRenderer.invoke("fs:read", path),
         write: (path: string, content: string): Promise<void> =>
-            ipcRenderer.invoke("fs:write", { path, content })
+            ipcRenderer.invoke("fs:write", { path, content }),
+        /** Save-As dialog + write; returns the chosen path, or "" if cancelled. */
+        saveFile: (
+            defaultName: string,
+            content: string,
+            filters?: { name: string; extensions: string[] }[]
+        ): Promise<string> =>
+            ipcRenderer.invoke("dialog:saveFile", { defaultName, content, filters })
     },
     git: {
         status: (cwd: string): Promise<GitStatus> => ipcRenderer.invoke("git:status", cwd),
