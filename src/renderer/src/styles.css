@@ -5854,3 +5854,81 @@ button:not(:disabled):active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
     [data-style="neo"] .rail-logo { animation: none; }
 }
+
+/* ============================================================
+   Kinetic Minimal style  [data-style="kinetic"]
+   Restrained color, alive with motion: spring-lift hovers, an active
+   indicator that grows in, smooth easing. Theme-agnostic (Linear-style).
+   ============================================================ */
+[data-style="kinetic"] .project-item,
+[data-style="kinetic"] .switcher-card,
+[data-style="kinetic"] .theme-card,
+[data-style="kinetic"] .style-card,
+[data-style="kinetic"] .work-item,
+[data-style="kinetic"] .task-chip,
+[data-style="kinetic"] button {
+    transition:
+        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.2s ease,
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+[data-style="kinetic"] .project-item:hover,
+[data-style="kinetic"] .switcher-card:hover,
+[data-style="kinetic"] .theme-card:hover,
+[data-style="kinetic"] .style-card:hover,
+[data-style="kinetic"] .work-item:hover,
+[data-style="kinetic"] .task-chip:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 20px -10px rgba(0, 0, 0, 0.55);
+}
+[data-style="kinetic"] button.accent:hover,
+[data-style="kinetic"] .send-claude:hover {
+    transform: translateY(-1px);
+}
+/* Tabs get a relative box + an underline that springs in when active. */
+[data-style="kinetic"] .term-tab,
+[data-style="kinetic"] .editor-tab {
+    position: relative;
+}
+[data-style="kinetic"] .term-tab.active::after,
+[data-style="kinetic"] .editor-tab.active::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+    transform-origin: left;
+    animation: kinetic-underline 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes kinetic-underline {
+    from { transform: scaleX(0); opacity: 0; }
+    to { transform: scaleX(1); opacity: 1; }
+}
+/* The rail's active stripe grows down. */
+[data-style="kinetic"] .rail-btn.on::before {
+    transform-origin: top;
+    animation: kinetic-stripe 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes kinetic-stripe {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    [data-style="kinetic"] .project-item,
+    [data-style="kinetic"] .switcher-card,
+    [data-style="kinetic"] .theme-card,
+    [data-style="kinetic"] .style-card,
+    [data-style="kinetic"] .work-item,
+    [data-style="kinetic"] .task-chip,
+    [data-style="kinetic"] button { transition: none; }
+    [data-style="kinetic"] .term-tab.active::after,
+    [data-style="kinetic"] .editor-tab.active::after,
+    [data-style="kinetic"] .rail-btn.on::before { animation: none; }
+    [data-style="kinetic"] .project-item:hover,
+    [data-style="kinetic"] .task-chip:hover { transform: none; }
+}
