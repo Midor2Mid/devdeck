@@ -88,9 +88,16 @@ encode the **default identity — Slate (cool dark) + Modern Pro** — but the s
 component definitions hold under every theme/style:
 
 - **Themes (color):** Slate (dark, default), Sumi (warm dark), Washi (light),
-  Zen (airy dark), Graphite (cool dark, indigo accent).
+  Zen (airy dark), Graphite (cool dark, indigo accent), Aurora (cool indigo
+  glass), Neo (holographic cyan/violet).
 - **Styles (shape/depth/type):** Modern Pro (default), Wabi-sabi, Modern Minimal,
-  Neon, Flat Vector, Bauhaus, Phosphor CRT, Modern+, Lacquer.
+  Neon, Flat Vector, Bauhaus, Phosphor CRT, Modern+, Lacquer, Aurora Glass,
+  Neo Holographic, Kinetic Minimal.
+
+A **global motion layer** underlies all of them: floating surfaces ease/scale
+in, interactions give press feedback, and everything is disabled under
+`prefers-reduced-motion`. Motion is purposeful and brief — never decoration that
+costs scan-speed.
 
 The brand mark is an **ensō** — a single quietly-imperfect brush ring.
 

@@ -235,6 +235,15 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 - [x] **Auto-update** — `electron-updater` + GitHub publish provider; Settings → About shows the real version + Check-for-updates; available/ready raises an actionable toast (Download → Restart & install). `update.ts` + `app:version`/`update:*` IPC. **Dormant until releases are public** (private repo, no embedded token).
 - [x] **Per-project env vars → terminals** (2026-06-30) — Sidebar → project menu → "Environment variables…"; merged into every terminal/agent session's env for that project, encrypted at rest (`projectenv.ts`), injected in the main `pty:create` handler. `tests/projectenv.test.ts`
 
+## Milestone 26 — modern look & motion ✅ (2026-07-01)
+
+A "more modern / creative / future" pass, all opt-in (calm default unchanged):
+- [x] **Animated rail** — the icon rail glides between collapsed/expanded; labels fade+slide, the toggle chevron sweeps › ↔ ‹.
+- [x] **Global motion layer** — modals pop, backdrops fade, the drawer slides, menus pop; buttons/chips get press feedback. Pure-additive; `prefers-reduced-motion` disables it.
+- [x] **Aurora Glass** — theme (cool-indigo) + style (frosted glass, gradient accent, soft glow).
+- [x] **Neo Holographic** — theme (cyan/violet near-black) + style (dot grid, luminous edges, neon active, pulse).
+- [x] **Kinetic Minimal** — theme-agnostic style: spring-lift hovers + an active indicator that springs in.
+
 ## Maintenance / security
 
 - **Electron security hardening** (2026-07-01) — audited `src/main`/`src/preload` against the vendored **electron-best-practices** skill. Fixed: `sandbox: true` (third pillar restored), strict **CSP** on file:// content (no unsafe-eval; blob: only for Monaco workers; scoped so the `<webview>` browser is untouched), **deny-all** permission/check handlers, and `web-contents-created` popup/navigation guards. Verified live. Already-good: contextIsolation, nodeIntegration off, no raw `ipcRenderer`, path-guarded IPC, protocol-gated `shell.openExternal`, ASAR integrity + signing. Remaining: the Electron CVE bump (below, Node-blocked).
