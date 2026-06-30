@@ -3175,7 +3175,7 @@ button .ic,
     transform: translateX(-50%);
     z-index: 65;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 12px;
     width: 420px;
     max-width: 90vw;
@@ -3357,6 +3357,56 @@ button .ic,
 }
 .pipeline-gate {
     color: var(--accent-soft);
+}
+.pipeline-icon {
+    cursor: pointer;
+}
+.pipeline-info {
+    cursor: pointer;
+}
+.pipeline-steps {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 200px;
+    overflow: auto;
+}
+.pipeline-step-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 2px 0;
+}
+.pipeline-step-icon {
+    width: 12px;
+    text-align: center;
+    flex: none;
+}
+.pipeline-step-row.st-running {
+    color: var(--text);
+}
+.pipeline-step-row.st-running .pipeline-step-icon {
+    color: var(--accent);
+}
+.pipeline-step-row.st-done .pipeline-step-icon {
+    color: var(--ok);
+}
+.pipeline-step-row.st-failed {
+    color: var(--text);
+}
+.pipeline-step-row.st-failed .pipeline-step-icon {
+    color: var(--danger);
+}
+.pipeline-step-row.st-skipped {
+    opacity: 0.5;
+}
+.pipeline-step-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ---------- File triggers editor ---------- */

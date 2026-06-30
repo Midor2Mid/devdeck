@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
 import { useSettings, sshCommand, type ShellKind } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
+import { isRunnable } from "../pipeline"
 import { confirm } from "../confirm"
 import { contextMenu } from "../contextmenu"
 import { paneRegistry } from "../paneRegistry"
@@ -39,6 +40,8 @@ export function TerminalView(): JSX.Element {
     const focusPane = useStore((s) => s.focusPane)
     const agents = useSettings((s) => s.agents)
     const sshProfiles = useSettings((s) => s.sshProfiles)
+    const pipelines = useSettings((s) => s.pipelines)
+    const runPipeline = useStore((s) => s.runPipeline)
 
     const [editingId, setEditingId] = useState<string | null>(null)
     const [draft, setDraft] = useState("")
@@ -366,6 +369,24 @@ export function TerminalView(): JSX.Element {
                                             >
                                                 <span className="agent-badge">SH</span>
                                                 {opt.label}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {pipelines.some(isRunnable) && (
+                                        <div className="agent-menu-divider">PIPELINES</div>
+                                    )}
+                                    {pipelines.filter(isRunnable).map((p) => (
+                                        <div key={p.id} className="agent-menu-row">
+                                            <span
+                                                className="agent-menu-name"
+                                                onClick={() => {
+                                                    runPipeline(p.id)
+                                                    setMenuOpen(false)
+                                                }}
+                                                data-tip={`Run the "${p.name}" pipeline`}
+                                            >
+                                                <span className="agent-badge">⇥</span>
+                                                {p.name}
                                             </span>
                                         </div>
                                     ))}

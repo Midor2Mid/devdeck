@@ -13,7 +13,7 @@ import {
     firstLeaf,
     hasLeaf
 } from "./layout"
-import type { PipelineRun } from "./pipeline"
+import type { PipelineRun, PipelineStepState } from "./pipeline"
 import { runnableSteps, sessionPlan } from "./pipeline"
 import { gateActive, evaluateGate, maxAttempts } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
@@ -726,6 +726,37 @@ export const useStore = create<AppState>((set, get) => {
             const setRun = (patch: Partial<PipelineRun>): void =>
                 set((s) => ({ pipelineRun: s.pipelineRun ? { ...s.pipelineRun, ...patch } : s.pipelineRun }))
 
+            // Patch one step's state in the run timeline.
+            const setStep = (i: number, patch: Partial<PipelineStepState>): void =>
+                set((s) =>
+                    s.pipelineRun
+                        ? {
+                              pipelineRun: {
+                                  ...s.pipelineRun,
+                                  steps: s.pipelineRun.steps.map((st, idx) =>
+                                      idx === i ? { ...st, ...patch } : st
+                                  )
+                              }
+                          }
+                        : s
+                )
+            // Mark any still-pending steps from `from` onward as skipped (early exit).
+            const skipFrom = (from: number): void =>
+                set((s) =>
+                    s.pipelineRun
+                        ? {
+                              pipelineRun: {
+                                  ...s.pipelineRun,
+                                  steps: s.pipelineRun.steps.map((st, idx) =>
+                                      idx >= from && st.status === "pending"
+                                          ? { ...st, status: "skipped" }
+                                          : st
+                                  )
+                              }
+                          }
+                        : s
+                )
+
             // Wait until an agent term has settled: seen working, then idle for a beat.
             const waitForIdle = async (termId: string): Promise<"idle" | "stopped" | "gone"> => {
                 const start = Date.now()
@@ -751,7 +782,12 @@ export const useStore = create<AppState>((set, get) => {
                     stepIndex: 0,
                     total: steps.length,
                     stepTitle: steps[0].title,
-                    status: "running"
+                    status: "running",
+                    steps: steps.map((s) => ({
+                        title: s.title,
+                        agentId: s.agentId,
+                        status: "pending" as const
+                    }))
                 }
             })
             pushActivity("pipeline", get().lastAgentTermId ?? "", `${pipeline.name} · started`)
@@ -762,6 +798,7 @@ export const useStore = create<AppState>((set, get) => {
                     if (stale()) return
                     const step = steps[i]
                     setRun({ stepIndex: i, stepTitle: step.title, status: "running", gateMsg: undefined })
+                    setStep(i, { status: "running" })
 
                     // Resolve the session once per step; retries reuse it.
                     const plan = sessionPlan(step, liveByAgent)
@@ -769,6 +806,8 @@ export const useStore = create<AppState>((set, get) => {
                     if (!plan.reuse || !termId) {
                         termId = get().newTab(step.agentId)
                         if (!termId) {
+                            setStep(i, { status: "failed", gateMsg: "no session" })
+                            skipFrom(i + 1)
                             setRun({ status: "error" })
                             return
                         }
@@ -779,6 +818,7 @@ export const useStore = create<AppState>((set, get) => {
                     } else {
                         get().jumpToTerm(termId)
                     }
+                    setStep(i, { termId })
 
                     const attempts = maxAttempts(step.gate)
                     let passed = true
@@ -803,11 +843,13 @@ export const useStore = create<AppState>((set, get) => {
 
                         if (!gateActive(step.gate)) {
                             passed = true
+                            setStep(i, { status: "done" })
                             break
                         }
                         passed = evaluateGate(step.gate, buf)
                         if (passed) {
                             setRun({ gateMsg: "✓ gate passed" })
+                            setStep(i, { status: "done", gateMsg: "✓ gate passed" })
                             pushActivity("pipeline", termId, `${step.title} · gate passed`)
                             break
                         }
@@ -822,9 +864,12 @@ export const useStore = create<AppState>((set, get) => {
                         const onFail = step.gate?.onFail ?? "stop"
                         pushActivity("pipeline", termId, `${step.title} · gate failed`)
                         if (onFail === "stop") {
+                            setStep(i, { status: "failed", gateMsg: "✗ gate failed - stopped" })
+                            skipFrom(i + 1)
                             setRun({ status: "error", gateMsg: "✗ gate failed - stopped" })
                             return
                         }
+                        setStep(i, { status: "failed", gateMsg: "✗ gate failed - continued" })
                         setRun({ gateMsg: "✗ gate failed - continued" })
                     }
                 }

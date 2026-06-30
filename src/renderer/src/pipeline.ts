@@ -43,6 +43,19 @@ export interface PipelineTrigger {
 
 export type PipelineRunStatus = "running" | "waiting" | "done" | "stopped" | "error"
 
+export type StepRunStatus = "pending" | "running" | "done" | "failed" | "skipped"
+
+/** Live state of one step within a run (drives the timeline UI). */
+export interface PipelineStepState {
+    title: string
+    agentId: string
+    status: StepRunStatus
+    /** Note about this step's gate outcome. */
+    gateMsg?: string
+    /** Session this step ran in (for jump-to). */
+    termId?: string
+}
+
 export interface PipelineRun {
     pipelineId: string
     name: string
@@ -53,6 +66,8 @@ export interface PipelineRun {
     status: PipelineRunStatus
     /** Transient note about the current step's gate (e.g. "✓ gate passed"). */
     gateMsg?: string
+    /** Per-step status for the run timeline. */
+    steps: PipelineStepState[]
 }
 
 /** A pipeline is runnable if it has a name and at least one step with a prompt. */
