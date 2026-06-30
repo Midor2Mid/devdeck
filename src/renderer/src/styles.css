@@ -267,6 +267,14 @@ select:focus {
 .git-pat-msg.standalone {
     margin-top: 8px;
 }
+
+.update-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 12px 0 4px;
+}
 .git-label {
     flex: 1;
     font-weight: 600;

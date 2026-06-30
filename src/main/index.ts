@@ -26,6 +26,7 @@ import * as release from "./release"
 import * as worklog from "./worklog"
 import * as pr from "./pr"
 import { loadWindowState, saveWindowState } from "./windowState"
+import * as updater from "./updater"
 
 let mainWindow: BrowserWindow | null = null
 
@@ -144,6 +145,12 @@ function registerIpc(): void {
     ipcMain.handle("git:verifyPat", (_e, accountId: string) =>
         verifyGitHubToken(gitpat.getPat(accountId))
     )
+
+    // --- App / auto-update (electron-updater + GitHub release feed) ---
+    ipcMain.handle("app:version", () => app.getVersion())
+    ipcMain.handle("update:check", () => updater.check())
+    ipcMain.handle("update:download", () => updater.download())
+    ipcMain.handle("update:install", () => updater.install())
 
     // --- Remote / mobile server ---
     // Session metadata lives in the renderer; it pushes a snapshot here, and the
@@ -404,6 +411,10 @@ function registerIpc(): void {
 app.whenReady().then(() => {
     registerIpc()
     createWindow()
+    updater.initUpdater(() => mainWindow)
+    // Best-effort check shortly after launch; failures (e.g. private repo) are
+    // reported to the renderer but never block startup.
+    setTimeout(() => void updater.check(), 4000)
     app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()
     })

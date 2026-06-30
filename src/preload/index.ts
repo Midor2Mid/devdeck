@@ -90,6 +90,12 @@ export interface ServerStatus {
     tailscale: string[]
     lan: string[]
 }
+export interface UpdateStatus {
+    state: "checking" | "available" | "current" | "downloading" | "ready" | "error"
+    version?: string
+    percent?: number
+    error?: string
+}
 export interface GitStatus {
     isRepo: boolean
     branch: string
@@ -310,6 +316,20 @@ const api = {
     },
     http: {
         send: (req: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke("http:send", req)
+    },
+    app: {
+        version: (): Promise<string> => ipcRenderer.invoke("app:version")
+    },
+    update: {
+        check: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke("update:check"),
+        download: (): Promise<{ ok: boolean; error?: string }> =>
+            ipcRenderer.invoke("update:download"),
+        install: (): Promise<void> => ipcRenderer.invoke("update:install"),
+        onStatus: (cb: (s: UpdateStatus) => void): (() => void) => {
+            const h = (_e: unknown, s: UpdateStatus): void => cb(s)
+            ipcRenderer.on("update:status", h)
+            return () => ipcRenderer.removeListener("update:status", h)
+        }
     },
     ai: {
         setKey: (agentId: string, key: string): Promise<void> =>

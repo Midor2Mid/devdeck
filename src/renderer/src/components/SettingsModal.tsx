@@ -9,7 +9,7 @@ import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
 
 const THEME_LIST = Object.values(THEMES)
 const STYLE_LIST = Object.values(STYLES)
-import type { ServerStatus } from "../../../preload/index"
+import type { ServerStatus, UpdateStatus } from "../../../preload/index"
 
 type Section =
     | "appearance"
@@ -894,6 +894,78 @@ function AISection(): JSX.Element {
     )
 }
 
+function AboutSection(): JSX.Element {
+    const [version, setVersion] = useState("")
+    const [status, setStatus] = useState<UpdateStatus | null>(null)
+
+    useEffect(() => {
+        window.api.app.version().then(setVersion)
+        return window.api.update.onStatus(setStatus)
+    }, [])
+
+    const runCheck = async (): Promise<void> => {
+        setStatus({ state: "checking" })
+        const r = await window.api.update.check()
+        // In dev or on a private repo, check() reports via its return value rather
+        // than the event stream - surface that so the button never looks dead.
+        if (!r.ok) setStatus({ state: "error", error: r.error })
+    }
+
+    const busy = status?.state === "checking" || status?.state === "downloading"
+    const statusLine = (): string => {
+        switch (status?.state) {
+            case "checking":
+                return "Checking for updates…"
+            case "available":
+                return `Update available: ${status.version}`
+            case "downloading":
+                return `Downloading… ${status.percent ?? 0}%`
+            case "ready":
+                return `Ready to install: ${status.version}`
+            case "current":
+                return "You're on the latest version."
+            case "error":
+                return `Update check failed: ${status.error ?? "unknown"}`
+            default:
+                return ""
+        }
+    }
+
+    return (
+        <div className="settings-section">
+            <h3>DevDeck</h3>
+            <p className="settings-hint">
+                A command deck for terminal-first, Claude-driven development - multiple terminals,
+                fast project switching, editor, API client, database, and remote access in one
+                window.
+            </p>
+            <p className="muted small">Version {version || "…"} · Electron + React</p>
+
+            <div className="update-row">
+                <button onClick={runCheck} disabled={busy}>
+                    Check for updates
+                </button>
+                {status?.state === "available" && (
+                    <button className="accent" onClick={() => window.api.update.download()}>
+                        Download
+                    </button>
+                )}
+                {status?.state === "ready" && (
+                    <button className="accent" onClick={() => window.api.update.install()}>
+                        Restart &amp; install
+                    </button>
+                )}
+                {statusLine() && <span className="muted small">{statusLine()}</span>}
+            </div>
+            <p className="settings-hint">
+                Updates are fetched from GitHub releases. They require the releases to be publicly
+                readable; on a private repo the check fails and you can keep installing builds
+                manually.
+            </p>
+        </div>
+    )
+}
+
 function RemoteSection(): JSX.Element {
     const remote = useSettings((s) => s.remote)
     const setRemote = useSettings((s) => s.setRemote)
@@ -1276,21 +1348,7 @@ export function SettingsModal(): JSX.Element {
                         </div>
                     )}
 
-                    {section === "about" && (
-                        <div className="settings-section">
-                            <h3>DevDeck</h3>
-                            <p className="settings-hint">
-                                A command deck for terminal-first, Claude-driven development -
-                                multiple terminals, fast project switching, editor, API client,
-                                and database in one window.
-                            </p>
-                            <p className="muted small">Version 0.1.0 · Electron + React</p>
-                            <p className="muted small">
-                                Sections like Git accounts, SSH, MCP and Remote access are on the
-                                roadmap.
-                            </p>
-                        </div>
-                    )}
+                    {section === "about" && <AboutSection />}
                 </div>
             </div>
         </div>

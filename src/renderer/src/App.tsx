@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { Allotment } from "allotment"
 import { useStore, type MainView } from "./store"
 import { useSettings } from "./settings"
+import { useToasts } from "./toast"
 import { Sidebar } from "./components/Sidebar"
 import { Rail } from "./components/Rail"
 import { Icon } from "./components/Icon"
@@ -99,6 +100,25 @@ export function App(): JSX.Element {
             newTabIn(projectId, useSettings.getState().agents[0]?.id ?? "claude")
         )
     }, [newTabIn])
+
+    // Surface an available / ready update as an actionable toast.
+    useEffect(() => {
+        return window.api.update.onStatus((s) => {
+            if (s.state === "available") {
+                useToasts.getState().push({
+                    text: `Update available: ${s.version}`,
+                    actionLabel: "Download",
+                    onAction: () => void window.api.update.download()
+                })
+            } else if (s.state === "ready") {
+                useToasts.getState().push({
+                    text: `Update ${s.version} ready`,
+                    actionLabel: "Restart & install",
+                    onAction: () => void window.api.update.install()
+                })
+            }
+        })
+    }, [])
 
     // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+P command palette.
     useEffect(() => {

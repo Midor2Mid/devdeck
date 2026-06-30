@@ -25,6 +25,7 @@
     "@xterm/xterm": "^6.0.0",
     "allotment": "^1.20.5",
     "dompurify": "^3.4.11",
+    "electron-updater": "^6.8.9",
     "marked": "^15.0.12",
     "monaco-editor": "^0.52.2",
     "mssql": "^12.6.0",
@@ -75,12 +76,20 @@
         "nsis",
         "portable"
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "publisherName": "DevDeck Dev"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Midor2Mid",
+        "repo": "devdeck"
+      }
+    ]
   }
 }
