@@ -237,6 +237,8 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 
 ## Maintenance / security
 
+- **Electron security hardening** (2026-07-01) — audited `src/main`/`src/preload` against the vendored **electron-best-practices** skill. Fixed: `sandbox: true` (third pillar restored), strict **CSP** on file:// content (no unsafe-eval; blob: only for Monaco workers; scoped so the `<webview>` browser is untouched), **deny-all** permission/check handlers, and `web-contents-created` popup/navigation guards. Verified live. Already-good: contextIsolation, nodeIntegration off, no raw `ipcRenderer`, path-guarded IPC, protocol-gated `shell.openExternal`, ASAR integrity + signing. Remaining: the Electron CVE bump (below, Node-blocked).
+
 - **Coordinated dependency bump** (deferred, noted 2026-06-29) — `npm audit` reports 15 advisories. Triage:
   - **Shipped to users:** only **Electron** (≤39.8.4, ~11 high — UAF / ASAR-integrity / protocol-handler issues, many macOS-specific). Fix is Electron 41, **gated on Node 22.11 → ≥22.12** (the reason Electron 33 is pinned — see Decisions log).
   - **Dev/build-only (never shipped):** esbuild/vite/vitest (moderate) and the electron-builder → `tar`/`node-gyp` chain (high + the 1 critical) run only at dev/package time.
