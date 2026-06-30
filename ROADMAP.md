@@ -217,7 +217,7 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 
 - **Live AI quota/cost display** — the activity dashboard (M23) tracks sessions/time, not tokens or dollars; real quota needs per-provider APIs (DevDeck only spawns the CLI, so it can't see the API)
 - Cross-platform (macOS/Linux) polish
-- Saved command runner per project (snippets + per-project package.json **task runner** (M23) shipped; an arbitrary saved-command list did not)
+- [x] **Saved command runner per project** (2026-07-01) — arbitrary shell commands per project (Sidebar → project menu → "Saved commands…"), launched as chips beside the package.json task runner; stored in `projectCommands`
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
 - (cleared) — image-preview tabs shipped 2026-07-01 (editor renders png/jpg/gif/webp/svg/… as a preview via `fs:readDataUrl`)
 - **Auto-update is wired but dormant** (M25) — `electron-updater` + the in-app flow ship now; it only fetches once the **repo/releases are public** (private repo has no embedded token, by design). Make releases public to activate, and upload `latest.yml` with each release.
