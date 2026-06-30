@@ -183,18 +183,32 @@ select:focus {
     background: var(--accent);
 }
 
-/* ---------- Expanded rail (icon + label) ---------- */
+/* ---------- Expandable rail (icon + label) ---------- */
+/* The whole rail glides between widths; labels fade + slide in, the toggle
+   chevron sweeps. Motion is purposeful + brief, and disabled under
+   prefers-reduced-motion (see below). */
+.rail {
+    transition: width 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
 .rail.expanded {
-    width: 184px;
+    width: 188px;
     align-items: stretch;
     padding: 12px 8px;
 }
-.rail.expanded .rail-logo {
-    width: auto;
-    justify-self: start;
+/* Buttons are always flex rows; collapsed just centers the icon and the label
+   is width-clipped to 0, so expanding is a smooth slide rather than a relayout. */
+.rail-logo,
+.rail-btn {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    justify-content: center;
+    transition: justify-content 0s, padding 0.2s ease;
+}
+.rail.expanded .rail-logo {
+    width: auto;
+    justify-content: flex-start;
     padding-left: 8px;
 }
 .rail.expanded .rail-group {
@@ -202,17 +216,25 @@ select:focus {
 }
 .rail.expanded .rail-btn {
     width: 100%;
-    display: flex;
-    align-items: center;
     justify-content: flex-start;
-    gap: 12px;
     padding: 0 10px;
 }
 .rail-label {
     font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    max-width: 0;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+        max-width 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.18s ease,
+        transform 0.22s ease;
+}
+.rail.expanded .rail-label {
+    max-width: 130px;
+    opacity: 1;
+    transform: none;
 }
 .rail-wordmark {
     font-weight: 600;
@@ -226,11 +248,23 @@ select:focus {
 .rail-toggle {
     color: var(--faint);
 }
-.rail-chevron-right {
-    transform: rotate(-90deg);
+.rail-toggle:hover {
+    color: var(--accent);
 }
-.rail-chevron-left {
-    transform: rotate(90deg);
+.rail-chevron {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.rail.expanded .rail-chevron {
+    transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rail,
+    .rail-label,
+    .rail-chevron,
+    .rail-btn {
+        transition: none;
+    }
 }
 .statusbar {
     flex: none;

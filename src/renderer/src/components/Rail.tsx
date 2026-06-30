@@ -53,7 +53,7 @@ export function Rail(): JSX.Element {
         <nav className={"rail" + (expanded ? " expanded" : "")} aria-label="Primary">
             <div className="rail-logo" data-tip={tip("DevDeck")}>
                 <Enso size={24} strokeWidth={2} />
-                {expanded && <span className="rail-label rail-wordmark">DevDeck</span>}
+                <span className="rail-label rail-wordmark">DevDeck</span>
             </div>
             <div className="rail-group">
                 {VIEW_NAV.map((v) => (
@@ -65,7 +65,7 @@ export function Rail(): JSX.Element {
                         onClick={() => setView(v.view)}
                     >
                         <Icon name={v.icon} size={20} />
-                        {expanded && <span className="rail-label">{v.name}</span>}
+                        <span className="rail-label">{v.name}</span>
                     </button>
                 ))}
             </div>
@@ -80,18 +80,19 @@ export function Rail(): JSX.Element {
                         onClick={t.onClick}
                     >
                         <Icon name={t.icon} size={20} />
-                        {expanded && <span className="rail-label">{t.name}</span>}
+                        <span className="rail-label">{t.name}</span>
                         {t.badge ? <span className="rail-badge">{t.badge}</span> : null}
                     </button>
                 ))}
                 <button
                     className="rail-btn rail-toggle"
-                    data-tip={tip("Expand the menu")}
+                    data-tip={tip(expanded ? "Collapse the menu" : "Expand the menu")}
                     data-tip-pos="right"
                     onClick={toggleRail}
+                    aria-label={expanded ? "Collapse menu" : "Expand menu"}
                 >
-                    <Icon name="chevronDown" size={20} className={expanded ? "rail-chevron-left" : "rail-chevron-right"} />
-                    {expanded && <span className="rail-label">Collapse</span>}
+                    <Icon name="chevronRight" size={18} className="rail-chevron" />
+                    <span className="rail-label">Collapse</span>
                 </button>
             </div>
         </nav>

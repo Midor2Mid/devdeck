@@ -19,6 +19,7 @@ export type IconName =
     | "gitBranch"
     | "check"
     | "chevronDown"
+    | "chevronRight"
     | "splitH"
     | "splitV"
     | "tabs"
@@ -99,6 +100,7 @@ const P: Record<IconName, JSX.Element> = {
     ),
     check: <polyline points="20 6 9 17 4 12" />,
     chevronDown: <polyline points="6 9 12 15 18 9" />,
+    chevronRight: <polyline points="9 18 15 12 9 6" />,
     splitH: (
         <>
             <rect x="3" y="3" width="18" height="18" rx="2" />
