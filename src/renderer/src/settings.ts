@@ -115,6 +115,13 @@ export interface Snippet {
     body: string
 }
 
+/** A per-project saved shell command, launchable as a sidebar chip. */
+export interface SavedCommand {
+    id: string
+    name: string
+    command: string
+}
+
 export interface GitAccount {
     id: string
     label: string
@@ -204,6 +211,8 @@ export interface AppSettings {
     usageLog: UsageEvent[]
     /** Recent SQL per DB connection id, most-recent-first. */
     dbQueryHistory: Record<string, string[]>
+    /** User-defined launchable shell commands, per project id. */
+    projectCommands: Record<string, SavedCommand[]>
 }
 
 /** Cap recent queries kept per connection. */
@@ -306,7 +315,8 @@ const DEFAULTS: AppSettings = {
     },
     workspacePresets: [],
     usageLog: [],
-    dbQueryHistory: {}
+    dbQueryHistory: {},
+    projectCommands: {}
 }
 
 interface SettingsState extends AppSettings {
@@ -338,6 +348,8 @@ interface SettingsState extends AppSettings {
     /** Record a successfully-run query for a connection (deduped, capped). */
     pushDbQuery: (connId: string, sql: string) => void
     clearDbHistory: (connId: string) => void
+    /** Replace a project's saved commands. */
+    setProjectCommands: (projectId: string, commands: SavedCommand[]) => void
     regenerateToken: () => void
     resetAll: () => void
     openSettings: () => void
@@ -350,8 +362,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory, projectCommands })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -413,7 +425,8 @@ export const useSettings = create<SettingsState>((set, get) => {
                     usageLog: (raw.usageLog ?? DEFAULTS.usageLog).map((e) =>
                         e.endedAt ? e : { ...e, endedAt: e.startedAt }
                     ),
-                    dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory
+                    dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory,
+                    projectCommands: raw.projectCommands ?? DEFAULTS.projectCommands
                 })
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
@@ -542,6 +555,15 @@ export const useSettings = create<SettingsState>((set, get) => {
                 const next = { ...s.dbQueryHistory }
                 delete next[connId]
                 return { dbQueryHistory: next }
+            })
+            persist()
+        },
+        setProjectCommands: (projectId, commands) => {
+            set((s) => {
+                const next = { ...s.projectCommands }
+                if (commands.length) next[projectId] = commands
+                else delete next[projectId]
+                return { projectCommands: next }
             })
             persist()
         },

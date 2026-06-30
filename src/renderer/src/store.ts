@@ -135,6 +135,10 @@ interface AppState extends Persisted {
     envEditorProject: string | null
     setEnvEditorProject: (projectId: string | null) => void
 
+    // Per-project saved-commands editor (holds the project id being edited, or null)
+    commandsEditorProject: string | null
+    setCommandsEditorProject: (projectId: string | null) => void
+
     // Terminal record & replay (runtime-only)
     recordingTermId: string | null
     setRecordingTermId: (id: string | null) => void
@@ -452,6 +456,7 @@ export const useStore = create<AppState>((set, get) => {
         inboxOpen: false,
         usageOpen: false,
         envEditorProject: null,
+        commandsEditorProject: null,
         recordingTermId: null,
         recordingsOpen: false,
         worktreesOpen: false,
@@ -610,6 +615,7 @@ export const useStore = create<AppState>((set, get) => {
         setInboxOpen: (inboxOpen) => set({ inboxOpen }),
         setUsageOpen: (usageOpen) => set({ usageOpen }),
         setEnvEditorProject: (envEditorProject) => set({ envEditorProject }),
+        setCommandsEditorProject: (commandsEditorProject) => set({ commandsEditorProject }),
 
         renameSession: (termId, name) => {
             const trimmed = name.trim()

@@ -19,6 +19,7 @@ import { ActivityPanel } from "./components/ActivityPanel"
 import { InboxPanel } from "./components/InboxPanel"
 import { UsagePanel } from "./components/UsagePanel"
 import { ProjectEnvModal } from "./components/ProjectEnvModal"
+import { CommandsModal } from "./components/CommandsModal"
 import { RecordingsModal } from "./components/RecordingsModal"
 import { PipelineBar } from "./components/PipelineBar"
 import { WorktreesModal } from "./components/WorktreesModal"
@@ -58,6 +59,7 @@ export function App(): JSX.Element {
     const inboxOpen = useStore((s) => s.inboxOpen)
     const usageOpen = useStore((s) => s.usageOpen)
     const envEditorProject = useStore((s) => s.envEditorProject)
+    const commandsEditorProject = useStore((s) => s.commandsEditorProject)
     const recordingsOpen = useStore((s) => s.recordingsOpen)
     const worktreesOpen = useStore((s) => s.worktreesOpen)
     const changesTarget = useStore((s) => s.changesTarget)
@@ -232,6 +234,7 @@ export function App(): JSX.Element {
             {inboxOpen && <InboxPanel />}
             {usageOpen && <UsagePanel />}
             {envEditorProject && <ProjectEnvModal />}
+            {commandsEditorProject && <CommandsModal />}
             {recordingsOpen && <RecordingsModal />}
             {worktreesOpen && <WorktreesModal />}
             {changesTarget && <ChangesModal />}

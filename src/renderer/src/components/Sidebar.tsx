@@ -32,7 +32,8 @@ export function Sidebar(): JSX.Element {
         saveWorkspacePreset,
         openWorkspacePreset,
         deleteWorkspacePreset,
-        setEnvEditorProject
+        setEnvEditorProject,
+        setCommandsEditorProject
     } = useStore()
     const openSwitcher = useStore((s) => s.openSwitcher)
     const agents = useSettings((s) => s.agents)
@@ -132,6 +133,7 @@ export function Sidebar(): JSX.Element {
         return [
             { label: "Open", onClick: () => setActiveProject(p.id) },
             { label: "Environment variables…", onClick: () => setEnvEditorProject(p.id) },
+            { label: "Saved commands…", onClick: () => setCommandsEditorProject(p.id) },
             { separator: true },
             ...existingGroups
                 .filter((g) => g !== p.group)

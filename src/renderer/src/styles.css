@@ -340,6 +340,38 @@ select:focus {
     gap: 8px;
     margin-top: 4px;
 }
+.cmd-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.cmd-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.cmd-row .cmd-name {
+    width: 120px;
+    flex: none;
+}
+.cmd-row .cmd-cmd {
+    flex: 1;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+}
+.sidebar-section-title .section-add {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 4px;
+}
+.sidebar-section-title .section-add:hover {
+    color: var(--accent);
+}
 .git-label {
     flex: 1;
     font-weight: 600;
