@@ -4,7 +4,7 @@ import { sshCommand } from "../src/renderer/src/settings"
 
 describe("design styles", () => {
     it("registers all design styles with labels", () => {
-        expect(Object.keys(STYLES).sort()).toEqual(["bauhaus", "crt", "flat", "lacquer", "minimal", "modern", "modernplus", "neon", "wabi"])
+        expect(Object.keys(STYLES).sort()).toEqual(["aurora", "bauhaus", "crt", "flat", "kinetic", "lacquer", "minimal", "modern", "modernplus", "neo", "neon", "wabi"])
         expect(STYLES.minimal.label).toBe("Modern Minimal")
         expect(STYLES.neon.label).toBe("Neon")
         expect(STYLES.flat.label).toBe("Flat Vector")
@@ -13,6 +13,9 @@ describe("design styles", () => {
         expect(STYLES.modern.label).toBe("Modern Pro")
         expect(STYLES.lacquer.label).toBe("Lacquer")
         expect(STYLES.modernplus.label).toBe("Modern+")
+        expect(STYLES.aurora.label).toBe("Aurora Glass")
+        expect(STYLES.neo.label).toBe("Neo Holographic")
+        expect(STYLES.kinetic.label).toBe("Kinetic Minimal")
     })
 
     it("includes the Slate modern color theme", () => {
@@ -26,6 +29,13 @@ describe("design styles", () => {
         expect(THEMES.graphite.mode).toBe("dark")
         expect(THEMES.graphite.accent).toBe("#7c83ff")
         expect(THEMES.graphite.monacoId).toBe("devdeck-graphite")
+    })
+
+    it("includes the Aurora and Neo themes", () => {
+        expect(THEMES.aurora.mode).toBe("dark")
+        expect(THEMES.aurora.monacoId).toBe("devdeck-aurora")
+        expect(THEMES.neo.accent).toBe("#22d3ee")
+        expect(THEMES.neo.monacoId).toBe("devdeck-neo")
     })
 })
 

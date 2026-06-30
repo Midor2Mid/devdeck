@@ -1,7 +1,7 @@
 // Theme system: each theme is a full palette of the app's CSS custom properties
 // plus matching terminal (xterm) and editor (Monaco) colors. All wabi-sabi.
 
-export type ThemeId = "sumi" | "washi" | "zen" | "slate" | "graphite"
+export type ThemeId = "sumi" | "washi" | "zen" | "slate" | "graphite" | "aurora" | "neo"
 
 export interface XtermTheme {
     background: string
@@ -144,6 +144,46 @@ const GRAPHITE_VARS = {
     "--clay": "#a78bfa",
     "--ok": "#56c98a",
     "--danger": "#f0616d"
+}
+
+// Aurora - a premium cool indigo night with a periwinkle accent that gradients
+// toward violet. Pairs with the Aurora Glass style (frosted glass + soft glow).
+const AURORA_VARS = {
+    "--bg": "#0a0e1a",
+    "--bg-2": "#111729",
+    "--bg-3": "#070a14",
+    "--panel": "#111729",
+    "--border": "#28304b",
+    "--border-soft": "#1a2138",
+    "--text": "#e9ecfb",
+    "--muted": "#9aa4c8",
+    "--faint": "#6b7498",
+    "--accent": "#8ea2ff",
+    "--accent-soft": "#b6c2ff",
+    "--moss": "#5fd3b0",
+    "--clay": "#c79bff",
+    "--ok": "#5fd3b0",
+    "--danger": "#f0788f"
+}
+
+// Neo - a holographic near-black with a cyan primary and violet secondary.
+// Pairs with the Neo Holographic style (glowing edges, faint grid).
+const NEO_VARS = {
+    "--bg": "#06080f",
+    "--bg-2": "#0c1019",
+    "--bg-3": "#03050a",
+    "--panel": "#0c1019",
+    "--border": "#1c2740",
+    "--border-soft": "#141c2e",
+    "--text": "#dff3ff",
+    "--muted": "#86a0c0",
+    "--faint": "#566a86",
+    "--accent": "#22d3ee",
+    "--accent-soft": "#67e8f9",
+    "--moss": "#34e5b0",
+    "--clay": "#a78bfa",
+    "--ok": "#34e5b0",
+    "--danger": "#fb7185"
 }
 
 export const THEMES: Record<ThemeId, Theme> = {
@@ -306,6 +346,70 @@ export const THEMES: Record<ThemeId, Theme> = {
             white: "#ece5d2",
             brightWhite: "#f7f1e2"
         }
+    },
+    aurora: {
+        id: "aurora",
+        label: "Aurora (glass)",
+        mode: "dark",
+        accent: "#8ea2ff",
+        vars: { ...AURORA_VARS, ...COMPACT },
+        monacoId: "devdeck-aurora",
+        termLineHeight: 1.15,
+        xterm: {
+            background: "#070a14",
+            foreground: "#e9ecfb",
+            cursor: "#8ea2ff",
+            cursorAccent: "#070a14",
+            selectionBackground: "#283154",
+            black: "#070a14",
+            brightBlack: "#5a6488",
+            red: "#f0788f",
+            brightRed: "#f794a6",
+            green: "#5fd3b0",
+            brightGreen: "#82e0c4",
+            yellow: "#f2c97d",
+            brightYellow: "#f7d89c",
+            blue: "#8ea2ff",
+            brightBlue: "#b6c2ff",
+            magenta: "#c79bff",
+            brightMagenta: "#d7b7ff",
+            cyan: "#6fd3e8",
+            brightCyan: "#97e1f0",
+            white: "#e9ecfb",
+            brightWhite: "#f6f8ff"
+        }
+    },
+    neo: {
+        id: "neo",
+        label: "Neo (holographic)",
+        mode: "dark",
+        accent: "#22d3ee",
+        vars: { ...NEO_VARS, ...COMPACT },
+        monacoId: "devdeck-neo",
+        termLineHeight: 1.15,
+        xterm: {
+            background: "#03050a",
+            foreground: "#dff3ff",
+            cursor: "#22d3ee",
+            cursorAccent: "#03050a",
+            selectionBackground: "#143046",
+            black: "#03050a",
+            brightBlack: "#4a5e7a",
+            red: "#fb7185",
+            brightRed: "#fd93a3",
+            green: "#34e5b0",
+            brightGreen: "#5ff0c6",
+            yellow: "#fde047",
+            brightYellow: "#fee784",
+            blue: "#38bdf8",
+            brightBlue: "#7dd3fc",
+            magenta: "#a78bfa",
+            brightMagenta: "#c4b2fd",
+            cyan: "#22d3ee",
+            brightCyan: "#67e8f9",
+            white: "#dff3ff",
+            brightWhite: "#f2fbff"
+        }
     }
 }
 
@@ -349,6 +453,9 @@ export type StyleId =
     | "modern"
     | "lacquer"
     | "modernplus"
+    | "aurora"
+    | "neo"
+    | "kinetic"
 
 export interface DesignStyle {
     id: StyleId
@@ -401,6 +508,21 @@ export const STYLES: Record<StyleId, DesignStyle> = {
         id: "modernplus",
         label: "Modern+",
         description: "Contemporary & alive: crisp radii, hairline borders with soft elevation, vivid filled accent buttons, focus rings and snappy hover/press micro-interactions. Pairs with Graphite."
+    },
+    aurora: {
+        id: "aurora",
+        label: "Aurora Glass",
+        description: "Premium frosted glass: translucent blurred panels, a gradient accent CTA, soft glow on active elements and lifting hovers. Pairs with the Aurora theme."
+    },
+    neo: {
+        id: "neo",
+        label: "Neo Holographic",
+        description: "Sci-fi cockpit: glowing luminous edges, a faint dot grid, neon accent stripes and a pulse on attention. Pairs with the Neo theme (cyan + violet)."
+    },
+    kinetic: {
+        id: "kinetic",
+        label: "Kinetic Minimal",
+        description: "Restrained color, alive with motion: spring hovers that lift, an animated sliding active indicator, and smooth easing throughout. Linear-style polish on any theme."
     }
 }
 
