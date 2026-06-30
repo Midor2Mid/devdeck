@@ -211,11 +211,10 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 
 - **Live AI quota/cost display** — the activity dashboard (M23) tracks sessions/time, not tokens or dollars; real quota needs per-provider APIs (DevDeck only spawns the CLI, so it can't see the API)
 - Cross-platform (macOS/Linux) polish
-- Per-terminal / per-project shell override (default shell is configurable; per-terminal is not)
 - Saved command runner per project (snippets + per-project package.json **task runner** (M23) shipped; an arbitrary saved-command list did not)
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
-- Agent pipeline UI on top of `pipeline.ts`
-- Image-preview tabs in the editor; auto-update (`electron-updater`); API request scripting beyond assertions
+- Agent pipeline UI on top of `pipeline.ts`; image-preview tabs in the editor; API request chaining/scripting; project env-vars injected into terminals
+- **Auto-update is wired but dormant** (M25) — `electron-updater` + the in-app flow ship now; it only fetches once the **repo/releases are public** (private repo has no embedded token, by design). Make releases public to activate, and upload `latest.yml` with each release.
 - **Coordinated Electron/deps bump** — see Maintenance/security; blocked on a Node 22.11 → ≥22.12 runtime upgrade
 
 ## Milestone 24 — Git PATs · API tests · remote TLS ✅ (2026-06-30)
@@ -223,6 +222,11 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 - [x] **Encrypted Git PATs** (M15 close-out) — per-account tokens encrypted at rest (`gitpat.ts`, DPAPI), "Cache for HTTPS push" via `git credential approve`, GitHub "Verify". `tests/gitpat.test.ts`
 - [x] **API response tests/assertions** — status/time/body/header/JSON-path checks per request; pass/fail Tests tab + summary. Pure engine `apiTests.ts`, `tests/apiTests.test.ts`
 - [x] **Remote TLS** (M7 close-out) — opt-in self-signed HTTPS/WSS (`tlscert.ts`)
+
+## Milestone 25 — per-terminal shells · auto-update ✅ (2026-06-30)
+
+- [x] **Per-terminal shell override** — the new-terminal menu's SHELLS section opens a terminal with a chosen shell (PowerShell/cmd/Git Bash/WSL/custom) regardless of the global default; stored per terminal (`termShells`, persisted), `resolveShell(kind?)`. Verified live (cmd.exe banner in an override terminal). Closes the parking-lot per-terminal-shell item.
+- [x] **Auto-update** — `electron-updater` + GitHub publish provider; Settings → About shows the real version + Check-for-updates; available/ready raises an actionable toast (Download → Restart & install). `update.ts` + `app:version`/`update:*` IPC. **Dormant until releases are public** (private repo, no embedded token).
 
 ## Maintenance / security
 
