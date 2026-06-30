@@ -213,7 +213,7 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 - Cross-platform (macOS/Linux) polish
 - Saved command runner per project (snippets + per-project package.json **task runner** (M23) shipped; an arbitrary saved-command list did not)
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
-- Agent pipeline UI on top of `pipeline.ts`; image-preview tabs in the editor; API request chaining/scripting; project env-vars injected into terminals
+- Agent pipeline UI on top of `pipeline.ts`; image-preview tabs in the editor; API request chaining/scripting
 - **Auto-update is wired but dormant** (M25) — `electron-updater` + the in-app flow ship now; it only fetches once the **repo/releases are public** (private repo has no embedded token, by design). Make releases public to activate, and upload `latest.yml` with each release.
 - **Coordinated Electron/deps bump** — see Maintenance/security; blocked on a Node 22.11 → ≥22.12 runtime upgrade
 
@@ -227,6 +227,7 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 
 - [x] **Per-terminal shell override** — the new-terminal menu's SHELLS section opens a terminal with a chosen shell (PowerShell/cmd/Git Bash/WSL/custom) regardless of the global default; stored per terminal (`termShells`, persisted), `resolveShell(kind?)`. Verified live (cmd.exe banner in an override terminal). Closes the parking-lot per-terminal-shell item.
 - [x] **Auto-update** — `electron-updater` + GitHub publish provider; Settings → About shows the real version + Check-for-updates; available/ready raises an actionable toast (Download → Restart & install). `update.ts` + `app:version`/`update:*` IPC. **Dormant until releases are public** (private repo, no embedded token).
+- [x] **Per-project env vars → terminals** (2026-06-30) — Sidebar → project menu → "Environment variables…"; merged into every terminal/agent session's env for that project, encrypted at rest (`projectenv.ts`), injected in the main `pty:create` handler. `tests/projectenv.test.ts`
 
 ## Maintenance / security
 
