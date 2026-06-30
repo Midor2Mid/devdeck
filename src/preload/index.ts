@@ -33,6 +33,13 @@ export interface PtyCreateOpts {
     agentId?: string
     /** Env var name to inject the decrypted API key under (e.g. ANTHROPIC_API_KEY). */
     keyEnv?: string
+    /** Project this terminal belongs to; main injects that project's env vars. */
+    projectId?: string
+}
+export interface ProjectEnvPair {
+    key: string
+    value: string
+    enabled: boolean
 }
 export interface HttpRequest {
     method: string
@@ -319,6 +326,12 @@ const api = {
     },
     app: {
         version: (): Promise<string> => ipcRenderer.invoke("app:version")
+    },
+    projectEnv: {
+        get: (projectId: string): Promise<ProjectEnvPair[]> =>
+            ipcRenderer.invoke("projectEnv:get", projectId),
+        set: (projectId: string, pairs: ProjectEnvPair[]): Promise<void> =>
+            ipcRenderer.invoke("projectEnv:set", { projectId, pairs })
     },
     update: {
         check: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke("update:check"),

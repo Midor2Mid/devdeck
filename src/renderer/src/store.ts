@@ -127,6 +127,10 @@ interface AppState extends Persisted {
     usageOpen: boolean
     setUsageOpen: (open: boolean) => void
 
+    // Per-project env-var editor (holds the project id being edited, or null)
+    envEditorProject: string | null
+    setEnvEditorProject: (projectId: string | null) => void
+
     // Terminal record & replay (runtime-only)
     recordingTermId: string | null
     setRecordingTermId: (id: string | null) => void
@@ -194,6 +198,8 @@ interface AppState extends Persisted {
     activeTab: (projectId: string) => Tab | undefined
     activePane: (projectId: string) => string | undefined
     agentOf: (termId: string) => string
+    /** The project a terminal belongs to (by its tab), or undefined. */
+    projectIdOfTerm: (termId: string) => string | undefined
 
     newTab: (agentId: string, initialCommand?: string, label?: string, cwd?: string, shellKind?: ShellKind) => string | undefined
     splitActive: (dir: SplitDir, agentId: string) => void
@@ -439,6 +445,7 @@ export const useStore = create<AppState>((set, get) => {
         activityOpen: false,
         inboxOpen: false,
         usageOpen: false,
+        envEditorProject: null,
         recordingTermId: null,
         recordingsOpen: false,
         worktreesOpen: false,
@@ -591,6 +598,7 @@ export const useStore = create<AppState>((set, get) => {
         clearActivity: () => set({ activity: [] }),
         setInboxOpen: (inboxOpen) => set({ inboxOpen }),
         setUsageOpen: (usageOpen) => set({ usageOpen }),
+        setEnvEditorProject: (envEditorProject) => set({ envEditorProject }),
 
         renameSession: (termId, name) => {
             const trimmed = name.trim()
@@ -877,6 +885,11 @@ export const useStore = create<AppState>((set, get) => {
         },
         activePane: (projectId) => get().activePaneByProject[projectId],
         agentOf: (termId) => get().termAgents[termId] ?? SHELL,
+        projectIdOfTerm: (termId) => {
+            for (const [pid, tabs] of Object.entries(get().tabsByProject))
+                if (tabs.some((t) => hasLeaf(t.root, termId))) return pid
+            return undefined
+        },
 
         newTab: (agentId, initialCommand, label, cwd, shellKind) => {
             const projectId = get().activeId

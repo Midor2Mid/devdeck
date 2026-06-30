@@ -275,6 +275,21 @@ select:focus {
     flex-wrap: wrap;
     margin: 12px 0 4px;
 }
+
+.env-modal {
+    width: 560px;
+    max-width: 92vw;
+}
+.env-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.env-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
 .git-label {
     flex: 1;
     font-weight: 600;

@@ -16,6 +16,7 @@ import * as browserNet from "./browserNet"
 import * as proxy from "./proxy"
 import * as aikeys from "./aikeys"
 import * as gitpat from "./gitpat"
+import * as projectenv from "./projectenv"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -75,9 +76,13 @@ function registerIpc(): void {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("pty:exit", d)
     })
     ipcMain.on("pty:create", (e, opts) => {
-        // Merge per-agent env: the model (passed plainly by the renderer) plus the
-        // API key (decrypted here so the plaintext never leaves the main process).
-        const env: Record<string, string> = { ...(opts.env ?? {}) }
+        // Merge env, lowest→highest precedence: the project's env vars (decrypted
+        // here), then the renderer's extras (model), then the agent API key
+        // (decrypted here). Plaintext secrets never leave the main process.
+        const env: Record<string, string> = {
+            ...(opts.projectId ? projectenv.envMap(opts.projectId) : {}),
+            ...(opts.env ?? {})
+        }
         if (opts.agentId && opts.keyEnv) {
             const key = aikeys.getKey(opts.agentId)
             if (key) env[opts.keyEnv] = key
@@ -144,6 +149,14 @@ function registerIpc(): void {
     )
     ipcMain.handle("git:verifyPat", (_e, accountId: string) =>
         verifyGitHubToken(gitpat.getPat(accountId))
+    )
+
+    // --- Per-project env vars (encrypted at rest; injected at pty spawn) ---
+    ipcMain.handle("projectEnv:get", (_e, projectId: string) => projectenv.getEnv(projectId))
+    ipcMain.handle(
+        "projectEnv:set",
+        (_e, { projectId, pairs }: { projectId: string; pairs: projectenv.EnvPair[] }) =>
+            projectenv.setEnv(projectId, pairs)
     )
 
     // --- App / auto-update (electron-updater + GitHub release feed) ---

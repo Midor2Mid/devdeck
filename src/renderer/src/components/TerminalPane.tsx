@@ -95,7 +95,8 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 rows: term.rows,
                 env: Object.keys(extraEnv).length ? extraEnv : undefined,
                 agentId: preset ? agentId : undefined,
-                keyEnv: preset?.apiKeyEnv || undefined
+                keyEnv: preset?.apiKeyEnv || undefined,
+                projectId: useStore.getState().projectIdOfTerm(termId)
             })
         })
 

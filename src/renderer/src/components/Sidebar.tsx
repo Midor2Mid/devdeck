@@ -31,7 +31,8 @@ export function Sidebar(): JSX.Element {
         addProjectByPath,
         saveWorkspacePreset,
         openWorkspacePreset,
-        deleteWorkspacePreset
+        deleteWorkspacePreset,
+        setEnvEditorProject
     } = useStore()
     const openSwitcher = useStore((s) => s.openSwitcher)
     const agents = useSettings((s) => s.agents)
@@ -130,6 +131,7 @@ export function Sidebar(): JSX.Element {
         const hasTabs = (tabsByProject[p.id] ?? []).length > 0
         return [
             { label: "Open", onClick: () => setActiveProject(p.id) },
+            { label: "Environment variables…", onClick: () => setEnvEditorProject(p.id) },
             { separator: true },
             ...existingGroups
                 .filter((g) => g !== p.group)
