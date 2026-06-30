@@ -2268,6 +2268,31 @@ button .ic,
     background: var(--bg-3);
     display: flex;
 }
+.image-preview {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    /* Checkerboard so transparent PNGs/SVGs read clearly. */
+    background-color: var(--bg-3);
+    background-image:
+        linear-gradient(45deg, var(--border-soft) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--border-soft) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--border-soft) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--border-soft) 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+.image-preview img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+}
 .editor-host .editor-slot {
     flex: 1;
     min-width: 0;

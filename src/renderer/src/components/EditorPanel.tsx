@@ -12,6 +12,10 @@ function isMarkdown(name: string): boolean {
     const ext = name.split(".").pop()?.toLowerCase()
     return ext === "md" || ext === "markdown"
 }
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "avif"])
+function isImage(name: string): boolean {
+    return IMAGE_EXTS.has(name.split(".").pop()?.toLowerCase() ?? "")
+}
 import type { DirEntry } from "../../../preload/index"
 
 interface OpenFile {
@@ -19,6 +23,8 @@ interface OpenFile {
     name: string
     content: string
     dirty: boolean
+    /** Data URL for image files, rendered as a preview instead of in Monaco. */
+    image?: string
 }
 
 // File extension → Monaco language id.
@@ -192,8 +198,13 @@ export function EditorPanel(): JSX.Element {
             return
         }
         try {
-            const content = await window.api.fs.read(entry.path)
-            setFiles((prev) => [...prev, { path: entry.path, name: entry.name, content, dirty: false }])
+            if (isImage(entry.name)) {
+                const image = await window.api.fs.readDataUrl(entry.path)
+                setFiles((prev) => [...prev, { path: entry.path, name: entry.name, content: "", dirty: false, image }])
+            } else {
+                const content = await window.api.fs.read(entry.path)
+                setFiles((prev) => [...prev, { path: entry.path, name: entry.name, content, dirty: false }])
+            }
             setActivePath(entry.path)
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e))
@@ -301,7 +312,13 @@ export function EditorPanel(): JSX.Element {
                         </button>
                     </div>
                 )}
-                {active ? (
+                {active && active.image ? (
+                    <div className="editor-host">
+                        <div className="image-preview">
+                            <img src={active.image} alt={active.name} />
+                        </div>
+                    </div>
+                ) : active ? (
                     <div className={"editor-host" + (md ? " md-host mode-" + mdMode : "")}>
                         {!(md && mdMode === "preview") && (
                             <div className="editor-slot">

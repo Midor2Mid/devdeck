@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from "electron"
 import { join } from "path"
-import { mkdirSync, writeFileSync } from "fs"
+import { mkdirSync, writeFileSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
 import * as projects from "./projects"
 import { httpSend } from "./http"
@@ -414,6 +414,26 @@ function registerIpc(): void {
     ipcMain.handle("fs:read", (_e, path: string) => {
         guardPath(path)
         return files.readFileText(path)
+    })
+    // Read an image file as a data URL (for the editor's image-preview tabs).
+    const IMG_MIME: Record<string, string> = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        gif: "image/gif",
+        webp: "image/webp",
+        bmp: "image/bmp",
+        svg: "image/svg+xml",
+        ico: "image/x-icon",
+        avif: "image/avif"
+    }
+    ipcMain.handle("fs:readDataUrl", (_e, path: string) => {
+        guardPath(path)
+        const buf = readFileSync(path)
+        if (buf.length > 25 * 1024 * 1024) throw new Error("Image too large to preview (>25 MB).")
+        const ext = path.split(".").pop()?.toLowerCase() ?? ""
+        const mime = IMG_MIME[ext] ?? "application/octet-stream"
+        return `data:${mime};base64,${buf.toString("base64")}`
     })
     ipcMain.handle("fs:write", (_e, { path, content }) => {
         guardPath(path)
