@@ -5780,3 +5780,77 @@ button:not(:disabled):active { transform: translateY(1px); }
 @media (prefers-reduced-motion: reduce) {
     [data-style="aurora"] .rail-logo { animation: none; }
 }
+
+/* ============================================================
+   Neo Holographic style  [data-style="neo"]
+   Sci-fi cockpit: a faint dot grid, glowing luminous edges, neon active
+   stripes, focus glow, and a pulsing ensō. Pairs with the Neo theme.
+   ============================================================ */
+[data-style="neo"] .sidebar,
+[data-style="neo"] .main {
+    background-image: radial-gradient(
+        color-mix(in srgb, var(--accent) 9%, transparent) 1px,
+        transparent 1px
+    );
+    background-size: 22px 22px;
+}
+/* Luminous floating surfaces. */
+[data-style="neo"] .modal,
+[data-style="neo"] .drawer,
+[data-style="neo"] .agent-menu,
+[data-style="neo"] .ctx-menu,
+[data-style="neo"] .switcher,
+[data-style="neo"] .pipeline-bar,
+[data-style="neo"] .toast,
+[data-style="neo"] .db-history-menu {
+    border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent),
+        0 0 24px -8px color-mix(in srgb, var(--accent) 42%, transparent),
+        0 18px 44px -18px rgba(0, 0, 0, 0.8);
+}
+/* Glowing neon accent CTA. */
+[data-style="neo"] button.accent,
+[data-style="neo"] .send-claude,
+[data-style="neo"] .send-btn {
+    background: color-mix(in srgb, var(--accent) 86%, #000);
+    color: #03050a;
+    border: 1px solid var(--accent);
+    box-shadow: 0 0 14px -2px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* Active = a glowing neon edge + text glow. */
+[data-style="neo"] .term-tab.active,
+[data-style="neo"] .editor-tab.active,
+[data-style="neo"] .rail-btn.on {
+    color: var(--accent);
+    box-shadow:
+        inset 0 -2px 0 var(--accent),
+        0 0 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* Focus draws a cyan glow ring. */
+[data-style="neo"] input:focus,
+[data-style="neo"] textarea:focus,
+[data-style="neo"] select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow:
+        0 0 0 1px var(--accent),
+        0 0 12px -4px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+/* Attention reads as a hot neon glow. */
+[data-style="neo"] .tab-dot.status-attention,
+[data-style="neo"] .claude-attn {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 85%, transparent);
+}
+/* The ensō pulses like a reactor core. */
+[data-style="neo"] .rail-logo {
+    animation: neo-pulse 3.2s ease-in-out infinite;
+}
+@keyframes neo-pulse {
+    0%, 100% { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 45%, transparent)); }
+    50% { filter: drop-shadow(0 0 13px color-mix(in srgb, var(--accent) 90%, transparent)); }
+}
+@media (prefers-reduced-motion: reduce) {
+    [data-style="neo"] .rail-logo { animation: none; }
+}
