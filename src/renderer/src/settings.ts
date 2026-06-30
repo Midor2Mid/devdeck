@@ -340,7 +340,7 @@ interface SettingsState extends AppSettings {
     openSettings: () => void
     closeSettings: () => void
     /** Resolve the configured shell to a launchable file + args (Windows). */
-    resolveShell: () => { file: string; args: string[] }
+    resolveShell: (kind?: ShellKind) => { file: string; args: string[] }
 }
 
 export const useSettings = create<SettingsState>((set, get) => {
@@ -559,9 +559,9 @@ export const useSettings = create<SettingsState>((set, get) => {
         openSettings: () => set({ settingsOpen: true }),
         closeSettings: () => set({ settingsOpen: false }),
 
-        resolveShell: () => {
+        resolveShell: (kind) => {
             const { shell, customShellPath } = get().terminal
-            switch (shell) {
+            switch (kind ?? shell) {
                 case "cmd":
                     return { file: "cmd.exe", args: [] }
                 case "gitbash":

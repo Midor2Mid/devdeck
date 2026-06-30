@@ -90,7 +90,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 id: termId,
                 cwd: useStore.getState().termCwd[termId] ?? cwd,
                 initialCommand,
-                shell: useSettings.getState().resolveShell(),
+                shell: useSettings.getState().resolveShell(useStore.getState().termShells[termId]),
                 cols: term.cols,
                 rows: term.rows,
                 env: Object.keys(extraEnv).length ? extraEnv : undefined,

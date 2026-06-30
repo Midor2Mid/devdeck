@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
-import { useSettings, sshCommand } from "../settings"
+import { useSettings, sshCommand, type ShellKind } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { confirm } from "../confirm"
 import { contextMenu } from "../contextmenu"
@@ -10,6 +10,16 @@ import { SplitView } from "./SplitView"
 import { PromptComposer } from "./PromptComposer"
 import { CanvasView } from "./CanvasView"
 import { Icon } from "./Icon"
+
+// Shell choices offered in the "new terminal" menu (overrides the global default
+// for that one terminal). "custom" is configured in Settings → Terminal.
+const SHELL_OPTIONS: { kind: ShellKind; label: string }[] = [
+    { kind: "powershell", label: "PowerShell" },
+    { kind: "cmd", label: "Command Prompt" },
+    { kind: "gitbash", label: "Git Bash" },
+    { kind: "wsl", label: "WSL" },
+    { kind: "custom", label: "Custom shell" }
+]
 
 export function TerminalView(): JSX.Element {
     const projects = useStore((s) => s.projects)
@@ -341,6 +351,21 @@ export function TerminalView(): JSX.Element {
                                             >
                                                 <span className="agent-badge">SSH</span>
                                                 {p.label}
+                                            </span>
+                                        </div>
+                                    ))}
+                                    <div className="agent-menu-divider">SHELLS</div>
+                                    {SHELL_OPTIONS.map((opt) => (
+                                        <div key={opt.kind} className="agent-menu-row">
+                                            <span
+                                                className="agent-menu-name"
+                                                onClick={() => {
+                                                    newTab(SHELL, undefined, opt.label, undefined, opt.kind)
+                                                    setMenuOpen(false)
+                                                }}
+                                            >
+                                                <span className="agent-badge">SH</span>
+                                                {opt.label}
                                             </span>
                                         </div>
                                     ))}

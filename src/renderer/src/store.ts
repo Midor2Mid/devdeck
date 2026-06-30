@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import type { Project, WorkItem } from "../../preload/index"
 import { useSettings } from "./settings"
-import type { SavedRequest, PresetNode, PresetTab } from "./settings"
+import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
 import {
     type LayoutNode,
     type SplitDir,
@@ -72,6 +72,8 @@ interface Persisted {
     termCwd: Record<string, string>
     /** Per-session display-name override, independent of the tab name. */
     termNames: Record<string, string>
+    /** Per-terminal shell override (else the global default shell). */
+    termShells: Record<string, ShellKind>
     tabsByProject: Record<string, Tab[]>
     activeTabByProject: Record<string, string | undefined>
     activePaneByProject: Record<string, string | undefined>
@@ -193,7 +195,7 @@ interface AppState extends Persisted {
     activePane: (projectId: string) => string | undefined
     agentOf: (termId: string) => string
 
-    newTab: (agentId: string, initialCommand?: string, label?: string, cwd?: string) => string | undefined
+    newTab: (agentId: string, initialCommand?: string, label?: string, cwd?: string, shellKind?: ShellKind) => string | undefined
     splitActive: (dir: SplitDir, agentId: string) => void
     closePane: (termId: string) => void
     closeActivePane: () => void
@@ -259,6 +261,7 @@ export const useStore = create<AppState>((set, get) => {
             termInit: s.termInit,
             termCwd: s.termCwd,
             termNames: s.termNames,
+            termShells: s.termShells,
             tabsByProject: s.tabsByProject,
             activeTabByProject: s.activeTabByProject,
             activePaneByProject: s.activePaneByProject,
@@ -370,6 +373,8 @@ export const useStore = create<AppState>((set, get) => {
             delete termCwd[termId]
             const termNames = { ...s.termNames }
             delete termNames[termId]
+            const termShells = { ...s.termShells }
+            delete termShells[termId]
             const canvasPos = { ...s.canvasPos }
             delete canvasPos[termId]
             return {
@@ -378,6 +383,7 @@ export const useStore = create<AppState>((set, get) => {
                 termAgents,
                 termCwd,
                 termNames,
+                termShells,
                 canvasPos,
                 canvasLinks: s.canvasLinks.filter((l) => l.a !== termId && l.b !== termId),
                 lastAgentTermId: s.lastAgentTermId === termId ? null : s.lastAgentTermId
@@ -420,6 +426,7 @@ export const useStore = create<AppState>((set, get) => {
         termInit: {},
         termCwd: {},
         termNames: {},
+        termShells: {},
         tabsByProject: {},
         activeTabByProject: {},
         activePaneByProject: {},
@@ -473,6 +480,7 @@ export const useStore = create<AppState>((set, get) => {
                 termInit: w.termInit ?? {},
                 termCwd: w.termCwd ?? {},
                 termNames: w.termNames ?? {},
+                termShells: w.termShells ?? {},
                 tabsByProject: w.tabsByProject ?? {},
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
@@ -870,7 +878,7 @@ export const useStore = create<AppState>((set, get) => {
         activePane: (projectId) => get().activePaneByProject[projectId],
         agentOf: (termId) => get().termAgents[termId] ?? SHELL,
 
-        newTab: (agentId, initialCommand, label, cwd) => {
+        newTab: (agentId, initialCommand, label, cwd, shellKind) => {
             const projectId = get().activeId
             if (!projectId) return undefined
             const termId = newId()
@@ -887,6 +895,10 @@ export const useStore = create<AppState>((set, get) => {
                 termAgents: { ...s.termAgents, [termId]: agentId },
                 termInit: init ? { ...s.termInit, [termId]: init } : s.termInit,
                 termCwd: cwd ? { ...s.termCwd, [termId]: cwd } : s.termCwd,
+                termShells:
+                    !isAgentId(agentId) && shellKind
+                        ? { ...s.termShells, [termId]: shellKind }
+                        : s.termShells,
                 agentStatus: isAgentId(agentId)
                     ? { ...s.agentStatus, [termId]: "working" }
                     : s.agentStatus,
