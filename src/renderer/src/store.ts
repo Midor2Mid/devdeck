@@ -80,6 +80,8 @@ interface Persisted {
     composerDrafts: Record<string, string>
     view: MainView
     termLayout: TermLayout
+    /** Whether the icon rail is expanded to show labels next to icons. */
+    railExpanded: boolean
     canvasPos: Record<string, CanvasPos>
     canvasLinks: CanvasLink[]
 }
@@ -108,6 +110,8 @@ interface AppState extends Persisted {
     flush: () => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
+    railExpanded: boolean
+    toggleRail: () => void
     canvasPos: Record<string, CanvasPos>
     setCanvasPos: (termId: string, pos: CanvasPos) => void
     canvasLinks: CanvasLink[]
@@ -274,6 +278,7 @@ export const useStore = create<AppState>((set, get) => {
             composerDrafts: s.composerDrafts,
             view: s.view,
             termLayout: s.termLayout,
+            railExpanded: s.railExpanded,
             canvasPos: s.canvasPos,
             canvasLinks: s.canvasLinks
         } satisfies Persisted)
@@ -439,6 +444,7 @@ export const useStore = create<AppState>((set, get) => {
         composerDrafts: {},
         view: "terminal",
         termLayout: "tabs",
+        railExpanded: false,
         canvasPos: {},
         canvasLinks: [],
         activity: [],
@@ -494,6 +500,7 @@ export const useStore = create<AppState>((set, get) => {
                 composerDrafts: w.composerDrafts ?? {},
                 view: w.view ?? "terminal",
                 termLayout: w.termLayout ?? "tabs",
+                railExpanded: w.railExpanded ?? false,
                 canvasPos: w.canvasPos ?? {},
                 canvasLinks: w.canvasLinks ?? []
             })
@@ -572,6 +579,10 @@ export const useStore = create<AppState>((set, get) => {
         },
         setTermLayout: (layout) => {
             set({ termLayout: layout })
+            persist()
+        },
+        toggleRail: () => {
+            set((s) => ({ railExpanded: !s.railExpanded }))
             persist()
         },
         setCanvasPos: (termId, pos) => {

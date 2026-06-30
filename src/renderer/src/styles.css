@@ -182,6 +182,56 @@ select:focus {
     border-radius: 0 2px 2px 0;
     background: var(--accent);
 }
+
+/* ---------- Expanded rail (icon + label) ---------- */
+.rail.expanded {
+    width: 184px;
+    align-items: stretch;
+    padding: 12px 8px;
+}
+.rail.expanded .rail-logo {
+    width: auto;
+    justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 8px;
+}
+.rail.expanded .rail-group {
+    align-items: stretch;
+}
+.rail.expanded .rail-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 10px;
+}
+.rail-label {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rail-wordmark {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+}
+/* The "on" accent stripe sits flush to the panel's left edge when expanded. */
+.rail.expanded .rail-btn.on::before {
+    left: -8px;
+}
+.rail-toggle {
+    color: var(--faint);
+}
+.rail-chevron-right {
+    transform: rotate(-90deg);
+}
+.rail-chevron-left {
+    transform: rotate(90deg);
+}
 .statusbar {
     flex: none;
     height: 26px;

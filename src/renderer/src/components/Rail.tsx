@@ -7,15 +7,15 @@ import { Enso } from "./Enso"
  * Slim icon rail - the app's primary navigation. Top group switches the main
  * view (terminal / editor / API / database / browser); bottom group opens the
  * cross-cutting tools (work, activity, standup, release, shortcuts, settings).
- * Replaces the old text view-tabs + sidebar header buttons.
+ * A toggle at the bottom expands it to show a label beside each icon.
  */
-const VIEW_NAV: { view: MainView; icon: IconName; label: string }[] = [
-    { view: "terminal", icon: "terminal", label: "Terminals - multi-agent sessions, splits & layouts" },
-    { view: "editor", icon: "code", label: "Editor - browse & edit project files (Monaco)" },
-    { view: "api", icon: "send", label: "API client - test requests, environments & collections" },
-    { view: "database", icon: "database", label: "Database - query Postgres / MySQL / SQLite" },
-    { view: "browser", icon: "appWindow", label: "Browser - embedded, with send-to-AI" },
-    { view: "network", icon: "globe", label: "Network - capture HTTP(S) traffic through the local proxy" }
+const VIEW_NAV: { view: MainView; icon: IconName; name: string; label: string }[] = [
+    { view: "terminal", icon: "terminal", name: "Terminals", label: "Terminals - multi-agent sessions, splits & layouts" },
+    { view: "editor", icon: "code", name: "Editor", label: "Editor - browse & edit project files (Monaco)" },
+    { view: "api", icon: "send", name: "API", label: "API client - test requests, environments & collections" },
+    { view: "database", icon: "database", name: "Database", label: "Database - query Postgres / MySQL / SQLite" },
+    { view: "browser", icon: "appWindow", name: "Browser", label: "Browser - embedded, with send-to-AI" },
+    { view: "network", icon: "globe", name: "Network", label: "Network - capture HTTP(S) traffic through the local proxy" }
 ]
 
 export function Rail(): JSX.Element {
@@ -32,51 +32,66 @@ export function Rail(): JSX.Element {
     const setReleaseOpen = useStore((s) => s.setReleaseOpen)
     const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const openSettings = useSettings((s) => s.openSettings)
+    const expanded = useStore((s) => s.railExpanded)
+    const toggleRail = useStore((s) => s.toggleRail)
+
+    // Tooltips are redundant (and visually noisy) once labels are shown.
+    const tip = (t: string): string | undefined => (expanded ? undefined : t)
+
+    const tools: { name: string; tip: string; icon: IconName; onClick: () => void; badge?: number; extra?: string }[] = [
+        { name: "Inbox", tip: "Agents inbox - every session, attention-first, with quick reply", icon: "inbox", onClick: () => setInboxOpen(true), badge: attention, extra: "rail-inbox" },
+        { name: "Work", tip: "Work - your assigned Jira / Azure DevOps tickets; start a session from one", icon: "work", onClick: () => setWorkOpen(true) },
+        { name: "Activity", tip: "Activity - agent events across all projects", icon: "activity", onClick: () => setActivityOpen(true) },
+        { name: "AI usage", tip: "AI usage - session activity by agent & project", icon: "chart", onClick: () => setUsageOpen(true) },
+        { name: "Standup", tip: "Standup - generate today's worklog from git + activity", icon: "list", onClick: () => setStandupOpen(true) },
+        { name: "Release", tip: "Release board - promote Dev → UAT → PROD", icon: "release", onClick: () => setReleaseOpen(true) },
+        { name: "Shortcuts", tip: "Keyboard shortcuts (F1)", icon: "help", onClick: () => setShortcutsOpen(true) },
+        { name: "Settings", tip: "Settings - appearance, agents, snippets, remote…", icon: "settings", onClick: () => openSettings() }
+    ]
 
     return (
-        <nav className="rail" aria-label="Primary">
-            <div className="rail-logo" data-tip="DevDeck">
+        <nav className={"rail" + (expanded ? " expanded" : "")} aria-label="Primary">
+            <div className="rail-logo" data-tip={tip("DevDeck")}>
                 <Enso size={24} strokeWidth={2} />
+                {expanded && <span className="rail-label rail-wordmark">DevDeck</span>}
             </div>
             <div className="rail-group">
                 {VIEW_NAV.map((v) => (
                     <button
                         key={v.view}
                         className={"rail-btn" + (view === v.view ? " on" : "")}
-                        data-tip={v.label}
+                        data-tip={tip(v.label)}
                         data-tip-pos="right"
                         onClick={() => setView(v.view)}
                     >
                         <Icon name={v.icon} size={20} />
+                        {expanded && <span className="rail-label">{v.name}</span>}
                     </button>
                 ))}
             </div>
             <div className="rail-spacer" />
             <div className="rail-group">
-                <button className="rail-btn rail-inbox" data-tip="Agents inbox - every session, attention-first, with quick reply" data-tip-pos="right" onClick={() => setInboxOpen(true)}>
-                    <Icon name="inbox" size={20} />
-                    {attention > 0 && <span className="rail-badge">{attention}</span>}
-                </button>
-                <button className="rail-btn" data-tip="Work - your assigned Jira / Azure DevOps tickets; start a session from one" data-tip-pos="right" onClick={() => setWorkOpen(true)}>
-                    <Icon name="work" size={20} />
-                </button>
-                <button className="rail-btn" data-tip="Activity - agent events across all projects" data-tip-pos="right" onClick={() => setActivityOpen(true)}>
-                    <Icon name="activity" size={20} />
-                </button>
-                <button className="rail-btn" data-tip="AI usage - session activity by agent & project" data-tip-pos="right" onClick={() => setUsageOpen(true)}>
-                    <Icon name="chart" size={20} />
-                </button>
-                <button className="rail-btn" data-tip="Standup - generate today's worklog from git + activity" data-tip-pos="right" onClick={() => setStandupOpen(true)}>
-                    <Icon name="list" size={20} />
-                </button>
-                <button className="rail-btn" data-tip="Release board - promote Dev → UAT → PROD" data-tip-pos="right" onClick={() => setReleaseOpen(true)}>
-                    <Icon name="release" size={20} />
-                </button>
-                <button className="rail-btn" data-tip="Keyboard shortcuts (F1)" data-tip-pos="right" onClick={() => setShortcutsOpen(true)}>
-                    <Icon name="help" size={20} />
-                </button>
-                <button className="rail-btn" data-tip="Settings - appearance, agents, snippets, remote…" data-tip-pos="right" onClick={() => openSettings()}>
-                    <Icon name="settings" size={20} />
+                {tools.map((t) => (
+                    <button
+                        key={t.name}
+                        className={"rail-btn" + (t.extra ? " " + t.extra : "")}
+                        data-tip={tip(t.tip)}
+                        data-tip-pos="right"
+                        onClick={t.onClick}
+                    >
+                        <Icon name={t.icon} size={20} />
+                        {expanded && <span className="rail-label">{t.name}</span>}
+                        {t.badge ? <span className="rail-badge">{t.badge}</span> : null}
+                    </button>
+                ))}
+                <button
+                    className="rail-btn rail-toggle"
+                    data-tip={tip("Expand the menu")}
+                    data-tip-pos="right"
+                    onClick={toggleRail}
+                >
+                    <Icon name="chevronDown" size={20} className={expanded ? "rail-chevron-left" : "rail-chevron-right"} />
+                    {expanded && <span className="rail-label">Collapse</span>}
                 </button>
             </div>
         </nav>
