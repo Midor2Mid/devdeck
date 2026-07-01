@@ -5004,7 +5004,7 @@ kbd {
         inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 [data-style="lacquer"] button.accent:hover {
-    transform: translateY(-1px);
+    transform: scale(1.03);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
         0 6px 20px -2px color-mix(in srgb, var(--accent) 70%, transparent),
         inset 0 1px 0 rgba(255, 255, 255, 0.34);
@@ -5054,7 +5054,7 @@ kbd {
 [data-style="lacquer"] .theme-card:hover,
 [data-style="lacquer"] .style-card:hover,
 [data-style="lacquer"] .work-item:hover {
-    transform: translateY(-2px);
+    transform: scale(1.02);
     box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 14%, transparent),
         0 12px 30px -10px rgba(0, 0, 0, 0.65),
         0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -5231,7 +5231,7 @@ kbd {
     background: color-mix(in srgb, var(--accent) 86%, white);
     border-color: color-mix(in srgb, var(--accent) 86%, white);
     color: #fff;
-    transform: translateY(-1px);
+    transform: scale(1.03);
     box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 [data-style="modernplus"] button.accent:active {
@@ -5268,7 +5268,7 @@ kbd {
 [data-style="modernplus"] .theme-card:hover,
 [data-style="modernplus"] .style-card:hover,
 [data-style="modernplus"] .work-item:hover {
-    transform: translateY(-2px);
+    transform: scale(1.02);
     border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.24), 0 14px 28px -12px rgba(0, 0, 0, 0.6);
 }
@@ -5767,7 +5767,7 @@ button:not(:disabled):active { transform: translateY(1px); }
 [data-style="aurora"] .switcher-card:hover,
 [data-style="aurora"] .theme-card:hover,
 [data-style="aurora"] .style-card:hover {
-    transform: translateY(-2px);
+    transform: scale(1.02);
 }
 /* A slow aurora shimmer behind the ensō mark. */
 [data-style="aurora"] .rail-logo {
@@ -5874,18 +5874,24 @@ button:not(:disabled):active { transform: translateY(1px); }
         border-color 0.15s ease,
         color 0.15s ease;
 }
-[data-style="kinetic"] .project-item:hover,
+/* Grid cards / chips "pop" via a center scale, which only GROWS the hit box
+   outward - so the pointer never falls into a vacated strip (no hover flicker). */
 [data-style="kinetic"] .switcher-card:hover,
 [data-style="kinetic"] .theme-card:hover,
 [data-style="kinetic"] .style-card:hover,
-[data-style="kinetic"] .work-item:hover,
 [data-style="kinetic"] .task-chip:hover {
-    transform: translateY(-2px);
+    transform: scale(1.03);
     box-shadow: 0 7px 20px -10px rgba(0, 0, 0, 0.55);
+}
+/* Full-width rows must NOT move (a moving hit box flickers the cursor at its
+   edge); elevate them with shadow + border instead. */
+[data-style="kinetic"] .project-item:hover,
+[data-style="kinetic"] .work-item:hover {
+    box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.5);
 }
 [data-style="kinetic"] button.accent:hover,
 [data-style="kinetic"] .send-claude:hover {
-    transform: translateY(-1px);
+    transform: scale(1.03);
 }
 /* Tabs get a relative box + an underline that springs in when active. */
 [data-style="kinetic"] .term-tab,
@@ -5929,6 +5935,10 @@ button:not(:disabled):active { transform: translateY(1px); }
     [data-style="kinetic"] .term-tab.active::after,
     [data-style="kinetic"] .editor-tab.active::after,
     [data-style="kinetic"] .rail-btn.on::before { animation: none; }
-    [data-style="kinetic"] .project-item:hover,
-    [data-style="kinetic"] .task-chip:hover { transform: none; }
+    [data-style="kinetic"] .switcher-card:hover,
+    [data-style="kinetic"] .theme-card:hover,
+    [data-style="kinetic"] .style-card:hover,
+    [data-style="kinetic"] .task-chip:hover,
+    [data-style="kinetic"] button.accent:hover,
+    [data-style="kinetic"] .send-claude:hover { transform: none; }
 }
