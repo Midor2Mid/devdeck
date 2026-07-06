@@ -551,7 +551,7 @@ export function DbPanel(): JSX.Element {
                                                 }}
                                                 options={{
                                                     fontFamily:
-                                                        '"Cascadia Mono", Consolas, monospace',
+                                                        '"Geist Mono Variable", "Cascadia Mono", Consolas, monospace',
                                                     fontSize: editorFontSize,
                                                     minimap: { enabled: false },
                                                     scrollBeyondLastLine: false,

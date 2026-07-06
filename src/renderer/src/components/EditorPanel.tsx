@@ -335,7 +335,7 @@ export function EditorPanel(): JSX.Element {
                                         )
                                     }}
                                     options={{
-                                        fontFamily: '"Cascadia Mono", Consolas, monospace',
+                                        fontFamily: '"Geist Mono Variable", "Cascadia Mono", Consolas, monospace',
                                         fontSize: editorSettings.fontSize,
                                         minimap: { enabled: editorSettings.minimap },
                                         wordWrap: editorSettings.wordWrap ? "on" : "off",

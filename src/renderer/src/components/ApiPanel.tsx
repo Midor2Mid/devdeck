@@ -889,7 +889,7 @@ export function ApiPanel(): JSX.Element {
                                     options={{
                                         readOnly: true,
                                         domReadOnly: true,
-                                        fontFamily: '"Cascadia Mono", Consolas, monospace',
+                                        fontFamily: '"Geist Mono Variable", "Cascadia Mono", Consolas, monospace',
                                         fontSize: 12,
                                         minimap: { enabled: false },
                                         wordWrap: respWrap ? "on" : "off",

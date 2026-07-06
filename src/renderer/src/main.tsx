@@ -1,6 +1,8 @@
 import ReactDOM from "react-dom/client"
 import "allotment/dist/style.css"
 import "@xterm/xterm/css/xterm.css"
+import "@fontsource-variable/inter"
+import "@fontsource-variable/geist-mono"
 import "./styles.css"
 import { App } from "./App"
 import { ErrorBoundary } from "./components/ErrorBoundary"

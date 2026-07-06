@@ -22,6 +22,10 @@
     --danger: #b66b5f;
     /* Ensō silhouette used as a faint watermark behind empty states. */
     --enso-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'><circle cx='12' cy='12' r='9' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-dasharray='48%2060' transform='rotate(120%2012%2012)'/></svg>");
+    /* Bundled premium type (Fontsource, offline). Terminal font stays user-set. */
+    --font-ui: "Inter Variable", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "Geist Mono Variable", "Cascadia Mono", Consolas, monospace;
+    --mono: var(--font-mono);
 }
 
 * {
@@ -38,7 +42,7 @@ body,
 body {
     background: var(--bg);
     color: var(--text);
-    font-family: "Segoe UI", system-ui, sans-serif;
+    font-family: var(--font-ui);
     font-size: 13px;
     line-height: 1.55;
     overflow: hidden;
