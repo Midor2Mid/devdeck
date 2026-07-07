@@ -19,6 +19,69 @@
 - **Performance** - the status bar throttles its git polling and pauses while the
   window is hidden; mobile session sync only runs when the remote server is enabled.
 
+## 0.5.10 - 2026-07-01
+
+- **Fix** - eliminated a cursor hand/arrow flicker caused by hover-lift transforms
+  in the newer styles.
+
+## 0.5.9 - 2026-07-01
+
+- **Modern look & motion** - an animated icon rail and a **global motion layer**
+  (floating surfaces ease/scale in, interactions give press feedback; all disabled
+  under `prefers-reduced-motion`), plus three new opt-in skins: **Aurora Glass**,
+  **Neo Holographic**, and **Kinetic Minimal**. DESIGN.md synced.
+
+## 0.5.8 - 2026-07-01
+
+- **Image-preview editor tabs** - open images in the editor as preview tabs.
+- **Expandable icon rail** - the rail expands to show icon + label.
+- **Per-project saved commands** - a saved command runner scoped to each project.
+
+## 0.5.7 - 2026-06-30
+
+- **Agent pipeline live UI** - a per-step run timeline (status, gate notes,
+  jump-to-session) plus a launcher in the new-terminal menu.
+
+## 0.5.6 - 2026-06-30
+
+- **Export to file** - export Database grids and API responses to **CSV / JSON**.
+
+## 0.5.5 - 2026-06-30
+
+- **API request chaining** - extract response values into session variables
+  (`{{name}}`) for use in later requests.
+
+## 0.5.4 - 2026-06-30
+
+- **Per-project environment variables** - injected into terminals and agent
+  sessions, encrypted at rest.
+
+## 0.5.3 - 2026-06-30
+
+- **Per-terminal shell override** - choose the shell per terminal.
+- **Auto-update** - via electron-updater + GitHub releases (dormant until releases
+  are public).
+
+## 0.5.2 - 2026-06-30
+
+- **Encrypted Git PATs** - stored encrypted, for HTTPS push.
+- **API response tests/assertions** - assert on captured responses.
+- **Opt-in remote TLS** - self-signed HTTPS/WSS for the remote server.
+
+## 0.5.1 - 2026-06-29
+
+- **Remote security hardening** - constant-time token auth, mobile-client
+  quote-escaping, and a task-runner allowlist.
+- **Workflow** - push-on-attention notifications, pipe a result into an agent,
+  Database query history, and renameable sessions.
+
+## 0.5.0 - 2026-06-29
+
+- **Task runner** - run saved project commands/tasks.
+- **Agent triage inbox** - every session, attention-first, with quick reply.
+- **Workspace presets** - saved workspace layouts.
+- **AI usage dashboard** - session activity by agent & project.
+
 ## 0.4.8 - 2026-06-29
 
 - **Network → API** - the Network inspector has a **→ API** button that loads the
