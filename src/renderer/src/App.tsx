@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { useStore } from "./store"
+import { nextSession } from "./deck"
 import { useSettings } from "./settings"
 import { useToasts } from "./toast"
 import { Topbar } from "./components/Topbar"
@@ -10,6 +11,7 @@ import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
 import { NetworkPanel } from "./components/NetworkPanel"
+import { DECK_VIEWS } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
@@ -116,7 +118,8 @@ export function App(): JSX.Element {
         })
     }, [])
 
-    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+P command palette.
+    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+P command palette,
+    // Ctrl+1..6 view switch, Ctrl+Tab agent-session cycle.
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
             const mod = e.ctrlKey || e.metaKey
@@ -124,15 +127,38 @@ export function App(): JSX.Element {
                 e.preventDefault()
                 const s = useStore.getState()
                 s.setShortcutsOpen(!s.shortcutsOpen)
-            } else if (mod && e.shiftKey && e.code === "KeyP") {
+                return
+            }
+            if (mod && e.shiftKey && e.code === "KeyP") {
                 e.preventDefault()
                 e.stopPropagation()
                 const s = useStore.getState()
                 s.setPaletteOpen(!s.paletteOpen)
-            } else if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
+                return
+            }
+            if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
                 e.preventDefault()
                 if (useStore.getState().switcherOpen) closeSwitcher()
                 else openSwitcher()
+                return
+            }
+            // Ctrl+1..6 — switch main view.
+            if (mod && !e.shiftKey && /^Digit[1-6]$/.test(e.code)) {
+                e.preventDefault()
+                const idx = Number(e.code.slice(5)) - 1
+                const v = DECK_VIEWS[idx]?.view
+                if (v) useStore.getState().setView(v)
+                return
+            }
+            // Ctrl+Tab / Ctrl+Shift+Tab — cycle agent sessions (deck alt-tab).
+            if (mod && e.code === "Tab") {
+                const s = useStore.getState()
+                const target = nextSession(s.agentSessions(), s.lastAgentTermId, e.shiftKey ? -1 : 1)
+                if (target) {
+                    e.preventDefault()
+                    s.jumpToTerm(target)
+                }
+                return
             }
         }
         window.addEventListener("keydown", handler, true)
