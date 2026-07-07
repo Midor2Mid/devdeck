@@ -26,6 +26,16 @@
     --font-ui: "Inter Variable", "Segoe UI", system-ui, sans-serif;
     --font-mono: "Geist Mono Variable", "Cascadia Mono", Consolas, monospace;
     --mono: var(--font-mono);
+    /* Type ramp — tuned to Inter's metrics. */
+    --fs-title: 15px;
+    --fs-body: 13px;
+    --fs-sm: 12px;
+    --fs-label: 11px;
+    --fs-mono: 13px;
+    --lh-tight: 1.2;
+    --lh-body: 1.45;
+    --ls-title: -0.01em;
+    --ls-label: 0.06em;
 }
 
 * {
@@ -43,15 +53,15 @@ body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-ui);
-    font-size: 13px;
-    line-height: 1.55;
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
 }
 
 button {
     font-family: inherit;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--text);
     background: transparent;
     border: 1px solid var(--border);
@@ -114,7 +124,7 @@ select:focus {
     color: var(--muted);
 }
 .small {
-    font-size: 11px;
+    font-size: var(--fs-label);
 }
 
 .app {
