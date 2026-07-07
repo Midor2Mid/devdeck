@@ -1,11 +1,9 @@
 import { useEffect } from "react"
-import { Allotment } from "allotment"
-import { useStore, type MainView } from "./store"
+import { useStore } from "./store"
 import { useSettings } from "./settings"
 import { useToasts } from "./toast"
-import { Sidebar } from "./components/Sidebar"
-import { Rail } from "./components/Rail"
-import { Icon } from "./components/Icon"
+import { Topbar } from "./components/Topbar"
+import { Deck } from "./components/Deck"
 import { TerminalView } from "./components/TerminalView"
 import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
@@ -28,7 +26,6 @@ import { PrModal } from "./components/PrModal"
 import { WorkPanel } from "./components/WorkPanel"
 import { ReleaseBoard } from "./components/ReleaseBoard"
 import { StandupModal } from "./components/StandupModal"
-import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { IntroTip } from "./components/IntroTip"
@@ -36,17 +33,8 @@ import { ConfirmDialog } from "./components/ConfirmDialog"
 import { TooltipLayer } from "./components/Tooltip"
 import { ContextMenuLayer } from "./components/ContextMenu"
 
-const VIEWS: { key: MainView; label: string }[] = [
-    { key: "terminal", label: "Terminal" },
-    { key: "editor", label: "Editor" },
-    { key: "api", label: "API" },
-    { key: "database", label: "Database" },
-    { key: "browser", label: "Browser" },
-    { key: "network", label: "Network" }
-]
-
 export function App(): JSX.Element {
-    const { init, view, activeProject } = useStore()
+    const { init, view } = useStore()
     const loadSettings = useSettings((s) => s.load)
     const settingsOpen = useSettings((s) => s.settingsOpen)
     const switcherOpen = useStore((s) => s.switcherOpen)
@@ -67,7 +55,6 @@ export function App(): JSX.Element {
     const workOpen = useStore((s) => s.workOpen)
     const releaseOpen = useStore((s) => s.releaseOpen)
     const standupOpen = useStore((s) => s.standupOpen)
-    const project = activeProject()
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
     const tabsByProject = useStore((s) => s.tabsByProject)
@@ -155,82 +142,32 @@ export function App(): JSX.Element {
     return (
         <div className="app">
             <div className="app-body">
-            <Rail />
-            <div className="app-split">
-            <Allotment proportionalLayout={false}>
-                <Allotment.Pane minSize={180} preferredSize={240} maxSize={420}>
-                    <Sidebar />
-                </Allotment.Pane>
-                <Allotment.Pane>
-                    <div className="main">
-                        <div className="topbar">
-                            <div className="topbar-crumb">
-                                <span className="crumb-view">{VIEWS.find((v) => v.key === view)?.label}</span>
-                                {project ? (
-                                    <span className="crumb-sep">/</span>
-                                ) : null}
-                                {project ? (
-                                    <span className="crumb-proj" data-tip={project.path}>{project.name}</span>
-                                ) : (
-                                    <span className="muted">No project</span>
-                                )}
-                            </div>
-                            <button
-                                className="cmd-pill"
-                                onClick={() => useStore.getState().setPaletteOpen(true)}
-                                data-tip="Command palette (Ctrl+Shift+P)"
-                            >
-                                <Icon name="search" size={14} />
-                                <span>Search or run…</span>
-                                <span className="cmd-kbd">Ctrl+Shift+P</span>
-                            </button>
+                <div className="main">
+                    <Topbar />
+                    <div className="panels">
+                        {/* All panels stay mounted; visibility toggled so terminals keep running. */}
+                        <div className="panel" style={{ display: view === "terminal" ? "flex" : "none" }}>
+                            <TerminalView />
                         </div>
-
-                        <div className="panels">
-                            {/* All panels stay mounted; visibility toggled so terminals keep running. */}
-                            <div
-                                className="panel"
-                                style={{ display: view === "terminal" ? "flex" : "none" }}
-                            >
-                                <TerminalView />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "editor" ? "flex" : "none" }}
-                            >
-                                <EditorPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "api" ? "flex" : "none" }}
-                            >
-                                <ApiPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "database" ? "flex" : "none" }}
-                            >
-                                <DbPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "browser" ? "flex" : "none" }}
-                            >
-                                <BrowserPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "network" ? "flex" : "none" }}
-                            >
-                                <NetworkPanel />
-                            </div>
+                        <div className="panel" style={{ display: view === "editor" ? "flex" : "none" }}>
+                            <EditorPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "api" ? "flex" : "none" }}>
+                            <ApiPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "database" ? "flex" : "none" }}>
+                            <DbPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "browser" ? "flex" : "none" }}>
+                            <BrowserPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "network" ? "flex" : "none" }}>
+                            <NetworkPanel />
                         </div>
                     </div>
-                </Allotment.Pane>
-            </Allotment>
+                </div>
             </div>
-            </div>
-            <StatusBar />
+            <Deck />
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
             {paletteOpen && <CommandPalette />}
