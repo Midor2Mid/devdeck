@@ -43,6 +43,13 @@
     /* Theme-adaptive detail (derive from --text/--border, so they self-tune light/dark). */
     --edge-hi: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
     --border-strong: color-mix(in srgb, var(--border) 65%, var(--text));
+    /* Spacing scale (4px base). xs–lg formalize existing usage; xl/2xl are new breathing room. */
+    --sp-xs: 4px;
+    --sp-sm: 8px;
+    --sp-md: 12px;
+    --sp-lg: 16px;
+    --sp-xl: 24px;
+    --sp-2xl: 32px;
 }
 
 * {
@@ -2874,7 +2881,7 @@ button .ic,
 .settings-content {
     flex: 1;
     position: relative;
-    padding: 22px 26px;
+    padding: var(--sp-2xl) var(--sp-2xl);
     overflow-y: auto;
 }
 .settings-close {
