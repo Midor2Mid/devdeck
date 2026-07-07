@@ -193,6 +193,8 @@ interface AppState extends Persisted {
     sessions: () => AnySession[]
     agentSessions: () => AnySession[]
     sendToAgent: (text: string) => boolean
+    /** Send the same text to every given terminal (fire-to-many). */
+    broadcast: (termIds: string[], text: string) => void
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
     newTabIn: (projectId: string, agentId: string, initialCommand?: string) => void
@@ -891,6 +893,12 @@ export const useStore = create<AppState>((set, get) => {
             if (!id) return false
             window.api.pty.input(id, text)
             return true
+        },
+
+        broadcast: (termIds, text) => {
+            for (const id of termIds) window.api.pty.input(id, text)
+            // Keep the focused-agent notion coherent after a fan-out.
+            if (termIds.length) set({ lastAgentTermId: termIds[termIds.length - 1] })
         },
 
         setComposerDraft: (projectId, text) => {
