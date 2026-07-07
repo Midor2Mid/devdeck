@@ -68,7 +68,10 @@ const SUMI_VARS = {
     "--moss": "#8c9a68",
     "--clay": "#c4855d",
     "--ok": "#8c9a68",
-    "--danger": "#b66b5f"
+    "--danger": "#b66b5f",
+    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
+    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
+    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
 }
 
 const WASHI_VARS = {
@@ -86,7 +89,10 @@ const WASHI_VARS = {
     "--moss": "#7f8c54",
     "--clay": "#b06a44",
     "--ok": "#7f8c54",
-    "--danger": "#b0563f"
+    "--danger": "#b0563f",
+    "--elev-1": "0 1px 2px rgba(60,50,35,.10), 0 1px 1px rgba(60,50,35,.06)",
+    "--elev-2": "0 4px 12px -2px rgba(60,50,35,.14), 0 2px 4px rgba(60,50,35,.10)",
+    "--elev-3": "0 18px 48px -12px rgba(60,50,35,.20), 0 6px 16px rgba(60,50,35,.12)"
 }
 
 const ZEN_VARS = {
@@ -104,7 +110,10 @@ const ZEN_VARS = {
     "--moss": "#9aa56f",
     "--clay": "#c79a6a",
     "--ok": "#9aa56f",
-    "--danger": "#c2766a"
+    "--danger": "#c2766a",
+    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
+    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
+    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
 }
 
 // Cool slate - modern neutral ground keeping the warm amber accent.
@@ -125,7 +134,10 @@ const SLATE_VARS = {
     // "agent" doesn't read as a second accent instance (matches Sumi/Zen).
     "--clay": "#c9906a",
     "--ok": "#5fce8f",
-    "--danger": "#e9786b"
+    "--danger": "#e9786b",
+    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
+    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
+    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
 }
 
 // Graphite - a modern, cool near-black palette with a vivid indigo accent.
@@ -145,7 +157,10 @@ const GRAPHITE_VARS = {
     "--moss": "#56c98a",
     "--clay": "#a78bfa",
     "--ok": "#56c98a",
-    "--danger": "#f0616d"
+    "--danger": "#f0616d",
+    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
+    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
+    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
 }
 
 // Aurora - a premium cool indigo night with a periwinkle accent that gradients
@@ -165,7 +180,10 @@ const AURORA_VARS = {
     "--moss": "#5fd3b0",
     "--clay": "#c79bff",
     "--ok": "#5fd3b0",
-    "--danger": "#f0788f"
+    "--danger": "#f0788f",
+    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
+    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
+    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
 }
 
 // Neo - a holographic near-black with a cyan primary and violet secondary.
@@ -185,7 +203,10 @@ const NEO_VARS = {
     "--moss": "#34e5b0",
     "--clay": "#a78bfa",
     "--ok": "#34e5b0",
-    "--danger": "#fb7185"
+    "--danger": "#fb7185",
+    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
+    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
+    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
 }
 
 export const THEMES: Record<ThemeId, Theme> = {
