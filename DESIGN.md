@@ -21,16 +21,16 @@ colors:
   danger: "#e9786b"
 typography:
   heading:
-    fontFamily: "Inter Variable", "Segoe UI", system-ui, sans-serif
+    fontFamily: '"Inter Variable", "Segoe UI", system-ui, sans-serif'
     fontSize: 15px
   body:
-    fontFamily: "Inter Variable", "Segoe UI", system-ui, sans-serif
+    fontFamily: '"Inter Variable", "Segoe UI", system-ui, sans-serif'
     fontSize: 13px
   label:
-    fontFamily: "Inter Variable", "Segoe UI", system-ui, sans-serif
+    fontFamily: '"Inter Variable", "Segoe UI", system-ui, sans-serif'
     fontSize: 11px
   mono:
-    fontFamily: "Geist Mono Variable", "Cascadia Mono", Consolas, monospace
+    fontFamily: '"Geist Mono Variable", "Cascadia Mono", Consolas, monospace'
     fontSize: 13px
 rounded:
   sm: 6px
