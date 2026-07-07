@@ -96,9 +96,6 @@ button:hover {
     border-color: var(--accent);
     color: var(--accent-soft);
 }
-button:active:not(:disabled) {
-    transform: translateY(0.3px) scale(0.997);
-}
 button:disabled {
     opacity: 0.4;
     cursor: default;
@@ -315,7 +312,6 @@ select:focus {
     .rail-btn {
         transition: none;
     }
-    button:active:not(:disabled) { transform: none; }
 }
 /* Tabular figures so digits align and don't jitter. */
 .statusbar,
@@ -2805,7 +2801,8 @@ button .ic,
     box-shadow: var(--elev-3);
 }
 .modal-title {
-    font-size: 14px;
+    font-size: var(--fs-title);
+    letter-spacing: var(--ls-title);
     font-weight: 600;
     margin-bottom: 14px;
 }
@@ -5769,8 +5766,8 @@ kbd {
 .db-history-menu { animation: dd-menu-in 0.13s ease; transform-origin: top; }
 
 /* Press feedback — transform only, so it never clobbers a component's own
-   transition. A snappy 1px press reads as responsive across every button. */
-button:not(:disabled):active { transform: translateY(1px); }
+   transition. A refined, subtle press reads as responsive across every button. */
+button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .task-chip:not(:disabled):active,
 .rail-btn:active { transform: scale(0.96); }
 
