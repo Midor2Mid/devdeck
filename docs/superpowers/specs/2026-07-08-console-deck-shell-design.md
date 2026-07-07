@@ -205,13 +205,13 @@ state, the same way the Sidebar does today:
 - **Losing sidebar affordances** → every one is explicitly rehomed (table below);
   nothing is silently dropped.
 
-### Affordance rehoming (nothing dropped)
+### Affordance rehoming (nothing silently dropped)
 
 | Sidebar affordance | New home |
 | --- | --- |
 | Project list + active highlight | Deck project strips (live) + switcher (all) |
 | Project groups (collapsible) | Switcher |
-| Project reorder (drag) | Switcher |
+| Project reorder (drag) | Dropped intentionally — projects keep insertion order; grouping covers organization |
 | OS folder-drop to add | Whole-window drop |
 | Project context menu | Right-click deck project label (unchanged menu) |
 | Add project `+` | Switcher / topbar `▾` |

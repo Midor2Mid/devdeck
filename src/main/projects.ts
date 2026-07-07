@@ -92,21 +92,6 @@ export function addProjectByPath(path: string): ProjectStore {
     return store
 }
 
-/** Move `draggedId` to just before `targetId`, adopting the target's group. */
-export function moveProject(draggedId: string, targetId: string): ProjectStore {
-    const store = load()
-    if (draggedId === targetId) return store
-    const dragged = store.projects.find((p) => p.id === draggedId)
-    const target = store.projects.find((p) => p.id === targetId)
-    if (!dragged || !target) return store
-    dragged.group = target.group // dropping into another group moves it there
-    store.projects = store.projects.filter((p) => p.id !== draggedId)
-    const ti = store.projects.findIndex((p) => p.id === targetId)
-    store.projects.splice(ti, 0, dragged)
-    save(store)
-    return store
-}
-
 export function removeProject(id: string): ProjectStore {
     const store = load()
     store.projects = store.projects.filter((p) => p.id !== id)
