@@ -317,6 +317,13 @@ select:focus {
     }
     button:active:not(:disabled) { transform: none; }
 }
+/* Tabular figures so digits align and don't jitter. */
+.statusbar,
+.sb-item,
+.cmd-kbd,
+.grid-card-head {
+    font-variant-numeric: tabular-nums;
+}
 .statusbar {
     flex: none;
     height: 26px;
