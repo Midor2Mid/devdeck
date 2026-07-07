@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.11 - 2026-07-07
+
+- **Refined visual craft (every theme & style)** - a global design-token pass that
+  makes the whole app feel more premium while staying calm and legible: a bundled
+  **Inter + Geist Mono** type pair (shipped offline, no download), a refined type
+  scale, a layered **elevation** system (soft shadows on cards, menus and modals,
+  tuned per light/dark), unified motion timing with a subtle button-press response,
+  and **tabular numerals** so counts, durations and status digits line up. It
+  re-binds every theme and style with no layout changes; your terminal font is
+  untouched.
+- **UI polish** - the primary **+ Claude** action is now a filled accent button; a
+  keyboard **focus ring** works in every style and the Settings theme/style pickers
+  are keyboard-reachable; a single terminal now fills the cockpit instead of a small
+  card; the command-palette hint shows the correct **Ctrl+Shift+P**; Settings shows
+  all seven themes (Aurora/Neo were cut off); and inline `...`/edit glyphs are now
+  crisp icons.
+- **Performance** - the status bar throttles its git polling and pauses while the
+  window is hidden; mobile session sync only runs when the remote server is enabled.
+
 ## 0.4.8 - 2026-06-29
 
 - **Network → API** - the Network inspector has a **→ API** button that loads the
