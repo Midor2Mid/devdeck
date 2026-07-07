@@ -204,7 +204,7 @@ export function Sidebar(): JSX.Element {
                     setMenuFor(menuFor === p.id ? null : p.id)
                 }}
             >
-                ⋯
+                <Icon name="more" size={14} />
             </span>
             <span
                 className="project-remove"

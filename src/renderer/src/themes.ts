@@ -121,7 +121,9 @@ const SLATE_VARS = {
     "--accent": "#eba65c",
     "--accent-soft": "#f2bd83",
     "--moss": "#5fce8f",
-    "--clay": "#eba65c",
+    // A desaturated clay for agent badges, distinct from the amber accent so
+    // "agent" doesn't read as a second accent instance (matches Sumi/Zen).
+    "--clay": "#c9906a",
     "--ok": "#5fce8f",
     "--danger": "#e9786b"
 }

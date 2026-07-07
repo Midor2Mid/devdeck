@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
+import { Icon } from "./Icon"
 import type { RemoteInfo } from "../../../preload/index"
 
 /**
@@ -118,7 +119,7 @@ export function PrModal(): JSX.Element | null {
                     />
                     <div className="pr-actions">
                         <button className="btn-min" onClick={() => aiOnDiff(cwd, "pr")} data-tip="Draft a description with an agent (opens a terminal)">
-                            ✎ Draft with AI
+                            <Icon name="pencil" size={13} /> Draft with AI
                         </button>
                         <span style={{ flex: 1 }} />
                         {msg && <span className="pr-msg">{msg}</span>}

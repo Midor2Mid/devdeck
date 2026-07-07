@@ -617,7 +617,7 @@ export function TerminalView(): JSX.Element {
                     onClick={() => setComposerOpen(true)}
                     data-tip="Open the prompt composer (Ctrl+Shift+I)"
                 >
-                    <span className="cl-icon">✎</span>
+                    <span className="cl-icon"><Icon name="pencil" size={14} /></span>
                     <span className="cl-text">
                         {composerDraft.trim()
                             ? "Resume your prompt draft…"

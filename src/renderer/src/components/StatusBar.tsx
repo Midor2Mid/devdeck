@@ -25,15 +25,24 @@ export function StatusBar(): JSX.Element {
             return
         }
         let on = true
+        // Each tick spawns two `git` child processes; skip entirely while the
+        // window is hidden (nothing to show), and refresh on focus so it's fresh
+        // the moment you come back. Cheaper than a fixed always-on 5s poll.
         const tick = (): void => {
+            if (document.hidden) return
             window.api.git.status(path).then((g) => on && setGit(g)).catch(() => undefined)
             window.api.git.getIdentity(path).then((i) => on && setIdentity(i)).catch(() => undefined)
         }
         tick()
-        const iv = setInterval(tick, 5000)
+        const iv = setInterval(tick, 12000)
+        const onFocus = (): void => tick()
+        window.addEventListener("focus", onFocus)
+        document.addEventListener("visibilitychange", onFocus)
         return () => {
             on = false
             clearInterval(iv)
+            window.removeEventListener("focus", onFocus)
+            document.removeEventListener("visibilitychange", onFocus)
         }
     }, [path])
 

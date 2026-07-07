@@ -5,6 +5,7 @@ import { useStore } from "../store"
 import { useSettings } from "../settings"
 import { THEMES } from "../themes"
 import { toCsv, toJson } from "../exporters"
+import { Icon } from "./Icon"
 import "../monaco-setup"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
@@ -421,7 +422,7 @@ export function DbPanel(): JSX.Element {
                                             setEditing({ ...c, password: "" })
                                         }}
                                     >
-                                        ✎
+                                        <Icon name="pencil" size={14} />
                                     </span>
                                     <span
                                         className="project-remove"

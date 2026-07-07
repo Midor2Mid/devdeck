@@ -89,9 +89,14 @@ export function App(): JSX.Element {
         return () => window.removeEventListener("beforeunload", flush)
     }, [init, loadSettings])
 
+    // Only push the mobile session snapshot when the remote server is actually
+    // on - otherwise this fires an IPC + snapshot build on every agent status
+    // flip for nothing (remote is off by default).
+    const remoteEnabled = useSettings((s) => s.remote.enabled)
     useEffect(() => {
+        if (!remoteEnabled) return
         window.api.mobile.syncSessions(sessions())
-    }, [tabsByProject, agentStatus, termAgents, projects, sessions])
+    }, [remoteEnabled, tabsByProject, agentStatus, termAgents, projects, sessions])
 
     // Tell the capture proxy which project is active, so it can tag traffic.
     const activeId = useStore((s) => s.activeId)
@@ -177,7 +182,7 @@ export function App(): JSX.Element {
                             >
                                 <Icon name="search" size={14} />
                                 <span>Search or run…</span>
-                                <span className="cmd-kbd">⌘K</span>
+                                <span className="cmd-kbd">Ctrl+Shift+P</span>
                             </button>
                         </div>
 

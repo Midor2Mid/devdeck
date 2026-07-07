@@ -3,6 +3,7 @@ import { useSettings, type SavedRequest, type Collection } from "../settings"
 import { ImportModal } from "./ImportModal"
 import { contextMenu } from "../contextmenu"
 import { undoToast } from "../toast"
+import { Icon } from "./Icon"
 
 interface Props {
     onLoad: (req: SavedRequest) => void
@@ -337,7 +338,7 @@ export function CollectionsSidebar({ onLoad, activeReqId }: Props): JSX.Element 
                                             }}
                                             data-tip="More…"
                                         >
-                                            ⋯
+                                            <Icon name="more" size={14} />
                                         </button>
                                         {menuFor === r.id && (
                                             <>

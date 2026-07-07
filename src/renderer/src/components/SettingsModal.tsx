@@ -1112,13 +1112,14 @@ export function SettingsModal(): JSX.Element {
                 <div className="settings-nav">
                     <div className="settings-nav-title">Settings</div>
                     {SECTIONS.map((sec) => (
-                        <div
+                        <button
+                            type="button"
                             key={sec.key}
                             className={"settings-nav-item" + (section === sec.key ? " active" : "")}
                             onClick={() => setSection(sec.key)}
                         >
                             {sec.label}
-                        </div>
+                        </button>
                     ))}
                 </div>
 
@@ -1134,7 +1135,8 @@ export function SettingsModal(): JSX.Element {
                                 <label>Theme</label>
                                 <div className="theme-cards">
                                     {THEME_LIST.map((t) => (
-                                        <div
+                                        <button
+                                            type="button"
                                             key={t.id}
                                             className={
                                                 "theme-card" +
@@ -1151,7 +1153,7 @@ export function SettingsModal(): JSX.Element {
                                                 <span style={{ background: t.vars["--text"] }} />
                                             </div>
                                             <span className="theme-name">{t.label}</span>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             </div>
@@ -1159,14 +1161,15 @@ export function SettingsModal(): JSX.Element {
                                 <label>Style</label>
                                 <div className="style-cards">
                                     {STYLE_LIST.map((st) => (
-                                        <div
+                                        <button
+                                            type="button"
                                             key={st.id}
                                             className={"style-card" + (s.appearance.style === st.id ? " on" : "")}
                                             onClick={() => s.setAppearance({ style: st.id })}
                                         >
                                             <span className="style-name">{st.label}</span>
                                             <span className="style-desc">{st.description}</span>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             </div>
@@ -1202,9 +1205,9 @@ export function SettingsModal(): JSX.Element {
                                 </div>
                             </div>
                             <p className="settings-hint">
-                                Three wabi-sabi themes - Sumi &amp; Zen (dark), Washi (light) -
-                                applied across the UI, terminal, and editor. Accent tints the one
-                                highlight color.
+                                Seven themes - Slate, Sumi, Zen, Graphite, Aurora &amp; Neo (dark)
+                                and Washi (light) - each applied across the UI, terminal, and
+                                editor. Accent tints the one highlight color.
                             </p>
                         </div>
                     )}
