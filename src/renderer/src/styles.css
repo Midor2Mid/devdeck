@@ -398,6 +398,12 @@ button .ic,
     box-shadow: var(--elev-3);
     overflow: hidden;
 }
+.switcher-head {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 12px;
+}
 .switcher-search {
     border: none;
     border-bottom: 1px solid var(--border-soft);
@@ -405,6 +411,29 @@ button .ic,
     background: transparent;
     font-size: 16px;
     padding: 16px 20px;
+}
+.switcher-head .switcher-search {
+    flex: 1;
+    min-width: 0;
+    border-bottom: none;
+}
+.switcher-add {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: var(--radius, 7px);
+    padding: 4px 10px;
+    margin-left: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.switcher-add:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.switcher-backdrop.folder-drop {
+    outline: 2px dashed var(--accent);
+    outline-offset: -8px;
 }
 .switcher-grid {
     display: grid;

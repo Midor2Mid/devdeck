@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "../store"
+import { contextMenu } from "../contextmenu"
+import { projectContextMenu } from "../projectMenu"
 
 /**
- * Full-window launchpad for switching projects: a searchable grid of cards.
- * Type to filter, arrows to move, Enter to open. Opened with Ctrl+K.
+ * Full-window launchpad for switching and managing projects: a searchable grid
+ * of cards with an "Add folder" button, per-card context menu, and OS
+ * folder-drop to add. Type to filter, arrows to move, Enter to open.
+ * Opened with Ctrl+K.
  */
 export function ProjectSwitcher(): JSX.Element {
     const projects = useStore((s) => s.projects)
@@ -11,9 +15,12 @@ export function ProjectSwitcher(): JSX.Element {
     const setActiveProject = useStore((s) => s.setActiveProject)
     const close = useStore((s) => s.closeSwitcher)
     const sessions = useStore((s) => s.sessions)
+    const addProject = useStore((s) => s.addProject)
+    const addProjectByPath = useStore((s) => s.addProjectByPath)
 
     const [q, setQ] = useState("")
     const [sel, setSel] = useState(0)
+    const [folderOver, setFolderOver] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
@@ -74,18 +81,43 @@ export function ProjectSwitcher(): JSX.Element {
     }
 
     return (
-        <div className="switcher-backdrop" onMouseDown={close}>
+        <div
+            className={"switcher-backdrop" + (folderOver ? " folder-drop" : "")}
+            onMouseDown={close}
+            onDragOver={(e) => {
+                if (e.dataTransfer.types.includes("Files")) {
+                    e.preventDefault()
+                    setFolderOver(true)
+                }
+            }}
+            onDragLeave={() => setFolderOver(false)}
+            onDrop={(e) => {
+                if (e.dataTransfer.files.length) {
+                    e.preventDefault()
+                    for (const f of Array.from(e.dataTransfer.files)) {
+                        const path = (f as unknown as { path?: string }).path
+                        if (path) addProjectByPath(path)
+                    }
+                }
+                setFolderOver(false)
+            }}
+        >
             <div className="switcher" onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKeyDown}>
-                <input
-                    ref={inputRef}
-                    className="switcher-search"
-                    placeholder="Switch project…"
-                    value={q}
-                    onChange={(e) => {
-                        setQ(e.target.value)
-                        setSel(0)
-                    }}
-                />
+                <div className="switcher-head">
+                    <input
+                        ref={inputRef}
+                        className="switcher-search"
+                        placeholder="Switch project…"
+                        value={q}
+                        onChange={(e) => {
+                            setQ(e.target.value)
+                            setSel(0)
+                        }}
+                    />
+                    <button className="switcher-add" data-tip="Add a project folder" onClick={addProject}>
+                        + Add folder
+                    </button>
+                </div>
                 <div className="switcher-grid">
                     {filtered.map((p, i) => {
                         const c = counts[p.id]
@@ -99,6 +131,7 @@ export function ProjectSwitcher(): JSX.Element {
                                 }
                                 onMouseEnter={() => setSel(i)}
                                 onClick={() => open(p.id)}
+                                onContextMenu={(e) => contextMenu(e, projectContextMenu(p.id))}
                             >
                                 <div className="switcher-card-name">
                                     {p.name}
