@@ -293,8 +293,6 @@ const api = {
             ipcRenderer.invoke("projects:setActive", id),
         setGroup: (id: string, group: string): Promise<ProjectStore> =>
             ipcRenderer.invoke("projects:setGroup", { id, group }),
-        move: (draggedId: string, targetId: string): Promise<ProjectStore> =>
-            ipcRenderer.invoke("projects:move", { draggedId, targetId }),
         addPath: (path: string): Promise<ProjectStore> =>
             ipcRenderer.invoke("projects:addPath", path)
     },

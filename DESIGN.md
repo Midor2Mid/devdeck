@@ -137,9 +137,13 @@ numerals so digits align in a column instead of jittering as they change.
 
 ## Layout
 
-A fixed slim **icon rail** (primary nav) → a resizable **sidebar** (projects +
-agent sessions) → the **main panel** (one view at a time: terminal / editor / API
-/ database / browser / network). Panels are resizable splits.
+A slim **topbar** (ensō · active project ▾ · view breadcrumb · command pill) →
+the **main panel** (one view at a time: terminal / editor / API / database /
+browser / network, full width) → a bottom **Console Deck**. The deck is the live
+control surface: agent sessions appear as **keys** grouped into per-project
+strips (state shown as a dot, active key carries the accent stripe), with the
+view switch, a tool cluster, and the git/status region on its lower row. Project
+management (add, group, reorder, presets) lives in the `Ctrl+K` switcher.
 
 Spacing is a small, consistent scale — **xs 4 · sm 8 · md 12 · lg 16** — applied
 through tokens, never ad hoc. Density is compact-but-breathable; the terminal gets

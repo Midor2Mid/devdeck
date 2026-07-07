@@ -1,17 +1,17 @@
 import { useEffect } from "react"
-import { Allotment } from "allotment"
-import { useStore, type MainView } from "./store"
+import { useStore } from "./store"
+import { nextSession } from "./deck"
 import { useSettings } from "./settings"
 import { useToasts } from "./toast"
-import { Sidebar } from "./components/Sidebar"
-import { Rail } from "./components/Rail"
-import { Icon } from "./components/Icon"
+import { Topbar } from "./components/Topbar"
+import { Deck } from "./components/Deck"
 import { TerminalView } from "./components/TerminalView"
 import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
 import { NetworkPanel } from "./components/NetworkPanel"
+import { DECK_VIEWS } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
@@ -28,25 +28,16 @@ import { PrModal } from "./components/PrModal"
 import { WorkPanel } from "./components/WorkPanel"
 import { ReleaseBoard } from "./components/ReleaseBoard"
 import { StandupModal } from "./components/StandupModal"
-import { StatusBar } from "./components/StatusBar"
 import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { IntroTip } from "./components/IntroTip"
 import { ConfirmDialog } from "./components/ConfirmDialog"
+import { PromptDialog } from "./components/PromptDialog"
 import { TooltipLayer } from "./components/Tooltip"
 import { ContextMenuLayer } from "./components/ContextMenu"
 
-const VIEWS: { key: MainView; label: string }[] = [
-    { key: "terminal", label: "Terminal" },
-    { key: "editor", label: "Editor" },
-    { key: "api", label: "API" },
-    { key: "database", label: "Database" },
-    { key: "browser", label: "Browser" },
-    { key: "network", label: "Network" }
-]
-
 export function App(): JSX.Element {
-    const { init, view, activeProject } = useStore()
+    const { init, view } = useStore()
     const loadSettings = useSettings((s) => s.load)
     const settingsOpen = useSettings((s) => s.settingsOpen)
     const switcherOpen = useStore((s) => s.switcherOpen)
@@ -67,7 +58,6 @@ export function App(): JSX.Element {
     const workOpen = useStore((s) => s.workOpen)
     const releaseOpen = useStore((s) => s.releaseOpen)
     const standupOpen = useStore((s) => s.standupOpen)
-    const project = activeProject()
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
     const tabsByProject = useStore((s) => s.tabsByProject)
@@ -129,7 +119,8 @@ export function App(): JSX.Element {
         })
     }, [])
 
-    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+P command palette.
+    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+P command palette,
+    // Ctrl+1..6 view switch, Ctrl+Tab agent-session cycle.
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
             const mod = e.ctrlKey || e.metaKey
@@ -137,15 +128,38 @@ export function App(): JSX.Element {
                 e.preventDefault()
                 const s = useStore.getState()
                 s.setShortcutsOpen(!s.shortcutsOpen)
-            } else if (mod && e.shiftKey && e.code === "KeyP") {
+                return
+            }
+            if (mod && e.shiftKey && e.code === "KeyP") {
                 e.preventDefault()
                 e.stopPropagation()
                 const s = useStore.getState()
                 s.setPaletteOpen(!s.paletteOpen)
-            } else if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
+                return
+            }
+            if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
                 e.preventDefault()
                 if (useStore.getState().switcherOpen) closeSwitcher()
                 else openSwitcher()
+                return
+            }
+            // Ctrl+1..6 — switch main view.
+            if (mod && !e.shiftKey && /^Digit[1-6]$/.test(e.code)) {
+                e.preventDefault()
+                const idx = Number(e.code.slice(5)) - 1
+                const v = DECK_VIEWS[idx]?.view
+                if (v) useStore.getState().setView(v)
+                return
+            }
+            // Ctrl+Tab / Ctrl+Shift+Tab — cycle agent sessions (deck alt-tab).
+            if (mod && e.code === "Tab") {
+                const s = useStore.getState()
+                const target = nextSession(s.agentSessions(), s.lastAgentTermId, e.shiftKey ? -1 : 1)
+                if (target) {
+                    e.preventDefault()
+                    s.jumpToTerm(target)
+                }
+                return
             }
         }
         window.addEventListener("keydown", handler, true)
@@ -155,82 +169,32 @@ export function App(): JSX.Element {
     return (
         <div className="app">
             <div className="app-body">
-            <Rail />
-            <div className="app-split">
-            <Allotment proportionalLayout={false}>
-                <Allotment.Pane minSize={180} preferredSize={240} maxSize={420}>
-                    <Sidebar />
-                </Allotment.Pane>
-                <Allotment.Pane>
-                    <div className="main">
-                        <div className="topbar">
-                            <div className="topbar-crumb">
-                                <span className="crumb-view">{VIEWS.find((v) => v.key === view)?.label}</span>
-                                {project ? (
-                                    <span className="crumb-sep">/</span>
-                                ) : null}
-                                {project ? (
-                                    <span className="crumb-proj" data-tip={project.path}>{project.name}</span>
-                                ) : (
-                                    <span className="muted">No project</span>
-                                )}
-                            </div>
-                            <button
-                                className="cmd-pill"
-                                onClick={() => useStore.getState().setPaletteOpen(true)}
-                                data-tip="Command palette (Ctrl+Shift+P)"
-                            >
-                                <Icon name="search" size={14} />
-                                <span>Search or run…</span>
-                                <span className="cmd-kbd">Ctrl+Shift+P</span>
-                            </button>
+                <div className="main">
+                    <Topbar />
+                    <div className="panels">
+                        {/* All panels stay mounted; visibility toggled so terminals keep running. */}
+                        <div className="panel" style={{ display: view === "terminal" ? "flex" : "none" }}>
+                            <TerminalView />
                         </div>
-
-                        <div className="panels">
-                            {/* All panels stay mounted; visibility toggled so terminals keep running. */}
-                            <div
-                                className="panel"
-                                style={{ display: view === "terminal" ? "flex" : "none" }}
-                            >
-                                <TerminalView />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "editor" ? "flex" : "none" }}
-                            >
-                                <EditorPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "api" ? "flex" : "none" }}
-                            >
-                                <ApiPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "database" ? "flex" : "none" }}
-                            >
-                                <DbPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "browser" ? "flex" : "none" }}
-                            >
-                                <BrowserPanel />
-                            </div>
-                            <div
-                                className="panel"
-                                style={{ display: view === "network" ? "flex" : "none" }}
-                            >
-                                <NetworkPanel />
-                            </div>
+                        <div className="panel" style={{ display: view === "editor" ? "flex" : "none" }}>
+                            <EditorPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "api" ? "flex" : "none" }}>
+                            <ApiPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "database" ? "flex" : "none" }}>
+                            <DbPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "browser" ? "flex" : "none" }}>
+                            <BrowserPanel />
+                        </div>
+                        <div className="panel" style={{ display: view === "network" ? "flex" : "none" }}>
+                            <NetworkPanel />
                         </div>
                     </div>
-                </Allotment.Pane>
-            </Allotment>
+                </div>
             </div>
-            </div>
-            <StatusBar />
+            <Deck />
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
             {paletteOpen && <CommandPalette />}
@@ -251,6 +215,7 @@ export function App(): JSX.Element {
             <Toasts />
             <IntroTip />
             <ConfirmDialog />
+            <PromptDialog />
             <TooltipLayer />
             <ContextMenuLayer />
         </div>

@@ -161,160 +161,7 @@ select:focus {
     display: flex;
     flex-direction: row;
 }
-.app-split {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    position: relative;
-}
-
-/* ---------- Slim icon rail (primary nav) ---------- */
-.rail {
-    width: 58px;
-    flex: none;
-    background: var(--bg);
-    border-right: 1px solid var(--border-soft);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 12px 0;
-    gap: 4px;
-}
-.rail-logo {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    margin-bottom: 10px;
-    /* The ensō brand mark - a quiet clay brush-ring, no filled tile. */
-    color: var(--accent);
-}
-.rail-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
-.rail-spacer {
-    flex: 1;
-}
-.rail-btn {
-    width: 40px;
-    height: 40px;
-    border: none;
-    background: transparent;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    color: var(--muted);
-    cursor: pointer;
-    position: relative;
-    transition: color 0.12s ease, background 0.12s ease;
-}
-.rail-btn:hover {
-    color: var(--text);
-    background: var(--bg-2);
-}
-.rail-btn.on {
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.rail-btn.on::before {
-    content: "";
-    position: absolute;
-    left: -12px;
-    top: 9px;
-    bottom: 9px;
-    width: 3px;
-    border-radius: 0 2px 2px 0;
-    background: var(--accent);
-}
-
-/* ---------- Expandable rail (icon + label) ---------- */
-/* The whole rail glides between widths; labels fade + slide in, the toggle
-   chevron sweeps. Motion is purposeful + brief, and disabled under
-   prefers-reduced-motion (see below). */
-.rail {
-    transition: width 0.26s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
-}
-.rail.expanded {
-    width: 188px;
-    align-items: stretch;
-    padding: 12px 8px;
-}
-/* Buttons are always flex rows; collapsed just centers the icon and the label
-   is width-clipped to 0, so expanding is a smooth slide rather than a relayout. */
-.rail-logo,
-.rail-btn {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    justify-content: center;
-    transition: justify-content 0s, padding 0.2s ease;
-}
-.rail.expanded .rail-logo {
-    width: auto;
-    justify-content: flex-start;
-    padding-left: 8px;
-}
-.rail.expanded .rail-group {
-    align-items: stretch;
-}
-.rail.expanded .rail-btn {
-    width: 100%;
-    justify-content: flex-start;
-    padding: 0 10px;
-}
-.rail-label {
-    font-size: 13px;
-    white-space: nowrap;
-    overflow: hidden;
-    max-width: 0;
-    opacity: 0;
-    transform: translateX(-4px);
-    transition:
-        max-width 0.26s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.18s ease,
-        transform 0.22s ease;
-}
-.rail.expanded .rail-label {
-    max-width: 130px;
-    opacity: 1;
-    transform: none;
-}
-.rail-wordmark {
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    color: var(--accent);
-}
-/* The "on" accent stripe sits flush to the panel's left edge when expanded. */
-.rail.expanded .rail-btn.on::before {
-    left: -8px;
-}
-.rail-toggle {
-    color: var(--faint);
-}
-.rail-toggle:hover {
-    color: var(--accent);
-}
-.rail-chevron {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.rail.expanded .rail-chevron {
-    transform: rotate(180deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .rail,
-    .rail-label,
-    .rail-chevron,
-    .rail-btn {
-        transition: none;
-    }
-}
 /* Tabular figures so digits align and don't jitter. */
-.statusbar,
 .sb-item,
 .cmd-kbd,
 .grid-card-head,
@@ -323,18 +170,6 @@ select:focus {
 .usage-live-tab,
 .usage-live-agent {
     font-variant-numeric: tabular-nums;
-}
-.statusbar {
-    flex: none;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 12px;
-    background: var(--bg);
-    border-top: 1px solid var(--border-soft);
-    font-size: 11px;
-    color: var(--muted);
 }
 .sb-left,
 .sb-right {
@@ -469,34 +304,6 @@ select:focus {
     font-weight: 600;
 }
 
-/* ---------- Sidebar ---------- */
-.sidebar {
-    height: 100%;
-    background: var(--bg);
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid var(--border-soft);
-}
-.sidebar-header {
-    padding: 18px 18px 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.header-actions {
-    display: flex;
-    gap: 2px;
-}
-.gear-btn {
-    border: none;
-    color: var(--muted);
-    font-size: 15px;
-    padding: 4px 6px;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
 /* Line icons inherit text color and align cleanly inside controls. */
 .ic {
     flex: none;
@@ -539,50 +346,7 @@ button .ic,
         animation: none;
     }
 }
-.gear-btn:hover {
-    color: var(--accent-soft);
-    background: transparent;
-}
-
-/* project groups */
-.project-group-head {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 8px;
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-    cursor: pointer;
-    border-radius: 6px;
-}
-.project-group-head:hover {
-    color: var(--text);
-}
-.project-group-head .caret {
-    color: var(--faint);
-    width: 10px;
-}
-.group-count {
-    margin-left: auto;
-    color: var(--faint);
-    font-size: 10px;
-}
-.project-group-items {
-    padding-left: 8px;
-}
-.project-menu-btn {
-    color: var(--faint);
-    opacity: 0;
-    padding: 0 4px;
-    cursor: pointer;
-}
-.project-item:hover .project-menu-btn {
-    opacity: 1;
-}
-.project-menu-btn:hover {
-    color: var(--accent-soft);
-}
+/* Group / identity menus (shared by deck status + modals) */
 .group-menu {
     position: absolute;
     z-index: 20;
@@ -609,12 +373,6 @@ button .ic,
 .group-menu-item:hover {
     background: var(--bg-3);
 }
-.group-new {
-    width: 100%;
-    margin-top: 6px;
-    font-size: 12px;
-    padding: 5px 7px;
-}
 
 /* ---------- Project switcher ---------- */
 .switcher-backdrop {
@@ -640,6 +398,12 @@ button .ic,
     box-shadow: var(--elev-3);
     overflow: hidden;
 }
+.switcher-head {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-soft);
+    padding-right: 12px;
+}
 .switcher-search {
     border: none;
     border-bottom: 1px solid var(--border-soft);
@@ -647,6 +411,29 @@ button .ic,
     background: transparent;
     font-size: 16px;
     padding: 16px 20px;
+}
+.switcher-head .switcher-search {
+    flex: 1;
+    min-width: 0;
+    border-bottom: none;
+}
+.switcher-add {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: var(--radius, 7px);
+    padding: 4px 10px;
+    margin-left: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.switcher-add:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.switcher-backdrop.folder-drop {
+    outline: 2px dashed var(--accent);
+    outline-offset: -8px;
 }
 .switcher-grid {
     display: grid;
@@ -748,24 +535,6 @@ button .ic,
     color: var(--faint);
     text-transform: uppercase;
 }
-.brand {
-    font-weight: var(--brand-weight, 500);
-    font-size: 15px;
-    letter-spacing: var(--brand-spacing, 1.5px);
-    color: var(--text);
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-}
-.brand-enso {
-    flex: none;
-    color: var(--accent);
-}
-/* When the rail is expanded it shows its own DevDeck wordmark, so drop the
-   duplicate brand in the sidebar header. */
-.rail.expanded + .app-split .sidebar-header .brand {
-    display: none;
-}
 .sidebar-section-title {
     display: flex;
     align-items: center;
@@ -791,41 +560,10 @@ button .ic,
     background: transparent;
     color: var(--accent-soft);
 }
-.project-list {
-    flex: 1 1 45%;
-    min-height: 40px;
-    overflow-y: auto;
-    padding: 2px 10px;
-}
 .sidebar-empty {
     padding: 18px 10px;
     line-height: 1.7;
     font-size: 12px;
-}
-.project-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--row-py, 8px) 10px;
-    border-radius: var(--radius, 7px);
-    cursor: pointer;
-    margin-bottom: 2px;
-    color: var(--muted);
-    transition: background 0.15s ease, color 0.15s ease;
-}
-.project-item:hover {
-    background: var(--bg-2);
-    color: var(--text);
-}
-.project-item.active {
-    background: var(--bg-2);
-    color: var(--text);
-    box-shadow: inset 2px 0 0 var(--accent);
-}
-.project-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 .project-remove {
     color: var(--faint);
@@ -833,64 +571,8 @@ button .ic,
     padding: 0 4px;
     transition: opacity 0.15s ease, color 0.15s ease;
 }
-.project-item:hover .project-remove {
-    opacity: 1;
-}
 .project-remove:hover {
     color: var(--danger);
-}
-
-/* ---------- Claude sessions registry ---------- */
-.claude-title {
-    border-top: 1px solid var(--border-soft);
-    margin-top: 4px;
-    padding-top: 12px;
-}
-.attention-badge {
-    background: var(--accent);
-    color: #14110d;
-    font-size: 10px;
-    font-weight: 700;
-    min-width: 16px;
-    height: 16px;
-    border-radius: 8px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 5px;
-    letter-spacing: 0;
-}
-.claude-list {
-    flex: 1 1 45%;
-    min-height: 40px;
-    overflow-y: auto;
-    padding: 2px 10px 10px;
-}
-.claude-session {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: var(--row-py, 7px) 10px;
-    border-radius: var(--radius, 7px);
-    cursor: pointer;
-    color: var(--muted);
-}
-.claude-session:hover {
-    background: var(--bg-2);
-    color: var(--text);
-}
-.claude-session-text {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    line-height: 1.25;
-    overflow: hidden;
-}
-.claude-session-tab {
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 .session-rename {
     width: 100%;
@@ -902,19 +584,12 @@ button .ic,
     font-size: 12px;
     font-family: inherit;
 }
-.claude-session-project {
-    font-size: 10px;
-    color: var(--faint);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 .claude-attn {
     color: var(--accent);
     font-weight: 700;
 }
 
-/* Claude status dots (shared by sidebar + terminal tabs) */
+/* Claude status dots (shared by deck keys + terminal tabs) */
 .tab-dot.status-idle {
     opacity: 0.35;
 }
@@ -935,10 +610,19 @@ button .ic,
         opacity: 1;
     }
 }
+@media (prefers-reduced-motion: reduce) {
+    .tab-dot.status-working {
+        animation: none;
+    }
+}
 
 /* ---------- Main ---------- */
 .main {
     height: 100%;
+    /* Fill the app-body row: with the Allotment sidebar split removed, main is a
+       bare flex child and must grow to the full window width itself. */
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     background: var(--bg-2);
@@ -951,34 +635,7 @@ button .ic,
     border-bottom: 1px solid var(--border-soft);
     gap: 12px;
 }
-.view-tabs {
-    display: flex;
-    gap: 2px;
-}
-.view-tab {
-    background: transparent;
-    border: 1px solid transparent;
-    padding: 4px 14px;
-    color: var(--muted);
-    border-radius: 6px;
-}
-.view-tab:hover {
-    border-color: transparent;
-    color: var(--text);
-}
-.view-tab.active {
-    color: var(--text);
-    box-shadow: inset 0 -2px 0 var(--accent);
-    border-radius: 0;
-}
-.topbar-project {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-    color: var(--faint);
-}
-/* Topbar breadcrumb + command pill (rail-layout) */
+/* Topbar breadcrumb + command pill */
 .topbar-crumb {
     display: flex;
     align-items: center;
@@ -4123,11 +3780,6 @@ button .ic,
 [data-style="neon"] {
     --radius: 9px;
 }
-/* Glowing wordmark */
-[data-style="neon"] .brand {
-    letter-spacing: 0.04em;
-    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
-}
 /* Accent buttons + active toggles bloom */
 [data-style="neon"] button.accent,
 [data-style="neon"] .icon-action.on {
@@ -4372,8 +4024,6 @@ button .ic,
     box-shadow: none;
 }
 /* Uppercase geometric chrome */
-[data-style="bauhaus"] .brand,
-[data-style="bauhaus"] .m-brand,
 [data-style="bauhaus"] .settings-section h3,
 [data-style="bauhaus"] .modal-head,
 [data-style="bauhaus"] .drawer-head,
@@ -4382,6 +4032,14 @@ button .ic,
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-weight: 700;
+}
+/* Deck: rectangular keys under a heavy structural top rule */
+[data-style="bauhaus"] .deck-key,
+[data-style="bauhaus"] .deck-add {
+    border-radius: 0;
+}
+[data-style="bauhaus"] .deck {
+    border-top-width: 2px;
 }
 
 /* ============================================================
@@ -4427,11 +4085,6 @@ button .ic,
     border-radius: 3px;
 }
 /* Phosphor glow on accents / chrome (terminal canvas is unaffected) */
-[data-style="crt"] .brand {
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
-}
 [data-style="crt"] .accent,
 [data-style="crt"] button.accent,
 [data-style="crt"] .lc-sha,
@@ -4475,6 +4128,11 @@ button .ic,
         97% { opacity: 0.82; }
         98% { opacity: 0.94; }
     }
+}
+/* Deck labels read as terminal chrome */
+[data-style="crt"] .deck-key-name,
+[data-style="crt"] .deck-view-name {
+    font-family: var(--mono, monospace);
 }
 
 /* ============================================================
@@ -4542,11 +4200,6 @@ button .ic,
 [data-style="modern"] textarea:focus {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
-[data-style="modern"] .brand {
-    letter-spacing: -0.02em;
-    font-weight: 650;
-}
-
 /* ---------- shortcuts cheat-sheet + kbd ---------- */
 kbd {
     font-family: "Cascadia Mono", Consolas, monospace;
@@ -4668,6 +4321,10 @@ kbd {
     justify-content: flex-end;
     gap: 8px;
     margin-top: 20px;
+}
+.confirm-dialog .prompt-input {
+    width: 100%;
+    margin-top: 12px;
 }
 .danger-btn {
     background: var(--danger);
@@ -5037,9 +4694,8 @@ kbd {
         ),
         var(--bg-2);
 }
-/* Rail + sidebar become frosted glass. */
-[data-style="lacquer"] .rail,
-[data-style="lacquer"] .sidebar {
+/* The console deck becomes frosted glass. */
+[data-style="lacquer"] .deck {
     background: color-mix(in srgb, var(--bg) 68%, transparent);
     backdrop-filter: blur(10px);
 }
@@ -5089,14 +4745,13 @@ kbd {
     box-shadow: inset 0 -2px 0 var(--accent),
         0 0 14px -4px color-mix(in srgb, var(--accent) 55%, transparent);
 }
-/* Active rail icon gets a soft halo. */
-[data-style="lacquer"] .rail-btn.on {
+/* Active deck key gets a soft halo. */
+[data-style="lacquer"] .deck-key.active {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent),
         0 0 16px -4px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 /* The ensō brand mark catches a gilded glow. */
-[data-style="lacquer"] .rail-logo,
-[data-style="lacquer"] .brand-enso {
+[data-style="lacquer"] .topbar-brand {
     filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent));
 }
 /* Cards & rows: frosted glass + lift; hover raises them. */
@@ -5195,7 +4850,7 @@ kbd {
     }
 }
 /* The ensō brand mark glows in a slow, calm breath. */
-[data-style="lacquer"] .rail-logo {
+[data-style="lacquer"] .topbar-brand {
     animation: lacquer-enso-glow 4.5s ease-in-out infinite;
 }
 @keyframes lacquer-enso-glow {
@@ -5210,7 +4865,7 @@ kbd {
 /* Respect reduced-motion: keep the gloss, drop the movement. */
 @media (prefers-reduced-motion: reduce) {
     [data-style="lacquer"] button.accent::after,
-    [data-style="lacquer"] .rail-logo {
+    [data-style="lacquer"] .topbar-brand {
         animation: none;
     }
 }
@@ -5314,9 +4969,6 @@ kbd {
 [data-style="modernplus"] .term-tab.active {
     box-shadow: inset 0 -2px 0 var(--accent);
 }
-[data-style="modernplus"] .rail-btn.on {
-    box-shadow: inset 2px 0 0 var(--accent);
-}
 /* Cards & rows: hairline border + soft elevation; hover raises. */
 [data-style="modernplus"] .switcher-card,
 [data-style="modernplus"] .theme-card,
@@ -5367,29 +5019,17 @@ kbd {
 }
 
 /* ---------- Drag & drop affordances ---------- */
-.project-item,
 .col-req,
 .col-group-head {
     cursor: grab;
 }
-.project-item.dragging {
-    opacity: 0.45;
-}
 /* Drop indicator: an accent line at the top edge of the hovered target. */
-.project-item.drag-over,
 .col-req.drag-over {
     box-shadow: inset 0 2px 0 var(--accent);
 }
-.project-group-head.drag-over,
 .col-group-head.drag-over {
     background: color-mix(in srgb, var(--accent) 16%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
-}
-/* OS folder dragged over the project list. */
-.project-list.folder-drop {
-    outline: 2px dashed color-mix(in srgb, var(--accent) 60%, transparent);
-    outline-offset: -4px;
-    border-radius: 8px;
 }
 
 /* ---------- Tab drag-to-split ---------- */
@@ -5447,15 +5087,6 @@ kbd {
 .tree-row.file,
 .db-table {
     cursor: grab;
-}
-/* While a payload is in flight, hint that sessions accept it. */
-.claude-session.drop-active {
-    outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
-    outline-offset: -2px;
-}
-.claude-session.drag-over {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-    box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 /* ---------- Context menu ---------- */
@@ -5527,7 +5158,7 @@ kbd {
     color: var(--accent-soft);
 }
 
-/* ---------- Per-project task runner (sidebar) ---------- */
+/* ---------- Per-project task runner (deck popover) ---------- */
 .task-list {
     display: flex;
     flex-wrap: wrap;
@@ -5768,8 +5399,7 @@ kbd {
 /* Press feedback — transform only, so it never clobbers a component's own
    transition. A refined, subtle press reads as responsive across every button. */
 button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
-.task-chip:not(:disabled):active,
-.rail-btn:active { transform: scale(0.96); }
+.task-chip:not(:disabled):active { transform: scale(0.96); }
 
 @media (prefers-reduced-motion: reduce) {
     .modal-backdrop,
@@ -5780,8 +5410,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     .agent-menu,
     .db-history-menu { animation: none; }
     button:not(:disabled):active,
-    .task-chip:not(:disabled):active,
-    .rail-btn:active { transform: none; }
+    .task-chip:not(:disabled):active { transform: none; }
 }
 
 /* ============================================================
@@ -5789,7 +5418,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
    Premium frosted glass: translucent blurred surfaces, a gradient accent CTA,
    soft glow on active elements. Pairs with the Aurora theme.
    ============================================================ */
-[data-style="aurora"] .sidebar,
 [data-style="aurora"] .modal,
 [data-style="aurora"] .drawer,
 [data-style="aurora"] .agent-menu,
@@ -5823,8 +5451,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 }
 /* Active surfaces glow. */
 [data-style="aurora"] .term-tab.active,
-[data-style="aurora"] .editor-tab.active,
-[data-style="aurora"] .rail-btn.on {
+[data-style="aurora"] .editor-tab.active {
     box-shadow:
         0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
         0 0 18px -5px color-mix(in srgb, var(--accent) 55%, transparent);
@@ -5832,8 +5459,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 /* Cards lift on hover. */
 [data-style="aurora"] .switcher-card,
 [data-style="aurora"] .theme-card,
-[data-style="aurora"] .style-card,
-[data-style="aurora"] .project-item {
+[data-style="aurora"] .style-card {
     transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 [data-style="aurora"] .switcher-card:hover,
@@ -5842,7 +5468,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     transform: scale(1.02);
 }
 /* A slow aurora shimmer behind the ensō mark. */
-[data-style="aurora"] .rail-logo {
+[data-style="aurora"] .topbar-brand {
     animation: aurora-glow 6s ease-in-out infinite;
 }
 @keyframes aurora-glow {
@@ -5850,7 +5476,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     50% { filter: drop-shadow(0 0 13px color-mix(in srgb, var(--clay) 70%, transparent)); }
 }
 @media (prefers-reduced-motion: reduce) {
-    [data-style="aurora"] .rail-logo { animation: none; }
+    [data-style="aurora"] .topbar-brand { animation: none; }
 }
 
 /* ============================================================
@@ -5858,7 +5484,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
    Sci-fi cockpit: a faint dot grid, glowing luminous edges, neon active
    stripes, focus glow, and a pulsing ensō. Pairs with the Neo theme.
    ============================================================ */
-[data-style="neo"] .sidebar,
 [data-style="neo"] .main,
 [data-style="neo"] .term-stage {
     background-image: radial-gradient(
@@ -5893,13 +5518,16 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 }
 /* Active = a glowing neon edge + text glow. */
 [data-style="neo"] .term-tab.active,
-[data-style="neo"] .editor-tab.active,
-[data-style="neo"] .rail-btn.on {
+[data-style="neo"] .editor-tab.active {
     color: var(--accent);
     box-shadow:
         inset 0 -2px 0 var(--accent),
         0 0 16px -6px color-mix(in srgb, var(--accent) 60%, transparent);
     text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* Active deck key glows like a lit console switch. */
+[data-style="neo"] .deck-key.active {
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 /* Focus draws a cyan glow ring. */
 [data-style="neo"] input:focus,
@@ -5917,7 +5545,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 85%, transparent);
 }
 /* The ensō pulses like a reactor core. */
-[data-style="neo"] .rail-logo {
+[data-style="neo"] .topbar-brand {
     animation: neo-pulse 3.2s ease-in-out infinite;
 }
 @keyframes neo-pulse {
@@ -5925,7 +5553,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     50% { filter: drop-shadow(0 0 13px color-mix(in srgb, var(--accent) 90%, transparent)); }
 }
 @media (prefers-reduced-motion: reduce) {
-    [data-style="neo"] .rail-logo { animation: none; }
+    [data-style="neo"] .topbar-brand { animation: none; }
 }
 
 /* ============================================================
@@ -5933,7 +5561,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
    Restrained color, alive with motion: spring-lift hovers, an active
    indicator that grows in, smooth easing. Theme-agnostic (Linear-style).
    ============================================================ */
-[data-style="kinetic"] .project-item,
 [data-style="kinetic"] .switcher-card,
 [data-style="kinetic"] .theme-card,
 [data-style="kinetic"] .style-card,
@@ -5958,7 +5585,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 }
 /* Full-width rows must NOT move (a moving hit box flickers the cursor at its
    edge); elevate them with shadow + border instead. */
-[data-style="kinetic"] .project-item:hover,
 [data-style="kinetic"] .work-item:hover {
     box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.5);
 }
@@ -5988,8 +5614,8 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     from { transform: scaleX(0); opacity: 0; }
     to { transform: scaleX(1); opacity: 1; }
 }
-/* The rail's active stripe grows down. */
-[data-style="kinetic"] .rail-btn.on::before {
+/* The deck key's active stripe grows down. */
+[data-style="kinetic"] .deck-key.active::before {
     transform-origin: top;
     animation: kinetic-stripe 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -5998,7 +5624,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     to { transform: scaleY(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-    [data-style="kinetic"] .project-item,
     [data-style="kinetic"] .switcher-card,
     [data-style="kinetic"] .theme-card,
     [data-style="kinetic"] .style-card,
@@ -6007,11 +5632,261 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     [data-style="kinetic"] button { transition: none; }
     [data-style="kinetic"] .term-tab.active::after,
     [data-style="kinetic"] .editor-tab.active::after,
-    [data-style="kinetic"] .rail-btn.on::before { animation: none; }
+    [data-style="kinetic"] .deck-key.active::before { animation: none; }
     [data-style="kinetic"] .switcher-card:hover,
     [data-style="kinetic"] .theme-card:hover,
     [data-style="kinetic"] .style-card:hover,
     [data-style="kinetic"] .task-chip:hover,
     [data-style="kinetic"] button.accent:hover,
     [data-style="kinetic"] .send-claude:hover { transform: none; }
+}
+
+/* ============================================================
+   Console Deck (bottom control surface) + topbar brand.
+   Built entirely from theme tokens so every theme x style
+   combination reskins it without component changes.
+   ============================================================ */
+.deck {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+}
+.deck-strips {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    min-height: 38px;
+    padding: 4px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+.deck-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 8px;
+    border-right: 1px solid var(--border-soft);
+    flex: none;
+}
+.deck-strip.active .deck-strip-label {
+    color: var(--text);
+}
+.deck-strip-label {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    padding: 0 2px;
+}
+.deck-strip-label:hover {
+    color: var(--text);
+}
+.deck-strip-keys {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.deck-key {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: var(--radius, 7px);
+    background: var(--bg-2);
+    color: var(--muted);
+    cursor: pointer;
+    max-width: 180px;
+    transition: background var(--dur-fast, 120ms) var(--ease, ease), color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.deck-key:hover {
+    background: var(--panel);
+    color: var(--text);
+}
+.deck-key.active {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.deck-key.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--accent);
+}
+.deck-key.compressed {
+    padding: 0 6px;
+}
+.deck-key.drop-active {
+    outline: 1px dashed var(--accent);
+}
+.deck-key.drag-over {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.deck-key-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+}
+.deck-add {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--faint);
+    border-radius: var(--radius, 7px);
+    cursor: pointer;
+}
+.deck-add:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.deck-empty {
+    background: transparent;
+    border: none;
+    color: var(--faint);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 6px;
+}
+.deck-empty:hover {
+    color: var(--text);
+}
+
+.deck-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 30px;
+    padding: 0 10px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 11px;
+    color: var(--muted);
+}
+.deck-views {
+    display: flex;
+    gap: 2px;
+    flex: none;
+}
+.deck-view {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 3px 10px;
+    border-radius: var(--radius, 7px);
+    cursor: pointer;
+}
+.deck-view:hover {
+    color: var(--text);
+}
+.deck-view.on {
+    color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--accent);
+    border-radius: 0;
+}
+.deck-view-name {
+    font-size: 12px;
+}
+.deck-tools {
+    display: flex;
+    gap: 2px;
+    flex: none;
+}
+.deck-tool {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    border-radius: var(--radius, 7px);
+    cursor: pointer;
+}
+.deck-tool:hover {
+    color: var(--text);
+    background: var(--bg-2);
+}
+.deck-tasks-wrap {
+    position: relative;
+}
+.deck-popover {
+    position: absolute;
+    bottom: 34px;
+    left: 0;
+    min-width: 220px;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 8px);
+    box-shadow: var(--elev-2);
+    z-index: 40;
+}
+.deck-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    justify-content: flex-end;
+}
+.deck-status-spacer {
+    flex: 1;
+}
+
+/* ---------- Topbar brand + project button ---------- */
+.topbar-brand {
+    display: grid;
+    place-items: center;
+    color: var(--accent);
+}
+.topbar-proj-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    max-width: 40vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.topbar-proj-btn:hover {
+    color: var(--accent);
+}
+/* The caret icon is already a down-chevron (chevronDown) — no rotation. */
+.topbar-proj-caret {
+    color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .deck-key {
+        transition: none;
+    }
 }

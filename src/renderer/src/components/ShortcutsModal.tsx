@@ -9,6 +9,9 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
         items: [
             ["Ctrl + K", "Switch project"],
             ["Ctrl + Shift + P", "Command palette"],
+            ["Ctrl + 1 … 6", "Switch view (Terminal … Network)"],
+            ["Ctrl + Tab", "Next agent session"],
+            ["Ctrl + Shift + Tab", "Previous agent session"],
             ["F1", "This shortcuts list"]
         ]
     },
