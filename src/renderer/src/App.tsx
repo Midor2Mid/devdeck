@@ -32,6 +32,7 @@ import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { IntroTip } from "./components/IntroTip"
 import { ConfirmDialog } from "./components/ConfirmDialog"
+import { PromptDialog } from "./components/PromptDialog"
 import { TooltipLayer } from "./components/Tooltip"
 import { ContextMenuLayer } from "./components/ContextMenu"
 
@@ -214,6 +215,7 @@ export function App(): JSX.Element {
             <Toasts />
             <IntroTip />
             <ConfirmDialog />
+            <PromptDialog />
             <TooltipLayer />
             <ContextMenuLayer />
         </div>

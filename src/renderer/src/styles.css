@@ -610,6 +610,11 @@ button .ic,
         opacity: 1;
     }
 }
+@media (prefers-reduced-motion: reduce) {
+    .tab-dot.status-working {
+        animation: none;
+    }
+}
 
 /* ---------- Main ---------- */
 .main {
@@ -4316,6 +4321,10 @@ kbd {
     justify-content: flex-end;
     gap: 8px;
     margin-top: 20px;
+}
+.confirm-dialog .prompt-input {
+    width: 100%;
+    margin-top: 12px;
 }
 .danger-btn {
     background: var(--danger);

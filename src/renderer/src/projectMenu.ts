@@ -1,6 +1,7 @@
 import { useStore } from "./store"
 import { useSettings } from "./settings"
 import { confirm } from "./confirm"
+import { prompt } from "./prompt"
 import type { MenuItem } from "./contextmenu"
 
 export type { MenuItem } from "./contextmenu"
@@ -22,6 +23,17 @@ export function projectContextMenu(projectId: string): MenuItem[] {
         ...groups
             .filter((g) => g !== project.group)
             .map((g) => ({ label: "Move to " + g, onClick: () => s.setProjectGroup(project.id, g) })),
+        {
+            label: "Move to new group…",
+            onClick: async () => {
+                const name = await prompt({
+                    title: "New group",
+                    placeholder: "Group name",
+                    confirmLabel: "Create"
+                })
+                if (name && name.trim()) s.setProjectGroup(project.id, name.trim())
+            }
+        },
         ...(project.group ? [{ label: "Ungroup", onClick: () => s.setProjectGroup(project.id, "") }] : []),
         { separator: true },
         ...(hasTabs ? [{ label: "Save layout as preset", onClick: () => s.saveWorkspacePreset(project.id) }] : []),
