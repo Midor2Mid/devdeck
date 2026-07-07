@@ -21,16 +21,16 @@ colors:
   danger: "#e9786b"
 typography:
   heading:
-    fontFamily: "Segoe UI, system-ui, sans-serif"
+    fontFamily: "Inter Variable", "Segoe UI", system-ui, sans-serif
     fontSize: 15px
   body:
-    fontFamily: "Segoe UI, system-ui, sans-serif"
+    fontFamily: "Inter Variable", "Segoe UI", system-ui, sans-serif
     fontSize: 13px
   label:
-    fontFamily: "Segoe UI, system-ui, sans-serif"
+    fontFamily: "Inter Variable", "Segoe UI", system-ui, sans-serif
     fontSize: 11px
   mono:
-    fontFamily: "Cascadia Mono, Consolas, monospace"
+    fontFamily: "Geist Mono Variable", "Cascadia Mono", Consolas, monospace
     fontSize: 13px
 rounded:
   sm: 6px
@@ -124,8 +124,14 @@ or code-shaped.
 - **heading (15px):** modal titles and section headers, ~600 weight.
 - **body (13px):** the default — buttons, rows, labels.
 - **label (11px):** uppercase, letter-spaced section titles (PROJECTS, AGENTS).
-- **mono (Cascadia Mono, 13px):** terminals, the SQL/HTTP editors, code, paths,
+- **mono (Geist Mono, 13px):** terminals, the SQL/HTTP editors, code, paths,
   and tabular numerals where digits must align. Terminal line-height is generous.
+
+Inter (UI) and Geist Mono (mono) ship bundled with the app (Fontsource, no CDN
+fetch), so type renders identically offline and on first launch. The terminal
+(xterm) keeps its own user-configurable font — it's a workspace, not chrome.
+Numeric/status surfaces (usage counters, mono status columns) use tabular
+numerals so digits align in a column instead of jittering as they change.
 
 ## Layout
 
@@ -144,6 +150,20 @@ Flat by default. Depth is a *style dial*: Modern Pro uses **subtle elevation**
 nearly flat; Lacquer adds frosted glass; Neon swaps shadow for accent glow. Use
 the lightest depth that still separates a floating surface from the ground —
 modals get the largest shadow, inline cards the smallest.
+
+Elevation is a token scale — `--elev-1` (cards), `--elev-2` (menus/popovers),
+`--elev-3` (modals) — plus `--edge-hi`, a hairline top highlight that gives a
+floating surface a tactile top edge. Each theme tunes its own shadow color and
+opacity (a soft warm set for light Washi, a darker set for the dark themes);
+styles still dial overall intensity on top.
+
+## Motion
+
+A shared motion vocabulary: `--ease` (standard) and `--ease-spring` (playful
+overshoot) pair with `--dur-fast` / `--dur` / `--dur-slow` (120/180/260ms) for
+hovers, presses, and floating-surface transitions. All of it is disabled under
+`prefers-reduced-motion: reduce` — motion is a nicety, never a requirement to
+read the UI.
 
 ## Shapes
 
