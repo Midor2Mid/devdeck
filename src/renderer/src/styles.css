@@ -614,6 +614,10 @@ button .ic,
 /* ---------- Main ---------- */
 .main {
     height: 100%;
+    /* Fill the app-body row: with the Allotment sidebar split removed, main is a
+       bare flex child and must grow to the full window width itself. */
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     background: var(--bg-2);
