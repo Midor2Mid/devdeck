@@ -321,7 +321,11 @@ select:focus {
 .statusbar,
 .sb-item,
 .cmd-kbd,
-.grid-card-head {
+.grid-card-head,
+.usage-card-num,
+.usage-bar-count,
+.usage-live-tab,
+.usage-live-agent {
     font-variant-numeric: tabular-nums;
 }
 .statusbar {
