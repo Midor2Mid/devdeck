@@ -652,6 +652,53 @@ button .ic,
 .mission-chip-dot.ok {
     background: var(--ok);
 }
+.mission-own {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.mission-own-warn {
+    color: var(--danger);
+}
+.mission-own-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 4px 8px;
+    border-radius: var(--radius, 6px);
+    border-left: 2px solid transparent;
+}
+.mission-own-row.conflict {
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+    border-left-color: var(--danger);
+}
+.mission-own-path {
+    font-family: var(--mono, monospace);
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+.mission-own-owners {
+    display: flex;
+    gap: 4px;
+    flex: none;
+}
+.mission-own-chip {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11px;
+    cursor: pointer;
+}
+.mission-own-chip:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
 @media (prefers-reduced-motion: reduce) {
     .mission-tile {
         transition: none;
