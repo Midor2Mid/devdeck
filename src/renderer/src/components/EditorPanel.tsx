@@ -152,6 +152,8 @@ export function EditorPanel(): JSX.Element {
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
     const sendToClaude = useStore((s) => s.sendToAgent)
     const lastClaude = useStore((s) => s.lastAgentTermId)
+    const pendingEditorOpen = useStore((s) => s.pendingEditorOpen)
+    const clearPendingEditorOpen = useStore((s) => s.clearPendingEditorOpen)
     const editorSettings = useSettings((s) => s.editor)
     const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
     const [files, setFiles] = useState<OpenFile[]>([])
@@ -191,6 +193,25 @@ export function EditorPanel(): JSX.Element {
     // Keep a ref to the latest save fn so Monaco's Ctrl+S command isn't stale.
     const saveRef = useRef<() => void>(() => undefined)
 
+    // Editor instance + a pending line to reveal (handed in from cross-project search).
+    const editorRef = useRef<{
+        revealLineInCenter: (line: number) => void
+        setPosition: (pos: { lineNumber: number; column: number }) => void
+        focus: () => void
+    } | null>(null)
+    const revealLineRef = useRef<number | null>(null)
+    const revealPending = (): void => {
+        const line = revealLineRef.current
+        const ed = editorRef.current
+        if (!line || !ed) return
+        revealLineRef.current = null
+        requestAnimationFrame(() => {
+            ed.revealLineInCenter(line)
+            ed.setPosition({ lineNumber: line, column: 1 })
+            ed.focus()
+        })
+    }
+
     const open = async (entry: DirEntry): Promise<void> => {
         setError(null)
         if (files.some((f) => f.path === entry.path)) {
@@ -210,6 +231,22 @@ export function EditorPanel(): JSX.Element {
             setError(e instanceof Error ? e.message : String(e))
         }
     }
+
+    // Open a file by absolute path (+ optional line), handed in from search.
+    const openPath = async (path: string, line?: number): Promise<void> => {
+        revealLineRef.current = line ?? null
+        const name = path.split(/[\\/]/).pop() ?? path
+        await open({ path, name, isDir: false })
+    }
+    useEffect(() => {
+        if (!pendingEditorOpen) return
+        void openPath(pendingEditorOpen.path, pendingEditorOpen.line)
+        clearPendingEditorOpen()
+    }, [pendingEditorOpen])
+    // Reveal a pending search line once the target model is active.
+    useEffect(() => {
+        revealPending()
+    }, [activePath])
 
     const updateContent = (path: string, value: string): void => {
         setFiles((prev) =>
@@ -329,10 +366,12 @@ export function EditorPanel(): JSX.Element {
                                     value={active.content}
                                     onChange={(v) => updateContent(active.path, v ?? "")}
                                     onMount={(editor, monaco) => {
+                                        editorRef.current = editor
                                         editor.addCommand(
                                             monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
                                             () => saveRef.current()
                                         )
+                                        revealPending()
                                     }}
                                     options={{
                                         fontFamily: '"Geist Mono Variable", "Cascadia Mono", Consolas, monospace',

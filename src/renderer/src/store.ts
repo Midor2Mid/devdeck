@@ -182,6 +182,8 @@ interface AppState extends Persisted {
     setComposerOpen: (open: boolean) => void
     paletteOpen: boolean
     setPaletteOpen: (open: boolean) => void
+    searchOpen: boolean
+    setSearchOpen: (open: boolean) => void
     shortcutsOpen: boolean
     setShortcutsOpen: (open: boolean) => void
 
@@ -227,6 +229,11 @@ interface AppState extends Persisted {
     // A request handed from the Network panel to the API client to load (runtime-only).
     pendingApiRequest: SavedRequest | null
     setPendingApiRequest: (req: SavedRequest | null) => void
+
+    // A file+line handed from cross-project search to the editor to open (runtime-only).
+    pendingEditorOpen: { path: string; line?: number } | null
+    openInEditor: (projectId: string, path: string, line?: number) => void
+    clearPendingEditorOpen: () => void
 
     // Tab drag-and-drop (runtime-only)
     draggingTabId: string | null
@@ -464,10 +471,12 @@ export const useStore = create<AppState>((set, get) => {
         switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
+        searchOpen: false,
         shortcutsOpen: false,
         draggingTabId: null,
         dragPayload: null,
         pendingApiRequest: null,
+        pendingEditorOpen: null,
         agentStatus: {},
         lastAgentTermId: null,
         notifications: [],
@@ -555,6 +564,7 @@ export const useStore = create<AppState>((set, get) => {
         closeSwitcher: () => set({ switcherOpen: false }),
         setComposerOpen: (composerOpen) => set({ composerOpen }),
         setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+        setSearchOpen: (searchOpen) => set({ searchOpen }),
         setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 
         activeProject: () => get().projects.find((p) => p.id === get().activeId),
@@ -1172,6 +1182,13 @@ export const useStore = create<AppState>((set, get) => {
         setDraggingTabId: (draggingTabId) => set({ draggingTabId }),
         setDragPayload: (dragPayload) => set({ dragPayload }),
         setPendingApiRequest: (pendingApiRequest) => set({ pendingApiRequest }),
+
+        openInEditor: (projectId, path, line) => {
+            void get().setActiveProject(projectId)
+            get().setView("editor")
+            set({ pendingEditorOpen: { path, line } })
+        },
+        clearPendingEditorOpen: () => set({ pendingEditorOpen: null }),
 
         reorderTabs: (projectId, fromTabId, toTabId) => {
             const tabs = get().tabsByProject[projectId] ?? []

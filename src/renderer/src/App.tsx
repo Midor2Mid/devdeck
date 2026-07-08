@@ -15,6 +15,7 @@ import { DECK_VIEWS } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
+import { SearchModal } from "./components/SearchModal"
 import { ActivityPanel } from "./components/ActivityPanel"
 import { InboxPanel } from "./components/InboxPanel"
 import { UsagePanel } from "./components/UsagePanel"
@@ -44,6 +45,7 @@ export function App(): JSX.Element {
     const openSwitcher = useStore((s) => s.openSwitcher)
     const closeSwitcher = useStore((s) => s.closeSwitcher)
     const paletteOpen = useStore((s) => s.paletteOpen)
+    const searchOpen = useStore((s) => s.searchOpen)
     const shortcutsOpen = useStore((s) => s.shortcutsOpen)
     const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const activityOpen = useStore((s) => s.activityOpen)
@@ -137,6 +139,13 @@ export function App(): JSX.Element {
                 s.setPaletteOpen(!s.paletteOpen)
                 return
             }
+            if (mod && e.shiftKey && e.code === "KeyF") {
+                e.preventDefault()
+                e.stopPropagation()
+                const s = useStore.getState()
+                s.setSearchOpen(!s.searchOpen)
+                return
+            }
             if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
                 e.preventDefault()
                 if (useStore.getState().switcherOpen) closeSwitcher()
@@ -198,6 +207,7 @@ export function App(): JSX.Element {
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
             {paletteOpen && <CommandPalette />}
+            {searchOpen && <SearchModal />}
             {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
             {activityOpen && <ActivityPanel />}
             {inboxOpen && <InboxPanel />}
