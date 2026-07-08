@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { groupTargets } from "../broadcast"
-import { getTail } from "../missionTail"
+import { getTail, getLastAt, relTime, sortForFollow } from "../missionTail"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -26,8 +25,8 @@ export function MissionControl(): JSX.Element {
     void termAgents
     void termNames
 
-    const groups = groupTargets(agentSessions())
-    const sessions = agentSessions()
+    // Attention-first: the agent that needs you floats to the top.
+    const sessions = sortForFollow(agentSessions())
     const totalAgents = sessions.length
     const attention = sessions.filter((s) => s.status === "attention").length
 
@@ -101,8 +100,9 @@ export function MissionControl(): JSX.Element {
                     </div>
                 ) : (
                     <div className="mission-grid">
-                        {groups.flatMap((g) =>
-                            g.sessions.map((s) => (
+                        {sessions.map((s) => {
+                            const ago = relTime(Date.now(), getLastAt(s.termId))
+                            return (
                                 <button
                                     key={s.termId}
                                     className={"mission-tile status-" + s.status}
@@ -113,7 +113,10 @@ export function MissionControl(): JSX.Element {
                                         <span className="mission-tile-name">{s.sessionName}</span>
                                         <span className="agent-badge sm">{s.badge}</span>
                                     </div>
-                                    <div className="mission-tile-proj muted small">{s.projectName}</div>
+                                    <div className="mission-tile-proj muted small">
+                                        {s.projectName}
+                                        {ago ? ` · ${ago}` : ""}
+                                    </div>
                                     <div className="mission-tile-peek">
                                         {getTail(s.termId) || <span className="muted">…</span>}
                                     </div>
@@ -121,8 +124,8 @@ export function MissionControl(): JSX.Element {
                                         <div className="mission-tile-attn">needs you</div>
                                     )}
                                 </button>
-                            ))
-                        )}
+                            )
+                        })}
                     </div>
                 )}
             </div>
