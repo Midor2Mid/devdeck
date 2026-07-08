@@ -18,6 +18,7 @@ import { CommandPalette } from "./components/CommandPalette"
 import { SearchModal } from "./components/SearchModal"
 import { DotnetPanel } from "./components/DotnetPanel"
 import { ReviewPanel } from "./components/ReviewPanel"
+import { MissionControl } from "./components/MissionControl"
 import { ActivityPanel } from "./components/ActivityPanel"
 import { InboxPanel } from "./components/InboxPanel"
 import { UsagePanel } from "./components/UsagePanel"
@@ -170,13 +171,15 @@ export function App(): JSX.Element {
                 else openSwitcher()
                 return
             }
-            // Ctrl+1..6 — switch main view.
-            if (mod && !e.shiftKey && /^Digit[1-6]$/.test(e.code)) {
-                e.preventDefault()
+            // Ctrl+1..N — switch main view (indexed into the deck view order).
+            if (mod && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
                 const idx = Number(e.code.slice(5)) - 1
                 const v = DECK_VIEWS[idx]?.view
-                if (v) useStore.getState().setView(v)
-                return
+                if (v) {
+                    e.preventDefault()
+                    useStore.getState().setView(v)
+                    return
+                }
             }
             // Ctrl+Tab / Ctrl+Shift+Tab — cycle agent sessions (deck alt-tab).
             if (mod && e.code === "Tab") {
@@ -200,6 +203,9 @@ export function App(): JSX.Element {
                     <Topbar />
                     <div className="panels">
                         {/* All panels stay mounted; visibility toggled so terminals keep running. */}
+                        <div className="panel" style={{ display: view === "mission" ? "flex" : "none" }}>
+                            <MissionControl />
+                        </div>
                         <div className="panel" style={{ display: view === "terminal" ? "flex" : "none" }}>
                             <TerminalView />
                         </div>
