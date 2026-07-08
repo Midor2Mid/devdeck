@@ -5707,6 +5707,52 @@ kbd {
     flex-direction: column;
     gap: 18px;
 }
+.usage-tokens {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius, 8px);
+    font-variant-numeric: tabular-nums;
+}
+.usage-tokens-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+.usage-cost-total {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--accent);
+}
+.usage-tok-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 4px;
+}
+.usage-tok-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.usage-tok-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+.usage-tok-cost {
+    min-width: 56px;
+    text-align: right;
+    color: var(--text);
+}
+.usage-tok-models {
+    margin-top: 4px;
+}
 .usage-cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

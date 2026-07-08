@@ -61,6 +61,23 @@ export interface SystemInfo {
     docker: DockerContainer[]
     ports: ListenPort[]
 }
+export interface UsageBucket {
+    label: string
+    input: number
+    output: number
+    cacheRead: number
+    cacheCreate: number
+    tokens: number
+    /** Estimated USD. */
+    cost: number
+}
+export interface UsageSummary {
+    sinceDays: number
+    total: UsageBucket
+    byModel: UsageBucket[]
+    byProject: UsageBucket[]
+    byDay: UsageBucket[]
+}
 export interface PtyCreateOpts {
     id: string
     cwd?: string
@@ -411,6 +428,10 @@ const api = {
     },
     system: {
         info: (): Promise<SystemInfo> => ipcRenderer.invoke("system:info")
+    },
+    usage: {
+        tokens: (sinceDays?: number): Promise<UsageSummary> =>
+            ipcRenderer.invoke("usage:tokens", sinceDays)
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),
