@@ -2,6 +2,14 @@
 
 ## 0.6.0 - 2026-07-08
 
+- **Mission Control - a supervision-first home.** The new **default view**
+  reflects how work has changed: you spend your day *following* AI agents, not
+  hand-editing code. It shows every live agent across *all* your projects as a
+  tile (status + a live peek of its latest output), a cross-project **review
+  queue** of repos with uncommitted AI changes (open the diff or fire the
+  role-panel lenses), and a **SYSTEM** strip (Docker containers + listening dev
+  ports). The **Editor is demoted** from a co-equal view to a tool you drop into,
+  and deck agent-keys gained the same live output peek.
 - **Console Deck shell** - the biggest layout change since launch. The left icon
   rail and resizable sidebar are gone; navigation moves to a slim **topbar**
   (brand · active-project switcher · view breadcrumb · command pill) and a bottom
