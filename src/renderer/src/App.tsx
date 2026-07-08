@@ -17,6 +17,7 @@ import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
 import { SearchModal } from "./components/SearchModal"
 import { DotnetPanel } from "./components/DotnetPanel"
+import { ReviewPanel } from "./components/ReviewPanel"
 import { ActivityPanel } from "./components/ActivityPanel"
 import { InboxPanel } from "./components/InboxPanel"
 import { UsagePanel } from "./components/UsagePanel"
@@ -48,6 +49,7 @@ export function App(): JSX.Element {
     const paletteOpen = useStore((s) => s.paletteOpen)
     const searchOpen = useStore((s) => s.searchOpen)
     const dotnetOpen = useStore((s) => s.dotnetOpen)
+    const reviewOpen = useStore((s) => s.reviewOpen)
     const shortcutsOpen = useStore((s) => s.shortcutsOpen)
     const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const activityOpen = useStore((s) => s.activityOpen)
@@ -155,6 +157,13 @@ export function App(): JSX.Element {
                 s.setDotnetOpen(!s.dotnetOpen)
                 return
             }
+            if (mod && e.shiftKey && e.code === "KeyR") {
+                e.preventDefault()
+                e.stopPropagation()
+                const s = useStore.getState()
+                s.setReviewOpen(!s.reviewOpen)
+                return
+            }
             if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
                 e.preventDefault()
                 if (useStore.getState().switcherOpen) closeSwitcher()
@@ -218,6 +227,7 @@ export function App(): JSX.Element {
             {paletteOpen && <CommandPalette />}
             {searchOpen && <SearchModal />}
             {dotnetOpen && <DotnetPanel />}
+            {reviewOpen && <ReviewPanel />}
             {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
             {activityOpen && <ActivityPanel />}
             {inboxOpen && <InboxPanel />}

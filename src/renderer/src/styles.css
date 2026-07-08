@@ -496,6 +496,74 @@ button .ic,
     text-align: center;
 }
 
+/* ---------- Role-panel review ---------- */
+.review-panel {
+    width: min(640px, 92vw);
+    margin: 12vh auto 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 8px);
+    box-shadow: var(--elev-3);
+    overflow: hidden;
+}
+.review-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-soft);
+}
+.review-title {
+    font-weight: 600;
+}
+.review-body {
+    padding: 10px 12px;
+    max-height: 56vh;
+    overflow-y: auto;
+}
+.review-sub {
+    padding: 2px 4px 8px;
+}
+.review-lens {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 6px;
+    border-radius: var(--radius, 7px);
+    cursor: pointer;
+}
+.review-lens:hover {
+    background: var(--bg-2);
+}
+.review-lens input {
+    accent-color: var(--accent);
+    align-self: center;
+}
+.review-lens-label {
+    font-size: 13px;
+    flex: none;
+    min-width: 96px;
+}
+.review-lens-focus {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.review-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border-soft);
+}
+.review-actions {
+    display: flex;
+    gap: 8px;
+}
+
 /* ---------- .NET build/test panel ---------- */
 .dotnet-panel {
     width: min(820px, 92vw);
