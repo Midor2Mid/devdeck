@@ -17,6 +17,7 @@ import type { PipelineRun, PipelineStepState } from "./pipeline"
 import { runnableSteps, sessionPlan } from "./pipeline"
 import { gateActive, evaluateGate, maxAttempts } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
+import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -186,6 +187,10 @@ interface AppState extends Persisted {
     setSearchOpen: (open: boolean) => void
     dotnetOpen: boolean
     setDotnetOpen: (open: boolean) => void
+    reviewOpen: boolean
+    setReviewOpen: (open: boolean) => void
+    /** Spawn one agent session per lens to review the working-tree changes. */
+    startReview: (lensIds: string[]) => Promise<void>
     shortcutsOpen: boolean
     setShortcutsOpen: (open: boolean) => void
 
@@ -475,6 +480,7 @@ export const useStore = create<AppState>((set, get) => {
         paletteOpen: false,
         searchOpen: false,
         dotnetOpen: false,
+        reviewOpen: false,
         shortcutsOpen: false,
         draggingTabId: null,
         dragPayload: null,
@@ -569,6 +575,7 @@ export const useStore = create<AppState>((set, get) => {
         setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
         setSearchOpen: (searchOpen) => set({ searchOpen }),
         setDotnetOpen: (dotnetOpen) => set({ dotnetOpen }),
+        setReviewOpen: (reviewOpen) => set({ reviewOpen }),
         setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 
         activeProject: () => get().projects.find((p) => p.id === get().activeId),
@@ -669,6 +676,28 @@ export const useStore = create<AppState>((set, get) => {
         setWorkOpen: (workOpen) => set({ workOpen }),
         setReleaseOpen: (releaseOpen) => set({ releaseOpen }),
         setStandupOpen: (standupOpen) => set({ standupOpen }),
+
+        startReview: async (lensIds) => {
+            const proj = get().activeProject()
+            if (!proj) return
+            const lenses = LENSES.filter((l) => lensIds.includes(l.id))
+            if (lenses.length === 0) return
+            const agentId = useSettings.getState().agents[0]?.id ?? "claude"
+            // Grid layout so every lens reviewer is visible at once.
+            get().setTermLayout("grid")
+            const spawned: { termId: string; lens: Lens }[] = []
+            for (const lens of lenses) {
+                const termId = get().newTab(agentId, undefined, `review:${lens.id}`)
+                if (termId) spawned.push({ termId, lens })
+            }
+            set({ reviewOpen: false, view: "terminal" })
+            // Let each freshly-spawned agent CLI boot before typing its prompt.
+            await sleep(2800)
+            for (const { termId, lens } of spawned) {
+                window.api.pty.input(termId, reviewPrompt(lens) + "\r")
+            }
+            if (spawned.length) set({ lastAgentTermId: spawned[spawned.length - 1].termId })
+        },
 
         startWork: async (item, opts) => {
             const proj = get().activeProject()
