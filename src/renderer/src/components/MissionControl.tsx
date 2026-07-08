@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { getTail, getLastAt, relTime, sortForFollow } from "../missionTail"
+import { getTail, getFullTail, getLastAt, relTime, sortForFollow } from "../missionTail"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -29,6 +29,16 @@ export function MissionControl(): JSX.Element {
     const sessions = sortForFollow(agentSessions())
     const totalAgents = sessions.length
     const attention = sessions.filter((s) => s.status === "attention").length
+
+    // Tiles the user has expanded to see fuller recent output inline.
+    const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    const toggleExpand = (id: string): void =>
+        setExpanded((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
 
     // Poll the output peeks (tails live outside the store, updated by the pty stream).
     const [, setTick] = useState(0)
@@ -102,28 +112,47 @@ export function MissionControl(): JSX.Element {
                     <div className="mission-grid">
                         {sessions.map((s) => {
                             const ago = relTime(Date.now(), getLastAt(s.termId))
+                            const isExpanded = expanded.has(s.termId)
                             return (
-                                <button
+                                <div
                                     key={s.termId}
                                     className={"mission-tile status-" + s.status}
+                                    role="button"
+                                    tabIndex={0}
                                     onClick={() => jumpToTerm(s.termId)}
                                 >
                                     <div className="mission-tile-head">
                                         <span className={"tab-dot claude status-" + s.status} />
                                         <span className="mission-tile-name">{s.sessionName}</span>
                                         <span className="agent-badge sm">{s.badge}</span>
+                                        <button
+                                            className="mission-tile-expand"
+                                            data-tip={isExpanded ? "Collapse" : "Show recent output"}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                toggleExpand(s.termId)
+                                            }}
+                                        >
+                                            {isExpanded ? "−" : "⋯"}
+                                        </button>
                                     </div>
                                     <div className="mission-tile-proj muted small">
                                         {s.projectName}
                                         {ago ? ` · ${ago}` : ""}
                                     </div>
-                                    <div className="mission-tile-peek">
-                                        {getTail(s.termId) || <span className="muted">…</span>}
-                                    </div>
+                                    {isExpanded ? (
+                                        <pre className="mission-tile-full">
+                                            {getFullTail(s.termId) || "(no output yet)"}
+                                        </pre>
+                                    ) : (
+                                        <div className="mission-tile-peek">
+                                            {getTail(s.termId) || <span className="muted">…</span>}
+                                        </div>
+                                    )}
                                     {s.status === "attention" && (
                                         <div className="mission-tile-attn">needs you</div>
                                     )}
-                                </button>
+                                </div>
                             )
                         })}
                     </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { cleanTail, peekLine, relTime, sortForFollow } from "../src/renderer/src/missionTail"
+import { cleanTail, peekLine, relTime, sortForFollow, lastLines } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 
 function sess(over: Partial<AnySession>): AnySession {
@@ -55,6 +55,21 @@ describe("sortForFollow", () => {
             sess({ termId: "w2", status: "working" })
         ])
         expect(out.map((s) => s.termId)).toEqual(["a", "w1", "w2", "i"])
+    })
+})
+
+describe("lastLines", () => {
+    it("returns the last N non-empty, trimmed lines joined by newline", () => {
+        expect(lastLines("a\n\nb\nc", 2)).toBe("b\nc")
+    })
+    it("trims each line and skips blanks", () => {
+        expect(lastLines("  \n x \n y ", 2)).toBe("x\ny")
+    })
+    it("returns everything when fewer than N lines", () => {
+        expect(lastLines("only", 5)).toBe("only")
+    })
+    it("returns empty for all-blank", () => {
+        expect(lastLines("  \n \n", 4)).toBe("")
     })
 })
 
