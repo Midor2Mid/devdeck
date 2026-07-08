@@ -338,6 +338,42 @@ export const useStore = create<AppState>((set, get) => {
         return "agent session"
     }
 
+    // A short audible beep via Web Audio (no asset).
+    const beep = (): void => {
+        try {
+            const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+            const ctx = new Ctx()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.frequency.value = 660
+            gain.gain.value = 0.05
+            osc.start()
+            osc.stop(ctx.currentTime + 0.12)
+            setTimeout(() => void ctx.close(), 300)
+        } catch {
+            /* audio unavailable - ignore */
+        }
+    }
+
+    // Fire a desktop notification / sound when an agent needs attention, per settings.
+    const notifyAttention = (termId: string): void => {
+        const cfg = useSettings.getState().notifications
+        if (cfg.desktop && typeof Notification !== "undefined") {
+            try {
+                const n = new Notification("DevDeck", { body: `${labelForTerm(termId)} needs attention` })
+                n.onclick = () => {
+                    window.focus()
+                    get().jumpToTerm(termId)
+                }
+            } catch {
+                /* notifications unavailable - ignore */
+            }
+        }
+        if (cfg.sound) beep()
+    }
+
     const pushNotification = (termId: string): void => {
         if (get().notifications.some((n) => n.termId === termId)) return
         set((s) => ({
@@ -368,6 +404,7 @@ export const useStore = create<AppState>((set, get) => {
             if (was !== "attention") {
                 pushNotification(id)
                 pushActivity("attention", id)
+                notifyAttention(id)
             }
             return
         }
