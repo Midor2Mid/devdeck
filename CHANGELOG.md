@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.0 - 2026-07-08
+
+- **Console Deck shell** - the biggest layout change since launch. The left icon
+  rail and resizable sidebar are gone; navigation moves to a slim **topbar**
+  (brand · active-project switcher · view breadcrumb · command pill) and a bottom
+  **Console Deck** - a live control surface where your agent sessions are "keys"
+  grouped by project (status dot, rename, drag-to-agent, attention), alongside a
+  view switcher, a tool cluster, and the git/branch/identity status folded in. The
+  main panel is now full-width. Project management (add, group, reorder, presets,
+  new-group) moved into the upgraded **Ctrl+K** switcher. Reskins across all
+  themes & styles; keyboard: **Ctrl+1…6** switch view, **Ctrl+Tab** cycle sessions.
+- **Fire one prompt at many agents** - the prompt composer gains a target selector
+  (agent sessions grouped by project, with All / This-project / Idle presets) so a
+  single prompt fans out to every chosen session at once; a confirm guards larger
+  broadcasts.
+- **Cross-project search** (**Ctrl+Shift+F**) - search file contents across *all*
+  your projects at once (`git grep`, fixed-string, case-insensitive); results are
+  grouped by project and clicking one opens the file at its line in the editor.
+- **.NET build / test with clickable errors** (**Ctrl+Shift+B**) - run
+  `dotnet build`/`test` for the active project and get MSBuild diagnostics as a
+  clickable list that jumps to `file:line`; handles no-project and missing-SDK.
+- **Role-panel review** (**Ctrl+Shift+R**) - fan the current changes out to a panel
+  of agent reviewers, one per lens (correctness / security / .NET / performance /
+  tests), laid out in the grid so each review is read side by side.
+
 ## 0.5.11 - 2026-07-07
 
 - **Refined visual craft (every theme & style)** - a global design-token pass that
