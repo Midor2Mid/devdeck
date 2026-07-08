@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Task board** - a per-project kanban (**Todo · Doing · Review · Done**) as a new
+  **Tasks** view (Ctrl+2). Create task cards (or paste a checklist), **dispatch** one
+  to an agent in its own git worktree (toggle), and the card auto-moves to **Review**
+  when that agent finishes a turn; jump to the session, open its diff, or move it on.
 - **Token & cost dashboard** - the AI usage panel now shows real token counts and
   **estimated USD cost** (total, by model, by project, by day), parsed from Claude
   Code's local transcripts (`~/.claude/projects/**.jsonl`) - no provider API needed.
