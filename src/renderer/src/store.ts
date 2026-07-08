@@ -184,6 +184,8 @@ interface AppState extends Persisted {
     setPaletteOpen: (open: boolean) => void
     searchOpen: boolean
     setSearchOpen: (open: boolean) => void
+    dotnetOpen: boolean
+    setDotnetOpen: (open: boolean) => void
     shortcutsOpen: boolean
     setShortcutsOpen: (open: boolean) => void
 
@@ -472,6 +474,7 @@ export const useStore = create<AppState>((set, get) => {
         composerOpen: false,
         paletteOpen: false,
         searchOpen: false,
+        dotnetOpen: false,
         shortcutsOpen: false,
         draggingTabId: null,
         dragPayload: null,
@@ -565,6 +568,7 @@ export const useStore = create<AppState>((set, get) => {
         setComposerOpen: (composerOpen) => set({ composerOpen }),
         setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
         setSearchOpen: (searchOpen) => set({ searchOpen }),
+        setDotnetOpen: (dotnetOpen) => set({ dotnetOpen }),
         setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 
         activeProject: () => get().projects.find((p) => p.id === get().activeId),
