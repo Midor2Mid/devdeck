@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Token & cost dashboard** - the AI usage panel now shows real token counts and
+  **estimated USD cost** (total, by model, by project, by day), parsed from Claude
+  Code's local transcripts (`~/.claude/projects/**.jsonl`) - no provider API needed.
+- **Mission Control refinements** - tiles sort **attention-first**, show
+  **time-since-last-output**, **expand** to read an agent's recent output inline,
+  and flag **stalled** agents (working but silent past a threshold).
+- **Notifications hub** - a Settings section to get a **desktop notification** and/or
+  **sound** when an agent needs attention (click the notification to jump to it).
+- **Editor snippets** - insert a saved snippet at the editor cursor (previously
+  snippets were composer-only).
+
 ## 0.6.0 - 2026-07-08
 
 - **Mission Control - a supervision-first home.** The new **default view**
