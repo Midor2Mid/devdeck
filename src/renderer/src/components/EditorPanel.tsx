@@ -155,6 +155,7 @@ export function EditorPanel(): JSX.Element {
     const pendingEditorOpen = useStore((s) => s.pendingEditorOpen)
     const clearPendingEditorOpen = useStore((s) => s.clearPendingEditorOpen)
     const editorSettings = useSettings((s) => s.editor)
+    const snippets = useSettings((s) => s.snippets)
     const monacoTheme = useSettings((s) => THEMES[s.appearance.theme].monacoId)
     const [files, setFiles] = useState<OpenFile[]>([])
     const [activePath, setActivePath] = useState<string | null>(null)
@@ -197,9 +198,20 @@ export function EditorPanel(): JSX.Element {
     const editorRef = useRef<{
         revealLineInCenter: (line: number) => void
         setPosition: (pos: { lineNumber: number; column: number }) => void
+        getSelection: () => unknown
+        executeEdits: (source: string, edits: { range: unknown; text: string }[]) => void
         focus: () => void
     } | null>(null)
     const revealLineRef = useRef<number | null>(null)
+
+    // Insert a snippet body at the editor's cursor/selection.
+    const insertSnippet = (body: string): void => {
+        const ed = editorRef.current
+        if (!ed) return
+        const sel = ed.getSelection()
+        if (sel) ed.executeEdits("snippet", [{ range: sel, text: body }])
+        ed.focus()
+    }
     const revealPending = (): void => {
         const line = revealLineRef.current
         const ed = editorRef.current
@@ -334,6 +346,25 @@ export function EditorPanel(): JSX.Element {
                                     ))}
                                 </div>
                             </div>
+                        )}
+                        {snippets.length > 0 && active && !active.image && (
+                            <select
+                                className="editor-snippet"
+                                value=""
+                                data-tip="Insert a snippet at the cursor"
+                                onChange={(e) => {
+                                    const sn = snippets.find((x) => x.id === e.target.value)
+                                    if (sn) insertSnippet(sn.body)
+                                    e.currentTarget.value = ""
+                                }}
+                            >
+                                <option value="">Snippet…</option>
+                                {snippets.map((sn) => (
+                                    <option key={sn.id} value={sn.id}>
+                                        {sn.name}
+                                    </option>
+                                ))}
+                            </select>
                         )}
                         <button
                             className="send-claude"
