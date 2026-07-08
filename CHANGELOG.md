@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **File-ownership / conflict map** - Mission Control gains an "In-flight changes"
+  section showing which agent is changing which files (across their worktrees), and
+  flags a file two agents in the same project both touched as a **conflict** (a
+  coming merge collision). Click an owner to jump to that session.
 - **Task board** - a per-project kanban (**Todo · Doing · Review · Done**) as a new
   **Tasks** view (Ctrl+2). Create task cards (or paste a checklist), **dispatch** one
   to an agent in its own git worktree (toggle), and the card auto-moves to **Review**
