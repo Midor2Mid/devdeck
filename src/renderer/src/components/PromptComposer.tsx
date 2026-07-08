@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
+import { groupTargets, presetSelection, type Preset } from "../broadcast"
+import { confirm } from "../confirm"
 
 interface Props {
     onClose: () => void
@@ -13,13 +15,15 @@ interface Suggestion {
 }
 
 /**
- * Compose a rich prompt and send it to the focused (last-active) agent session.
- * `@` autocompletes project files; `/` autocompletes user-defined snippets.
+ * Compose a rich prompt and fire it at one or many agent sessions. `@`
+ * autocompletes project files; `/` autocompletes user snippets. Targets are
+ * picked via checkboxes (grouped by project); the selection defaults to the
+ * focused agent on each open and is not persisted.
  */
 export function PromptComposer({ onClose }: Props): JSX.Element {
     const activeProject = useStore((s) => s.activeProject())
     const lastAgent = useStore((s) => s.lastAgentTermId)
-    const sendToAgent = useStore((s) => s.sendToAgent)
+    const broadcast = useStore((s) => s.broadcast)
     const agentSessions = useStore((s) => s.agentSessions)
     const draft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
     const setComposerDraft = useStore((s) => s.setComposerDraft)
@@ -30,15 +34,23 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         null
     )
     const [sel, setSel] = useState(0)
+    // Fire targets — seeded once (on open) from the focused agent. The composer
+    // is mounted fresh each open, so this reseeds and is never persisted.
+    const [selected, setSelected] = useState<Set<string>>(() =>
+        lastAgent ? new Set([lastAgent]) : new Set()
+    )
     const ref = useRef<HTMLTextAreaElement>(null)
 
-    // Draft is persisted per project (survives project switch + restart).
     const text = draft
     const setText = (value: string): void => {
         if (activeProject) setComposerDraft(activeProject.id, value)
     }
 
-    const target = agentSessions().find((s) => s.termId === lastAgent)
+    const sessions = agentSessions()
+    const groups = groupTargets(sessions)
+    const selectedCount = selected.size
+    const singleTarget =
+        selectedCount === 1 ? sessions.find((s) => selected.has(s.termId)) : undefined
 
     useEffect(() => {
         if (activeProject) {
@@ -66,8 +78,6 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
             }))
     }, [token, files, snippets])
 
-    // Detect a trigger word (@file or /snippet) at the caret - the whitespace-
-    // delimited word the caret is in, if it starts with @ or /.
     const detectToken = (value: string, caret: number): void => {
         let i = caret - 1
         while (i >= 0 && !/\s/.test(value[i])) i--
@@ -99,10 +109,31 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         })
     }
 
-    const send = (): void => {
+    const toggle = (termId: string): void =>
+        setSelected((prev) => {
+            const next = new Set(prev)
+            if (next.has(termId)) next.delete(termId)
+            else next.add(termId)
+            return next
+        })
+
+    // Presets read a fresh session list so idle/all reflect the current moment.
+    const applyPreset = (preset: Preset): void =>
+        setSelected(presetSelection(agentSessions(), preset, activeProject?.id ?? null))
+
+    const send = async (): Promise<void> => {
         const body = text.trim()
-        if (!body || !lastAgent) return
-        sendToAgent(body + "\r")
+        const ids = [...selected]
+        if (!body || ids.length === 0) return
+        if (ids.length >= 3) {
+            const ok = await confirm({
+                title: "Send to multiple agents",
+                message: `Send this prompt to ${ids.length} agent sessions?`,
+                confirmLabel: "Send to " + ids.length
+            })
+            if (!ok) return
+        }
+        broadcast(ids, body + "\r")
         setText("")
         onClose()
     }
@@ -131,7 +162,7 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         }
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
             e.preventDefault()
-            send()
+            void send()
             return
         }
         if (e.key === "Escape") onClose()
@@ -141,16 +172,61 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         <div className="composer">
             <div className="composer-head">
                 <span className="muted small">
-                    {target ? (
+                    {sessions.length === 0 ? (
+                        "No agent session - start one to send a prompt"
+                    ) : selectedCount === 0 ? (
+                        "Select at least one agent"
+                    ) : singleTarget ? (
                         <>
-                            → {target.tabName} <span className="agent-badge sm">{target.badge}</span>
+                            → {singleTarget.tabName}{" "}
+                            <span className="agent-badge sm">{singleTarget.badge}</span>
                         </>
                     ) : (
-                        "No agent session - start one to send a prompt"
+                        <>
+                            → <b>{selectedCount} agents</b>
+                        </>
                     )}
                 </span>
                 <span className="muted small">@ file · / snippet · Ctrl+Enter send · Esc close</span>
             </div>
+
+            {sessions.length > 0 && (
+                <div className="composer-targets">
+                    <div className="composer-presets">
+                        <button className="composer-preset" onClick={() => applyPreset("all")}>
+                            All
+                        </button>
+                        <button className="composer-preset" onClick={() => applyPreset("project")}>
+                            This project
+                        </button>
+                        <button className="composer-preset" onClick={() => applyPreset("idle")}>
+                            Idle
+                        </button>
+                        <button className="composer-preset" onClick={() => applyPreset("none")}>
+                            None
+                        </button>
+                        <span className="muted small composer-count">{selectedCount} selected</span>
+                    </div>
+                    {groups.map((g) => (
+                        <div key={g.projectId} className="composer-target-group">
+                            <div className="composer-target-group-title">{g.projectName}</div>
+                            {g.sessions.map((s) => (
+                                <label key={s.termId} className="composer-target">
+                                    <input
+                                        type="checkbox"
+                                        checked={selected.has(s.termId)}
+                                        onChange={() => toggle(s.termId)}
+                                    />
+                                    <span className={"tab-dot claude status-" + s.status} />
+                                    <span className="composer-target-name">{s.sessionName}</span>
+                                    <span className="agent-badge sm">{s.badge}</span>
+                                </label>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <div className="composer-body">
                 <textarea
                     ref={ref}
@@ -179,7 +255,11 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
             </div>
             <div className="composer-foot">
                 <button onClick={onClose}>Cancel</button>
-                <button className="accent" onClick={send} disabled={!text.trim() || !lastAgent}>
+                <button
+                    className="accent"
+                    onClick={() => void send()}
+                    disabled={!text.trim() || selectedCount === 0}
+                >
                     Send ▸
                 </button>
             </div>
