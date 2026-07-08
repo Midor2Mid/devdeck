@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import { getTail, getFullTail, getLastAt, relTime, sortForFollow, isStalled } from "../missionTail"
+import { buildOwnership, type OwnershipMap } from "../ownership"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -87,6 +88,35 @@ export function MissionControl(): JSX.Element {
         }
     }, [])
     const showSystem = !!sys && (sys.docker.length > 0 || sys.ports.length > 0)
+
+    // File-ownership / conflict map: which agent is changing which files, across worktrees.
+    const [ownership, setOwnership] = useState<OwnershipMap | null>(null)
+    useEffect(() => {
+        let on = true
+        const fetchOwn = async (): Promise<void> => {
+            if (document.hidden) return
+            const st = useStore.getState()
+            const entries = await Promise.all(
+                st.agentSessions().map(async (s) => ({
+                    termId: s.termId,
+                    sessionName: s.sessionName,
+                    projectName: s.projectName,
+                    files: (
+                        await window.api.git
+                            .changes(st.termCwd[s.termId] ?? s.projectPath)
+                            .catch(() => [])
+                    ).map((c) => c.path)
+                }))
+            )
+            if (on) setOwnership(buildOwnership(entries))
+        }
+        void fetchOwn()
+        const iv = setInterval(() => void fetchOwn(), 8000)
+        return () => {
+            on = false
+            clearInterval(iv)
+        }
+    }, [])
 
     const reviewRows = projects.filter((p) => (changes[p.id] ?? 0) > 0)
 
@@ -187,6 +217,41 @@ export function MissionControl(): JSX.Element {
                     </div>
                 )}
             </div>
+
+            {ownership && ownership.files.length > 0 && (
+                <div className="mission-section">
+                    <div className="mission-head">
+                        <span className="section-label">IN-FLIGHT CHANGES</span>
+                        <span className={"muted small" + (ownership.conflicts > 0 ? " mission-own-warn" : "")}>
+                            {ownership.conflicts > 0
+                                ? `${ownership.conflicts} conflict${ownership.conflicts === 1 ? "" : "s"}`
+                                : "who's touching what"}
+                        </span>
+                    </div>
+                    <div className="mission-own">
+                        {ownership.files.slice(0, 30).map((f) => (
+                            <div
+                                key={f.projectName + " " + f.path}
+                                className={"mission-own-row" + (f.owners.length > 1 ? " conflict" : "")}
+                            >
+                                <span className="mission-own-path">{f.path}</span>
+                                <span className="muted small">{f.projectName}</span>
+                                <span className="mission-own-owners">
+                                    {f.owners.map((o) => (
+                                        <button
+                                            key={o.termId}
+                                            className="mission-own-chip"
+                                            onClick={() => jumpToTerm(o.termId)}
+                                        >
+                                            {o.sessionName}
+                                        </button>
+                                    ))}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {showSystem && (
                 <div className="mission-section">
