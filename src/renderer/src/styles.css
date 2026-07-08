@@ -496,6 +496,111 @@ button .ic,
     text-align: center;
 }
 
+/* ---------- Mission Control (supervision home) ---------- */
+.mission {
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    padding: 16px 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.mission-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.mission-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+}
+.mission-empty {
+    padding: 10px 2px;
+    font-size: 13px;
+}
+.mission-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+}
+.mission-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+    padding: 10px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius, 8px);
+    cursor: pointer;
+    transition: border-color var(--dur-fast, 120ms) var(--ease, ease);
+}
+.mission-tile:hover {
+    border-color: var(--accent);
+}
+.mission-tile.status-attention {
+    border-left: 2px solid var(--danger);
+}
+.mission-tile-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.mission-tile-name {
+    font-size: 13px;
+    font-weight: 600;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mission-tile-peek {
+    font-family: var(--mono, monospace);
+    font-size: 11.5px;
+    color: var(--muted);
+    height: 2.6em;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+}
+.mission-tile-attn {
+    font-size: 11px;
+    color: var(--danger);
+}
+.mission-review {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.mission-review-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 10px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius, 7px);
+}
+.mission-review-proj {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 120px;
+}
+.mission-review-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .mission-tile {
+        transition: none;
+    }
+}
+
 /* ---------- Role-panel review ---------- */
 .review-panel {
     width: min(640px, 92vw);

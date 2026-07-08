@@ -2,12 +2,13 @@ import { useStore, type MainView } from "../store"
 import { Icon, type IconName } from "./Icon"
 
 export const DECK_VIEWS: { view: MainView; icon: IconName; name: string }[] = [
+    { view: "mission", icon: "activity", name: "Mission" },
     { view: "terminal", icon: "terminal", name: "Terminal" },
-    { view: "editor", icon: "code", name: "Editor" },
     { view: "api", icon: "send", name: "API" },
     { view: "database", icon: "database", name: "Database" },
     { view: "browser", icon: "appWindow", name: "Browser" },
-    { view: "network", icon: "globe", name: "Network" }
+    { view: "network", icon: "globe", name: "Network" },
+    { view: "editor", icon: "code", name: "Editor" }
 ]
 
 export function ViewKeys(): JSX.Element {

@@ -22,7 +22,7 @@ import { recordTail, forgetTail } from "./missionTail"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
-export type MainView = "terminal" | "editor" | "api" | "database" | "browser" | "network"
+export type MainView = "mission" | "terminal" | "editor" | "api" | "database" | "browser" | "network"
 export type AgentStatus = "working" | "idle" | "attention"
 
 export interface Tab {
@@ -460,7 +460,7 @@ export const useStore = create<AppState>((set, get) => {
         activeTabByProject: {},
         activePaneByProject: {},
         composerDrafts: {},
-        view: "terminal",
+        view: "mission",
         termLayout: "tabs",
         canvasPos: {},
         canvasLinks: [],
@@ -520,7 +520,7 @@ export const useStore = create<AppState>((set, get) => {
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
                 composerDrafts: w.composerDrafts ?? {},
-                view: w.view ?? "terminal",
+                view: w.view ?? "mission",
                 termLayout: w.termLayout ?? "tabs",
                 canvasPos: w.canvasPos ?? {},
                 canvasLinks: w.canvasLinks ?? []
