@@ -18,6 +18,7 @@ import { runnableSteps, sessionPlan } from "./pipeline"
 import { gateActive, evaluateGate, maxAttempts } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
+import { recordTail, forgetTail } from "./missionTail"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -358,6 +359,8 @@ export const useStore = create<AppState>((set, get) => {
 
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
         if (!isAgentId(get().agentOf(id))) return
+        // Keep a cleaned tail of this agent's output for the Mission Control peek.
+        recordTail(id, data)
         const visible = isVisible(id)
         if (data.includes("\x07") && !visible) {
             const was = get().agentStatus[id]
@@ -386,6 +389,7 @@ export const useStore = create<AppState>((set, get) => {
         const t = idleTimers.get(termId)
         if (t) clearTimeout(t)
         idleTimers.delete(termId)
+        forgetTail(termId)
         if (isAgentId(get().termAgents[termId] ?? SHELL)) useSettings.getState().logUsageEnd(termId)
         set((s) => {
             const agentStatus = { ...s.agentStatus }
