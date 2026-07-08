@@ -20,6 +20,17 @@ export interface DirEntry {
     path: string
     isDir: boolean
 }
+export interface SearchHit {
+    projectId: string
+    projectName: string
+    /** Path relative to the project root, forward-slashed. */
+    file: string
+    /** Absolute path, for opening in the editor. */
+    absPath: string
+    line: number
+    /** The matching line (clamped). */
+    text: string
+}
 export interface PtyCreateOpts {
     id: string
     cwd?: string
@@ -360,6 +371,9 @@ const api = {
             ipcRenderer.invoke("db:tables", profileId),
         disconnect: (profileId: string): void => ipcRenderer.send("db:disconnect", profileId),
         pickFile: (): Promise<string> => ipcRenderer.invoke("db:pickFile")
+    },
+    search: {
+        code: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke("search:code", { query })
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),

@@ -17,6 +17,7 @@ import * as proxy from "./proxy"
 import * as aikeys from "./aikeys"
 import * as gitpat from "./gitpat"
 import * as projectenv from "./projectenv"
+import * as search from "./search"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -285,6 +286,9 @@ function registerIpc(): void {
         guardPath(root)
         return files.allFiles(root)
     })
+
+    // --- Cross-project search --- (confined to registered project roots)
+    ipcMain.handle("search:code", (_e, { query }: { query: string }) => search.code(query))
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))

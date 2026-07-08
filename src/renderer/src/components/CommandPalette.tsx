@@ -104,6 +104,7 @@ export function CommandPalette(): JSX.Element {
             })
 
         cmds.push({ id: "act:switcher", section: "Actions", title: "Switch project…", run: () => store.openSwitcher() })
+        cmds.push({ id: "act:search", section: "Actions", title: "Search across projects", run: () => store.setSearchOpen(true) })
         cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
         cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })
