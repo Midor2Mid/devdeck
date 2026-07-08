@@ -2505,6 +2505,22 @@ button .ic,
     border-color: var(--clay);
     color: var(--clay);
 }
+.editor-snippet {
+    flex: none;
+    align-self: center;
+    margin-bottom: 2px;
+    background: var(--bg-3);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 6px);
+    padding: 3px 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.editor-snippet:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
 .editor-tab {
     display: flex;
     align-items: center;
