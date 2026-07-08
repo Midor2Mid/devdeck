@@ -3,6 +3,7 @@ import { Icon, type IconName } from "./Icon"
 
 export const DECK_VIEWS: { view: MainView; icon: IconName; name: string }[] = [
     { view: "mission", icon: "activity", name: "Mission" },
+    { view: "tasks", icon: "list", name: "Tasks" },
     { view: "terminal", icon: "terminal", name: "Terminal" },
     { view: "api", icon: "send", name: "API" },
     { view: "database", icon: "database", name: "Database" },
