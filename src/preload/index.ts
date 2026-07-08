@@ -31,6 +31,22 @@ export interface SearchHit {
     /** The matching line (clamped). */
     text: string
 }
+export interface Diag {
+    file: string
+    line: number
+    col: number
+    severity: "error" | "warning"
+    code: string
+    message: string
+}
+export interface DotnetResult {
+    /** Did the build/test succeed (no errors)? */
+    ok: boolean
+    /** Did we actually run dotnet (false = no project / no SDK)? */
+    ran: boolean
+    summary: string
+    diagnostics: (Diag & { absPath: string })[]
+}
 export interface PtyCreateOpts {
     id: string
     cwd?: string
@@ -374,6 +390,10 @@ const api = {
     },
     search: {
         code: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke("search:code", { query })
+    },
+    dotnet: {
+        run: (root: string, mode: "build" | "test"): Promise<DotnetResult> =>
+            ipcRenderer.invoke("dotnet:run", { root, mode })
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),
