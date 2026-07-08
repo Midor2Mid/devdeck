@@ -20,6 +20,7 @@ import * as projectenv from "./projectenv"
 import * as search from "./search"
 import * as dotnet from "./dotnet"
 import * as system from "./system"
+import * as usage from "./usage"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -300,6 +301,9 @@ function registerIpc(): void {
 
     // --- Ambient system state (Docker + listening ports) ---
     ipcMain.handle("system:info", () => system.info())
+
+    // --- Token usage + cost (parsed from Claude Code's local transcripts) ---
+    ipcMain.handle("usage:tokens", (_e, sinceDays?: number) => usage.tokenUsage(sinceDays))
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))

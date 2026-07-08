@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
 import { useSettings, type UsageEvent } from "../settings"
+import type { UsageSummary } from "../../../preload/index"
+
+function fmtTok(n: number): string {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M"
+    if (n >= 1000) return Math.round(n / 1000) + "k"
+    return String(n)
+}
 
 type Window = "today" | "week" | "all"
 
@@ -41,15 +48,19 @@ function durationOf(e: UsageEvent, now: number): number {
 }
 
 /**
- * AI usage / activity dashboard.
+ * AI usage / activity + cost dashboard.
  *
- * Honesty note: DevDeck spawns the agent CLI as a child process — it never sees
- * the API, so it cannot know token counts or dollar cost. What it *can* report
- * truthfully is activity: which agent ran, in which project, how often, and for
- * how long. That's what this panel shows.
+ * Two data sources: (1) DevDeck's own session *activity* (which agent ran, where,
+ * how long) — always available. (2) Token counts + estimated USD cost, parsed
+ * from Claude Code's local transcripts (`~/.claude/projects/**.jsonl`) — real
+ * numbers, no API needed; cost is estimated from list pricing.
  */
 export function UsagePanel(): JSX.Element {
     const close = useStore((s) => s.setUsageOpen)
+    const [tokens, setTokens] = useState<UsageSummary | null>(null)
+    useEffect(() => {
+        window.api.usage.tokens(7).then(setTokens).catch(() => setTokens(null))
+    }, [])
     const usageLog = useSettings((s) => s.usageLog)
     const agents = useSettings((s) => s.agents)
     const projects = useStore((s) => s.projects)
@@ -166,6 +177,36 @@ export function UsagePanel(): JSX.Element {
                 </div>
 
                 <div className="modal-body usage-body">
+                    {tokens && (
+                        <div className="usage-tokens">
+                            <div className="usage-tokens-head">
+                                <span className="section-label">
+                                    Tokens &amp; cost · last {tokens.sinceDays}d
+                                </span>
+                                <span className="usage-cost-total">${tokens.total.cost.toFixed(2)}</span>
+                            </div>
+                            <div className="usage-tokens-sub muted small">
+                                {fmtTok(tokens.total.tokens)} tokens · estimated from Claude Code local logs
+                            </div>
+                            <div className="usage-tok-rows">
+                                {tokens.byProject.slice(0, 6).map((b) => (
+                                    <div key={b.label} className="usage-tok-row">
+                                        <span className="usage-tok-label">{b.label}</span>
+                                        <span className="muted small">{fmtTok(b.tokens)}</span>
+                                        <span className="usage-tok-cost">${b.cost.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            {tokens.byModel.length > 0 && (
+                                <div className="usage-tok-models muted small">
+                                    {tokens.byModel
+                                        .slice(0, 4)
+                                        .map((b) => `${b.label.replace("claude-", "")} $${b.cost.toFixed(2)}`)
+                                        .join(" · ")}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <div className="usage-cards">
                         <div className="usage-card">
                             <div className="usage-card-num">{stats.sessions}</div>
@@ -224,8 +265,9 @@ export function UsagePanel(): JSX.Element {
                     )}
 
                     <div className="usage-note muted small">
-                        DevDeck launches the agent CLI directly, so it can&apos;t read API tokens or
-                        cost. This tracks session activity — which agent ran where, and for how long.
+                        Tokens &amp; cost are parsed from Claude Code&apos;s local transcripts (cost
+                        estimated from list pricing); the activity below is DevDeck&apos;s own record
+                        of which agent ran where, and for how long.
                     </div>
                 </div>
             </div>
