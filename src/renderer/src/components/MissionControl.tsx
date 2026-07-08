@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import { groupTargets } from "../broadcast"
 import { getTail } from "../missionTail"
+import type { SystemInfo } from "../../../preload/index"
 
 /**
  * The supervision home: every live agent across all projects as a tile (status +
@@ -60,6 +61,23 @@ export function MissionControl(): JSX.Element {
             window.removeEventListener("focus", onFocus)
         }
     }, [projects])
+
+    // Ambient system state (Docker + listening ports).
+    const [sys, setSys] = useState<SystemInfo | null>(null)
+    useEffect(() => {
+        let on = true
+        const fetchSys = (): void => {
+            if (document.hidden) return
+            window.api.system.info().then((s) => on && setSys(s)).catch(() => undefined)
+        }
+        fetchSys()
+        const iv = setInterval(fetchSys, 8000)
+        return () => {
+            on = false
+            clearInterval(iv)
+        }
+    }, [])
+    const showSystem = !!sys && (sys.docker.length > 0 || sys.ports.length > 0)
 
     const reviewRows = projects.filter((p) => (changes[p.id] ?? 0) > 0)
 
@@ -133,6 +151,28 @@ export function MissionControl(): JSX.Element {
                     </div>
                 )}
             </div>
+
+            {showSystem && (
+                <div className="mission-section">
+                    <div className="mission-head">
+                        <span className="section-label">SYSTEM</span>
+                        <span className="muted small">containers &amp; listening ports</span>
+                    </div>
+                    <div className="mission-system">
+                        {sys!.docker.map((c) => (
+                            <span key={"d" + c.name} className="mission-chip" data-tip={c.ports || c.status}>
+                                <span className="mission-chip-dot ok" /> {c.name}
+                                <span className="muted small"> {c.status}</span>
+                            </span>
+                        ))}
+                        {sys!.ports.map((p) => (
+                            <span key={"p" + p.port} className="mission-chip" data-tip={`pid ${p.pid}`}>
+                                :{p.port}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
