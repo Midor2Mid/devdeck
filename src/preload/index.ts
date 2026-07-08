@@ -47,6 +47,20 @@ export interface DotnetResult {
     summary: string
     diagnostics: (Diag & { absPath: string })[]
 }
+export interface DockerContainer {
+    name: string
+    status: string
+    ports: string
+}
+export interface ListenPort {
+    port: number
+    pid: number
+}
+export interface SystemInfo {
+    dockerAvailable: boolean
+    docker: DockerContainer[]
+    ports: ListenPort[]
+}
 export interface PtyCreateOpts {
     id: string
     cwd?: string
@@ -394,6 +408,9 @@ const api = {
     dotnet: {
         run: (root: string, mode: "build" | "test"): Promise<DotnetResult> =>
             ipcRenderer.invoke("dotnet:run", { root, mode })
+    },
+    system: {
+        info: (): Promise<SystemInfo> => ipcRenderer.invoke("system:info")
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),

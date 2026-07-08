@@ -1,6 +1,7 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import type { AnySession } from "../store"
+import { getTail } from "../missionTail"
 
 export function AgentKey({
     session,
@@ -18,6 +19,12 @@ export function AgentKey({
     const [renaming, setRenaming] = useState(false)
     const [text, setText] = useState("")
     const [over, setOver] = useState(false)
+    // Live peek of the agent's latest output, surfaced in the hover tooltip.
+    const [peek, setPeek] = useState("")
+    useEffect(() => {
+        const iv = setInterval(() => setPeek(getTail(session.termId)), 1500)
+        return () => clearInterval(iv)
+    }, [session.termId])
 
     const commit = (): void => {
         renameSession(session.termId, text)
@@ -37,7 +44,8 @@ export function AgentKey({
             data-tip={
                 dragPayload
                     ? "Drop to insert into this session"
-                    : `${session.sessionName} · ${session.projectName} - ${session.status}`
+                    : `${session.sessionName} · ${session.projectName} - ${session.status}` +
+                      (peek ? `\n${peek}` : "")
             }
             data-tip-pos="top"
             onDragOver={(e) => {
