@@ -23,6 +23,7 @@ type Section =
     | "ssh"
     | "mcp"
     | "remote"
+    | "notifications"
     | "shortcuts"
     | "about"
 
@@ -38,6 +39,7 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "ssh", label: "SSH" },
     { key: "mcp", label: "MCP" },
     { key: "remote", label: "Remote (Mobile)" },
+    { key: "notifications", label: "Notifications" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
 ]
@@ -966,6 +968,38 @@ function AboutSection(): JSX.Element {
     )
 }
 
+function NotificationsSection(): JSX.Element {
+    const notifications = useSettings((s) => s.notifications)
+    const setNotifications = useSettings((s) => s.setNotifications)
+    return (
+        <div className="settings-section">
+            <h3>Attention notifications</h3>
+            <p className="muted small">
+                When an agent needs you (and its terminal isn&apos;t visible), how should DevDeck
+                alert you?
+            </p>
+            <div className="setting-row">
+                <label>Desktop notification</label>
+                <input
+                    type="checkbox"
+                    className="checkbox"
+                    checked={notifications.desktop}
+                    onChange={(e) => setNotifications({ desktop: e.target.checked })}
+                />
+            </div>
+            <div className="setting-row">
+                <label>Play a sound</label>
+                <input
+                    type="checkbox"
+                    className="checkbox"
+                    checked={notifications.sound}
+                    onChange={(e) => setNotifications({ sound: e.target.checked })}
+                />
+            </div>
+        </div>
+    )
+}
+
 function RemoteSection(): JSX.Element {
     const remote = useSettings((s) => s.remote)
     const setRemote = useSettings((s) => s.setRemote)
@@ -1332,6 +1366,7 @@ export function SettingsModal(): JSX.Element {
                     {section === "mcp" && <McpSection />}
 
                     {section === "remote" && <RemoteSection />}
+                    {section === "notifications" && <NotificationsSection />}
 
                     {section === "shortcuts" && (
                         <div className="settings-section">

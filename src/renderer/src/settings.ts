@@ -207,6 +207,13 @@ export interface AppSettings {
     network: {
         port: number
     }
+    /** Attention notifications when an agent needs you. */
+    notifications: {
+        /** Native OS desktop notification. */
+        desktop: boolean
+        /** Short audible beep. */
+        sound: boolean
+    }
     workspacePresets: WorkspacePreset[]
     usageLog: UsageEvent[]
     /** Recent SQL per DB connection id, most-recent-first. */
@@ -313,6 +320,10 @@ const DEFAULTS: AppSettings = {
     network: {
         port: 8899
     },
+    notifications: {
+        desktop: true,
+        sound: false
+    },
     workspacePresets: [],
     usageLog: [],
     dbQueryHistory: {},
@@ -340,6 +351,7 @@ interface SettingsState extends AppSettings {
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
     setNetwork: (patch: Partial<AppSettings["network"]>) => void
+    setNotifications: (patch: Partial<AppSettings["notifications"]>) => void
     setWorkspacePresets: (presets: WorkspacePreset[]) => void
     /** Record the start of an agent session (id = the pty/term id). */
     logUsageStart: (id: string, agentId: string, projectId: string) => void
@@ -362,8 +374,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, workspacePresets, usageLog, dbQueryHistory, projectCommands })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -418,6 +430,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote },
                     network: { ...DEFAULTS.network, ...raw.network },
+                    notifications: { ...DEFAULTS.notifications, ...raw.notifications },
                     workspacePresets: raw.workspacePresets ?? DEFAULTS.workspacePresets,
                     // Fresh process → no pty is actually running, so any event left
                     // open by a previous run is stale. Close it at its start time so
@@ -516,6 +529,10 @@ export const useSettings = create<SettingsState>((set, get) => {
         },
         setNetwork: (patch) => {
             set((s) => ({ network: { ...s.network, ...patch } }))
+            persist()
+        },
+        setNotifications: (patch) => {
+            set((s) => ({ notifications: { ...s.notifications, ...patch } }))
             persist()
         },
         setWorkspacePresets: (workspacePresets) => {
