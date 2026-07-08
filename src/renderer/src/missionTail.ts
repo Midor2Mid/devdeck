@@ -29,6 +29,16 @@ export function peekLine(tail: string): string {
     return ""
 }
 
+/** The last N non-empty, trimmed lines of a cleaned tail — for the expanded view. */
+export function lastLines(tail: string, n: number): string {
+    return tail
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(-n)
+        .join("\n")
+}
+
 import type { AgentStatus, AnySession } from "./store"
 
 const tails = new Map<string, string>()
@@ -36,13 +46,19 @@ const lastAt = new Map<string, number>()
 
 /** Record a raw pty chunk for a terminal (cheap; no React state). */
 export function recordTail(id: string, chunk: string): void {
-    tails.set(id, cleanTail(tails.get(id) ?? "", chunk))
+    // Keep a larger window than the one-line peek so tiles can expand to context.
+    tails.set(id, cleanTail(tails.get(id) ?? "", chunk, 4000))
     lastAt.set(id, Date.now())
 }
 
 /** The current display peek (last non-empty line) for a terminal. */
 export function getTail(id: string): string {
     return peekLine(tails.get(id) ?? "")
+}
+
+/** The last N non-empty lines for a terminal — the expanded tile view. */
+export function getFullTail(id: string, n = 8): string {
+    return lastLines(tails.get(id) ?? "", n)
 }
 
 /** When this terminal last produced output (ms epoch), or undefined. */
