@@ -1,0 +1,167 @@
+import { useState } from "react"
+import { useStore } from "../store"
+import { tasksByColumn, COLUMNS, type BoardColumn } from "../board"
+
+const COL_LABEL: Record<BoardColumn, string> = {
+    todo: "Todo",
+    doing: "Doing",
+    review: "Review",
+    done: "Done"
+}
+
+/**
+ * Per-project task board: create task cards, dispatch one to an agent (in its own
+ * worktree by default), and track it across Todo · Doing · Review · Done. A
+ * dispatched card auto-moves to Review when its agent goes idle.
+ */
+export function TaskBoard(): JSX.Element {
+    const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
+    const boardTasks = useStore((s) => s.boardTasks)
+    const agentStatus = useStore((s) => s.agentStatus)
+    const addBoardTask = useStore((s) => s.addBoardTask)
+    const moveBoardTask = useStore((s) => s.moveBoardTask)
+    const removeBoardTask = useStore((s) => s.removeBoardTask)
+    const dispatchBoardTask = useStore((s) => s.dispatchBoardTask)
+    const jumpToTerm = useStore((s) => s.jumpToTerm)
+    const openChanges = useStore((s) => s.openChanges)
+
+    const [draft, setDraft] = useState("")
+    const [worktree, setWorktree] = useState(true)
+
+    if (!activeProject) {
+        return (
+            <div className="empty-state">
+                <p>No project selected.</p>
+            </div>
+        )
+    }
+
+    const grouped = tasksByColumn(boardTasks, activeProject.id)
+    const add = (): void => {
+        if (draft.trim()) {
+            addBoardTask(activeProject.id, draft)
+            setDraft("")
+        }
+    }
+    const idx = (c: BoardColumn): number => COLUMNS.indexOf(c)
+
+    return (
+        <div className="board">
+            <div className="board-cols">
+                {COLUMNS.map((col) => (
+                    <div
+                        key={col}
+                        className="board-col"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                            const id = e.dataTransfer.getData("text/board-task")
+                            if (id) moveBoardTask(id, col)
+                        }}
+                    >
+                        <div className="board-col-head">
+                            <span className="section-label">{COL_LABEL[col]}</span>
+                            <span className="muted small">{grouped[col].length}</span>
+                        </div>
+
+                        {col === "todo" && (
+                            <div className="board-add">
+                                <textarea
+                                    className="board-add-input"
+                                    placeholder="New task… (Ctrl+Enter to add; paste a checklist for many)"
+                                    value={draft}
+                                    onChange={(e) => setDraft(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                                            e.preventDefault()
+                                            add()
+                                        }
+                                    }}
+                                />
+                                <div className="board-add-foot">
+                                    <label className="board-wt">
+                                        <input
+                                            type="checkbox"
+                                            checked={worktree}
+                                            onChange={(e) => setWorktree(e.target.checked)}
+                                        />
+                                        worktree
+                                    </label>
+                                    <button className="accent" onClick={add} disabled={!draft.trim()}>
+                                        Add
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="board-cards">
+                            {grouped[col].map((t) => {
+                                const status = t.termId ? agentStatus[t.termId] : undefined
+                                return (
+                                    <div
+                                        key={t.id}
+                                        className="board-card"
+                                        draggable
+                                        onDragStart={(e) => e.dataTransfer.setData("text/board-task", t.id)}
+                                    >
+                                        <div className="board-card-title">{t.title}</div>
+                                        <div className="board-card-foot">
+                                            {status && <span className={"tab-dot claude status-" + status} />}
+                                            {t.column === "todo" && (
+                                                <button
+                                                    className="board-btn accent"
+                                                    onClick={() => void dispatchBoardTask(t.id, { worktree })}
+                                                >
+                                                    Dispatch
+                                                </button>
+                                            )}
+                                            {t.termId && (t.column === "doing" || t.column === "review") && (
+                                                <button className="board-btn" onClick={() => jumpToTerm(t.termId!)}>
+                                                    Jump
+                                                </button>
+                                            )}
+                                            {t.column === "review" && (
+                                                <button
+                                                    className="board-btn"
+                                                    onClick={() =>
+                                                        openChanges(t.worktree ?? activeProject.path, t.title)
+                                                    }
+                                                >
+                                                    Diff
+                                                </button>
+                                            )}
+                                            {idx(t.column) > 0 && (
+                                                <button
+                                                    className="board-btn"
+                                                    data-tip="Move back"
+                                                    onClick={() => moveBoardTask(t.id, COLUMNS[idx(t.column) - 1])}
+                                                >
+                                                    ‹
+                                                </button>
+                                            )}
+                                            {idx(t.column) < COLUMNS.length - 1 && (
+                                                <button
+                                                    className="board-btn"
+                                                    data-tip="Move forward"
+                                                    onClick={() => moveBoardTask(t.id, COLUMNS[idx(t.column) + 1])}
+                                                >
+                                                    ›
+                                                </button>
+                                            )}
+                                            <button
+                                                className="board-btn board-del"
+                                                data-tip="Delete"
+                                                onClick={() => removeBoardTask(t.id)}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}

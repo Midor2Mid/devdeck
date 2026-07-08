@@ -19,6 +19,7 @@ import { SearchModal } from "./components/SearchModal"
 import { DotnetPanel } from "./components/DotnetPanel"
 import { ReviewPanel } from "./components/ReviewPanel"
 import { MissionControl } from "./components/MissionControl"
+import { TaskBoard } from "./components/TaskBoard"
 import { ActivityPanel } from "./components/ActivityPanel"
 import { InboxPanel } from "./components/InboxPanel"
 import { UsagePanel } from "./components/UsagePanel"
@@ -205,6 +206,9 @@ export function App(): JSX.Element {
                         {/* All panels stay mounted; visibility toggled so terminals keep running. */}
                         <div className="panel" style={{ display: view === "mission" ? "flex" : "none" }}>
                             <MissionControl />
+                        </div>
+                        <div className="panel" style={{ display: view === "tasks" ? "flex" : "none" }}>
+                            <TaskBoard />
                         </div>
                         <div className="panel" style={{ display: view === "terminal" ? "flex" : "none" }}>
                             <TerminalView />

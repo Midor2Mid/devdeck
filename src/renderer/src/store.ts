@@ -19,10 +19,11 @@ import { gateActive, evaluateGate, maxAttempts } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail } from "./missionTail"
+import { parseChecklist, type BoardTask, type BoardColumn } from "./board"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
-export type MainView = "mission" | "terminal" | "editor" | "api" | "database" | "browser" | "network"
+export type MainView = "mission" | "tasks" | "terminal" | "editor" | "api" | "database" | "browser" | "network"
 export type AgentStatus = "working" | "idle" | "attention"
 
 export interface Tab {
@@ -84,6 +85,7 @@ interface Persisted {
     termLayout: TermLayout
     canvasPos: Record<string, CanvasPos>
     canvasLinks: CanvasLink[]
+    boardTasks: BoardTask[]
 }
 
 export type TermLayout = "tabs" | "grid" | "canvas"
@@ -106,6 +108,11 @@ interface AppState extends Persisted {
 
     view: MainView
     setView: (view: MainView) => void
+    boardTasks: BoardTask[]
+    addBoardTask: (projectId: string, title: string) => void
+    moveBoardTask: (id: string, column: BoardColumn) => void
+    removeBoardTask: (id: string) => void
+    dispatchBoardTask: (id: string, opts: { worktree: boolean }) => Promise<void>
     flush: () => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
@@ -295,7 +302,8 @@ export const useStore = create<AppState>((set, get) => {
             view: s.view,
             termLayout: s.termLayout,
             canvasPos: s.canvasPos,
-            canvasLinks: s.canvasLinks
+            canvasLinks: s.canvasLinks,
+            boardTasks: s.boardTasks
         } satisfies Persisted)
     }
     const persist = (): void => {
@@ -415,7 +423,15 @@ export const useStore = create<AppState>((set, get) => {
             id,
             setTimeout(
                 () => {
-                    if (get().agentStatus[id] === "working") setStatus(id, "idle")
+                    if (get().agentStatus[id] === "working") {
+                        setStatus(id, "idle")
+                        // A dispatched task whose agent just finished a turn is ready to review.
+                        set((s) => ({
+                            boardTasks: s.boardTasks.map((t) =>
+                                t.termId === id && t.column === "doing" ? { ...t, column: "review" } : t
+                            )
+                        }))
+                    }
                 },
                 useSettings.getState().agentIdleMs
             )
@@ -501,6 +517,7 @@ export const useStore = create<AppState>((set, get) => {
         termLayout: "tabs",
         canvasPos: {},
         canvasLinks: [],
+        boardTasks: [],
         activity: [],
         activityOpen: false,
         inboxOpen: false,
@@ -560,7 +577,8 @@ export const useStore = create<AppState>((set, get) => {
                 view: w.view ?? "mission",
                 termLayout: w.termLayout ?? "tabs",
                 canvasPos: w.canvasPos ?? {},
-                canvasLinks: w.canvasLinks ?? []
+                canvasLinks: w.canvasLinks ?? [],
+                boardTasks: w.boardTasks ?? []
             })
         },
 
@@ -625,6 +643,61 @@ export const useStore = create<AppState>((set, get) => {
             set({ view })
             if (view === "terminal" && get().activeId) ack(get().activePaneByProject[get().activeId as string])
             persist()
+        },
+
+        addBoardTask: (projectId, title) => {
+            const titles = parseChecklist(title)
+            if (titles.length === 0) return
+            const now = Date.now()
+            const created: BoardTask[] = titles.map((t) => ({
+                id: newId(),
+                projectId,
+                title: t,
+                column: "todo",
+                createdAt: now
+            }))
+            set((s) => ({ boardTasks: [...s.boardTasks, ...created] }))
+            persist()
+        },
+        moveBoardTask: (id, column) => {
+            set((s) => ({ boardTasks: s.boardTasks.map((t) => (t.id === id ? { ...t, column } : t)) }))
+            persist()
+        },
+        removeBoardTask: (id) => {
+            set((s) => ({ boardTasks: s.boardTasks.filter((t) => t.id !== id) }))
+            persist()
+        },
+        dispatchBoardTask: async (id, opts) => {
+            const task = get().boardTasks.find((t) => t.id === id)
+            if (!task) return
+            const proj = get().projects.find((p) => p.id === task.projectId)
+            if (!proj) return
+            const agentId = useSettings.getState().agents[0]?.id ?? "claude"
+            // newTab spawns into the active project — make sure it's this task's.
+            await get().setActiveProject(proj.id)
+
+            let worktreePath: string | undefined
+            if (opts.worktree) {
+                const res = await window.api.git.worktreeAdd(proj.path, task.title)
+                if (!res.ok || !res.path) {
+                    pushActivity("attention", "", `worktree failed: ${res.error ?? "error"}`)
+                    return
+                }
+                worktreePath = res.path
+            }
+            const label = "task " + task.title.slice(0, 24)
+            const termId = get().newTab(agentId, undefined, label, worktreePath)
+            if (!termId) return
+            set((s) => ({
+                boardTasks: s.boardTasks.map((t) =>
+                    t.id === id ? { ...t, column: "doing", termId, worktree: worktreePath } : t
+                )
+            }))
+            persist()
+            // Let the agent CLI boot, then send the task as its first prompt.
+            await sleep(2800)
+            window.api.pty.input(termId, task.title + "\r")
+            set({ lastAgentTermId: termId })
         },
         flush: () => {
             if (persistTimer) {
