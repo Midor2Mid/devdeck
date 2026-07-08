@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { cleanTail, peekLine, relTime, sortForFollow, lastLines } from "../src/renderer/src/missionTail"
+import { cleanTail, peekLine, relTime, sortForFollow, lastLines, isStalled } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 
 function sess(over: Partial<AnySession>): AnySession {
@@ -70,6 +70,23 @@ describe("lastLines", () => {
     })
     it("returns empty for all-blank", () => {
         expect(lastLines("  \n \n", 4)).toBe("")
+    })
+})
+
+describe("isStalled", () => {
+    const now = 1_000_000
+    it("flags a working agent with no output past the threshold", () => {
+        expect(isStalled("working", now - 5 * 60000, now, 2 * 60000)).toBe(true)
+    })
+    it("does not flag recent working agents", () => {
+        expect(isStalled("working", now - 30000, now, 2 * 60000)).toBe(false)
+    })
+    it("only applies to working status", () => {
+        expect(isStalled("idle", now - 10 * 60000, now, 2 * 60000)).toBe(false)
+        expect(isStalled("attention", now - 10 * 60000, now, 2 * 60000)).toBe(false)
+    })
+    it("needs a known last-output time", () => {
+        expect(isStalled("working", undefined, now, 2 * 60000)).toBe(false)
     })
 })
 

@@ -82,6 +82,19 @@ export function relTime(now: number, then?: number): string {
     return `${Math.floor(d / 3600000)}h`
 }
 
+/**
+ * A "working" agent that hasn't produced output for longer than `thresholdMs`
+ * is likely stalled or stuck in a loop — worth surfacing so you can check on it.
+ */
+export function isStalled(
+    status: AgentStatus,
+    lastAt: number | undefined,
+    now: number,
+    thresholdMs = 120000
+): boolean {
+    return status === "working" && !!lastAt && now - lastAt > thresholdMs
+}
+
 const RANK: Record<AgentStatus, number> = { attention: 0, working: 1, idle: 2 }
 
 /** Order sessions attention-first (then working, then idle), stable within a status. */

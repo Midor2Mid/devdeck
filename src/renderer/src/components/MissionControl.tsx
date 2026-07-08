@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { getTail, getFullTail, getLastAt, relTime, sortForFollow } from "../missionTail"
+import { getTail, getFullTail, getLastAt, relTime, sortForFollow, isStalled } from "../missionTail"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -113,10 +113,11 @@ export function MissionControl(): JSX.Element {
                         {sessions.map((s) => {
                             const ago = relTime(Date.now(), getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
+                            const stalled = isStalled(s.status, getLastAt(s.termId), Date.now())
                             return (
                                 <div
                                     key={s.termId}
-                                    className={"mission-tile status-" + s.status}
+                                    className={"mission-tile status-" + s.status + (stalled ? " stalled" : "")}
                                     role="button"
                                     tabIndex={0}
                                     onClick={() => jumpToTerm(s.termId)}
@@ -151,6 +152,9 @@ export function MissionControl(): JSX.Element {
                                     )}
                                     {s.status === "attention" && (
                                         <div className="mission-tile-attn">needs you</div>
+                                    )}
+                                    {stalled && (
+                                        <div className="mission-tile-stalled">stalled — no output {ago}</div>
                                     )}
                                 </div>
                             )
