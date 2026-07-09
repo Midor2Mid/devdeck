@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 - 2026-07-10
 
+- **Agent context files** - the tool cluster gains a **Context** popover listing the
+  active project's agent memory files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`): open a
+  present one in the editor, or create a missing one from a seeded starter template.
+  Root-only; a lens over the real files the CLI agents already load.
 - **MCP server catalog** - the MCP settings section gains an **Add from catalog**
   list of common servers (filesystem, github, memory, sequential-thinking,
   puppeteer, brave-search, postgres, sqlite, fetch, slack). One click drops an
