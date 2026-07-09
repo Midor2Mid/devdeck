@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import { mergeContext, template, type ContextEntry } from "../contextCatalog"
 import { toast } from "../toast"
+import type { DirEntry } from "../../../preload/index"
 
 /**
  * Popover listing the active project's agent memory files (CLAUDE.md /
@@ -13,6 +14,7 @@ export function ContextIndex({ onClose }: { onClose: () => void }): JSX.Element 
     const project = useStore((s) => s.projects.find((p) => p.id === s.activeId))
     const openInEditor = useStore((s) => s.openInEditor)
     const [entries, setEntries] = useState<ContextEntry[]>([])
+    const [listing, setListing] = useState<DirEntry[]>([])
     const [error, setError] = useState(false)
 
     useEffect(() => {
@@ -23,6 +25,7 @@ export function ContextIndex({ onClose }: { onClose: () => void }): JSX.Element 
             .then((list) => {
                 if (!live) return
                 setError(false)
+                setListing(list)
                 setEntries(mergeContext(list.map((e) => e.name)))
             })
             .catch(() => {
@@ -31,18 +34,26 @@ export function ContextIndex({ onClose }: { onClose: () => void }): JSX.Element 
     }, [project])
 
     if (!project) return <div className="context-empty muted small">No active project.</div>
+    const pid = project.id
+    const root = project.path
 
-    const path = (name: string): string => `${project.path}/${name}`
-
+    // Open a present file by its real listing path, so the string matches what
+    // the file tree opens - EditorPanel de-dupes tabs by exact path equality.
     const open = (name: string): void => {
-        openInEditor(project.id, path(name))
+        const entry = listing.find((e) => e.name === name)
+        if (!entry) return
+        openInEditor(pid, entry.path)
         onClose()
     }
 
+    // Create a missing file, then re-list so we open it by the same canonical
+    // path the file tree would produce (keeps tab de-dup working).
     const create = async (name: string): Promise<void> => {
         try {
-            await window.api.fs.write(path(name), template(name, project.name))
-            openInEditor(project.id, path(name))
+            await window.api.fs.write(`${root}/${name}`, template(name, project.name))
+            const list = await window.api.fs.readDir(root)
+            const entry = list.find((e) => e.name === name)
+            openInEditor(pid, entry ? entry.path : `${root}/${name}`)
             onClose()
         } catch {
             toast(`Couldn't create ${name}`)
