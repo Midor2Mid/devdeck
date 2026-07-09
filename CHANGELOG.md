@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 - 2026-07-10
 
 - **Agent context files** - the tool cluster gains a **Context** popover listing the
   active project's agent memory files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`): open a
