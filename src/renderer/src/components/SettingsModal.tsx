@@ -4,6 +4,7 @@ import { useSettings, type ShellKind, type GitAccount } from "../settings"
 import { useStore } from "../store"
 import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
+import { MCP_CATALOG, addServer } from "../mcpCatalog"
 import { type Pipeline, type PipelineStep, type PipelineTrigger, isRunnable, moveItem } from "../pipeline"
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
 
@@ -124,6 +125,25 @@ function McpSection(): JSX.Element {
                 <button className="accent" onClick={save}>
                     {saved ? "Saved ✓" : "Save .mcp.json"}
                 </button>
+            </div>
+            <div className="mcp-catalog">
+                <div className="section-label mcp-catalog-title">Add from catalog</div>
+                {MCP_CATALOG.map((entry) => {
+                    const added = servers.some((s) => s.name === entry.name)
+                    return (
+                        <div key={entry.id} className="mcp-cat-row">
+                            <span className="mcp-cat-name">{entry.name}</span>
+                            <span className="mcp-cat-desc muted small">{entry.description}</span>
+                            <button
+                                className="mcp-cat-add"
+                                disabled={added}
+                                onClick={() => setServers(addServer(servers, entry))}
+                            >
+                                {added ? "Added" : "Add"}
+                            </button>
+                        </div>
+                    )
+                })}
             </div>
             <p className="settings-hint">
                 Writes <code>{project.name}/.mcp.json</code> - the standard project MCP config read

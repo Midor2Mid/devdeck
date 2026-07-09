@@ -6549,3 +6549,49 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .board-del {
     margin-left: auto;
 }
+
+/* ---------- MCP catalog ---------- */
+.mcp-catalog {
+    margin-top: 14px;
+    border-top: 1px solid var(--border-soft);
+    padding-top: 10px;
+}
+.mcp-catalog-title {
+    margin-bottom: 6px;
+}
+.mcp-cat-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 4px 2px;
+}
+.mcp-cat-name {
+    font-family: var(--mono, monospace);
+    font-size: 12px;
+    color: var(--text);
+    min-width: 150px;
+}
+.mcp-cat-desc {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mcp-cat-add {
+    flex: none;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: var(--radius, 6px);
+    padding: 1px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.mcp-cat-add:hover:not(:disabled) {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.mcp-cat-add:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

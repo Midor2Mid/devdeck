@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **MCP server catalog** - the MCP settings section gains an **Add from catalog**
+  list of common servers (filesystem, github, memory, sequential-thinking,
+  puppeteer, brave-search, postgres, sqlite, fetch, slack). One click drops an
+  editable `npx`-based server template (command/args/env) into the project's
+  `.mcp.json`; already-added servers show **Added** and disable.
 - **File-ownership / conflict map** - Mission Control gains an "In-flight changes"
   section showing which agent is changing which files (across their worktrees), and
   flags a file two agents in the same project both touched as a **conflict** (a
