@@ -6595,3 +6595,58 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     opacity: 0.5;
     cursor: default;
 }
+
+/* ---------- Agent context files ---------- */
+.context-index {
+    min-width: 260px;
+}
+.context-title {
+    margin-bottom: 6px;
+}
+.context-empty {
+    padding: 6px 2px;
+}
+.context-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 2px;
+}
+.context-dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    align-self: center;
+    border: 1px solid var(--border);
+    background: transparent;
+}
+.context-dot.on {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.context-name {
+    font-family: var(--mono, monospace);
+    font-size: 12px;
+    color: var(--text);
+}
+.context-agent {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.context-action {
+    flex: none;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: var(--radius, 6px);
+    padding: 1px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.context-action:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}

@@ -4,6 +4,7 @@ import { useSettings } from "../settings"
 import { Icon } from "./Icon"
 import { contextMenu } from "../contextmenu"
 import { TaskRunner } from "./TaskRunner"
+import { ContextIndex } from "./ContextIndex"
 
 export function ToolCluster(): JSX.Element {
     const setInboxOpen = useStore((s) => s.setInboxOpen)
@@ -13,6 +14,7 @@ export function ToolCluster(): JSX.Element {
         (s) => Object.values(s.agentStatus).filter((x) => x === "attention").length
     )
     const [tasksOpen, setTasksOpen] = useState(false)
+    const [contextOpen, setContextOpen] = useState(false)
 
     const overflow = (e: React.MouseEvent): void => {
         const s = useStore.getState()
@@ -42,6 +44,24 @@ export function ToolCluster(): JSX.Element {
                         <div className="menu-backdrop" onClick={() => setTasksOpen(false)} />
                         <div className="deck-popover" onClick={(e) => e.stopPropagation()}>
                             <TaskRunner />
+                        </div>
+                    </>
+                )}
+            </div>
+            <div className="deck-tasks-wrap">
+                <button
+                    className="deck-tool"
+                    data-tip="Agent context files"
+                    data-tip-pos="top"
+                    onClick={() => setContextOpen((v) => !v)}
+                >
+                    <Icon name="bookOpen" size={16} />
+                </button>
+                {contextOpen && (
+                    <>
+                        <div className="menu-backdrop" onClick={() => setContextOpen(false)} />
+                        <div className="deck-popover" onClick={(e) => e.stopPropagation()}>
+                            <ContextIndex onClose={() => setContextOpen(false)} />
                         </div>
                     </>
                 )}

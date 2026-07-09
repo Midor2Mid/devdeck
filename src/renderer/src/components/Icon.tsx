@@ -40,6 +40,7 @@ export type IconName =
     | "more"
     | "inbox"
     | "chart"
+    | "bookOpen"
 
 const P: Record<IconName, JSX.Element> = {
     terminal: (
@@ -224,6 +225,12 @@ const P: Record<IconName, JSX.Element> = {
             <path d="M18 17V9" />
             <path d="M13 17V5" />
             <path d="M8 17v-3" />
+        </>
+    ),
+    bookOpen: (
+        <>
+            <path d="M12 7v14" />
+            <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
         </>
     )
 }
