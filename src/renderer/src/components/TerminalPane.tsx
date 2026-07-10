@@ -6,6 +6,9 @@ import { paneRegistry } from "../paneRegistry"
 import { useSettings } from "../settings"
 import { useStore } from "../store"
 import { THEMES } from "../themes"
+import { exitNotice } from "../termExit"
+
+const IS_WINDOWS = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
 
 interface Props {
     termId: string
@@ -65,8 +68,8 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         const offData = window.api.pty.onData(({ id, data }) => {
             if (id === termId) term.write(data)
         })
-        const offExit = window.api.pty.onExit(({ id }) => {
-            if (id === termId) term.write("\r\n\x1b[90m[process exited]\x1b[0m\r\n")
+        const offExit = window.api.pty.onExit(({ id, exitCode }) => {
+            if (id === termId) term.write("\r\n\x1b[90m" + exitNotice(exitCode, IS_WINDOWS) + "\x1b[0m\r\n")
         })
         const inputSub = term.onData((data) => window.api.pty.input(termId, data))
 
