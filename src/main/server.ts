@@ -10,6 +10,7 @@ import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
 import { isBlockedRemoteUrl, isReadOnlySql, tokenOk } from "./guards"
+import { exitNotice } from "../renderer/src/termExit"
 
 export interface RemoteSession {
     termId: string
@@ -231,8 +232,11 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     onData = ({ id, data }) => {
         for (const c of clients) if (c.attached?.has(id)) send(c, { t: "data", id, data })
     }
-    onExit = ({ id }) => {
-        for (const c of clients) if (c.attached?.has(id)) send(c, { t: "exit", id })
+    onExit = ({ id, exitCode }) => {
+        // Compute the notice host-side: the DevDeck host knows its own OS, whereas a
+        // remote browser client can't (and the Avast/fast-fail case is host-specific).
+        const notice = exitNotice(exitCode, process.platform === "win32")
+        for (const c of clients) if (c.attached?.has(id)) send(c, { t: "exit", id, notice })
     }
     ptyEvents.on("data", onData)
     ptyEvents.on("exit", onExit)
@@ -428,7 +432,7 @@ const CLIENT_HTML = `<!doctype html>
         sessions = m.sessions; updateBadge(); if(!attachedId) renderList();
       }
       else if(m.t === 'data' && m.id === attachedId && term){ term.write(m.data); }
-      else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m[process exited]\\x1b[0m\\r\\n'); }
+      else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m'+(m.notice||'[process exited]')+'\\x1b[0m\\r\\n'); }
       else if(m.t === 'upload:done'){ statusEl.textContent = m.error ? ('upload failed: '+m.error) : ('attached → path inserted'); setTimeout(function(){statusEl.textContent='connected';},2500); }
       else if(m.t === 'http:res'){ renderResult(document.getElementById('h-res'), m.res); }
       else if(m.t === 'db:res'){ renderResult(document.getElementById('d-res'), m.res); }
