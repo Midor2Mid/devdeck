@@ -6294,6 +6294,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     place-items: center;
     width: 24px;
     height: 24px;
+    padding: 0; /* reset the base `button` 5px 12px, which stretched this fixed square */
     border: 1px dashed var(--border);
     background: transparent;
     color: var(--faint);
