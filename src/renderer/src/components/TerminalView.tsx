@@ -103,7 +103,10 @@ export function TerminalView(): JSX.Element {
             const action = map[e.code]
             if (action) {
                 e.preventDefault()
-                e.stopPropagation()
+                // stopImmediatePropagation: App.tsx also listens on window in the
+                // capture phase; stopPropagation() would not stop that sibling
+                // listener, so chords like Ctrl+Shift+F would fire twice.
+                e.stopImmediatePropagation()
                 action()
             }
         }
@@ -120,8 +123,8 @@ export function TerminalView(): JSX.Element {
             <div className="empty-state">
                 <p>No project selected.</p>
                 <p className="muted">
-                    Click <b>+</b> next to <b>PROJECTS</b> in the sidebar to add a folder, or press{" "}
-                    <kbd>Ctrl + K</kbd> to switch projects. Press <kbd>F1</kbd> for all shortcuts.
+                    Press <kbd>Ctrl + K</kbd> to open the project switcher — add a folder from
+                    there, or drop one onto it. Press <kbd>F1</kbd> for all shortcuts.
                 </p>
             </div>
         )

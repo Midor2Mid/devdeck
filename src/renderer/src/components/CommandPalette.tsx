@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useStore, SHELL, type MainView, type TermLayout } from "../store"
+import { useStore, SHELL, type TermLayout } from "../store"
 import { useSettings, sshCommand } from "../settings"
-import type { ThemeId } from "../themes"
+import { THEMES, STYLES } from "../themes"
+import { DECK_VIEWS } from "./ViewKeys"
 
 interface Command {
     id: string
@@ -42,13 +43,13 @@ export function CommandPalette(): JSX.Element {
 
     const commands = useMemo<Command[]>(() => {
         const cmds: Command[] = []
-        const views: MainView[] = ["terminal", "editor", "api", "database", "browser"]
-        for (const v of views)
+        // Every deck view (derived from DECK_VIEWS so new views show up here).
+        for (const v of DECK_VIEWS)
             cmds.push({
-                id: "view:" + v,
+                id: "view:" + v.view,
                 section: "Go to",
-                title: "Go to " + v[0].toUpperCase() + v.slice(1),
-                run: () => store.setView(v)
+                title: "Go to " + v.name,
+                run: () => store.setView(v.view)
             })
 
         cmds.push({ id: "new:shell", section: "New", title: "New terminal (shell)", run: () => store.newTab(SHELL) })
@@ -82,17 +83,20 @@ export function CommandPalette(): JSX.Element {
                 }
             })
 
-        const themes: { id: ThemeId; label: string }[] = [
-            { id: "sumi", label: "Sumi (dark)" },
-            { id: "washi", label: "Washi (light)" },
-            { id: "zen", label: "Zen (dark)" }
-        ]
-        for (const t of themes)
+        for (const t of Object.values(THEMES))
             cmds.push({
                 id: "theme:" + t.id,
                 section: "Theme",
                 title: "Theme: " + t.label,
                 run: () => setAppearance({ theme: t.id })
+            })
+
+        for (const s of Object.values(STYLES))
+            cmds.push({
+                id: "style:" + s.id,
+                section: "Style",
+                title: "Style: " + s.label,
+                run: () => setAppearance({ style: s.id })
             })
 
         for (const s of store.agentSessions())
@@ -107,7 +111,7 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:search", section: "Actions", title: "Search across projects", run: () => store.setSearchOpen(true) })
         cmds.push({ id: "act:tasks", section: "Actions", title: "Task board", run: () => store.setView("tasks") })
         cmds.push({ id: "act:dotnet", section: "Actions", title: "Build / test (.NET)", run: () => store.setDotnetOpen(true) })
-        cmds.push({ id: "act:review", section: "Actions", title: "Review changes (agent panel)", run: () => store.setReviewOpen(true) })
+        cmds.push({ id: "act:review-panel", section: "Actions", title: "Review changes — agent panel", run: () => store.setReviewOpen(true) })
         cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
         cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })
@@ -123,9 +127,9 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:standup", section: "Actions", title: "Standup - generate today's worklog", run: () => store.setStandupOpen(true) })
         cmds.push({ id: "act:worktrees", section: "Actions", title: "Worktrees - new agent in a worktree", run: () => store.setWorktreesOpen(true) })
         cmds.push({
-            id: "act:review",
+            id: "act:review-project",
             section: "Actions",
-            title: "Review changes (active project)",
+            title: "Diff working tree — active project",
             run: () => {
                 const p = store.activeProject()
                 if (p) store.openChanges(p.path, p.name)
@@ -137,7 +141,7 @@ export function CommandPalette(): JSX.Element {
         return cmds
     }, [agents, sshProfiles, pipelines, store, setAppearance, openSettings])
 
-    const filtered = useMemo(() => commands.filter((c) => matches(c.title, q)).slice(0, 50), [commands, q])
+    const filtered = useMemo(() => commands.filter((c) => matches(c.title, q)).slice(0, 100), [commands, q])
 
     useEffect(() => {
         if (sel >= filtered.length) setSel(0)

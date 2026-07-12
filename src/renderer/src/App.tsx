@@ -146,9 +146,12 @@ export function App(): JSX.Element {
                 return
             }
             if (mod && e.shiftKey && e.code === "KeyF") {
+                const s = useStore.getState()
+                // In Terminal view Ctrl+Shift+F belongs to find-in-terminal
+                // (TerminalView handles it) — don't also toggle global search.
+                if (s.view === "terminal") return
                 e.preventDefault()
                 e.stopPropagation()
-                const s = useStore.getState()
                 s.setSearchOpen(!s.searchOpen)
                 return
             }
