@@ -2,6 +2,7 @@ import { useStore } from "../store"
 import { Enso } from "./Enso"
 import { Icon } from "./Icon"
 import { DECK_VIEWS } from "./ViewKeys"
+import { ProjectChip } from "./ProjectChip"
 
 export function Topbar(): JSX.Element {
     const view = useStore((s) => s.view)
@@ -22,6 +23,7 @@ export function Topbar(): JSX.Element {
                     data-tip={project ? project.path : "Open a project (Ctrl+K)"}
                     data-tip-pos="bottom"
                 >
+                    {project && <ProjectChip project={project} size="sm" />}
                     {project ? project.name : "No project"}
                     <Icon name="chevronDown" size={14} className="topbar-proj-caret" />
                 </button>

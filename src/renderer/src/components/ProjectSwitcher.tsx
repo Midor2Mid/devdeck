@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "../store"
 import { contextMenu } from "../contextmenu"
 import { projectContextMenu } from "../projectMenu"
+import { ProjectChip } from "./ProjectChip"
 
 /**
  * Full-window launchpad for switching and managing projects: a searchable grid
@@ -133,9 +134,12 @@ export function ProjectSwitcher(): JSX.Element {
                                 onClick={() => open(p.id)}
                                 onContextMenu={(e) => contextMenu(e, projectContextMenu(p.id))}
                             >
-                                <div className="switcher-card-name">
-                                    {p.name}
-                                    {c?.attention ? <span className="card-attn">●</span> : null}
+                                <div className="switcher-card-head">
+                                    <ProjectChip project={p} size="md" />
+                                    <div className="switcher-card-name">
+                                        {p.name}
+                                        {c?.attention ? <span className="card-attn">●</span> : null}
+                                    </div>
                                 </div>
                                 {p.group && <div className="switcher-card-group">{p.group}</div>}
                                 <div className="switcher-card-path">{p.path}</div>

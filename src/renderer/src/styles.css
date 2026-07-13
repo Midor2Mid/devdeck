@@ -6689,3 +6689,8 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .project-chip-md.is-emoji {
     font-size: 15px;
 }
+.switcher-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
