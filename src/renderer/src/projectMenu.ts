@@ -19,6 +19,7 @@ export function projectContextMenu(projectId: string): MenuItem[] {
         { label: "Open", onClick: () => s.setActiveProject(project.id) },
         { label: "Environment variables…", onClick: () => s.setEnvEditorProject(project.id) },
         { label: "Saved commands…", onClick: () => s.setCommandsEditorProject(project.id) },
+        { label: "Appearance…", onClick: () => s.setIdentityEditorProject(project.id) },
         { separator: true },
         ...groups
             .filter((g) => g !== project.group)

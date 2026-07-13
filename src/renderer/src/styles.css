@@ -6694,3 +6694,52 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     align-items: center;
     gap: 8px;
 }
+
+/* ---------- Project appearance modal ---------- */
+.identity-modal {
+    width: 340px;
+    padding: 18px;
+}
+.identity-modal .modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.identity-modal .modal-head h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 14px;
+}
+.identity-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+}
+.identity-row > span {
+    width: 48px;
+    color: var(--faint);
+    font-size: 12px;
+}
+.identity-emoji-input {
+    flex: 1;
+}
+.identity-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.identity-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+.identity-swatch.sel {
+    border-color: var(--text);
+}
+.identity-reset {
+    margin-top: 8px;
+}
