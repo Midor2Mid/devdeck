@@ -67,7 +67,7 @@ export function autoColorKey(name: string): PaletteKey {
 }
 
 export function identity(p: { name: string; emoji?: string; color?: string }): Identity {
-    const overridden = p.color && p.color in PALETTE ? (p.color as PaletteKey) : null
+    const overridden = p.color && PALETTE_KEYS.includes(p.color as PaletteKey) ? (p.color as PaletteKey) : null
     if (p.emoji) {
         const tile = overridden ? PALETTE[overridden] : NEUTRAL_TILE
         return { label: p.emoji, isEmoji: true, bg: tile.bg, fg: tile.fg }

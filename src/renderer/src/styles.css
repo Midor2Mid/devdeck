@@ -6663,7 +6663,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    border-radius: 6px;
+    border-radius: var(--radius, 6px);
     font-weight: 600;
     line-height: 1;
     letter-spacing: 0.02em;
@@ -6673,7 +6673,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     width: 18px;
     height: 18px;
     font-size: 9px;
-    border-radius: 5px;
+    border-radius: var(--radius, 6px);
 }
 .project-chip-md {
     width: 26px;
@@ -6705,6 +6705,8 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     align-items: center;
     gap: 10px;
     margin-bottom: 14px;
+    padding: 0;
+    border-bottom: none;
 }
 .identity-modal .modal-head h3 {
     flex: 1;
@@ -6733,7 +6735,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .identity-swatch {
     width: 24px;
     height: 24px;
-    border-radius: 6px;
+    border-radius: var(--radius, 6px);
     border: 2px solid transparent;
     cursor: pointer;
 }

@@ -42,6 +42,7 @@ export function ProjectIdentityModal(): JSX.Element | null {
                                 className={"identity-swatch" + (project.color === k ? " sel" : "")}
                                 style={{ background: PALETTE[k].bg }}
                                 data-tip={k}
+                                aria-label={k}
                                 onClick={() => setMeta(project.id, { color: k })}
                             />
                         ))}
