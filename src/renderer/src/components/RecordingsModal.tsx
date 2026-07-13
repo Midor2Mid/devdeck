@@ -219,7 +219,7 @@ export function RecordingsModal(): JSX.Element {
                                 ↺
                             </button>
                             <div className="replay-progress">
-                                <div className="replay-progress-fill" style={{ width: pct + "%" }} />
+                                <div className="replay-progress-fill" style={{ transform: "scaleX(" + pct / 100 + ")" }} />
                             </div>
                             <div className="replay-speeds">
                                 {SPEEDS.map((sp) => (

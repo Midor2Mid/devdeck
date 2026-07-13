@@ -53,6 +53,7 @@
     /* Motion — standard easing + durations (all gated by prefers-reduced-motion). */
     --ease: cubic-bezier(.2,.6,.35,1);
     --ease-spring: cubic-bezier(.34,1.4,.5,1);
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --dur-fast: 120ms;
     --dur: 180ms;
     --dur-slow: 260ms;
@@ -334,7 +335,7 @@ button .ic,
     box-shadow: var(--elev-1);
     pointer-events: none;
     white-space: normal;
-    animation: tip-in 0.12s ease;
+    animation: tip-in 0.12s var(--ease-out);
 }
 @keyframes tip-in {
     from {
@@ -3519,7 +3520,9 @@ button .ic,
 .replay-progress-fill {
     height: 100%;
     background: var(--accent);
-    transition: width 0.08s linear;
+    width: 100%;
+    transform-origin: left;
+    transition: transform 0.08s linear;
 }
 .replay-speeds {
     display: flex;
@@ -3556,7 +3559,7 @@ button .ic,
     border-left: 3px solid var(--accent);
     border-radius: 10px;
     box-shadow: var(--elev-3);
-    animation: toast-in 0.18s ease;
+    animation: toast-in 0.18s var(--ease-out);
 }
 .pipeline-bar.k-waiting {
     border-left-color: var(--accent);
@@ -3621,7 +3624,9 @@ button .ic,
 .pipeline-progress-fill {
     height: 100%;
     background: var(--accent);
-    transition: width 0.3s ease;
+    width: 100%;
+    transform-origin: left;
+    transition: transform 0.3s linear;
 }
 
 /* ---------- Pipelines editor (settings) ---------- */
@@ -4860,7 +4865,7 @@ kbd {
     border-radius: 10px;
     box-shadow: var(--elev-2);
     cursor: pointer;
-    animation: toast-in 0.18s ease;
+    animation: toast-in 0.18s var(--ease-out);
 }
 .toast:hover {
     background: var(--bg-3);
@@ -5936,13 +5941,13 @@ kbd {
 }
 
 /* Floating surfaces */
-.modal-backdrop { animation: dd-fade-in 0.14s ease; }
-.modal { animation: dd-pop-in 0.19s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.drawer-backdrop { animation: dd-fade-in 0.14s ease; }
-.drawer { animation: dd-slide-in-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.modal-backdrop { animation: dd-fade-in 0.14s var(--ease-out); }
+.modal { animation: dd-pop-in 0.19s var(--ease-out); }
+.drawer-backdrop { animation: dd-fade-in 0.14s var(--ease-out); }
+.drawer { animation: dd-slide-in-right 0.22s var(--ease-out); }
 .ctx-menu,
 .agent-menu,
-.db-history-menu { animation: dd-menu-in 0.13s ease; transform-origin: top; }
+.db-history-menu { animation: dd-menu-in 0.13s var(--ease-out); transform-origin: top; }
 
 /* Press feedback — transform only, so it never clobbers a component's own
    transition. A refined, subtle press reads as responsive across every button. */

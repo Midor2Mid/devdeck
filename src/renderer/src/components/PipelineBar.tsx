@@ -59,7 +59,7 @@ export function PipelineBar(): JSX.Element | null {
                     </div>
                 )}
                 <div className="pipeline-progress">
-                    <div className="pipeline-progress-fill" style={{ width: pct + "%" }} />
+                    <div className="pipeline-progress-fill" style={{ transform: "scaleX(" + pct / 100 + ")" }} />
                 </div>
                 {open && (
                     <div className="pipeline-steps">
