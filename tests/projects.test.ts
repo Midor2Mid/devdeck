@@ -19,7 +19,7 @@ vi.mock("electron", () => ({
     BrowserWindow: class {}
 }))
 
-import { addProjectByPath, listProjects } from "../src/main/projects"
+import { addProjectByPath, listProjects, setMeta } from "../src/main/projects"
 
 const dirA = mkdtempSync(join(tmpdir(), "pa-"))
 
@@ -30,6 +30,18 @@ describe("projects ops", () => {
         expect(s1.projects[0].path).toBe(dirA)
         const s2 = addProjectByPath(dirA) // same path again
         expect(s2.projects.length).toBe(1)
+    })
+
+    it("sets and clears identity meta", () => {
+        const id = addProjectByPath(dirA).projects[0].id
+        const set = setMeta(id, { emoji: "🚀", color: "teal" })
+        const p = set.projects.find((x) => x.id === id)!
+        expect(p.emoji).toBe("🚀")
+        expect(p.color).toBe("teal")
+        const cleared = setMeta(id, { emoji: "", color: undefined })
+        const p2 = cleared.projects.find((x) => x.id === id)!
+        expect(p2.emoji).toBeUndefined()
+        expect(p2.color).toBeUndefined()
     })
 
     it("ignores a path that isn't a directory", () => {

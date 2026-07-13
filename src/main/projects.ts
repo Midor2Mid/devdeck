@@ -10,6 +10,8 @@ export interface Project {
     path: string
     addedAt: number
     group?: string
+    emoji?: string
+    color?: string
 }
 
 export interface ProjectStore {
@@ -107,6 +109,17 @@ export function setGroup(id: string, group: string): ProjectStore {
     const project = store.projects.find((p) => p.id === id)
     if (project) {
         project.group = group.trim() || undefined
+        save(store)
+    }
+    return store
+}
+
+export function setMeta(id: string, meta: { emoji?: string; color?: string }): ProjectStore {
+    const store = load()
+    const project = store.projects.find((p) => p.id === id)
+    if (project) {
+        if ("emoji" in meta) project.emoji = meta.emoji?.trim() || undefined
+        if ("color" in meta) project.color = meta.color || undefined
         save(store)
     }
     return store

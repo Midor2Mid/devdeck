@@ -10,6 +10,8 @@ export interface Project {
     path: string
     addedAt: number
     group?: string
+    emoji?: string
+    color?: string
 }
 export interface ProjectStore {
     projects: Project[]
@@ -351,6 +353,8 @@ const api = {
             ipcRenderer.invoke("projects:setActive", id),
         setGroup: (id: string, group: string): Promise<ProjectStore> =>
             ipcRenderer.invoke("projects:setGroup", { id, group }),
+        setMeta: (id: string, meta: { emoji?: string; color?: string }): Promise<ProjectStore> =>
+            ipcRenderer.invoke("projects:setMeta", { id, meta }),
         addPath: (path: string): Promise<ProjectStore> =>
             ipcRenderer.invoke("projects:addPath", path)
     },

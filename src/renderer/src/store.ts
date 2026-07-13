@@ -103,6 +103,7 @@ interface AppState extends Persisted {
     removeProject: (id: string) => Promise<void>
     setActiveProject: (id: string) => Promise<void>
     setProjectGroup: (id: string, group: string) => Promise<void>
+    setProjectMeta: (id: string, meta: { emoji?: string; color?: string }) => Promise<void>
     addProjectByPath: (path: string) => Promise<void>
     activeProject: () => Project | undefined
 
@@ -620,6 +621,11 @@ export const useStore = create<AppState>((set, get) => {
 
         setProjectGroup: async (id, group) => {
             const store = await window.api.projects.setGroup(id, group)
+            set({ projects: store.projects })
+        },
+
+        setProjectMeta: async (id, meta) => {
+            const store = await window.api.projects.setMeta(id, meta)
             set({ projects: store.projects })
         },
 
