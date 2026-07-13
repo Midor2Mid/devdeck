@@ -6656,3 +6656,36 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     color: var(--accent);
     border-color: var(--accent);
 }
+
+/* ---------- Project identity chip ---------- */
+.project-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    border-radius: 6px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+.project-chip-sm {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+    border-radius: 5px;
+}
+.project-chip-md {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+}
+.project-chip.is-emoji {
+    font-weight: 400;
+}
+.project-chip-sm.is-emoji {
+    font-size: 12px;
+}
+.project-chip-md.is-emoji {
+    font-size: 15px;
+}
