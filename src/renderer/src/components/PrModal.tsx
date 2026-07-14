@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import { Icon } from "./Icon"
+import { Modal } from "./Modal"
 import type { RemoteInfo } from "../../../preload/index"
 
 /**
@@ -87,53 +88,51 @@ export function PrModal(): JSX.Element | null {
                 : "…"
 
     return (
-        <div className="modal-backdrop" onMouseDown={() => close()}>
-            <div className="modal pr-modal" onMouseDown={(e) => e.stopPropagation()}>
-                <div className="modal-head">
-                    <span>Open pull request</span>
-                    <button className="btn-min" onClick={() => close()}>×</button>
-                </div>
-                <div className="modal-body pr-body">
-                    <div className="pr-route">
-                        <span className="pr-branch">{info?.branch || "…"}</span>
-                        <span className="pr-arrow">→</span>
-                        <input
-                            className="pr-target"
-                            value={targetBranch}
-                            onChange={(e) => setTargetBranch(e.target.value)}
-                            data-tip="Target branch"
-                        />
-                        <span className="pr-host">{hostLabel}</span>
-                    </div>
-                    <input
-                        className="pr-title"
-                        value={title}
-                        placeholder="Pull request title"
-                        onChange={(e) => setTitle(e.target.value)}
-                    />
-                    <textarea
-                        className="pr-desc"
-                        value={desc}
-                        placeholder="Description (markdown). Tip: use “PR description” in Review changes to draft this with an agent, then paste."
-                        onChange={(e) => setDesc(e.target.value)}
-                    />
-                    <div className="pr-actions">
-                        <button className="btn-min" onClick={() => aiOnDiff(cwd, "pr")} data-tip="Draft a description with an agent (opens a terminal)">
-                            <Icon name="pencil" size={13} /> Draft with AI
-                        </button>
-                        <span style={{ flex: 1 }} />
-                        {msg && <span className="pr-msg">{msg}</span>}
-                        <button className="accent" disabled={busy || !info} onClick={go}>
-                            {info?.host === "azure" ? "Push & create PR" : "Push & open PR page"}
-                        </button>
-                    </div>
-                    <p className="settings-hint">
-                        Azure DevOps PRs are created via the API using your Work PAT (needs
-                        <code> Code: read &amp; write</code>). Other hosts: DevDeck pushes the branch
-                        and opens the create-PR page.
-                    </p>
-                </div>
+        <Modal onClose={() => close()} className="pr-modal" labelledBy="pr-modal-title">
+            <div className="modal-head">
+                <span id="pr-modal-title">Open pull request</span>
+                <button className="btn-min" onClick={() => close()}>×</button>
             </div>
-        </div>
+            <div className="modal-body pr-body">
+                <div className="pr-route">
+                    <span className="pr-branch">{info?.branch || "…"}</span>
+                    <span className="pr-arrow">→</span>
+                    <input
+                        className="pr-target"
+                        value={targetBranch}
+                        onChange={(e) => setTargetBranch(e.target.value)}
+                        data-tip="Target branch"
+                    />
+                    <span className="pr-host">{hostLabel}</span>
+                </div>
+                <input
+                    className="pr-title"
+                    value={title}
+                    placeholder="Pull request title"
+                    onChange={(e) => setTitle(e.target.value)}
+                />
+                <textarea
+                    className="pr-desc"
+                    value={desc}
+                    placeholder="Description (markdown). Tip: use “PR description” in Review changes to draft this with an agent, then paste."
+                    onChange={(e) => setDesc(e.target.value)}
+                />
+                <div className="pr-actions">
+                    <button className="btn-min" onClick={() => aiOnDiff(cwd, "pr")} data-tip="Draft a description with an agent (opens a terminal)">
+                        <Icon name="pencil" size={13} /> Draft with AI
+                    </button>
+                    <span style={{ flex: 1 }} />
+                    {msg && <span className="pr-msg">{msg}</span>}
+                    <button className="accent" disabled={busy || !info} onClick={go}>
+                        {info?.host === "azure" ? "Push & create PR" : "Push & open PR page"}
+                    </button>
+                </div>
+                <p className="settings-hint">
+                    Azure DevOps PRs are created via the API using your Work PAT (needs
+                    <code> Code: read &amp; write</code>). Other hosts: DevDeck pushes the branch
+                    and opens the create-PR page.
+                </p>
+            </div>
+        </Modal>
     )
 }

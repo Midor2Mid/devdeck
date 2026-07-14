@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
 import { Icon } from "./Icon"
+import { IconButton } from "./IconButton"
 import { contextMenu } from "../contextmenu"
 import { TaskRunner } from "./TaskRunner"
 import { ContextIndex } from "./ContextIndex"
@@ -31,14 +32,14 @@ export function ToolCluster(): JSX.Element {
     return (
         <div className="deck-tools">
             <div className="deck-tasks-wrap">
-                <button
+                <IconButton
                     className="deck-tool"
-                    data-tip="Tasks & saved commands"
-                    data-tip-pos="top"
+                    tip="Tasks & saved commands"
+                    tipPos="top"
                     onClick={() => setTasksOpen((v) => !v)}
                 >
                     <Icon name="list" size={16} />
-                </button>
+                </IconButton>
                 {tasksOpen && (
                     <>
                         <div className="menu-backdrop" onClick={() => setTasksOpen(false)} />
@@ -49,14 +50,14 @@ export function ToolCluster(): JSX.Element {
                 )}
             </div>
             <div className="deck-tasks-wrap">
-                <button
+                <IconButton
                     className="deck-tool"
-                    data-tip="Agent context files"
-                    data-tip-pos="top"
+                    tip="Agent context files"
+                    tipPos="top"
                     onClick={() => setContextOpen((v) => !v)}
                 >
                     <Icon name="bookOpen" size={16} />
-                </button>
+                </IconButton>
                 {contextOpen && (
                     <>
                         <div className="menu-backdrop" onClick={() => setContextOpen(false)} />
@@ -66,34 +67,34 @@ export function ToolCluster(): JSX.Element {
                     </>
                 )}
             </div>
-            <button
+            <IconButton
                 className="deck-tool rail-inbox"
-                data-tip="Agents inbox"
-                data-tip-pos="top"
+                tip="Agents inbox"
+                tipPos="top"
                 onClick={() => setInboxOpen(true)}
             >
                 <Icon name="inbox" size={16} />
                 {attention ? <span className="rail-badge">{attention}</span> : null}
-            </button>
-            <button
+            </IconButton>
+            <IconButton
                 className="deck-tool"
-                data-tip="AI usage"
-                data-tip-pos="top"
+                tip="AI usage"
+                tipPos="top"
                 onClick={() => setUsageOpen(true)}
             >
                 <Icon name="chart" size={16} />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
                 className="deck-tool"
-                data-tip="Settings"
-                data-tip-pos="top"
+                tip="Settings"
+                tipPos="top"
                 onClick={() => openSettings()}
             >
                 <Icon name="settings" size={16} />
-            </button>
-            <button className="deck-tool" data-tip="More" data-tip-pos="top" onClick={overflow}>
+            </IconButton>
+            <IconButton className="deck-tool" tip="More" tipPos="top" onClick={overflow}>
                 <Icon name="more" size={16} />
-            </button>
+            </IconButton>
         </div>
     )
 }
