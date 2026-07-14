@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "../store"
+import { orderByMru, previousProjectId } from "../projectMru"
 import { contextMenu } from "../contextmenu"
 import { projectContextMenu } from "../projectMenu"
 import { ProjectChip } from "./ProjectChip"
@@ -13,6 +14,7 @@ import { ProjectChip } from "./ProjectChip"
 export function ProjectSwitcher(): JSX.Element {
     const projects = useStore((s) => s.projects)
     const activeId = useStore((s) => s.activeId)
+    const mru = useStore((s) => s.projectMru)
     const setActiveProject = useStore((s) => s.setActiveProject)
     const close = useStore((s) => s.closeSwitcher)
     const sessions = useStore((s) => s.sessions)
@@ -50,9 +52,29 @@ export function ProjectSwitcher(): JSX.Element {
         )
     }, [projects, q])
 
+    // Most-recently-used projects first, so the ones you bounce between lead.
+    const ordered = useMemo(() => {
+        const rank = orderByMru(
+            filtered.map((p) => p.id),
+            mru
+        )
+        return rank.map((id) => filtered.find((p) => p.id === id)!)
+    }, [filtered, mru])
+
     useEffect(() => {
-        if (sel >= filtered.length) setSel(Math.max(0, filtered.length - 1))
-    }, [filtered, sel])
+        if (sel >= ordered.length) setSel(Math.max(0, ordered.length - 1))
+    }, [ordered, sel])
+
+    // Preselect the previously used project on open (Enter = instant flip back);
+    // once the user types a query, selection resets to the top match instead.
+    useEffect(() => {
+        if (q !== "") return
+        const prev = previousProjectId(mru, activeId)
+        const idx = prev ? ordered.findIndex((p) => p.id === prev) : -1
+        setSel(idx >= 0 ? idx : 0)
+        // Only when the query changes (mount / cleared search) — not on MRU churn.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [q])
 
     const open = (id: string): void => {
         setActiveProject(id)
@@ -62,19 +84,19 @@ export function ProjectSwitcher(): JSX.Element {
     const COLS = 4
     const onKeyDown = (e: React.KeyboardEvent): void => {
         if (e.key === "Escape") return close()
-        if (!filtered.length) return
+        if (!ordered.length) return
         if (e.key === "Enter") {
             e.preventDefault()
-            open(filtered[sel].id)
+            open(ordered[sel].id)
         } else if (e.key === "ArrowRight") {
             e.preventDefault()
-            setSel((i) => Math.min(filtered.length - 1, i + 1))
+            setSel((i) => Math.min(ordered.length - 1, i + 1))
         } else if (e.key === "ArrowLeft") {
             e.preventDefault()
             setSel((i) => Math.max(0, i - 1))
         } else if (e.key === "ArrowDown") {
             e.preventDefault()
-            setSel((i) => Math.min(filtered.length - 1, i + COLS))
+            setSel((i) => Math.min(ordered.length - 1, i + COLS))
         } else if (e.key === "ArrowUp") {
             e.preventDefault()
             setSel((i) => Math.max(0, i - COLS))
@@ -120,7 +142,7 @@ export function ProjectSwitcher(): JSX.Element {
                     </button>
                 </div>
                 <div className="switcher-grid">
-                    {filtered.map((p, i) => {
+                    {ordered.map((p, i) => {
                         const c = counts[p.id]
                         return (
                             <div
@@ -156,7 +178,7 @@ export function ProjectSwitcher(): JSX.Element {
                             </div>
                         )
                     })}
-                    {filtered.length === 0 && (
+                    {ordered.length === 0 && (
                         <div className="muted switcher-empty">No matching projects.</div>
                     )}
                 </div>

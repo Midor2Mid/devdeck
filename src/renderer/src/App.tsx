@@ -129,8 +129,8 @@ export function App(): JSX.Element {
         })
     }, [])
 
-    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+P command palette,
-    // Ctrl+1..6 view switch, Ctrl+Tab agent-session cycle.
+    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+K previous project,
+    // Ctrl+Shift+P command palette, Ctrl+1..6 view switch, Ctrl+Tab session cycle.
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
             const mod = e.ctrlKey || e.metaKey
@@ -169,6 +169,13 @@ export function App(): JSX.Element {
                 e.stopPropagation()
                 const s = useStore.getState()
                 s.setReviewOpen(!s.reviewOpen)
+                return
+            }
+            // Ctrl+Shift+K — instant flip to the previously used project.
+            if (mod && e.shiftKey && e.code === "KeyK") {
+                e.preventDefault()
+                e.stopPropagation()
+                useStore.getState().switchToPreviousProject()
                 return
             }
             if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {

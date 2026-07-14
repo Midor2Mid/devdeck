@@ -19,6 +19,7 @@ import { gateActive, evaluateGate, maxAttempts } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail } from "./missionTail"
+import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, type BoardTask, type BoardColumn } from "./board"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
@@ -98,6 +99,9 @@ export interface CanvasPos {
 interface AppState extends Persisted {
     projects: Project[]
     activeId: string | null
+    /** Project ids, most recently used first (persisted to localStorage). */
+    projectMru: string[]
+    switchToPreviousProject: () => void
     init: () => Promise<void>
     addProject: () => Promise<void>
     removeProject: (id: string) => Promise<void>
@@ -279,6 +283,19 @@ let dataSubscribed = false
 // Bumped on stop / new run; the async runner aborts when its token goes stale.
 let pipelineToken = 0
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+const MRU_KEY = "devdeck.projectMru"
+
+/** Load the persisted project MRU list (best-effort — [] on any failure). */
+function loadMru(): string[] {
+    try {
+        const raw = localStorage.getItem(MRU_KEY)
+        const parsed: unknown = raw ? JSON.parse(raw) : []
+        return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : []
+    } catch {
+        return []
+    }
+}
 
 function isAgentId(agentId: string): boolean {
     return !!agentId && agentId !== SHELL
@@ -509,6 +526,7 @@ export const useStore = create<AppState>((set, get) => {
     return {
         projects: [],
         activeId: null,
+        projectMru: loadMru(),
         termAgents: {},
         termInit: {},
         termCwd: {},
@@ -567,9 +585,21 @@ export const useStore = create<AppState>((set, get) => {
                 window.api.workspace.load()
             ])
             const w = (ws as (Partial<Persisted> & { termKinds?: Record<string, string> }) | null) ?? {}
+            // Seed the MRU with the restored active project so "previous project"
+            // (Ctrl+Shift+K / switcher preselect) works from launch, using the
+            // persisted history with the active project moved to the front.
+            const seededMru = store.activeId
+                ? recordMru(get().projectMru, store.activeId)
+                : get().projectMru
+            try {
+                localStorage.setItem(MRU_KEY, JSON.stringify(seededMru))
+            } catch {
+                /* storage unavailable - ignore */
+            }
             set({
                 projects: store.projects,
                 activeId: store.activeId,
+                projectMru: seededMru,
                 // Migrate the old termKinds → termAgents if present.
                 termAgents: w.termAgents ?? w.termKinds ?? {},
                 termInit: w.termInit ?? {},
@@ -619,9 +649,20 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         setActiveProject: async (id) => {
-            set({ activeId: id })
+            const mru = recordMru(get().projectMru, id)
+            set({ activeId: id, projectMru: mru })
+            try {
+                localStorage.setItem(MRU_KEY, JSON.stringify(mru))
+            } catch {
+                /* storage unavailable - ignore */
+            }
             await window.api.projects.setActive(id)
             ack(get().activePaneByProject[id])
+        },
+
+        switchToPreviousProject: () => {
+            const prev = previousProjectId(get().projectMru, get().activeId)
+            if (prev) void get().setActiveProject(prev)
         },
 
         setProjectGroup: async (id, group) => {
