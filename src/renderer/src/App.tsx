@@ -15,6 +15,7 @@ import { DECK_VIEWS } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
+import { ExtendAgentModal } from "./components/ExtendAgentModal"
 import { SearchModal } from "./components/SearchModal"
 import { DotnetPanel } from "./components/DotnetPanel"
 import { ReviewPanel } from "./components/ReviewPanel"
@@ -50,6 +51,7 @@ export function App(): JSX.Element {
     const openSwitcher = useStore((s) => s.openSwitcher)
     const closeSwitcher = useStore((s) => s.closeSwitcher)
     const paletteOpen = useStore((s) => s.paletteOpen)
+    const extendOpen = useStore((s) => s.extendOpen)
     const searchOpen = useStore((s) => s.searchOpen)
     const dotnetOpen = useStore((s) => s.dotnetOpen)
     const reviewOpen = useStore((s) => s.reviewOpen)
@@ -247,6 +249,7 @@ export function App(): JSX.Element {
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
             {paletteOpen && <CommandPalette />}
+            {extendOpen && <ExtendAgentModal />}
             {searchOpen && <SearchModal />}
             {dotnetOpen && <DotnetPanel />}
             {reviewOpen && <ReviewPanel />}

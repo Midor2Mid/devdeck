@@ -115,6 +115,7 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
         cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })
+        cmds.push({ id: "act:extend", section: "Actions", title: "Extend agent — skills & agents…", run: () => store.setExtendOpen(true) })
         for (const p of pipelines)
             cmds.push({
                 id: "pipeline:" + p.id,

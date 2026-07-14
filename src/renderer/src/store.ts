@@ -200,6 +200,8 @@ interface AppState extends Persisted {
     setComposerOpen: (open: boolean) => void
     paletteOpen: boolean
     setPaletteOpen: (open: boolean) => void
+    extendOpen: boolean
+    setExtendOpen: (open: boolean) => void
     searchOpen: boolean
     setSearchOpen: (open: boolean) => void
     dotnetOpen: boolean
@@ -560,6 +562,7 @@ export const useStore = create<AppState>((set, get) => {
         switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
+        extendOpen: false,
         searchOpen: false,
         dotnetOpen: false,
         reviewOpen: false,
@@ -684,6 +687,7 @@ export const useStore = create<AppState>((set, get) => {
         closeSwitcher: () => set({ switcherOpen: false }),
         setComposerOpen: (composerOpen) => set({ composerOpen }),
         setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+        setExtendOpen: (extendOpen) => set({ extendOpen }),
         setSearchOpen: (searchOpen) => set({ searchOpen }),
         setDotnetOpen: (dotnetOpen) => set({ dotnetOpen }),
         setReviewOpen: (reviewOpen) => set({ reviewOpen }),
