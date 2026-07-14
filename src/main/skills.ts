@@ -10,7 +10,7 @@ import {
     readdirSync
 } from "fs"
 import { tmpdir, homedir } from "os"
-import { join, dirname } from "path"
+import { join, dirname, resolve, sep } from "path"
 import {
     discover,
     targetPath,
@@ -102,12 +102,22 @@ export async function install(
     scope: ExtendScope,
     projectPath: string
 ): Promise<InstalledItem> {
+    // Reject names that could escape the target directory or hide as dotfiles.
+    if (!item.name || /[\\/]|\.\./.test(item.name) || item.name.startsWith(".")) {
+        throw new Error("invalid item name")
+    }
     const tmp = mkdtempSync(join(tmpdir(), "devdeck-skill-"))
     try {
         await clone(repo, ref, tmp)
         const dest = targetPath(scope, item.kind, item.name, { home: homedir(), projectPath })
         mkdirSync(dirname(dest), { recursive: true })
         const src = join(tmp, item.sourcePath)
+        // The source must stay inside the cloned temp dir (no .. traversal).
+        const base = resolve(tmp)
+        const srcResolved = resolve(src)
+        if (srcResolved !== base && !srcResolved.startsWith(base + sep)) {
+            throw new Error("invalid source path")
+        }
         if (item.kind === "skill") {
             rmSync(dest, { recursive: true, force: true })
             cpSync(src, dest, { recursive: true })
@@ -149,8 +159,10 @@ export function listInstalled(projectPath: string): { global: InstalledItem[]; p
 }
 
 export function remove(item: InstalledItem): void {
-    const norm = item.path.replace(/\\/g, "/")
-    if (!/\/\.claude\/(skills|agents)\//.test(norm + "/")) {
+    // Resolve first so ".." segments cannot smuggle the path outside .claude,
+    // then require a real leaf under .claude/skills|agents.
+    const norm = resolve(item.path).replace(/\\/g, "/")
+    if (!/\/\.claude\/(skills|agents)\/[^/]+/.test(norm)) {
         throw new Error("refusing to remove path outside .claude/skills|agents")
     }
     rmSync(item.path, { recursive: true, force: true })

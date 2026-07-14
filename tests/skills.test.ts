@@ -35,4 +35,13 @@ describe("remove", () => {
     it("refuses to remove a path outside .claude", () => {
         expect(() => remove({ kind: "skill", name: "x", scope: "project", path: join(tmpdir(), "evil") })).toThrow()
     })
+    it("refuses a .. traversal path that resolves outside .claude", () => {
+        const proj = seed()
+        const evil = { kind: "skill" as const, name: "x", scope: "project" as const, path: join(proj, ".claude", "skills", "..", "..", "..", "target") }
+        expect(() => remove(evil)).toThrow()
+    })
+    it("refuses the bare skills root (no leaf)", () => {
+        const proj = seed()
+        expect(() => remove({ kind: "skill", name: "x", scope: "project", path: join(proj, ".claude", "skills") })).toThrow()
+    })
 })
