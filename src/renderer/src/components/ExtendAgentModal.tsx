@@ -111,6 +111,7 @@ export function ExtendAgentModal(): JSX.Element {
                         </div>
                     </div>
 
+                    <div className="extend-right">
                     <div className="extend-preview">
                         {busy === "preview" && <div className="muted">Fetching {sourceRepo}…</div>}
                         {error && <div className="extend-error">{error}</div>}
@@ -164,6 +165,7 @@ export function ExtendAgentModal(): JSX.Element {
                             </div>
                         ))}
                         {shownInstalled.length === 0 && <div className="muted small">None installed.</div>}
+                    </div>
                     </div>
                 </div>
             </div>
