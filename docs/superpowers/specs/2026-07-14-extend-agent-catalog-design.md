@@ -21,7 +21,7 @@ context." It also mirrors the existing MCP catalog, so it's a known shape.
 1. **Content:** skills (`SKILL.md`) + subagents (`agents/*.md`). No hooks/commands v1.
 2. **Sources:** curated catalog **+** "add from GitHub repo" (arbitrary URL).
 3. **Scope:** install to **global** (`~/.claude`) or **project** (`.claude/`), chosen per install.
-4. **Placement:** a new unified **Extend Agent** hub with tabs **Skills | Agents | MCP**.
+4. **Placement:** a new unified **Extend Agent** hub. v1 tabs: **Skills | Agents**. The **MCP tab is deferred** to a fast-follow (it requires extracting the MCP catalog out of `SettingsModal.tsx`; not built in v1).
 5. **Fetch:** git shallow-clone to a temp dir → copy matched folders → delete temp (no new deps; `git clone` doesn't execute repo code).
 6. **v1 verbs:** browse / preview / install / list / remove. **No** enable/disable toggle yet.
 7. **Format:** Claude Code `.claude/` convention only (not Codex/Gemini equivalents).
@@ -116,10 +116,10 @@ No electron/React imports (testable in isolation, like `projectIdentity.ts`):
     **scope toggle** (Global / This project) and an **Install** button.
   - Curated entries render a **Vetted** badge; URL results render **Unverified —
     review before installing.** Global scope shows a "affects every project" note.
-- **MCP tab:** extract the MCP-catalog section currently inside `SettingsModal.tsx`
-  into a reusable `<McpCatalog projectPath />` component and render it here. *(This is
-  the only part touching existing code; it can be deferred — ship the hub with
-  Skills + Agents and add the MCP tab in a fast follow — without blocking v1.)*
+- **MCP tab: DEFERRED (not in v1).** A fast-follow will extract the MCP-catalog
+  section from `SettingsModal.tsx` into a reusable `<McpCatalog projectPath />` and add
+  it as a third tab. v1 ships the hub with **Skills | Agents** only and does not touch
+  `SettingsModal.tsx`.
 - Store: `extendOpen: boolean` + `setExtendOpen(open)` mirroring `envEditorProject`
   pattern; render `{extendOpen && <ExtendAgentModal />}` in `App.tsx`.
 - Open via: a **Command Palette** command ("Extend agent — skills, agents, MCP…") and
