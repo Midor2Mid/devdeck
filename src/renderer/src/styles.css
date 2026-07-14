@@ -104,13 +104,13 @@ button:disabled {
 /* The one filled, high-contrast action: amber fill, near-black text (per DESIGN.md). */
 button.accent {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
     border-color: var(--accent);
 }
 button.accent:hover {
     background: var(--accent-soft);
     border-color: var(--accent-soft);
-    color: var(--bg);
+    color: var(--on-accent);
 }
 
 input,
@@ -1031,7 +1031,7 @@ button .ic,
 .tab-dot.status-attention {
     background: var(--accent);
     opacity: 1;
-    box-shadow: 0 0 0 3px rgba(184, 137, 92, 0.25);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 @keyframes dot-pulse {
     0%,
@@ -1338,7 +1338,7 @@ button .ic,
     line-height: 1.5;
 }
 .settings-warn {
-    background: rgba(182, 107, 95, 0.12);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
     border: 1px solid var(--danger);
     border-radius: 8px;
     padding: 10px 12px;
@@ -1362,7 +1362,7 @@ button .ic,
     font-size: 11px;
     line-height: 1.5;
     color: var(--text);
-    background: rgba(182, 107, 95, 0.12);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
     border: 1px solid var(--danger);
     border-radius: 6px;
     padding: 6px 9px;
@@ -2169,7 +2169,7 @@ button .ic,
     justify-content: center;
     padding-top: 8vh;
 }
-.env-modal {
+.env-manager-modal {
     width: 80vw;
     max-width: 760px;
     max-height: 78vh;
@@ -2961,6 +2961,7 @@ button .ic,
 }
 .modal {
     width: 420px;
+    max-height: 88vh;
     background: var(--bg-2);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -3280,7 +3281,7 @@ button .ic,
     left: 50%;
     transform: translateX(-50%);
     background: var(--accent);
-    color: #14110d;
+    color: var(--on-accent);
     font-size: 12px;
     padding: 6px 12px;
     border-radius: 8px;
@@ -3541,7 +3542,7 @@ button .ic,
 .replay-term {
     height: 420px;
     max-height: 56vh;
-    background: var(--term-bg, var(--bg-1));
+    background: var(--bg-3);
     border: 1px solid var(--border-soft);
     border-radius: 8px;
     padding: 8px;
@@ -3848,7 +3849,12 @@ button .ic,
 }
 
 /* ---------- Worktrees modal ---------- */
-.worktrees-modal { width: 600px; max-width: 94vw; }
+.worktrees-modal {
+    width: 600px;
+    max-width: 94vw;
+    display: flex;
+    flex-direction: column;
+}
 .wt-new {
     display: flex;
     gap: 6px;
@@ -3874,7 +3880,7 @@ button .ic,
     font-size: 9.5px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #111;
+    color: var(--on-accent);
     background: var(--moss);
     padding: 1px 6px;
     border-radius: 10px;
@@ -3958,8 +3964,8 @@ button .ic,
     line-height: 1.5;
 }
 .d-line { padding: 0 12px; white-space: pre; }
-.d-add { background: rgba(140, 154, 104, 0.14); color: #c8d3a8; }
-.d-del { background: rgba(182, 107, 95, 0.14); color: #e0a89f; }
+.d-add { background: color-mix(in srgb, var(--ok) 14%, transparent); color: color-mix(in srgb, var(--ok) 55%, var(--text)); }
+.d-del { background: color-mix(in srgb, var(--danger) 14%, transparent); color: color-mix(in srgb, var(--danger) 55%, var(--text)); }
 .d-hunk { color: var(--accent-soft); background: var(--bg-3); }
 .d-meta { color: var(--faint); }
 .d-ctx { color: var(--muted); }
@@ -4017,7 +4023,7 @@ button .ic,
     margin-bottom: 8px;
 }
 .work-warn { color: var(--accent-soft); background: var(--bg-3); }
-.work-err { color: var(--danger); background: rgba(182, 107, 95, 0.1); }
+.work-err { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .work-wt-toggle {
     display: flex;
     align-items: center;
@@ -4843,12 +4849,12 @@ kbd {
 .danger-btn {
     background: var(--danger);
     border-color: var(--danger);
-    color: #fff;
+    color: var(--on-accent);
 }
 .danger-btn:hover {
     filter: brightness(1.1);
     border-color: var(--danger);
-    color: #fff;
+    color: var(--on-accent);
 }
 
 /* ---------- Toasts ---------- */
@@ -4958,7 +4964,7 @@ kbd {
 }
 .net-dot.live {
     background: var(--ok);
-    box-shadow: 0 0 0 3px rgba(140, 154, 104, 0.2);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent);
     animation: net-pulse 1.6s infinite;
 }
 .net-dot.off {
@@ -5758,6 +5764,8 @@ kbd {
 .usage-modal {
     width: 540px;
     max-width: 92vw;
+    display: flex;
+    flex-direction: column;
 }
 .usage-windows {
     display: flex;
@@ -6000,7 +6008,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 [data-style="aurora"] .send-claude,
 [data-style="aurora"] .send-btn {
     background: linear-gradient(135deg, var(--accent), var(--clay));
-    color: #0a0e1a;
+    color: var(--on-accent);
     border: none;
     box-shadow: 0 4px 16px -4px color-mix(in srgb, var(--accent) 60%, transparent);
     transition: box-shadow 0.18s ease, transform 0.12s ease;
@@ -6072,7 +6080,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 [data-style="neo"] .send-claude,
 [data-style="neo"] .send-btn {
     background: color-mix(in srgb, var(--accent) 86%, #000);
-    color: #03050a;
+    color: var(--on-accent);
     border: 1px solid var(--accent);
     box-shadow: 0 0 14px -2px color-mix(in srgb, var(--accent) 70%, transparent);
 }
@@ -6875,7 +6883,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .extend-content {
     max-height: 220px;
     overflow: auto;
-    background: var(--bg-1);
+    background: var(--bg-3);
     padding: 8px;
     border-radius: var(--radius, 6px);
     font-size: 11px;

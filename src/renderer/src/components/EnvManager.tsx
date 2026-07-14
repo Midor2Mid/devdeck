@@ -51,7 +51,7 @@ export function EnvManager({ onClose }: { onClose: () => void }): JSX.Element {
 
     return (
         <div className="env-backdrop" onClick={onClose}>
-            <div className="env-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="env-manager-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="env-head">
                     <h3>Environments &amp; variables</h3>
                     <button onClick={onClose}>Close</button>
