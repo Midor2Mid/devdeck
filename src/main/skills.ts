@@ -29,6 +29,17 @@ export function catalog(): CatalogEntry[] {
     return SKILLS_CATALOG
 }
 
+/** Read a file as text for preview; null for binary or oversized (>64 KiB) files. */
+function readTextCapped(abs: string): string | null {
+    try {
+        const buf = readFileSync(abs)
+        if (buf.length > 64 * 1024 || buf.includes(0)) return null
+        return buf.toString("utf8")
+    } catch {
+        return null
+    }
+}
+
 function repoUrl(repo: string): string {
     return /^https?:\/\//.test(repo) ? repo : `https://github.com/${repo}.git`
 }
@@ -67,14 +78,19 @@ export async function preview(repo: string, ref?: string): Promise<DiscoveredIte
         for (const dir of skills) {
             const content = readFileSync(join(tmp, dir, "SKILL.md"), "utf8")
             const fm = parseFrontmatter(content)
-            const files = paths.filter((p) => p === (dir ? dir + "/SKILL.md" : "SKILL.md") || (dir && p.startsWith(dir + "/")))
+            const skillMdRel = dir ? dir + "/SKILL.md" : "SKILL.md"
+            const files = paths.filter((p) => p === skillMdRel || (dir && p.startsWith(dir + "/")))
+            const extraFiles = files
+                .filter((f) => f !== skillMdRel)
+                .map((f) => ({ path: f, text: readTextCapped(join(tmp, f)) }))
             items.push({
                 kind: "skill",
                 name: fm.name || (dir.split("/").pop() ?? "skill"),
                 description: fm.description ?? "",
                 sourcePath: dir,
                 files,
-                content
+                content,
+                extraFiles
             })
         }
         for (const file of agents) {
@@ -86,7 +102,8 @@ export async function preview(repo: string, ref?: string): Promise<DiscoveredIte
                 description: fm.description ?? "",
                 sourcePath: file,
                 files: [file],
-                content
+                content,
+                extraFiles: []
             })
         }
         return items
@@ -120,7 +137,11 @@ export async function install(
         }
         if (item.kind === "skill") {
             rmSync(dest, { recursive: true, force: true })
-            cpSync(src, dest, { recursive: true })
+            // Skip .git/node_modules so a root-level skill doesn't drag the whole repo along.
+            cpSync(src, dest, {
+                recursive: true,
+                filter: (s) => !/[\\/](\.git|node_modules)([\\/]|$)/.test(s)
+            })
         } else {
             copyFileSync(src, dest)
         }

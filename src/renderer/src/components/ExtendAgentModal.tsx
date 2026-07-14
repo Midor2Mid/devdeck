@@ -14,8 +14,9 @@ export function ExtendAgentModal(): JSX.Element {
     const [url, setUrl] = useState("")
     const [items, setItems] = useState<DiscoveredItem[]>([])
     const [sourceRepo, setSourceRepo] = useState("")
+    const [sourceRef, setSourceRef] = useState<string | undefined>(undefined)
     const [vetted, setVetted] = useState(false)
-    const [scope, setScope] = useState<ExtendScope>("project")
+    const [scope, setScope] = useState<ExtendScope>(projectPath ? "project" : "global")
     const [installed, setInstalled] = useState<{ global: InstalledItem[]; project: InstalledItem[] }>({ global: [], project: [] })
     const [busy, setBusy] = useState<string>("")
     const [error, setError] = useState("")
@@ -33,6 +34,7 @@ export function ExtendAgentModal(): JSX.Element {
         setError("")
         setBusy("preview")
         setSourceRepo(repo)
+        setSourceRef(ref)
         setVetted(isVetted)
         try {
             setItems(await window.api.extend.preview(repo, ref))
@@ -48,7 +50,7 @@ export function ExtendAgentModal(): JSX.Element {
         setBusy(item.sourcePath)
         setError("")
         try {
-            await window.api.extend.install(sourceRepo, undefined, { kind: item.kind, name: item.name, sourcePath: item.sourcePath }, scope, projectPath)
+            await window.api.extend.install(sourceRepo, sourceRef, { kind: item.kind, name: item.name, sourcePath: item.sourcePath }, scope, projectPath)
             refreshInstalled()
         } catch (e) {
             setError((e as Error).message || "Install failed.")
@@ -62,6 +64,8 @@ export function ExtendAgentModal(): JSX.Element {
         try {
             await window.api.extend.remove(item)
             refreshInstalled()
+        } catch (e) {
+            setError((e as Error).message || "Remove failed.")
         } finally {
             setBusy("")
         }
@@ -133,6 +137,16 @@ export function ExtendAgentModal(): JSX.Element {
                                             <summary className="muted small">{it.files.length} file(s) · read {it.kind === "skill" ? "SKILL.md" : "agent"}</summary>
                                             <pre className="extend-content">{it.content}</pre>
                                         </details>
+                                        {it.extraFiles.map((f) => (
+                                            <details key={f.path}>
+                                                <summary className="muted small">{f.path}</summary>
+                                                {f.text === null ? (
+                                                    <div className="muted small">(binary or large file — not shown; will be installed)</div>
+                                                ) : (
+                                                    <pre className="extend-content">{f.text}</pre>
+                                                )}
+                                            </details>
+                                        ))}
                                     </div>
                                 ))}
                                 {shownItems.length === 0 && <div className="muted small">No {tab}s found in this repo.</div>}

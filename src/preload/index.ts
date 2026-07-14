@@ -197,6 +197,7 @@ export interface DiscoveredItem {
     sourcePath: string
     files: string[]
     content: string
+    extraFiles: { path: string; text: string | null }[]
 }
 export interface InstalledItem {
     kind: ItemKind
