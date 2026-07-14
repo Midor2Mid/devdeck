@@ -82,7 +82,20 @@ export function TooltipLayer(): JSX.Element | null {
         }
         const onOver = (e: MouseEvent): void => enter(e.target)
         const onOut = (e: MouseEvent): void => leave(e.target, e.relatedTarget)
-        const onFocusIn = (e: FocusEvent): void => enter(e.target)
+        // Focus path is keyboard-only: clicking a button also focuses it, and
+        // without this gate the tip would flicker off (mousedown hides) then
+        // instantly re-show via focusin inside the warm window. Mouse-click
+        // focus does not match :focus-visible; keyboard Tab does.
+        const onFocusIn = (e: FocusEvent): void => {
+            const el = (e.target as Element)?.closest?.("[data-tip]")
+            if (!el) return
+            try {
+                if ("matches" in el && !el.matches(":focus-visible")) return
+            } catch {
+                // Engine without :focus-visible support — fall through and show.
+            }
+            enter(el)
+        }
         const onFocusOut = (e: FocusEvent): void => leave(e.target, e.relatedTarget)
         // Full dismiss (scroll / click / typing). Tabbing still shows the next
         // tip: keydown hides first, then the focus change fires focusin which

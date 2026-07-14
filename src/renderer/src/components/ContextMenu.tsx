@@ -11,13 +11,19 @@ export function ContextMenuLayer(): JSX.Element | null {
     const menuRef = useRef<HTMLDivElement | null>(null)
 
     // On open, focus the first enabled menuitem so arrow keys work immediately
-    // (fall back to the menu itself so Escape still dismisses).
+    // (fall back to the menu itself so Escape still dismisses). On close,
+    // restore focus to the element that was focused when the menu opened so
+    // keyboard users return to where they were after Escape/Enter.
     useEffect(() => {
         if (!open) return
+        const prev = document.activeElement as HTMLElement | null
         const first = menuRef.current?.querySelector<HTMLElement>(
             "[role=\"menuitem\"]:not([aria-disabled])"
         )
         ;(first ?? menuRef.current)?.focus()
+        return () => {
+            prev?.focus?.()
+        }
     }, [open, items])
 
     if (!open) return null
@@ -37,6 +43,13 @@ export function ContextMenuLayer(): JSX.Element | null {
         if (e.key === "Escape") {
             e.preventDefault()
             e.stopPropagation()
+            close()
+            return
+        }
+        // ARIA menu pattern: Tab closes the menu rather than moving focus
+        // behind the backdrop, where Escape could no longer reach it.
+        if (e.key === "Tab") {
+            e.preventDefault()
             close()
             return
         }
@@ -95,6 +108,11 @@ export function ContextMenuLayer(): JSX.Element | null {
                                 if (it.disabled) return
                                 it.onClick?.()
                                 close()
+                            }}
+                            // Keep hover and focus on the same row so only one
+                            // item is highlighted at a time.
+                            onMouseMove={(e) => {
+                                if (!it.disabled) e.currentTarget.focus()
                             }}
                         >
                             {it.label}
