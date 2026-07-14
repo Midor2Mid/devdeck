@@ -70,6 +70,7 @@ const SUMI_VARS = {
     "--clay": "#c4855d",
     "--ok": "#8c9a68",
     "--danger": "#b66b5f",
+    "--on-danger": "#14110d",
     "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
     "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
     "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
@@ -92,6 +93,7 @@ const WASHI_VARS = {
     "--clay": "#b06a44",
     "--ok": "#7f8c54",
     "--danger": "#b0563f",
+    "--on-danger": "#f6f6f4",
     "--elev-1": "0 1px 2px rgba(60,50,35,.10), 0 1px 1px rgba(60,50,35,.06)",
     "--elev-2": "0 4px 12px -2px rgba(60,50,35,.14), 0 2px 4px rgba(60,50,35,.10)",
     "--elev-3": "0 18px 48px -12px rgba(60,50,35,.20), 0 6px 16px rgba(60,50,35,.12)"
@@ -114,6 +116,7 @@ const ZEN_VARS = {
     "--clay": "#c79a6a",
     "--ok": "#9aa56f",
     "--danger": "#c2766a",
+    "--on-danger": "#14110d",
     "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
     "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
     "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
@@ -139,6 +142,7 @@ const SLATE_VARS = {
     "--clay": "#c9906a",
     "--ok": "#5fce8f",
     "--danger": "#e9786b",
+    "--on-danger": "#14110d",
     "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
     "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
     "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
@@ -163,6 +167,7 @@ const GRAPHITE_VARS = {
     "--clay": "#a78bfa",
     "--ok": "#56c98a",
     "--danger": "#f0616d",
+    "--on-danger": "#14110d",
     "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
     "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
     "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
@@ -187,6 +192,7 @@ const AURORA_VARS = {
     "--clay": "#c79bff",
     "--ok": "#5fd3b0",
     "--danger": "#f0788f",
+    "--on-danger": "#14110d",
     "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
     "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
     "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
@@ -211,6 +217,7 @@ const NEO_VARS = {
     "--clay": "#a78bfa",
     "--ok": "#34e5b0",
     "--danger": "#fb7185",
+    "--on-danger": "#14110d",
     "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
     "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
     "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
