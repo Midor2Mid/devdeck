@@ -342,6 +342,10 @@ button .ic,
         opacity: 0;
     }
 }
+/* Warm window: subsequent tooltips appear instantly, no entrance animation. */
+.tip[data-instant] {
+    animation: none;
+}
 @media (prefers-reduced-motion: reduce) {
     .tip {
         animation: none;
@@ -5636,6 +5640,14 @@ kbd {
 }
 .ctx-item:hover {
     background: var(--bg-3);
+}
+/* Keyboard nav: focused item highlights like hover (menu convention). */
+.ctx-menu:focus {
+    outline: none;
+}
+.ctx-item:focus {
+    background: var(--bg-3);
+    outline: none;
 }
 .ctx-item.danger {
     color: var(--danger);
