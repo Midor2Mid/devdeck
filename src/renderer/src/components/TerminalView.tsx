@@ -176,7 +176,7 @@ export function TerminalView(): JSX.Element {
     return (
         <div className="terminal-view">
             <div className="term-tabbar">
-                <div className="term-tabs">
+                <div className="term-tabs" role="tablist">
                     {tabs.map((tab) => {
                         const isActive = tab.id === activeTab?.id
                         const agentLeaves = collectLeaves(tab.root).filter(
@@ -276,10 +276,21 @@ export function TerminalView(): JSX.Element {
                                         onClick={(e) => e.stopPropagation()}
                                     />
                                 ) : (
-                                    <span className="tab-title">{tab.name}</span>
+                                    // Real button = keyboard focus + activation; its
+                                    // click bubbles to the container's select handler.
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={isActive}
+                                        className="term-tab-hit"
+                                    >
+                                        <span className="tab-title">{tab.name}</span>
+                                    </button>
                                 )}
-                                <span
+                                <button
+                                    type="button"
                                     className="tab-close"
+                                    aria-label="Close tab"
                                     data-tip="Close"
                                     onClick={(e) => {
                                         e.stopPropagation()
@@ -287,7 +298,7 @@ export function TerminalView(): JSX.Element {
                                     }}
                                 >
                                     ×
-                                </span>
+                                </button>
                             </div>
                         )
                     })}

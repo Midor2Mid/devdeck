@@ -6925,3 +6925,62 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     color: var(--danger);
     font-size: 12px;
 }
+
+/* ============================================================
+   Real-button pressables (a11y). Deck keys, the terminal-tab hit
+   area, tab closes, and accent swatches are now <button>s so they
+   get keyboard focus, the global focus-visible ring, and the global
+   button:active press feedback. These resets strip the base button
+   chrome (and any [data-style] button padding/typography) so each
+   keeps its class-defined look. Kept at the end of the file to win
+   source-order ties against the [data-style] button rules.
+   ============================================================ */
+button.deck-key,
+button.term-tab-hit,
+button.tab-close,
+button.swatch {
+    border: none;
+    font: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+}
+button.deck-key {
+    padding: 0 8px; /* re-assert over [data-style] button padding */
+}
+/* Chromeless hit area inside the .term-tab container — the container
+   div keeps every existing tab visual, the button carries semantics. */
+button.term-tab-hit {
+    display: flex;
+    align-items: center;
+    padding: 0;
+    margin: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 3px;
+}
+/* Close is a real button with a >=20x20 hit target; negative margin
+   keeps the occupied space (and the tab's height) what it was. */
+button.tab-close {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    margin: -3px;
+    background: none;
+    line-height: 1;
+    cursor: pointer;
+}
+button.swatch {
+    padding: 0;
+    /* re-assert over [data-style] button border-color (e.g. bauhaus) */
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+/* Selected-accent ring. :not(:focus-visible) lets the accent-colored
+   keyboard focus ring (styles.css base rule) win while focused. */
+.swatch[aria-pressed="true"]:not(:focus-visible) {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
+}

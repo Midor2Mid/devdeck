@@ -1239,10 +1239,13 @@ export function SettingsModal(): JSX.Element {
                                     />
                                     <div className="swatches">
                                         {ACCENT_PRESETS.map((c) => (
-                                            <span
+                                            <button
+                                                type="button"
                                                 key={c}
                                                 className="swatch"
                                                 style={{ background: c }}
+                                                aria-label={"Accent " + c}
+                                                aria-pressed={s.appearance.accent === c}
                                                 onClick={() => s.setAppearance({ accent: c })}
                                             />
                                         ))}
