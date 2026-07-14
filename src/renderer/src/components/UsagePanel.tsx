@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
+import { Modal } from "./Modal"
 import { useSettings, type UsageEvent } from "../settings"
 import type { UsageSummary } from "../../../preload/index"
 
@@ -151,126 +152,124 @@ export function UsagePanel(): JSX.Element {
     )
 
     return (
-        <div className="modal-backdrop" onMouseDown={() => close(false)}>
-            <div className="modal usage-modal" onMouseDown={(e) => e.stopPropagation()}>
-                <div className="modal-head">
-                    <span>
-                        AI usage
-                        <span className="muted small" style={{ marginLeft: 8 }}>
-                            session activity
-                        </span>
+        <Modal onClose={() => close(false)} className="usage-modal" labelledBy="usage-modal-title">
+            <div className="modal-head">
+                <span id="usage-modal-title">
+                    AI usage
+                    <span className="muted small" style={{ marginLeft: 8 }}>
+                        session activity
                     </span>
-                    <div className="usage-windows">
-                        {WINDOWS.map((w) => (
-                            <button
-                                key={w.key}
-                                className={"btn-min" + (win === w.key ? " on" : "")}
-                                onClick={() => setWin(w.key)}
-                            >
-                                {w.label}
-                            </button>
-                        ))}
-                        <button className="btn-min" onClick={() => close(false)} data-tip="Close">
-                            ×
+                </span>
+                <div className="usage-windows">
+                    {WINDOWS.map((w) => (
+                        <button
+                            key={w.key}
+                            className={"btn-min" + (win === w.key ? " on" : "")}
+                            onClick={() => setWin(w.key)}
+                        >
+                            {w.label}
                         </button>
-                    </div>
-                </div>
-
-                <div className="modal-body usage-body">
-                    {tokens && (
-                        <div className="usage-tokens">
-                            <div className="usage-tokens-head">
-                                <span className="section-label">
-                                    Tokens &amp; cost · last {tokens.sinceDays}d
-                                </span>
-                                <span className="usage-cost-total">${tokens.total.cost.toFixed(2)}</span>
-                            </div>
-                            <div className="usage-tokens-sub muted small">
-                                {fmtTok(tokens.total.tokens)} tokens · estimated from Claude Code local logs
-                            </div>
-                            <div className="usage-tok-rows">
-                                {tokens.byProject.slice(0, 6).map((b) => (
-                                    <div key={b.label} className="usage-tok-row">
-                                        <span className="usage-tok-label">{b.label}</span>
-                                        <span className="muted small">{fmtTok(b.tokens)}</span>
-                                        <span className="usage-tok-cost">${b.cost.toFixed(2)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            {tokens.byModel.length > 0 && (
-                                <div className="usage-tok-models muted small">
-                                    {tokens.byModel
-                                        .slice(0, 4)
-                                        .map((b) => `${b.label.replace("claude-", "")} $${b.cost.toFixed(2)}`)
-                                        .join(" · ")}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <div className="usage-cards">
-                        <div className="usage-card">
-                            <div className="usage-card-num">{stats.sessions}</div>
-                            <div className="usage-card-label">sessions launched</div>
-                        </div>
-                        <div className="usage-card">
-                            <div className="usage-card-num">{fmtDuration(stats.totalMs)}</div>
-                            <div className="usage-card-label">agent time</div>
-                        </div>
-                        <div className="usage-card">
-                            <div className="usage-card-num">{live.length}</div>
-                            <div className="usage-card-label">running now</div>
-                        </div>
-                    </div>
-
-                    <div className="usage-section">
-                        <div className="usage-section-title">By agent</div>
-                        {renderBars(stats.agents, maxAgent)}
-                    </div>
-
-                    <div className="usage-section">
-                        <div className="usage-section-title">By project</div>
-                        {renderBars(stats.projects, maxProject)}
-                    </div>
-
-                    {live.length > 0 && (
-                        <div className="usage-section">
-                            <div className="usage-section-title">Running now</div>
-                            <div className="usage-live">
-                                {live.map((s) => {
-                                    const ev = openByTerm[s.termId]
-                                    return (
-                                        <div
-                                            key={s.termId}
-                                            className={"usage-live-row status-" + s.status}
-                                            onClick={() => {
-                                                jumpToTerm(s.termId)
-                                                close(false)
-                                            }}
-                                        >
-                                            <span className={"tab-dot claude status-" + s.status} />
-                                            <span className="usage-live-agent">{s.badge}</span>
-                                            <span className="usage-live-tab">{s.sessionName}</span>
-                                            <span className="usage-live-proj muted small">
-                                                {s.projectName}
-                                            </span>
-                                            <span className="spacer" />
-                                            <span className="muted small">
-                                                {ev ? fmtDuration(now - ev.startedAt) : ""}
-                                            </span>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="usage-note muted small">
-                        Tokens &amp; cost are parsed from Claude Code&apos;s local transcripts (cost
-                        estimated from list pricing); the activity below is DevDeck&apos;s own record
-                        of which agent ran where, and for how long.
-                    </div>
+                    ))}
+                    <button className="btn-min" onClick={() => close(false)} data-tip="Close">
+                        ×
+                    </button>
                 </div>
             </div>
-        </div>
+
+            <div className="modal-body usage-body">
+                {tokens && (
+                    <div className="usage-tokens">
+                        <div className="usage-tokens-head">
+                            <span className="section-label">
+                                Tokens &amp; cost · last {tokens.sinceDays}d
+                            </span>
+                            <span className="usage-cost-total">${tokens.total.cost.toFixed(2)}</span>
+                        </div>
+                        <div className="usage-tokens-sub muted small">
+                            {fmtTok(tokens.total.tokens)} tokens · estimated from Claude Code local logs
+                        </div>
+                        <div className="usage-tok-rows">
+                            {tokens.byProject.slice(0, 6).map((b) => (
+                                <div key={b.label} className="usage-tok-row">
+                                    <span className="usage-tok-label">{b.label}</span>
+                                    <span className="muted small">{fmtTok(b.tokens)}</span>
+                                    <span className="usage-tok-cost">${b.cost.toFixed(2)}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {tokens.byModel.length > 0 && (
+                            <div className="usage-tok-models muted small">
+                                {tokens.byModel
+                                    .slice(0, 4)
+                                    .map((b) => `${b.label.replace("claude-", "")} $${b.cost.toFixed(2)}`)
+                                    .join(" · ")}
+                            </div>
+                        )}
+                    </div>
+                )}
+                <div className="usage-cards">
+                    <div className="usage-card">
+                        <div className="usage-card-num">{stats.sessions}</div>
+                        <div className="usage-card-label">sessions launched</div>
+                    </div>
+                    <div className="usage-card">
+                        <div className="usage-card-num">{fmtDuration(stats.totalMs)}</div>
+                        <div className="usage-card-label">agent time</div>
+                    </div>
+                    <div className="usage-card">
+                        <div className="usage-card-num">{live.length}</div>
+                        <div className="usage-card-label">running now</div>
+                    </div>
+                </div>
+
+                <div className="usage-section">
+                    <div className="usage-section-title">By agent</div>
+                    {renderBars(stats.agents, maxAgent)}
+                </div>
+
+                <div className="usage-section">
+                    <div className="usage-section-title">By project</div>
+                    {renderBars(stats.projects, maxProject)}
+                </div>
+
+                {live.length > 0 && (
+                    <div className="usage-section">
+                        <div className="usage-section-title">Running now</div>
+                        <div className="usage-live">
+                            {live.map((s) => {
+                                const ev = openByTerm[s.termId]
+                                return (
+                                    <div
+                                        key={s.termId}
+                                        className={"usage-live-row status-" + s.status}
+                                        onClick={() => {
+                                            jumpToTerm(s.termId)
+                                            close(false)
+                                        }}
+                                    >
+                                        <span className={"tab-dot claude status-" + s.status} />
+                                        <span className="usage-live-agent">{s.badge}</span>
+                                        <span className="usage-live-tab">{s.sessionName}</span>
+                                        <span className="usage-live-proj muted small">
+                                            {s.projectName}
+                                        </span>
+                                        <span className="spacer" />
+                                        <span className="muted small">
+                                            {ev ? fmtDuration(now - ev.startedAt) : ""}
+                                        </span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                <div className="usage-note muted small">
+                    Tokens &amp; cost are parsed from Claude Code&apos;s local transcripts (cost
+                    estimated from list pricing); the activity below is DevDeck&apos;s own record
+                    of which agent ran where, and for how long.
+                </div>
+            </div>
+        </Modal>
     )
 }

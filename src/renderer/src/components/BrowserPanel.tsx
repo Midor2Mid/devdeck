@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore } from "../store"
+import { Modal } from "./Modal"
 
 interface PageComment {
     id: string
@@ -241,30 +242,28 @@ export function BrowserPanel(): JSX.Element {
             )}
 
             {pending && (
-                <div className="modal-backdrop" onMouseDown={() => setPending(null)}>
-                    <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-                        <div className="modal-title">Comment on element</div>
-                        <code className="token">{pending.selector}</code>
-                        {pending.text && <p className="muted small">"{pending.text}"</p>}
-                        <textarea
-                            className="code-area"
-                            autoFocus
-                            placeholder="What should change here?"
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) addComment()
-                            }}
-                        />
-                        <div className="modal-actions">
-                            <span className="spacer" />
-                            <button onClick={() => setPending(null)}>Cancel</button>
-                            <button className="accent" onClick={addComment}>
-                                Add comment
-                            </button>
-                        </div>
+                <Modal onClose={() => setPending(null)} labelledBy="comment-modal-title">
+                    <div className="modal-title" id="comment-modal-title">Comment on element</div>
+                    <code className="token">{pending.selector}</code>
+                    {pending.text && <p className="muted small">"{pending.text}"</p>}
+                    <textarea
+                        className="code-area"
+                        autoFocus
+                        placeholder="What should change here?"
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) addComment()
+                        }}
+                    />
+                    <div className="modal-actions">
+                        <span className="spacer" />
+                        <button onClick={() => setPending(null)}>Cancel</button>
+                        <button className="accent" onClick={addComment}>
+                            Add comment
+                        </button>
                     </div>
-                </div>
+                </Modal>
             )}
         </div>
     )

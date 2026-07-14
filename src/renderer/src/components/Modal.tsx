@@ -7,11 +7,14 @@ export function Modal({
     onClose,
     className = "",
     labelledBy,
+    backdrop = "modal",
     children
 }: {
     onClose: () => void
     className?: string
     labelledBy?: string
+    /** Backdrop style: "modal" (centered) or "switcher" (centered-but-top). */
+    backdrop?: "modal" | "switcher"
     children: React.ReactNode
 }): JSX.Element {
     const ref = useRef<HTMLDivElement>(null)
@@ -63,7 +66,7 @@ export function Modal({
         }
     }, [])
     return (
-        <div className="modal-backdrop" onMouseDown={onClose}>
+        <div className={backdrop === "switcher" ? "switcher-backdrop" : "modal-backdrop"} onMouseDown={onClose}>
             <div
                 ref={ref}
                 className={"modal " + className}

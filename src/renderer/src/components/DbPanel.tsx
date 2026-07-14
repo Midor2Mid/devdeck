@@ -6,6 +6,7 @@ import { useSettings } from "../settings"
 import { THEMES } from "../themes"
 import { toCsv, toJson } from "../exporters"
 import { Icon } from "./Icon"
+import { Modal } from "./Modal"
 import "../monaco-setup"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
@@ -74,93 +75,91 @@ function ConnForm({
     }
 
     return (
-        <div className="modal-backdrop" onMouseDown={onCancel}>
-            <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-                <div className="modal-title">{isEdit ? "Edit connection" : "New connection"}</div>
-                <div className="form-grid">
-                    <label>Name</label>
-                    <input value={form.name} onChange={(e) => set({ name: e.target.value })} />
-                    <label>Type</label>
-                    <select
-                        value={form.kind}
-                        onChange={(e) => {
-                            const kind = e.target.value as DbKind
-                            set({ kind, port: DEFAULT_PORT[kind] })
-                        }}
-                    >
-                        <option value="postgres">PostgreSQL</option>
-                        <option value="mysql">MySQL</option>
-                        <option value="sqlserver">SQL Server</option>
-                        <option value="sqlite">SQLite</option>
-                    </select>
-                    {form.kind === "sqlite" ? (
-                        <>
-                            <label>Database file</label>
-                            <div className="file-pick">
-                                <input
-                                    value={form.database}
-                                    placeholder="C:\\path\\to\\app.db"
-                                    onChange={(e) => set({ database: e.target.value })}
-                                />
-                                <button
-                                    onClick={async () => {
-                                        const f = await window.api.db.pickFile()
-                                        if (f) set({ database: f })
-                                    }}
-                                >
-                                    Browse…
-                                </button>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <label>Host</label>
-                            <input value={form.host} onChange={(e) => set({ host: e.target.value })} />
-                            <label>Port</label>
-                            <input
-                                type="number"
-                                value={form.port}
-                                onChange={(e) => set({ port: Number(e.target.value) })}
-                            />
-                            <label>Database</label>
+        <Modal onClose={onCancel} labelledBy="conn-modal-title">
+            <div className="modal-title" id="conn-modal-title">{isEdit ? "Edit connection" : "New connection"}</div>
+            <div className="form-grid">
+                <label>Name</label>
+                <input value={form.name} onChange={(e) => set({ name: e.target.value })} />
+                <label>Type</label>
+                <select
+                    value={form.kind}
+                    onChange={(e) => {
+                        const kind = e.target.value as DbKind
+                        set({ kind, port: DEFAULT_PORT[kind] })
+                    }}
+                >
+                    <option value="postgres">PostgreSQL</option>
+                    <option value="mysql">MySQL</option>
+                    <option value="sqlserver">SQL Server</option>
+                    <option value="sqlite">SQLite</option>
+                </select>
+                {form.kind === "sqlite" ? (
+                    <>
+                        <label>Database file</label>
+                        <div className="file-pick">
                             <input
                                 value={form.database}
+                                placeholder="C:\\path\\to\\app.db"
                                 onChange={(e) => set({ database: e.target.value })}
                             />
-                            <label>User</label>
-                            <input value={form.user} onChange={(e) => set({ user: e.target.value })} />
-                            <label>Password</label>
-                            <input
-                                type="password"
-                                placeholder={isEdit ? "(leave blank to keep)" : ""}
-                                value={form.password ?? ""}
-                                onChange={(e) => set({ password: e.target.value })}
-                            />
-                            <label>SSL</label>
-                            <input
-                                type="checkbox"
-                                className="checkbox"
-                                checked={Boolean(form.ssl)}
-                                onChange={(e) => set({ ssl: e.target.checked })}
-                            />
-                        </>
-                    )}
-                </div>
-                {testMsg && (
-                    <div className={"test-msg " + (testMsg.ok ? "ok" : "err")}>{testMsg.text}</div>
+                            <button
+                                onClick={async () => {
+                                    const f = await window.api.db.pickFile()
+                                    if (f) set({ database: f })
+                                }}
+                            >
+                                Browse…
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <label>Host</label>
+                        <input value={form.host} onChange={(e) => set({ host: e.target.value })} />
+                        <label>Port</label>
+                        <input
+                            type="number"
+                            value={form.port}
+                            onChange={(e) => set({ port: Number(e.target.value) })}
+                        />
+                        <label>Database</label>
+                        <input
+                            value={form.database}
+                            onChange={(e) => set({ database: e.target.value })}
+                        />
+                        <label>User</label>
+                        <input value={form.user} onChange={(e) => set({ user: e.target.value })} />
+                        <label>Password</label>
+                        <input
+                            type="password"
+                            placeholder={isEdit ? "(leave blank to keep)" : ""}
+                            value={form.password ?? ""}
+                            onChange={(e) => set({ password: e.target.value })}
+                        />
+                        <label>SSL</label>
+                        <input
+                            type="checkbox"
+                            className="checkbox"
+                            checked={Boolean(form.ssl)}
+                            onChange={(e) => set({ ssl: e.target.checked })}
+                        />
+                    </>
                 )}
-                <div className="modal-actions">
-                    <button onClick={test} disabled={busy}>
-                        Test
-                    </button>
-                    <span className="spacer" />
-                    <button onClick={onCancel}>Cancel</button>
-                    <button className="accent" onClick={save} disabled={busy}>
-                        Save
-                    </button>
-                </div>
             </div>
-        </div>
+            {testMsg && (
+                <div className={"test-msg " + (testMsg.ok ? "ok" : "err")}>{testMsg.text}</div>
+            )}
+            <div className="modal-actions">
+                <button onClick={test} disabled={busy}>
+                    Test
+                </button>
+                <span className="spacer" />
+                <button onClick={onCancel}>Cancel</button>
+                <button className="accent" onClick={save} disabled={busy}>
+                    Save
+                </button>
+            </div>
+        </Modal>
     )
 }
 

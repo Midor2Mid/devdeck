@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
+import { Modal } from "./Modal"
 import { THEMES } from "../themes"
 import { frameDelay } from "../recPlayback"
 
@@ -167,76 +168,71 @@ export function RecordingsModal(): JSX.Element {
     const pct = Math.round((progress / total) * 100)
 
     return (
-        <div className="modal-backdrop" onMouseDown={() => close(false)}>
-            <div
-                className="modal recordings-modal"
-                onMouseDown={(e) => e.stopPropagation()}
-            >
-                <div className="modal-head">
-                    <span>{current ? `Replay · ${current.label}` : "Recordings"}</span>
-                    <div>
-                        {current && (
-                            <button className="btn-min" onClick={() => setCurrent(null)}>
-                                ← list
-                            </button>
-                        )}
-                        <button className="btn-min" onClick={() => close(false)}>
-                            ×
+        <Modal onClose={() => close(false)} className="recordings-modal" labelledBy="recordings-modal-title">
+            <div className="modal-head">
+                <span id="recordings-modal-title">{current ? `Replay · ${current.label}` : "Recordings"}</span>
+                <div>
+                    {current && (
+                        <button className="btn-min" onClick={() => setCurrent(null)}>
+                            ← list
                         </button>
-                    </div>
+                    )}
+                    <button className="btn-min" onClick={() => close(false)}>
+                        ×
+                    </button>
                 </div>
-
-                {!current ? (
-                    <div className="modal-body recordings-list">
-                        {list.length === 0 ? (
-                            <div className="muted sidebar-empty">
-                                No recordings yet. Hit ⏺ in the terminal toolbar to record a
-                                session, then it appears here for replay.
-                            </div>
-                        ) : (
-                            list.map((r) => (
-                                <div
-                                    key={r.path}
-                                    className="recording-row"
-                                    onClick={() => window.api.rec.load(r.path).then(setCurrent)}
-                                >
-                                    <span className="recording-icon">⏺</span>
-                                    <span className="recording-label">{r.label}</span>
-                                    <span className="recording-meta">
-                                        {r.events} frames · {ago(r.createdAt)}
-                                    </span>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                ) : (
-                    <div className="modal-body replay-body">
-                        <div className="replay-controls">
-                            <button className="icon-action" onClick={togglePlay}>
-                                {playing ? "⏸" : "▶"}
-                            </button>
-                            <button className="icon-action" onClick={restart} data-tip="Restart">
-                                ↺
-                            </button>
-                            <div className="replay-progress">
-                                <div className="replay-progress-fill" style={{ transform: "scaleX(" + pct / 100 + ")" }} />
-                            </div>
-                            <div className="replay-speeds">
-                                {SPEEDS.map((sp) => (
-                                    <button
-                                        key={sp}
-                                        className={"btn-min" + (speed === sp ? " on" : "")}
-                                        onClick={() => setSpeed(sp)}
-                                    >
-                                        {sp}×
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div ref={containerRef} className="replay-term" />
-                    </div>
-                )}
             </div>
-        </div>
+
+            {!current ? (
+                <div className="modal-body recordings-list">
+                    {list.length === 0 ? (
+                        <div className="muted sidebar-empty">
+                            No recordings yet. Hit ⏺ in the terminal toolbar to record a
+                            session, then it appears here for replay.
+                        </div>
+                    ) : (
+                        list.map((r) => (
+                            <div
+                                key={r.path}
+                                className="recording-row"
+                                onClick={() => window.api.rec.load(r.path).then(setCurrent)}
+                            >
+                                <span className="recording-icon">⏺</span>
+                                <span className="recording-label">{r.label}</span>
+                                <span className="recording-meta">
+                                    {r.events} frames · {ago(r.createdAt)}
+                                </span>
+                            </div>
+                        ))
+                    )}
+                </div>
+            ) : (
+                <div className="modal-body replay-body">
+                    <div className="replay-controls">
+                        <button className="icon-action" onClick={togglePlay}>
+                            {playing ? "⏸" : "▶"}
+                        </button>
+                        <button className="icon-action" onClick={restart} data-tip="Restart">
+                            ↺
+                        </button>
+                        <div className="replay-progress">
+                            <div className="replay-progress-fill" style={{ transform: "scaleX(" + pct / 100 + ")" }} />
+                        </div>
+                        <div className="replay-speeds">
+                            {SPEEDS.map((sp) => (
+                                <button
+                                    key={sp}
+                                    className={"btn-min" + (speed === sp ? " on" : "")}
+                                    onClick={() => setSpeed(sp)}
+                                >
+                                    {sp}×
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div ref={containerRef} className="replay-term" />
+                </div>
+            )}
+        </Modal>
     )
 }

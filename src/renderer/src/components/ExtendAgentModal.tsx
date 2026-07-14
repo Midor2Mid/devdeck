@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
+import { Modal } from "./Modal"
 import type { CatalogEntry, DiscoveredItem, InstalledItem, ItemKind, ExtendScope } from "../../../preload/index"
 
 type Tab = "skill" | "agent"
@@ -76,99 +77,97 @@ export function ExtendAgentModal(): JSX.Element {
     const shownInstalled = [...installed.project, ...installed.global].filter((i) => i.kind === (tab as ItemKind))
 
     return (
-        <div className="switcher-backdrop" onMouseDown={() => close(false)}>
-            <div className="modal extend-modal" onMouseDown={(e) => e.stopPropagation()}>
-                <div className="modal-head extend-head">
-                    <h3>Extend agent</h3>
-                    <div className="extend-tabs">
-                        <button className={"extend-tab" + (tab === "skill" ? " on" : "")} onClick={() => setTab("skill")}>Skills</button>
-                        <button className={"extend-tab" + (tab === "agent" ? " on" : "")} onClick={() => setTab("agent")}>Agents</button>
+        <Modal onClose={() => close(false)} className="extend-modal" backdrop="switcher" labelledBy="extend-modal-title">
+            <div className="modal-head extend-head">
+                <h3 id="extend-modal-title">Extend agent</h3>
+                <div className="extend-tabs">
+                    <button className={"extend-tab" + (tab === "skill" ? " on" : "")} onClick={() => setTab("skill")}>Skills</button>
+                    <button className={"extend-tab" + (tab === "agent" ? " on" : "")} onClick={() => setTab("agent")}>Agents</button>
+                </div>
+                <button onClick={() => close(false)}>Close</button>
+            </div>
+
+            <div className="extend-body">
+                <div className="extend-browse">
+                    <div className="extend-catalog">
+                        {shownCatalog.map((c) => (
+                            <button key={c.id} className="extend-cat-card" onClick={() => loadPreview(c.repo, c.ref, true)}>
+                                <div className="extend-cat-name">{c.name} <span className="extend-badge vetted">Vetted</span></div>
+                                <div className="muted small">{c.description}</div>
+                                <div className="extend-cat-repo">{c.repo}</div>
+                            </button>
+                        ))}
+                        {shownCatalog.length === 0 && <div className="muted small">No catalog entries for this type.</div>}
                     </div>
-                    <button onClick={() => close(false)}>Close</button>
+                    <div className="extend-url">
+                        <input
+                            className="switcher-search"
+                            placeholder="owner/repo or GitHub URL…"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" && url.trim()) loadPreview(url.trim(), undefined, false) }}
+                        />
+                        <button className="extend-add" disabled={!url.trim()} onClick={() => loadPreview(url.trim(), undefined, false)}>Preview</button>
+                    </div>
                 </div>
 
-                <div className="extend-body">
-                    <div className="extend-browse">
-                        <div className="extend-catalog">
-                            {shownCatalog.map((c) => (
-                                <button key={c.id} className="extend-cat-card" onClick={() => loadPreview(c.repo, c.ref, true)}>
-                                    <div className="extend-cat-name">{c.name} <span className="extend-badge vetted">Vetted</span></div>
-                                    <div className="muted small">{c.description}</div>
-                                    <div className="extend-cat-repo">{c.repo}</div>
-                                </button>
-                            ))}
-                            {shownCatalog.length === 0 && <div className="muted small">No catalog entries for this type.</div>}
-                        </div>
-                        <div className="extend-url">
-                            <input
-                                className="switcher-search"
-                                placeholder="owner/repo or GitHub URL…"
-                                value={url}
-                                onChange={(e) => setUrl(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter" && url.trim()) loadPreview(url.trim(), undefined, false) }}
-                            />
-                            <button className="extend-add" disabled={!url.trim()} onClick={() => loadPreview(url.trim(), undefined, false)}>Preview</button>
-                        </div>
-                    </div>
-
-                    <div className="extend-right">
-                    <div className="extend-preview">
-                        {busy === "preview" && <div className="muted">Fetching {sourceRepo}…</div>}
-                        {error && <div className="extend-error">{error}</div>}
-                        {sourceRepo && busy !== "preview" && !error && (
-                            <>
-                                <div className="extend-preview-head">
-                                    <span>{sourceRepo}</span>
-                                    <span className={"extend-badge " + (vetted ? "vetted" : "unverified")}>{vetted ? "Vetted" : "Unverified — review before installing"}</span>
-                                </div>
-                                <div className="extend-scope">
-                                    <span className="muted small">Install to</span>
-                                    <button className={"extend-scope-btn" + (scope === "project" ? " on" : "")} onClick={() => setScope("project")} disabled={!projectPath}>This project</button>
-                                    <button className={"extend-scope-btn" + (scope === "global" ? " on" : "")} onClick={() => setScope("global")}>Global</button>
-                                    {scope === "global" && <span className="muted small">affects every project</span>}
-                                </div>
-                                {shownItems.map((it) => (
-                                    <div key={it.sourcePath} className="extend-item">
-                                        <div className="extend-item-head">
-                                            <b>{it.name}</b>
-                                            <button className="extend-install" disabled={busy === it.sourcePath} onClick={() => doInstall(it)}>Install</button>
-                                        </div>
-                                        <div className="muted small">{it.description}</div>
-                                        <details>
-                                            <summary className="muted small">{it.files.length} file(s) · read {it.kind === "skill" ? "SKILL.md" : "agent"}</summary>
-                                            <pre className="extend-content">{it.content}</pre>
-                                        </details>
-                                        {it.extraFiles.map((f) => (
-                                            <details key={f.path}>
-                                                <summary className="muted small">{f.path}</summary>
-                                                {f.text === null ? (
-                                                    <div className="muted small">(binary or large file — not shown; will be installed)</div>
-                                                ) : (
-                                                    <pre className="extend-content">{f.text}</pre>
-                                                )}
-                                            </details>
-                                        ))}
-                                    </div>
-                                ))}
-                                {shownItems.length === 0 && <div className="muted small">No {tab}s found in this repo.</div>}
-                            </>
-                        )}
-                    </div>
-
-                    <div className="extend-installed">
-                        <div className="muted small">Installed</div>
-                        {shownInstalled.map((it) => (
-                            <div key={it.path} className="extend-installed-row">
-                                <span>{it.name}</span>
-                                <span className={"extend-badge scope-" + it.scope}>{it.scope}</span>
-                                <button className="extend-remove" disabled={busy === it.path} onClick={() => doRemove(it)}>Remove</button>
+                <div className="extend-right">
+                <div className="extend-preview">
+                    {busy === "preview" && <div className="muted">Fetching {sourceRepo}…</div>}
+                    {error && <div className="extend-error">{error}</div>}
+                    {sourceRepo && busy !== "preview" && !error && (
+                        <>
+                            <div className="extend-preview-head">
+                                <span>{sourceRepo}</span>
+                                <span className={"extend-badge " + (vetted ? "vetted" : "unverified")}>{vetted ? "Vetted" : "Unverified — review before installing"}</span>
                             </div>
-                        ))}
-                        {shownInstalled.length === 0 && <div className="muted small">None installed.</div>}
-                    </div>
-                    </div>
+                            <div className="extend-scope">
+                                <span className="muted small">Install to</span>
+                                <button className={"extend-scope-btn" + (scope === "project" ? " on" : "")} onClick={() => setScope("project")} disabled={!projectPath}>This project</button>
+                                <button className={"extend-scope-btn" + (scope === "global" ? " on" : "")} onClick={() => setScope("global")}>Global</button>
+                                {scope === "global" && <span className="muted small">affects every project</span>}
+                            </div>
+                            {shownItems.map((it) => (
+                                <div key={it.sourcePath} className="extend-item">
+                                    <div className="extend-item-head">
+                                        <b>{it.name}</b>
+                                        <button className="extend-install" disabled={busy === it.sourcePath} onClick={() => doInstall(it)}>Install</button>
+                                    </div>
+                                    <div className="muted small">{it.description}</div>
+                                    <details>
+                                        <summary className="muted small">{it.files.length} file(s) · read {it.kind === "skill" ? "SKILL.md" : "agent"}</summary>
+                                        <pre className="extend-content">{it.content}</pre>
+                                    </details>
+                                    {it.extraFiles.map((f) => (
+                                        <details key={f.path}>
+                                            <summary className="muted small">{f.path}</summary>
+                                            {f.text === null ? (
+                                                <div className="muted small">(binary or large file — not shown; will be installed)</div>
+                                            ) : (
+                                                <pre className="extend-content">{f.text}</pre>
+                                            )}
+                                        </details>
+                                    ))}
+                                </div>
+                            ))}
+                            {shownItems.length === 0 && <div className="muted small">No {tab}s found in this repo.</div>}
+                        </>
+                    )}
+                </div>
+
+                <div className="extend-installed">
+                    <div className="muted small">Installed</div>
+                    {shownInstalled.map((it) => (
+                        <div key={it.path} className="extend-installed-row">
+                            <span>{it.name}</span>
+                            <span className={"extend-badge scope-" + it.scope}>{it.scope}</span>
+                            <button className="extend-remove" disabled={busy === it.path} onClick={() => doRemove(it)}>Remove</button>
+                        </div>
+                    ))}
+                    {shownInstalled.length === 0 && <div className="muted small">None installed.</div>}
+                </div>
                 </div>
             </div>
-        </div>
+        </Modal>
     )
 }

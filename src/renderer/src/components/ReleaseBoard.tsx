@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react"
 import { useStore, SHELL } from "../store"
+import { Modal } from "./Modal"
 import type { ReleaseConfig, ReleaseStage, ReleaseCommit, StageStatus } from "../../../preload/index"
 
 /**
@@ -48,83 +49,79 @@ export function ReleaseBoard(): JSX.Element {
 
     if (!project || !repo) {
         return (
-            <div className="modal-backdrop" onMouseDown={() => close(false)}>
-                <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-                    <div className="modal-head"><span>Release board</span>
-                        <button className="btn-min" onClick={() => close(false)}>×</button>
-                    </div>
-                    <div className="modal-body"><p className="muted">Select a project first.</p></div>
+            <Modal onClose={() => close(false)} labelledBy="release-modal-title">
+                <div className="modal-head"><span id="release-modal-title">Release board</span>
+                    <button className="btn-min" onClick={() => close(false)}>×</button>
                 </div>
-            </div>
+                <div className="modal-body"><p className="muted">Select a project first.</p></div>
+            </Modal>
         )
     }
 
     return (
-        <div className="modal-backdrop" onMouseDown={() => close(false)}>
-            <div className="modal release-modal" onMouseDown={(e) => e.stopPropagation()}>
-                <div className="modal-head">
-                    <span>Release board · {project.name}</span>
-                    <div>
-                        <button className="btn-min" onClick={() => cfg && refresh(cfg)}>refresh</button>
-                        <button className="btn-min" onClick={() => setEdit((v) => !v)}>{edit ? "done" : "edit stages"}</button>
-                        <button className="btn-min" onClick={() => close(false)}>×</button>
-                    </div>
-                </div>
-
-                <div className="modal-body release-body">
-                    {edit && cfg ? (
-                        <StageEditor cfg={cfg} onSave={saveCfg} />
-                    ) : loading ? (
-                        <div className="muted sidebar-empty">Reading refs…</div>
-                    ) : (
-                        <div className="lanes">
-                            {status.map((s, i) => (
-                                <div key={s.id} className="lane-wrap">
-                                    <div className={"lane" + (s.found ? "" : " missing")}>
-                                        <div className="lane-name">{s.name}</div>
-                                        <div className="lane-ref">{s.ref}</div>
-                                        {s.commit ? (
-                                            <div className="lane-commit">
-                                                <span className="lc-sha">{s.commit.sha}</span>
-                                                <span className="lc-subj">{s.commit.subject}</span>
-                                                <span className="lc-meta">{s.commit.author} · {s.commit.when}</span>
-                                            </div>
-                                        ) : (
-                                            <div className="lane-missing">ref not found - edit stages</div>
-                                        )}
-                                    </div>
-                                    {i < status.length - 1 && (
-                                        <button
-                                            className={"promote-arrow" + (s.aheadOfNext > 0 ? " hot" : "")}
-                                            onClick={() => setPromoteIdx(promoteIdx === i ? null : i)}
-                                            data-tip={s.aheadOfNext > 0 ? `${s.aheadOfNext} commit(s) ready to promote` : "Up to date"}
-                                        >
-                                            <span className="pa-count">{s.aheadOfNext || "✓"}</span>
-                                            <span className="pa-tip">▸</span>
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {!edit && promoteIdx !== null && cfg && status[promoteIdx] && status[promoteIdx + 1] && (
-                        <PromotePanel
-                            repo={repo}
-                            checklist={cfg.checklist}
-                            source={cfg.stages[promoteIdx]}
-                            target={cfg.stages[promoteIdx + 1]}
-                            onSendTerminal={(cmds) => {
-                                const id = newTab(SHELL, undefined, `promote ${cfg.stages[promoteIdx].name}→${cfg.stages[promoteIdx + 1].name}`)
-                                if (id) setTimeout(() => window.api.pty.input(id, cmds), 500)
-                                close(false)
-                            }}
-                            onTagged={() => cfg && refresh(cfg)}
-                        />
-                    )}
+        <Modal onClose={() => close(false)} className="release-modal" labelledBy="release-modal-title">
+            <div className="modal-head">
+                <span id="release-modal-title">Release board · {project.name}</span>
+                <div>
+                    <button className="btn-min" onClick={() => cfg && refresh(cfg)}>refresh</button>
+                    <button className="btn-min" onClick={() => setEdit((v) => !v)}>{edit ? "done" : "edit stages"}</button>
+                    <button className="btn-min" onClick={() => close(false)}>×</button>
                 </div>
             </div>
-        </div>
+
+            <div className="modal-body release-body">
+                {edit && cfg ? (
+                    <StageEditor cfg={cfg} onSave={saveCfg} />
+                ) : loading ? (
+                    <div className="muted sidebar-empty">Reading refs…</div>
+                ) : (
+                    <div className="lanes">
+                        {status.map((s, i) => (
+                            <div key={s.id} className="lane-wrap">
+                                <div className={"lane" + (s.found ? "" : " missing")}>
+                                    <div className="lane-name">{s.name}</div>
+                                    <div className="lane-ref">{s.ref}</div>
+                                    {s.commit ? (
+                                        <div className="lane-commit">
+                                            <span className="lc-sha">{s.commit.sha}</span>
+                                            <span className="lc-subj">{s.commit.subject}</span>
+                                            <span className="lc-meta">{s.commit.author} · {s.commit.when}</span>
+                                        </div>
+                                    ) : (
+                                        <div className="lane-missing">ref not found - edit stages</div>
+                                    )}
+                                </div>
+                                {i < status.length - 1 && (
+                                    <button
+                                        className={"promote-arrow" + (s.aheadOfNext > 0 ? " hot" : "")}
+                                        onClick={() => setPromoteIdx(promoteIdx === i ? null : i)}
+                                        data-tip={s.aheadOfNext > 0 ? `${s.aheadOfNext} commit(s) ready to promote` : "Up to date"}
+                                    >
+                                        <span className="pa-count">{s.aheadOfNext || "✓"}</span>
+                                        <span className="pa-tip">▸</span>
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {!edit && promoteIdx !== null && cfg && status[promoteIdx] && status[promoteIdx + 1] && (
+                    <PromotePanel
+                        repo={repo}
+                        checklist={cfg.checklist}
+                        source={cfg.stages[promoteIdx]}
+                        target={cfg.stages[promoteIdx + 1]}
+                        onSendTerminal={(cmds) => {
+                            const id = newTab(SHELL, undefined, `promote ${cfg.stages[promoteIdx].name}→${cfg.stages[promoteIdx + 1].name}`)
+                            if (id) setTimeout(() => window.api.pty.input(id, cmds), 500)
+                            close(false)
+                        }}
+                        onTagged={() => cfg && refresh(cfg)}
+                    />
+                )}
+            </div>
+        </Modal>
     )
 }
 
