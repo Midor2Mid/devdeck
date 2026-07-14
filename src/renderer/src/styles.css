@@ -450,6 +450,9 @@ button .ic,
     background: var(--bg-3);
     cursor: pointer;
     transition: border-color 0.12s ease, transform 0.12s ease;
+    /* Let the grid columns shrink to 1fr instead of growing to fit the (long,
+       non-wrapping) project path — otherwise the grid overflows horizontally. */
+    min-width: 0;
 }
 .switcher-card.sel {
     border-color: var(--accent);
@@ -463,6 +466,10 @@ button .ic,
     align-items: center;
     gap: 6px;
     margin-bottom: 4px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 .card-attn {
     color: var(--accent);
