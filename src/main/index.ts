@@ -12,6 +12,7 @@ import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken } from "./git"
 import { readMcp, writeMcp, type McpServer } from "./mcp"
+import * as skills from "./skills"
 import * as browserNet from "./browserNet"
 import * as proxy from "./proxy"
 import * as aikeys from "./aikeys"
@@ -426,6 +427,16 @@ function registerIpc(): void {
         guardPath(projectPath)
         writeMcp(projectPath, servers)
     })
+
+    // --- Extend Agent (skills/agents catalog: fetch, install, list, remove) ---
+    ipcMain.handle("extend:catalog", () => skills.catalog())
+    ipcMain.handle("extend:preview", (_e, { repo, ref }: { repo: string; ref?: string }) => skills.preview(repo, ref))
+    ipcMain.handle("extend:install", (_e, { repo, ref, item, scope, projectPath }: { repo: string; ref?: string; item: { kind: "skill" | "agent"; name: string; sourcePath: string }; scope: "global" | "project"; projectPath: string }) => {
+        if (scope === "project") guardPath(projectPath)
+        return skills.install(repo, ref, item, scope, projectPath)
+    })
+    ipcMain.handle("extend:list", (_e, projectPath: string) => skills.listInstalled(projectPath))
+    ipcMain.handle("extend:remove", (_e, item: { kind: "skill" | "agent"; name: string; scope: "global" | "project"; path: string }) => skills.remove(item))
 
     // --- Terminal record & replay ---
     ipcMain.handle("rec:start", (_e, termId: string) => recorder.startRecording(termId))

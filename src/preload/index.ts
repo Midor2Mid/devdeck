@@ -179,6 +179,31 @@ export interface McpServer {
     args: string[]
     env: Record<string, string>
 }
+export type ExtendScope = "global" | "project"
+export type ItemKind = "skill" | "agent"
+export interface CatalogEntry {
+    id: string
+    name: string
+    description: string
+    repo: string
+    ref?: string
+    kinds: ItemKind[]
+    vetted: true
+}
+export interface DiscoveredItem {
+    kind: ItemKind
+    name: string
+    description: string
+    sourcePath: string
+    files: string[]
+    content: string
+}
+export interface InstalledItem {
+    kind: ItemKind
+    name: string
+    scope: ExtendScope
+    path: string
+}
 
 export interface RecEvent {
     dt: number
@@ -534,6 +559,21 @@ const api = {
         list: (projectPath: string): Promise<McpServer[]> => ipcRenderer.invoke("mcp:list", projectPath),
         save: (projectPath: string, servers: McpServer[]): Promise<void> =>
             ipcRenderer.invoke("mcp:save", { projectPath, servers })
+    },
+    extend: {
+        catalog: (): Promise<CatalogEntry[]> => ipcRenderer.invoke("extend:catalog"),
+        preview: (repo: string, ref?: string): Promise<DiscoveredItem[]> =>
+            ipcRenderer.invoke("extend:preview", { repo, ref }),
+        install: (
+            repo: string,
+            ref: string | undefined,
+            item: { kind: ItemKind; name: string; sourcePath: string },
+            scope: ExtendScope,
+            projectPath: string
+        ): Promise<InstalledItem> => ipcRenderer.invoke("extend:install", { repo, ref, item, scope, projectPath }),
+        list: (projectPath: string): Promise<{ global: InstalledItem[]; project: InstalledItem[] }> =>
+            ipcRenderer.invoke("extend:list", projectPath),
+        remove: (item: InstalledItem): Promise<void> => ipcRenderer.invoke("extend:remove", item)
     },
     shell: {
         open: (url: string): Promise<void> => ipcRenderer.invoke("shell:open", url)
