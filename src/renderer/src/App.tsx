@@ -44,7 +44,10 @@ import { TooltipLayer } from "./components/Tooltip"
 import { ContextMenuLayer } from "./components/ContextMenu"
 
 export function App(): JSX.Element {
-    const { init, view } = useStore()
+    // Slice selectors only — a whole-store subscription here would re-render
+    // the entire app tree on every store mutation (pty status flips, drags…).
+    const init = useStore((s) => s.init)
+    const view = useStore((s) => s.view)
     const loadSettings = useSettings((s) => s.load)
     const settingsOpen = useSettings((s) => s.settingsOpen)
     const switcherOpen = useStore((s) => s.switcherOpen)

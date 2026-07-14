@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useStore } from "../store"
 import type { AnySession } from "../store"
 import { getTail } from "../missionTail"
@@ -19,12 +19,9 @@ export function AgentKey({
     const [renaming, setRenaming] = useState(false)
     const [text, setText] = useState("")
     const [over, setOver] = useState(false)
-    // Live peek of the agent's latest output, surfaced in the hover tooltip.
+    // Peek of the agent's latest output, surfaced in the hover tooltip.
+    // Fetched lazily on hover — no always-on timer for an invisible tip.
     const [peek, setPeek] = useState("")
-    useEffect(() => {
-        const iv = setInterval(() => setPeek(getTail(session.termId)), 1500)
-        return () => clearInterval(iv)
-    }, [session.termId])
 
     const commit = (): void => {
         renameSession(session.termId, text)
@@ -41,6 +38,7 @@ export function AgentKey({
                 (over ? " drag-over" : "")
             }
             onClick={() => jumpToTerm(session.termId)}
+            onMouseEnter={() => setPeek(getTail(session.termId))}
             data-tip={
                 dragPayload
                     ? "Drop to insert into this session"

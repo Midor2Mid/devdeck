@@ -10,6 +10,9 @@ import type { SystemInfo } from "../../../preload/index"
  * changes. Following agents is the primary activity — this is the default view.
  */
 export function MissionControl(): JSX.Element {
+    // The panel stays mounted (App toggles display) — gate all polling on the
+    // Mission view actually being active so timers don't run in other views.
+    const view = useStore((s) => s.view)
     const projects = useStore((s) => s.projects)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const setActiveProject = useStore((s) => s.setActiveProject)
@@ -44,13 +47,16 @@ export function MissionControl(): JSX.Element {
     // Poll the output peeks (tails live outside the store, updated by the pty stream).
     const [, setTick] = useState(0)
     useEffect(() => {
+        if (view !== "mission") return
+        setTick((t) => t + 1) // refresh peeks immediately on entering the view
         const iv = setInterval(() => setTick((t) => t + 1), 1000)
         return () => clearInterval(iv)
-    }, [])
+    }, [view])
 
     // Per-project uncommitted-change counts for the review queue.
     const [changes, setChanges] = useState<Record<string, number>>({})
     useEffect(() => {
+        if (view !== "mission") return
         let on = true
         const fetchAll = (): void => {
             if (document.hidden) return
@@ -70,11 +76,12 @@ export function MissionControl(): JSX.Element {
             clearInterval(iv)
             window.removeEventListener("focus", onFocus)
         }
-    }, [projects])
+    }, [view, projects])
 
     // Ambient system state (Docker + listening ports).
     const [sys, setSys] = useState<SystemInfo | null>(null)
     useEffect(() => {
+        if (view !== "mission") return
         let on = true
         const fetchSys = (): void => {
             if (document.hidden) return
@@ -86,12 +93,13 @@ export function MissionControl(): JSX.Element {
             on = false
             clearInterval(iv)
         }
-    }, [])
+    }, [view])
     const showSystem = !!sys && (sys.docker.length > 0 || sys.ports.length > 0)
 
     // File-ownership / conflict map: which agent is changing which files, across worktrees.
     const [ownership, setOwnership] = useState<OwnershipMap | null>(null)
     useEffect(() => {
+        if (view !== "mission") return
         let on = true
         const fetchOwn = async (): Promise<void> => {
             if (document.hidden) return
@@ -116,7 +124,7 @@ export function MissionControl(): JSX.Element {
             on = false
             clearInterval(iv)
         }
-    }, [])
+    }, [view])
 
     const reviewRows = projects.filter((p) => (changes[p.id] ?? 0) > 0)
 
