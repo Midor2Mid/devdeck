@@ -7,6 +7,7 @@ import type { McpServer } from "../../../preload/index"
 import { MCP_CATALOG, addServer } from "../mcpCatalog"
 import { type Pipeline, type PipelineStep, type PipelineTrigger, isRunnable, moveItem } from "../pipeline"
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
+import { Modal } from "./Modal"
 
 const THEME_LIST = Object.values(THEMES)
 const STYLE_LIST = Object.values(STYLES)
@@ -1158,13 +1159,11 @@ export function SettingsModal(): JSX.Element {
     const [section, setSection] = useState<Section>("appearance")
 
     return (
-        <div className="modal-backdrop" onMouseDown={s.closeSettings}>
-            <div
-                className="modal settings-modal"
-                onMouseDown={(e) => e.stopPropagation()}
-            >
+        <Modal onClose={s.closeSettings} className="settings-modal" labelledBy="settings-modal-title">
                 <div className="settings-nav">
-                    <div className="settings-nav-title">Settings</div>
+                    <div className="settings-nav-title" id="settings-modal-title">
+                        Settings
+                    </div>
                     {SECTIONS.map((sec) => (
                         <button
                             type="button"
@@ -1411,7 +1410,6 @@ export function SettingsModal(): JSX.Element {
 
                     {section === "about" && <AboutSection />}
                 </div>
-            </div>
-        </div>
+        </Modal>
     )
 }
