@@ -13,7 +13,7 @@
     --border-soft: #28241f; /* quiet divider */
     --text: #e4ddcf; /* kinari */
     --muted: #8f8678; /* taupe */
-    --faint: #5f594f;
+    --faint: #888173; /* AA on --bg (4.50:1), below --muted (4.84:1) */
     --accent: #b8895c; /* clay / amber — the one accent */
     --accent-soft: #caa07a;
     --moss: #8c9a68; /* shell */
@@ -395,7 +395,7 @@ button .ic,
     flex-direction: column;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius, 10px);
     box-shadow: var(--elev-3);
     overflow: hidden;
 }
@@ -945,7 +945,7 @@ button .ic,
     flex-direction: column;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius, 10px);
     box-shadow: var(--elev-3);
     overflow: hidden;
 }
@@ -3347,7 +3347,7 @@ button .ic,
     max-width: 480px;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius, 10px);
     padding: 24px 28px;
 }
 .crash-card h2 {
@@ -4044,7 +4044,7 @@ button .ic,
 .work-wt-toggle input { width: 14px; height: 14px; accent-color: var(--accent); }
 .work-item {
     border: 1px solid var(--border-soft);
-    border-radius: 9px;
+    border-radius: var(--radius, 10px);
     padding: 10px 12px;
     margin-bottom: 8px;
     background: var(--bg-3);
@@ -5630,7 +5630,7 @@ kbd {
     min-width: 180px;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 9px;
+    border-radius: var(--radius, 10px);
     padding: 5px;
     box-shadow: 0 14px 36px -8px rgba(0, 0, 0, 0.55);
 }
