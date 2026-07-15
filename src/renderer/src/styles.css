@@ -476,8 +476,8 @@ button .ic,
     font-size: 9px;
 }
 .switcher-card-group {
-    font-size: 10px;
-    letter-spacing: 0.5px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     color: var(--accent-soft);
     margin-bottom: 4px;
 }
@@ -903,9 +903,9 @@ button .ic,
     padding: 6px 8px;
 }
 .search-group {
-    font-size: 11px;
+    font-size: var(--fs-label);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--ls-label);
     color: var(--muted);
     padding: 8px 10px 2px;
 }
@@ -980,8 +980,8 @@ button .ic,
     align-items: center;
     justify-content: space-between;
     padding: 14px 18px 6px;
-    font-size: 10px;
-    letter-spacing: 2px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     color: var(--faint);
 }
 .icon-btn {
@@ -1683,9 +1683,9 @@ button .ic,
     margin-left: auto;
 }
 .composer-target-group-title {
-    font-size: 11px;
+    font-size: var(--fs-label);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--ls-label);
     color: var(--muted);
     margin: 6px 0 2px;
 }
@@ -1785,8 +1785,8 @@ button .ic,
     align-items: center;
     justify-content: space-between;
     padding: 14px 14px 8px;
-    font-size: 11px;
-    letter-spacing: 0.5px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     text-transform: uppercase;
     color: var(--muted);
 }
@@ -1858,8 +1858,8 @@ button .ic,
     color: var(--danger);
 }
 .req-menu-title {
-    font-size: 10px;
-    letter-spacing: 0.5px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     text-transform: uppercase;
     color: var(--faint);
     padding: 6px 9px 3px;
@@ -2514,8 +2514,8 @@ button .ic,
     background: var(--bg);
 }
 .tree-root-label {
-    font-size: 10px;
-    letter-spacing: 2px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     color: var(--faint);
     padding: 2px 4px 10px;
     text-transform: uppercase;
@@ -3054,8 +3054,8 @@ button .ic,
     overflow-y: auto;
 }
 .settings-nav-title {
-    font-size: 10px;
-    letter-spacing: 2px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     color: var(--faint);
     padding: 4px 10px 12px;
 }
@@ -4147,7 +4147,7 @@ button .ic,
 .pc-row { display: flex; gap: 8px; align-items: baseline; padding: 4px 6px; font-size: 12px; }
 .pc-subj { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .promote-side { width: 280px; flex: none; }
-.promote-check-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 6px; }
+.promote-check-title { font-size: var(--fs-label); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--faint); margin-bottom: 6px; }
 .promote-check { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
 .promote-check input { width: 14px; height: 14px; accent-color: var(--accent); }
 .promote-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
@@ -4157,7 +4157,7 @@ button .ic,
 .promote-msg { font-size: 12px; color: var(--accent-soft); }
 
 .stage-editor { max-width: 560px; }
-.se-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); margin-bottom: 8px; }
+.se-title { font-size: var(--fs-label); text-transform: uppercase; letter-spacing: var(--ls-label); color: var(--faint); margin-bottom: 8px; }
 .se-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
 .se-name { width: 120px; }
 .se-ref { flex: 1; font-family: var(--mono, monospace); font-size: 12px; }
@@ -4768,8 +4768,8 @@ kbd {
     gap: 18px 28px;
 }
 .shortcuts-group-title {
-    font-size: 11px;
-    letter-spacing: 0.5px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     text-transform: uppercase;
     color: var(--muted);
     border-bottom: 1px solid var(--border-soft);
@@ -5162,8 +5162,8 @@ kbd {
 }
 .net-section-title {
     color: var(--accent-soft);
-    font-size: 11px;
-    letter-spacing: 0.5px;
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
     text-transform: uppercase;
     margin: 10px 0 6px;
 }
@@ -5870,9 +5870,9 @@ kbd {
     margin-top: 4px;
 }
 .usage-section-title {
-    font-size: 11px;
+    font-size: var(--fs-label);
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--ls-label);
     text-transform: uppercase;
     color: var(--muted);
     margin-bottom: 8px;
