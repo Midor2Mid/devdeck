@@ -101,7 +101,7 @@ export function ExtendAgentModal(): JSX.Element {
                     </div>
                     <div className="extend-url">
                         <input
-                            className="switcher-search"
+                            className="extend-url-input"
                             placeholder="owner/repo or GitHub URL…"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}

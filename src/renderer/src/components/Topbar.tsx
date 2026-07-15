@@ -24,7 +24,7 @@ export function Topbar(): JSX.Element {
                     data-tip-pos="bottom"
                 >
                     {project && <ProjectChip project={project} size="sm" />}
-                    {project ? project.name : "No project"}
+                    <span className="topbar-proj-name">{project ? project.name : "No project"}</span>
                     <Icon name="chevronDown" size={14} className="topbar-proj-caret" />
                 </button>
                 <span className="crumb-sep">/</span>

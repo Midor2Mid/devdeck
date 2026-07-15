@@ -59,6 +59,8 @@
     --dur-slow: 260ms;
     /* Adaptive hover wash (derives from --text: subtle light lift on dark, dark on light). */
     --bg-hover: color-mix(in srgb, var(--text) 4%, transparent);
+    /* Full-screen backdrop scrim behind modals/overlays. */
+    --scrim: rgba(10, 9, 8, 0.62);
 }
 
 * {
@@ -284,7 +286,7 @@ select:focus {
 }
 .cmd-row .cmd-cmd {
     flex: 1;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 .sidebar-section-title .section-add {
@@ -314,12 +316,6 @@ button .ic,
 .sb-item .ic {
     vertical-align: middle;
 }
-.icon-action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
 /* ---------- Custom tooltips (data-tip) ---------- */
 .tip {
     position: fixed;
@@ -383,7 +379,7 @@ button .ic,
 .switcher-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(12, 11, 10, 0.6);
+    background: var(--scrim);
     backdrop-filter: blur(3px);
     z-index: 60;
     display: flex;
@@ -513,6 +509,7 @@ button .ic,
     height: 100%;
     width: 100%;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 16px 20px 24px;
     display: flex;
     flex-direction: column;
@@ -630,7 +627,11 @@ button .ic,
 .mission-review-proj {
     font-size: 13px;
     font-weight: 600;
-    min-width: 120px;
+    min-width: 0;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .mission-review-actions {
     margin-left: auto;
@@ -697,6 +698,9 @@ button .ic,
     display: flex;
     gap: 4px;
     flex: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 50%;
 }
 .mission-own-chip {
     background: var(--bg-2);
@@ -1327,11 +1331,11 @@ button .ic,
 }
 .snippet-slash {
     color: var(--accent);
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
 }
 .snippet-name {
     flex: 1;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 .snippet-body {
@@ -1396,6 +1400,9 @@ button .ic,
     background: transparent;
 }
 .icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 28px;
     padding: 4px 0;
     font-size: 13px;
@@ -1602,7 +1609,7 @@ button .ic,
     border-radius: 0;
     resize: vertical;
     background: var(--bg-3);
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.5;
     padding: 10px 12px;
@@ -1622,7 +1629,7 @@ button .ic,
 }
 .mention-item {
     padding: 7px 11px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--muted);
     cursor: pointer;
@@ -1957,7 +1964,7 @@ button .ic,
     max-width: 90vw;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius, 10px);
     box-shadow: var(--elev-3);
     padding: 18px 20px;
 }
@@ -1976,7 +1983,7 @@ button .ic,
     max-width: 92vw;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius, 10px);
     box-shadow: var(--elev-3);
     padding: 18px 20px;
 }
@@ -1984,7 +1991,7 @@ button .ic,
     width: 100%;
     height: 200px;
     resize: vertical;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -2027,7 +2034,7 @@ button .ic,
     width: 100%;
     height: 110px;
     resize: vertical;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
 }
@@ -2073,7 +2080,7 @@ button .ic,
 }
 .kv-key,
 .kv-val {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 .kv-del {
@@ -2165,7 +2172,7 @@ button .ic,
 .env-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(12, 11, 10, 0.6);
+    background: var(--scrim);
     backdrop-filter: blur(3px);
     z-index: 70;
     display: flex;
@@ -2181,7 +2188,7 @@ button .ic,
     flex-direction: column;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius, 10px);
     box-shadow: var(--elev-3);
     padding: 18px 20px;
 }
@@ -2342,7 +2349,7 @@ button .ic,
     flex: 1;
     overflow: auto;
     padding: 10px 14px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 .resp-hrow {
@@ -2407,7 +2414,7 @@ button .ic,
     align-items: center;
     gap: 3px;
     font-size: 11px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     background: var(--bg-3);
     border: 1px solid var(--border-soft);
     border-radius: 5px;
@@ -2430,7 +2437,7 @@ button .ic,
 .resp-extracted {
     font-size: 11px;
     color: var(--moss, #8c9a68);
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
 }
 .resp-tests {
     flex: 1;
@@ -2461,7 +2468,7 @@ button .ic,
 }
 .test-actual {
     color: var(--muted);
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     max-width: 45%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2483,7 +2490,7 @@ button .ic,
     margin: 0;
     padding: 14px;
     overflow: auto;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.55;
     white-space: pre-wrap;
@@ -2716,7 +2723,7 @@ button .ic,
     color: var(--accent-soft);
 }
 .md-preview code {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 0.88em;
     background: var(--bg-3);
     padding: 1px 5px;
@@ -2865,7 +2872,7 @@ button .ic,
 .db-history-item {
     padding: 7px 9px;
     border-radius: 6px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text);
     white-space: nowrap;
@@ -2914,7 +2921,7 @@ button .ic,
 }
 .result-grid {
     border-collapse: collapse;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     width: max-content;
     min-width: 100%;
@@ -2956,7 +2963,7 @@ button .ic,
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(10, 9, 8, 0.72);
+    background: var(--scrim);
     backdrop-filter: blur(3px);
     display: flex;
     align-items: center;
@@ -2968,7 +2975,7 @@ button .ic,
     max-height: 88vh;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius, 10px);
     padding: 18px 20px;
     box-shadow: var(--elev-3);
     /* Clip scrolling children to the rounded corners. */
@@ -3136,7 +3143,7 @@ button .ic,
 .theme-card {
     flex: 1;
     border: 1px solid var(--border-soft);
-    border-radius: 9px;
+    border-radius: var(--radius, 10px);
     padding: 8px;
     cursor: pointer;
     text-align: center;
@@ -3204,7 +3211,7 @@ button .ic,
     color: var(--muted);
 }
 .token {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     background: var(--bg-3);
     border: 1px solid var(--border-soft);
@@ -3248,7 +3255,7 @@ button .ic,
     border: 1px solid var(--border);
     border-radius: 5px;
     padding: 2px 7px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     color: var(--text);
     font-size: 11px;
 }
@@ -3310,7 +3317,7 @@ button .ic,
     border-bottom: 1px solid var(--border-soft);
 }
 .comment-sel {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--accent-soft);
     white-space: nowrap;
@@ -3353,7 +3360,7 @@ button .ic,
     background: var(--bg-3);
     border: 1px solid var(--border-soft);
     border-radius: 8px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--danger);
     white-space: pre-wrap;
@@ -3369,7 +3376,7 @@ button .ic,
 .drawer-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(12, 11, 10, 0.4);
+    background: var(--scrim);
     z-index: 60;
     display: flex;
     justify-content: flex-end;
@@ -3588,10 +3595,12 @@ button .ic,
 .pipeline-icon {
     color: var(--accent);
     font-size: 16px;
+    cursor: pointer;
 }
 .pipeline-info {
     flex: 1;
     min-width: 0;
+    cursor: pointer;
 }
 .pipeline-title {
     display: flex;
@@ -3747,12 +3756,6 @@ button .ic,
 }
 .pipeline-gate {
     color: var(--accent-soft);
-}
-.pipeline-icon {
-    cursor: pointer;
-}
-.pipeline-info {
-    cursor: pointer;
 }
 .pipeline-steps {
     margin-top: 8px;
@@ -4086,7 +4089,7 @@ button .ic,
 .lane {
     width: 220px;
     border: 1px solid var(--border-soft);
-    border-radius: 10px;
+    border-radius: var(--radius, 10px);
     padding: 12px 14px;
     background: var(--bg-3);
     display: flex;
@@ -4181,7 +4184,7 @@ button .ic,
     flex: 1;
     min-width: 180px;
     border: 1px solid var(--border-soft);
-    border-radius: 9px;
+    border-radius: var(--radius, 10px);
     padding: 11px 13px;
     cursor: pointer;
     display: flex;
@@ -4576,7 +4579,7 @@ button .ic,
 [data-style="crt"] {
     --radius: 2px;
     /* The whole UI goes monospace — the strongest CRT signal. */
-    font-family: "Cascadia Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-family: var(--font-mono);
     letter-spacing: 0.01em;
 }
 [data-style="crt"] button,
@@ -4728,7 +4731,7 @@ button .ic,
 }
 /* ---------- shortcuts cheat-sheet + kbd ---------- */
 kbd {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     background: var(--bg-3);
     border: 1px solid var(--border);
@@ -4745,7 +4748,7 @@ kbd {
     overflow-y: auto;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius, 10px);
     box-shadow: var(--elev-3);
     padding: 20px 22px;
 }
@@ -4828,7 +4831,7 @@ kbd {
     max-width: 90vw;
     background: var(--bg-2);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--radius, 10px);
     box-shadow: var(--elev-3);
     padding: 20px 22px;
 }
@@ -4997,14 +5000,14 @@ kbd {
     color: var(--text);
     border-radius: 6px;
     padding: 4px 8px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 .net-port:disabled {
     opacity: 0.5;
 }
 .net-addr {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--muted);
 }
@@ -5077,13 +5080,13 @@ kbd {
     box-shadow: inset 2px 0 0 var(--accent);
 }
 .net-c-method {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     color: var(--muted);
     width: 70px;
 }
 .net-c-status {
     width: 56px;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
 }
 .net-c-host {
     max-width: 180px;
@@ -5093,7 +5096,7 @@ kbd {
     width: 64px;
     text-align: right;
     color: var(--faint);
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
 }
 .net-inspector {
     height: 100%;
@@ -5111,12 +5114,12 @@ kbd {
     background: var(--bg);
 }
 .net-method {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     color: var(--muted);
     font-size: 12px;
 }
 .net-insp-url {
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text);
     overflow: hidden;
@@ -5174,7 +5177,7 @@ kbd {
 .net-headers {
     border-collapse: collapse;
     width: 100%;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 .net-headers td {
@@ -5193,7 +5196,7 @@ kbd {
 }
 .net-pre {
     margin: 0;
-    font-family: "Cascadia Mono", Consolas, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.55;
     white-space: pre-wrap;
@@ -5735,7 +5738,7 @@ kbd {
 }
 .inbox-row {
     border: 1px solid var(--border-soft);
-    border-radius: 9px;
+    border-radius: var(--radius, 10px);
     padding: 9px 10px;
     margin-bottom: 8px;
     background: var(--bg);
@@ -5851,7 +5854,7 @@ kbd {
 }
 .usage-card {
     border: 1px solid var(--border-soft);
-    border-radius: 10px;
+    border-radius: var(--radius, 10px);
     padding: 14px 12px;
     background: var(--bg);
     text-align: center;
@@ -6441,6 +6444,16 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .deck-status-spacer {
     flex: 1;
 }
+/* Narrow windows: view keys go icon-only so status/tools keep their room.
+   The buttons keep data-tip/aria-label, so they stay discoverable. */
+@media (max-width: 1180px) {
+    .deck-view-name {
+        display: none;
+    }
+    .deck-view {
+        justify-content: center;
+    }
+}
 
 /* ---------- Topbar brand + project button ---------- */
 .topbar-brand {
@@ -6459,9 +6472,17 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     font-size: 13px;
     cursor: pointer;
     max-width: 40vw;
+    min-width: 0;
+}
+/* Only the name shrinks/ellipsizes; the chip and caret never clip. */
+.topbar-proj-name {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.topbar-proj-btn .project-chip {
+    flex: none;
 }
 .topbar-proj-btn:hover {
     color: var(--accent);
@@ -6469,6 +6490,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 /* The caret icon is already a down-chevron (chevronDown) — no rotation. */
 .topbar-proj-caret {
     color: var(--faint);
+    flex: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6858,6 +6880,16 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .extend-url {
     display: flex;
     gap: 8px;
+}
+/* Compact repo-URL field — .switcher-search is far too big for the 300px browse column. */
+.extend-url-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 13px;
+}
+.extend-url .extend-add {
+    flex: none;
 }
 .extend-preview {
     flex: 1;
