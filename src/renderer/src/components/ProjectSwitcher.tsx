@@ -25,6 +25,7 @@ export function ProjectSwitcher(): JSX.Element {
     const [sel, setSel] = useState(0)
     const [folderOver, setFolderOver] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
+    const gridRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         inputRef.current?.focus()
@@ -81,7 +82,15 @@ export function ProjectSwitcher(): JSX.Element {
         close()
     }
 
-    const COLS = 4
+    // Column count of the rendered grid (auto-fill makes it width-dependent),
+    // read at nav time so ArrowUp/Down always move by one visual row.
+    const gridCols = (): number => {
+        const el = gridRef.current
+        if (!el) return 1
+        const cols = getComputedStyle(el).gridTemplateColumns.split(/\s+/).filter(Boolean).length
+        return cols > 0 && Number.isFinite(cols) ? cols : 1
+    }
+
     const onKeyDown = (e: React.KeyboardEvent): void => {
         if (e.key === "Escape") return close()
         if (!ordered.length) return
@@ -96,10 +105,12 @@ export function ProjectSwitcher(): JSX.Element {
             setSel((i) => Math.max(0, i - 1))
         } else if (e.key === "ArrowDown") {
             e.preventDefault()
-            setSel((i) => Math.min(ordered.length - 1, i + COLS))
+            const cols = gridCols()
+            setSel((i) => Math.min(ordered.length - 1, i + cols))
         } else if (e.key === "ArrowUp") {
             e.preventDefault()
-            setSel((i) => Math.max(0, i - COLS))
+            const cols = gridCols()
+            setSel((i) => Math.max(0, i - cols))
         }
     }
 
@@ -141,7 +152,7 @@ export function ProjectSwitcher(): JSX.Element {
                         + Add folder
                     </button>
                 </div>
-                <div className="switcher-grid">
+                <div className="switcher-grid" ref={gridRef}>
                     {ordered.map((p, i) => {
                         const c = counts[p.id]
                         return (

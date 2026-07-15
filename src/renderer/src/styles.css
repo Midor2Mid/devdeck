@@ -438,7 +438,7 @@ button .ic,
 }
 .switcher-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     gap: 10px;
     padding: 16px;
     overflow-y: auto;
@@ -5402,7 +5402,7 @@ kbd {
 /* ---------- Settings → AI ---------- */
 .ai-agent {
     border: 1px solid var(--border-soft);
-    border-radius: 9px;
+    border-radius: var(--radius, 10px);
     padding: 10px 12px;
     margin-bottom: 10px;
     background: var(--bg);
