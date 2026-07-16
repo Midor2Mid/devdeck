@@ -14,7 +14,7 @@ import {
     hasLeaf
 } from "./layout"
 import type { PipelineRun, PipelineStepState } from "./pipeline"
-import { runnableSteps, sessionPlan } from "./pipeline"
+import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } from "./pipeline"
 import { gateActive, evaluateGate, maxAttempts } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
@@ -188,8 +188,12 @@ interface AppState extends Persisted {
 
     // Agent pipelines (runtime-only)
     pipelineRun: PipelineRun | null
+    /** Transient signal: set by resumePipeline to release a paused checkpoint. */
+    pipelineResume: boolean
     runPipeline: (pipelineId: string) => void
     stopPipeline: () => void
+    /** Continue a run paused at a checkpoint step. */
+    resumePipeline: () => void
     fireTrigger: (triggerId: string) => void
 
     // Overlays / panels (runtime-only)
@@ -559,6 +563,7 @@ export const useStore = create<AppState>((set, get) => {
         releaseOpen: false,
         standupOpen: false,
         pipelineRun: null,
+        pipelineResume: false,
         switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
@@ -929,6 +934,8 @@ export const useStore = create<AppState>((set, get) => {
             }, 2500)
         },
 
+        resumePipeline: () => set({ pipelineResume: true }),
+
         runPipeline: (pipelineId) => {
             const pipeline = useSettings.getState().pipelines.find((p) => p.id === pipelineId)
             if (!pipeline || !get().activeId) return
@@ -991,6 +998,28 @@ export const useStore = create<AppState>((set, get) => {
                 }
             }
 
+            // Sleep in short slices so Stop (which bumps the token) interrupts a delay.
+            const delay = async (ms: number): Promise<void> => {
+                const until = Date.now() + ms
+                while (Date.now() < until) {
+                    if (stale()) return
+                    await sleep(Math.min(200, until - Date.now()))
+                }
+            }
+
+            // Block a checkpoint until the user hits Continue (resume) or Stop (stale).
+            const waitForResume = async (): Promise<boolean> => {
+                set({ pipelineResume: false })
+                for (;;) {
+                    if (stale()) return false
+                    if (get().pipelineResume) {
+                        set({ pipelineResume: false })
+                        return true
+                    }
+                    await sleep(200)
+                }
+            }
+
             set({
                 pipelineRun: {
                     pipelineId,
@@ -1010,9 +1039,40 @@ export const useStore = create<AppState>((set, get) => {
 
             void (async () => {
                 const liveByAgent: Record<string, string | undefined> = {}
-                for (let i = 0; i < steps.length; i++) {
+                let i = 0
+                let execCount = 0
+                while (i >= 0 && i < steps.length) {
                     if (stale()) return
+                    if (++execCount > RUN_STEP_CAP) {
+                        setRun({ status: "error", gateMsg: `stopped: step cap (${RUN_STEP_CAP}) reached` })
+                        return
+                    }
                     const step = steps[i]
+
+                    // Optional pre-step delay (interruptible by Stop).
+                    if (step.delayMs && step.delayMs > 0) {
+                        setRun({
+                            stepIndex: i,
+                            stepTitle: step.title,
+                            status: "waiting",
+                            gateMsg: `waiting ${Math.round(step.delayMs / 1000)}s`
+                        })
+                        await delay(step.delayMs)
+                        if (stale()) return
+                    }
+
+                    // Optional manual checkpoint — pause until Continue (or Stop).
+                    if (step.checkpoint) {
+                        setRun({
+                            stepIndex: i,
+                            stepTitle: step.title,
+                            status: "paused",
+                            gateMsg: "paused — Continue to proceed"
+                        })
+                        const go = await waitForResume()
+                        if (!go) return
+                    }
+
                     setRun({ stepIndex: i, stepTitle: step.title, status: "running", gateMsg: undefined })
                     setStep(i, { status: "running" })
 
@@ -1076,18 +1136,42 @@ export const useStore = create<AppState>((set, get) => {
                         }
                     }
 
-                    if (!passed) {
-                        const onFail = step.gate?.onFail ?? "stop"
+                    // ---- Routing: pick the next step from the pass/fail outcome ----
+                    if (stale()) return
+                    let nextI: number
+                    if (passed) {
+                        nextI = resolveTarget(step.onPass, i, steps, "next")
+                    } else {
                         pushActivity("pipeline", termId, `${step.title} · gate failed`)
-                        if (onFail === "stop") {
+                        nextI = resolveTarget(failTarget(step), i, steps, "stop")
+                        if (nextI < 0) {
                             setStep(i, { status: "failed", gateMsg: "✗ gate failed - stopped" })
                             skipFrom(i + 1)
                             setRun({ status: "error", gateMsg: "✗ gate failed - stopped" })
                             return
                         }
-                        setStep(i, { status: "failed", gateMsg: "✗ gate failed - continued" })
-                        setRun({ gateMsg: "✗ gate failed - continued" })
+                        setStep(i, { status: "failed", gateMsg: "✗ gate failed - routed" })
+                        setRun({ gateMsg: "✗ gate failed - routed" })
                     }
+                    // A goto landing at or before this step resets those steps to
+                    // pending, so a loop shows fresh state on re-entry.
+                    if (nextI <= i) {
+                        set((s) =>
+                            s.pipelineRun
+                                ? {
+                                      pipelineRun: {
+                                          ...s.pipelineRun,
+                                          steps: s.pipelineRun.steps.map((st, idx) =>
+                                              idx >= nextI
+                                                  ? { ...st, status: "pending", gateMsg: undefined }
+                                                  : st
+                                          )
+                                      }
+                                  }
+                                : s
+                        )
+                    }
+                    i = nextI
                 }
                 if (stale()) return
                 setRun({ status: "done" })

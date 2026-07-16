@@ -5,6 +5,7 @@ import type { StepRunStatus } from "../pipeline"
 const STATUS_LABEL: Record<string, string> = {
     running: "running",
     waiting: "needs you",
+    paused: "paused",
     done: "done",
     stopped: "stopped",
     error: "error"
@@ -26,12 +27,13 @@ const STEP_ICON: Record<StepRunStatus, string> = {
 export function PipelineBar(): JSX.Element | null {
     const run = useStore((s) => s.pipelineRun)
     const stop = useStore((s) => s.stopPipeline)
+    const resume = useStore((s) => s.resumePipeline)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const [open, setOpen] = useState(false)
     if (!run) return null
 
     const pct = Math.round(((run.stepIndex + (run.status === "done" ? 1 : 0)) / run.total) * 100)
-    const live = run.status === "running" || run.status === "waiting"
+    const live = run.status === "running" || run.status === "waiting" || run.status === "paused"
 
     return (
         <div className={"pipeline-bar k-" + run.status}>
@@ -86,6 +88,11 @@ export function PipelineBar(): JSX.Element | null {
                     </div>
                 )}
             </div>
+            {run.status === "paused" && (
+                <button className="btn-min accent" onClick={resume} data-tip="Continue the run">
+                    continue
+                </button>
+            )}
             <button className="btn-min" onClick={stop} data-tip={live ? "Stop pipeline" : "Dismiss"}>
                 {live ? "stop" : "×"}
             </button>

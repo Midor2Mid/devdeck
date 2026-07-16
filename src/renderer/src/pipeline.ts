@@ -8,6 +8,9 @@
 
 import type { StepGate } from "./gate"
 
+/** Where a run goes after a step: on to the next, stop, or jump to a step id. */
+export type BranchTarget = "next" | "stop" | { goto: string }
+
 export interface PipelineStep {
     id: string
     /** Display title for the step (shown in the runner). */
@@ -20,7 +23,41 @@ export interface PipelineStep {
     fresh: boolean
     /** Optional success gate - only advance if the agent's output passes. */
     gate?: StepGate
+    /** Wait this many ms before running the step (0/undefined = no wait). */
+    delayMs?: number
+    /** Pause the run for manual Continue/Stop before this step runs. */
+    checkpoint?: boolean
+    /** Where to go when the step passes (default "next"). */
+    onPass?: BranchTarget
+    /** Where to go when the gate ultimately fails (default: from gate.onFail, else "stop"). */
+    onFail?: BranchTarget
 }
+
+/**
+ * Resolve where a run goes next: returns the next step index, or -1 to stop.
+ * An unknown goto id resolves to -1 (stop) so a broken reference can't hang the
+ * run. Pure so the routing is unit-testable.
+ */
+export function resolveTarget(
+    target: BranchTarget | undefined,
+    currentIndex: number,
+    steps: PipelineStep[],
+    fallback: BranchTarget = "next"
+): number {
+    const t = target ?? fallback
+    if (t === "next") return currentIndex + 1
+    if (t === "stop") return -1
+    return steps.findIndex((s) => s.id === t.goto)
+}
+
+/** The fail target for a step, honoring the legacy gate.onFail if no step.onFail. */
+export function failTarget(step: PipelineStep): BranchTarget {
+    if (step.onFail) return step.onFail
+    return step.gate?.onFail === "continue" ? "next" : "stop"
+}
+
+/** Hard cap on step executions per run — a backstop against goto loops. */
+export const RUN_STEP_CAP = 50
 
 export interface Pipeline {
     id: string
@@ -41,7 +78,13 @@ export interface PipelineTrigger {
     debounceMs: number
 }
 
-export type PipelineRunStatus = "running" | "waiting" | "done" | "stopped" | "error"
+export type PipelineRunStatus =
+    | "running"
+    | "waiting"
+    | "paused"
+    | "done"
+    | "stopped"
+    | "error"
 
 export type StepRunStatus = "pending" | "running" | "done" | "failed" | "skipped"
 

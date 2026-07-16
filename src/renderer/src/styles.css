@@ -3754,6 +3754,25 @@ button .ic,
 .pipe-gate-onfail {
     flex: none;
 }
+.pipe-step-adv {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.pipe-adv-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+.pipe-adv-delay {
+    width: 52px;
+    font-size: 12px;
+}
 .pipeline-gate {
     color: var(--accent-soft);
 }

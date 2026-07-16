@@ -5,7 +5,19 @@ import { useStore } from "../store"
 import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
 import { MCP_CATALOG, addServer } from "../mcpCatalog"
-import { type Pipeline, type PipelineStep, type PipelineTrigger, isRunnable, moveItem } from "../pipeline"
+import { type Pipeline, type PipelineStep, type PipelineTrigger, type BranchTarget, isRunnable, moveItem } from "../pipeline"
+
+/** Encode/decode a BranchTarget for a <select> value. "" = use the default. */
+function encodeTarget(t?: BranchTarget): string {
+    if (!t) return ""
+    if (t === "next" || t === "stop") return t
+    return "goto:" + t.goto
+}
+function decodeTarget(v: string): BranchTarget | undefined {
+    if (v === "next" || v === "stop") return v
+    if (v.startsWith("goto:")) return { goto: v.slice(5) }
+    return undefined
+}
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
 import { Modal } from "./Modal"
 
@@ -685,6 +697,66 @@ function PipelinesSection(): JSX.Element {
                                 gate={st.gate}
                                 onChange={(gate) => updateStep(pi, si, { gate })}
                             />
+                            <div className="pipe-step-adv">
+                                <label className="pipe-adv-field" data-tip="Wait before running this step">
+                                    delay
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        className="pipe-adv-delay"
+                                        value={st.delayMs ? Math.round(st.delayMs / 1000) : 0}
+                                        onChange={(e) =>
+                                            updateStep(pi, si, {
+                                                delayMs: Math.max(0, Number(e.target.value)) * 1000
+                                            })
+                                        }
+                                    />
+                                    s
+                                </label>
+                                <label className="pipe-fresh" data-tip="Pause for manual Continue before this step runs">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!st.checkpoint}
+                                        onChange={(e) => updateStep(pi, si, { checkpoint: e.target.checked })}
+                                    />
+                                    checkpoint
+                                </label>
+                                <label className="pipe-adv-field" data-tip="Where the run goes when this step passes">
+                                    on pass
+                                    <select
+                                        value={encodeTarget(st.onPass)}
+                                        onChange={(e) => updateStep(pi, si, { onPass: decodeTarget(e.target.value) })}
+                                    >
+                                        <option value="">→ next</option>
+                                        <option value="stop">⏹ stop</option>
+                                        {p.steps
+                                            .filter((s) => s.id !== st.id)
+                                            .map((s) => (
+                                                <option key={s.id} value={"goto:" + s.id}>
+                                                    ↪ {s.title || "(untitled)"}
+                                                </option>
+                                            ))}
+                                    </select>
+                                </label>
+                                <label className="pipe-adv-field" data-tip="Where the run goes when the gate ultimately fails">
+                                    on fail
+                                    <select
+                                        value={encodeTarget(st.onFail)}
+                                        onChange={(e) => updateStep(pi, si, { onFail: decodeTarget(e.target.value) })}
+                                    >
+                                        <option value="">gate default (stop)</option>
+                                        <option value="next">→ next</option>
+                                        <option value="stop">⏹ stop</option>
+                                        {p.steps
+                                            .filter((s) => s.id !== st.id)
+                                            .map((s) => (
+                                                <option key={s.id} value={"goto:" + s.id}>
+                                                    ↪ {s.title || "(untitled)"}
+                                                </option>
+                                            ))}
+                                    </select>
+                                </label>
+                            </div>
                         </div>
                     ))}
                     <button className="btn-min" style={{ marginTop: 6 }} onClick={() => addStep(pi)}>
