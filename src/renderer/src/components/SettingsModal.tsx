@@ -1094,10 +1094,11 @@ function NotificationsSection(): JSX.Element {
             <h3>Attention notifications</h3>
             <p className="muted small">
                 When an agent needs you (and its terminal isn&apos;t visible), how should DevDeck
-                alert you?
+                alert you? The loud tier is a bell / blocked prompt; the soft tier is an agent
+                finishing a turn and waiting on you.
             </p>
             <div className="setting-row">
-                <label>Desktop notification</label>
+                <label>Desktop notification (loud)</label>
                 <input
                     type="checkbox"
                     className="checkbox"
@@ -1106,12 +1107,21 @@ function NotificationsSection(): JSX.Element {
                 />
             </div>
             <div className="setting-row">
-                <label>Play a sound</label>
+                <label>Sound when an agent needs you (loud)</label>
                 <input
                     type="checkbox"
                     className="checkbox"
                     checked={notifications.sound}
                     onChange={(e) => setNotifications({ sound: e.target.checked })}
+                />
+            </div>
+            <div className="setting-row">
+                <label>Sound when an agent finishes / is waiting (soft)</label>
+                <input
+                    type="checkbox"
+                    className="checkbox"
+                    checked={notifications.waitingSound}
+                    onChange={(e) => setNotifications({ waitingSound: e.target.checked })}
                 />
             </div>
         </div>
@@ -1313,6 +1323,7 @@ const SHORTCUTS: [string, string][] = [
     ["Ctrl+Shift+-", "Split down"],
     ["Ctrl+Shift+] / [", "Next / previous tab"],
     ["Ctrl+Shift+F", "Find in terminal"],
+    ["Ctrl+Shift+J", "Jump to the agent waiting on you"],
     ["Ctrl+S", "Save file (editor)"],
     ["Ctrl+Enter", "Run query (database)"]
 ]

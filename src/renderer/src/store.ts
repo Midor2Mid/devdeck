@@ -231,6 +231,8 @@ interface AppState extends Persisted {
     broadcast: (termIds: string[], text: string) => void
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
+    /** Jump to the oldest agent session that wants you (waiting or attention). */
+    jumpToPending: () => void
     newTabIn: (projectId: string, agentId: string, initialCommand?: string) => void
 
     tabsFor: (projectId: string) => Tab[]
@@ -289,6 +291,9 @@ function newId(): string {
 }
 
 const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+// When each agent entered a wants-you state (waiting/attention), for "jump to
+// the oldest one that wants you".
+const pendingSince = new Map<string, number>()
 let dataSubscribed = false
 // Bumped on stop / new run; the async runner aborts when its token goes stale.
 let pipelineToken = 0
@@ -345,11 +350,18 @@ export const useStore = create<AppState>((set, get) => {
 
     const setStatus = (termId: string, status: AgentStatus): void => {
         if (get().agentStatus[termId] === status) return
+        // Stamp / clear when a session enters or leaves a wants-you state.
+        if (status === "waiting" || status === "attention") {
+            if (!pendingSince.has(termId)) pendingSince.set(termId, Date.now())
+        } else {
+            pendingSince.delete(termId)
+        }
         set((s) => ({ agentStatus: { ...s.agentStatus, [termId]: status } }))
     }
 
     const ack = (termId?: string): void => {
         if (!termId || !isAgentId(get().agentOf(termId))) return
+        pendingSince.delete(termId)
         set((s) => ({
             lastAgentTermId: termId,
             agentStatus:
@@ -418,7 +430,7 @@ export const useStore = create<AppState>((set, get) => {
     // Quieter than attention: an optional beep only — the deck-key ring + inbox
     // count carry it. No desktop notification (that's reserved for the loud tier).
     const notifyWaiting = (): void => {
-        if (useSettings.getState().notifications.sound) beep()
+        if (useSettings.getState().notifications.waitingSound) beep()
     }
 
     const pushNotification = (termId: string): void => {
@@ -486,6 +498,7 @@ export const useStore = create<AppState>((set, get) => {
         const t = idleTimers.get(termId)
         if (t) clearTimeout(t)
         idleTimers.delete(termId)
+        pendingSince.delete(termId)
         forgetTail(termId)
         if (isAgentId(get().termAgents[termId] ?? SHELL)) useSettings.getState().logUsageEnd(termId)
         set((s) => {
@@ -1236,6 +1249,21 @@ export const useStore = create<AppState>((set, get) => {
                 persist()
                 return
             }
+        },
+
+        jumpToPending: () => {
+            const status = get().agentStatus
+            const pending = Object.keys(status).filter(
+                (id) => status[id] === "waiting" || status[id] === "attention"
+            )
+            if (!pending.length) return
+            // Oldest first; attention outranks waiting at an equal age.
+            pending.sort((a, b) => {
+                const rank = (id: string): number => (status[id] === "attention" ? 0 : 1)
+                if (rank(a) !== rank(b)) return rank(a) - rank(b)
+                return (pendingSince.get(a) ?? 0) - (pendingSince.get(b) ?? 0)
+            })
+            get().jumpToTerm(pending[0])
         },
 
         newTabIn: (projectId, agentId, initialCommand) => {

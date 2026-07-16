@@ -176,6 +176,13 @@ export function App(): JSX.Element {
                 s.setReviewOpen(!s.reviewOpen)
                 return
             }
+            // Ctrl+Shift+J — jump to the oldest agent that's waiting on you.
+            if (mod && e.shiftKey && e.code === "KeyJ") {
+                e.preventDefault()
+                e.stopPropagation()
+                useStore.getState().jumpToPending()
+                return
+            }
             // Ctrl+Shift+K — instant flip to the previously used project.
             if (mod && e.shiftKey && e.code === "KeyK") {
                 e.preventDefault()

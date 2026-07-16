@@ -219,10 +219,12 @@ export interface AppSettings {
     }
     /** Attention notifications when an agent needs you. */
     notifications: {
-        /** Native OS desktop notification. */
+        /** Native OS desktop notification (loud "attention" tier). */
         desktop: boolean
-        /** Short audible beep. */
+        /** Short audible beep on the loud "attention" tier (bell / blocked). */
         sound: boolean
+        /** Short beep on the soft "waiting" tier (agent finished a turn). Off by default. */
+        waitingSound: boolean
     }
     workspacePresets: WorkspacePreset[]
     usageLog: UsageEvent[]
@@ -338,7 +340,8 @@ const DEFAULTS: AppSettings = {
     },
     notifications: {
         desktop: true,
-        sound: false
+        sound: false,
+        waitingSound: false
     },
     workspacePresets: [],
     usageLog: [],
