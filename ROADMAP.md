@@ -67,7 +67,13 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - [x] **Push-on-attention** (2026-06-29) — mobile client title-badge + beep + best-effort OS notification when an agent flips to *attention* and you're not looking; the no-Tailscale case now warns that a plain-LAN link is unencrypted
 - [x] **Constant-time token auth** (2026-06-29) — `tokenOk` (sha256 + `timingSafeEqual`) closes the `!==` timing side-channel; mobile-client `esc()` now escapes quotes (latent attribute XSS). Covered by `tests/server-guards.test.ts`
 - [x] **TLS / HTTPS option** (2026-06-30) — opt-in self-signed cert (`tlscert.ts` via `selfsigned`, SANs for localhost + LAN/Tailscale IPs, cached + reused); serves https/wss so the link + token are encrypted even on plain LAN and the mobile client gets a secure context. Verified live (200 with token, 401 without, over TLS)
-- [ ] Later: full-UI mobile client
+- [x] **Mobile coding + AI** (2026-07-16) — the web client gained a Files view
+      (browse project tree, open/edit/save, confined to project roots via
+      `isWithinRoots`) and an AI view (compose a prompt with tap-to-insert
+      `@file` mentions, fire at any running agent). ws: projects/fs:tree/read/
+      write/files. Verified live.
+- [ ] Later: full **native** mobile app (the web client is now a real cockpit,
+      not just terminals)
 
 ## Milestone 4 — Network debugging ✅ (2026-06-28)
 
@@ -97,7 +103,7 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
   - Terminal: default shell (PowerShell / cmd / Git Bash / WSL / custom) + font family/size (live)
   - Editor: font size, tab size, word wrap, minimap
   - Claude: command, resume args, idle→attention timing
-- [ ] Later sections: **AI settings** (the rest shipped: Git multi-account → M15, SSH → M16, Remote → M7, MCP → M18, light theme → M10)
+- [x] Later sections all shipped: **AI settings** → M22, Git multi-account → M15, SSH → M16, Remote → M7, MCP → M18, light theme → M10, **Proxy** → 2026-07-16
 
 ## Milestone 8 — 1DevTool-inspired depth ✅ (2026-06-27)
 
@@ -108,7 +114,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Project switcher** — Ctrl+K launchpad grid (search, live counts, keyboard nav)
 - [x] **Markdown preview** — Edit/Split/Preview + word count
 - [x] **Status bar** — git branch + change count, attention, remote, project
-- [ ] Later (from reference): **image-preview tabs, more DB engines** (the rest shipped: agent pipelines → `pipeline.ts`, embedded browser → M9, AI diff → ticket→PR loop, activity feed → M20)
+- [x] From reference: image-preview tabs → 2026-07-01; agent pipelines → `pipeline.ts`, embedded browser → M9, AI diff → ticket→PR loop, activity feed → M20. (Deliberately skipping **more DB engines** — PG/MySQL/SQLite/MSSQL is enough.)
 
 ## Milestone 9 — more 1DevTool-inspired features ✅ (2026-06-27)
 
@@ -133,7 +139,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Packaging** via electron-builder (NSIS + portable); asar-unpack for node-pty / sqlite-wasm / xterm; ensō app icon; verified the packaged `DevDeck.exe` launches standalone
 - [x] **Error boundary** (no more white-screen on a render error)
 - [x] Window bounds + last-view restored across restarts
-- [ ] Later: code signing; auto-update
+- [x] Code signing → M21 (self-signed Authenticode); auto-update → M25 (`electron-updater`, dormant until releases are public)
 
 ## Milestone 12 — snippets + dashboard layout ✅ (2026-06-27)
 
