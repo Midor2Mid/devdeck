@@ -109,6 +109,46 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         })
     }
 
+    // Drop or paste an image → save it into the project's uploads dir and append
+    // an @-mention of its path, so the agent can read the image. Mirrors the
+    // mobile client's attach flow.
+    const attachImage = async (file: File): Promise<void> => {
+        if (!activeProject || !file.type.startsWith("image/")) return
+        const dataUrl = await new Promise<string>((res, rej) => {
+            const r = new FileReader()
+            r.onload = () => res(String(r.result))
+            r.onerror = () => rej(r.error)
+            r.readAsDataURL(file)
+        })
+        const saved = await window.api.fs.saveUpload(activeProject.path, file.name, dataUrl)
+        if (!saved) return
+        const rel = saved.startsWith(activeProject.path)
+            ? saved.slice(activeProject.path.length).replace(/^[\\/]/, "").replace(/\\/g, "/")
+            : saved
+        // Read the freshest draft so several dropped images don't clobber each other.
+        const cur = useStore.getState().composerDrafts[activeProject.id] ?? ""
+        setComposerDraft(activeProject.id, (cur && !cur.endsWith(" ") ? cur + " " : cur) + "@" + rel + " ")
+    }
+
+    const onDrop = (e: React.DragEvent): void => {
+        const imgs = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"))
+        if (imgs.length) {
+            e.preventDefault()
+            imgs.forEach((f) => void attachImage(f))
+        }
+    }
+    const onDragOver = (e: React.DragEvent): void => {
+        if ([...e.dataTransfer.types].includes("Files")) e.preventDefault()
+    }
+    const onPaste = (e: React.ClipboardEvent): void => {
+        const item = [...e.clipboardData.items].find((i) => i.type.startsWith("image/"))
+        const f = item?.getAsFile()
+        if (f) {
+            e.preventDefault()
+            void attachImage(f)
+        }
+    }
+
     const toggle = (termId: string): void =>
         setSelected((prev) => {
             const next = new Set(prev)
@@ -187,7 +227,9 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
                         </>
                     )}
                 </span>
-                <span className="muted small">@ file · / snippet · Ctrl+Enter send · Esc close</span>
+                <span className="muted small">
+                    @ file · / snippet · drop/paste image · Ctrl+Enter send · Esc close
+                </span>
             </div>
 
             {sessions.length > 0 && (
@@ -231,10 +273,13 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
                 <textarea
                     ref={ref}
                     className="composer-input"
-                    placeholder="Write a prompt… @ to mention a file, / for a snippet"
+                    placeholder="Write a prompt… @ to mention a file, / for a snippet, drop or paste an image"
                     value={text}
                     onChange={onChange}
                     onKeyDown={onKeyDown}
+                    onDrop={onDrop}
+                    onDragOver={onDragOver}
+                    onPaste={onPaste}
                 />
                 {suggestions.length > 0 && (
                     <div className="mention-pop">

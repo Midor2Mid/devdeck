@@ -487,6 +487,29 @@ function registerIpc(): void {
             return ""
         }
     })
+    // Save an image dropped/pasted into the composer into the project's uploads
+    // dir (preserving its type), so its path can be @-mentioned to an agent.
+    ipcMain.handle("fs:saveUpload", (_e, { projectPath, name, dataUrl }) => {
+        try {
+            const base = projectPath || app.getPath("temp")
+            const dir = join(base, ".devdeck", "uploads")
+            mkdirSync(dir, { recursive: true })
+            const m = /^data:([^;]+);base64,(.*)$/s.exec(String(dataUrl))
+            if (!m) return ""
+            const extFromName = /\.[A-Za-z0-9]+$/.exec(String(name || ""))?.[0]
+            const extFromMime = "." + (m[1].split("/")[1] || "bin").replace(/[^a-z0-9]/gi, "")
+            const stem =
+                String(name || "image")
+                    .replace(/\.[^.]*$/, "")
+                    .replace(/[^\w.-]/g, "_")
+                    .slice(0, 40) || "image"
+            const file = join(dir, Date.now() + "-" + stem + (extFromName || extFromMime))
+            writeFileSync(file, Buffer.from(m[2], "base64"))
+            return file
+        } catch {
+            return ""
+        }
+    })
 
     // --- Environment (what spawned terminals inherit) ---
     // Report which of the requested env vars are set, so the UI can warn that an

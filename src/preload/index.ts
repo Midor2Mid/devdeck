@@ -470,6 +470,9 @@ const api = {
         readDataUrl: (path: string): Promise<string> => ipcRenderer.invoke("fs:readDataUrl", path),
         write: (path: string, content: string): Promise<void> =>
             ipcRenderer.invoke("fs:write", { path, content }),
+        /** Save an image (data URL) into the project's uploads dir; returns its path. */
+        saveUpload: (projectPath: string, name: string, dataUrl: string): Promise<string> =>
+            ipcRenderer.invoke("fs:saveUpload", { projectPath, name, dataUrl }),
         /** Save-As dialog + write; returns the chosen path, or "" if cancelled. */
         saveFile: (
             defaultName: string,
