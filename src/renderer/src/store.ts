@@ -99,6 +99,10 @@ export interface CanvasPos {
 }
 
 interface AppState extends Persisted {
+    /** Agent terminals restored from a previous run, awaiting a resume/fresh choice (runtime-only). */
+    agentResumePending: Record<string, boolean>
+    /** Clear a terminal's pending-resume flag (after the user picks resume or fresh). */
+    clearAgentResume: (termId: string) => void
     projects: Project[]
     activeId: string | null
     /** Project ids, most recently used first (persisted to localStorage). */
@@ -516,10 +520,13 @@ export const useStore = create<AppState>((set, get) => {
             delete termShells[termId]
             const canvasPos = { ...s.canvasPos }
             delete canvasPos[termId]
+            const agentResumePending = { ...s.agentResumePending }
+            delete agentResumePending[termId]
             return {
                 agentStatus,
                 termInit,
                 termAgents,
+                agentResumePending,
                 termCwd,
                 termNames,
                 termShells,
@@ -564,6 +571,7 @@ export const useStore = create<AppState>((set, get) => {
         projectMru: loadMru(),
         termAgents: {},
         termInit: {},
+        agentResumePending: {},
         termCwd: {},
         termNames: {},
         termShells: {},
@@ -633,17 +641,31 @@ export const useStore = create<AppState>((set, get) => {
             } catch {
                 /* storage unavailable - ignore */
             }
+            // Migrate the old termKinds → termAgents if present.
+            const termAgents = w.termAgents ?? w.termKinds ?? {}
+            const tabsByProject = w.tabsByProject ?? {}
+            // Agent sessions from the previous run come back needing a resume/fresh
+            // choice — their ptys died with the old process, so cold-relaunching
+            // would silently drop each conversation.
+            const agentResumePending: Record<string, boolean> = {}
+            for (const tabs of Object.values(tabsByProject) as Tab[][]) {
+                for (const tab of tabs) {
+                    for (const id of collectLeaves(tab.root)) {
+                        if (isAgentId(termAgents[id])) agentResumePending[id] = true
+                    }
+                }
+            }
             set({
                 projects: store.projects,
                 activeId: store.activeId,
                 projectMru: seededMru,
-                // Migrate the old termKinds → termAgents if present.
-                termAgents: w.termAgents ?? w.termKinds ?? {},
+                termAgents,
                 termInit: w.termInit ?? {},
+                agentResumePending,
                 termCwd: w.termCwd ?? {},
                 termNames: w.termNames ?? {},
                 termShells: w.termShells ?? {},
-                tabsByProject: w.tabsByProject ?? {},
+                tabsByProject,
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
                 composerDrafts: w.composerDrafts ?? {},
@@ -1344,6 +1366,14 @@ export const useStore = create<AppState>((set, get) => {
             }
             get().newTab(SHELL, command, label ?? command)
         },
+
+        clearAgentResume: (termId) =>
+            set((s) => {
+                if (!(termId in s.agentResumePending)) return s
+                const agentResumePending = { ...s.agentResumePending }
+                delete agentResumePending[termId]
+                return { agentResumePending }
+            }),
 
         splitActive: (dir, agentId) => {
             const s = get()

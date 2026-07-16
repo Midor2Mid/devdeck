@@ -1587,6 +1587,49 @@ button .ic,
     inset: 0;
     padding: 8px 6px 6px 10px;
 }
+/* Overlay shown on a restored agent pane until you pick resume vs. fresh. */
+.resume-overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--bg-3) 78%, transparent);
+    backdrop-filter: blur(2px);
+    z-index: 5;
+}
+.resume-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    text-align: center;
+    max-width: 360px;
+    padding: 20px 22px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: var(--elev-2, 0 8px 24px -8px rgba(0, 0, 0, 0.5));
+}
+.resume-title {
+    font-weight: 600;
+    font-size: 14px;
+}
+.resume-sub {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.resume-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
+}
+.resume-cmd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--faint);
+    word-break: break-all;
+}
 /* Subtle focus ring — only meaningful once panes are split, kept very quiet. */
 .term-pane.focused::after {
     content: "";

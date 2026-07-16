@@ -29,9 +29,25 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const containerRef = useRef<HTMLDivElement>(null)
     const termRef = useRef<Terminal | null>(null)
     const fitRef = useRef<FitAddon | null>(null)
+    // Holds the pty-spawn closure so the resume prompt can launch it after mount.
+    const spawnRef = useRef<((cmd?: string) => void) | null>(null)
     const fontFamily = useSettings((s) => s.terminal.fontFamily)
     const fontSize = useSettings((s) => s.terminal.fontSize)
     const themeId = useSettings((s) => s.appearance.theme)
+    // A restored agent session waits for a resume/fresh choice before it launches.
+    const pending = useStore((s) => !!s.agentResumePending[termId])
+    const clearAgentResume = useStore((s) => s.clearAgentResume)
+
+    const resumePreset = useSettings.getState().agentById(useStore.getState().agentOf(termId))
+    const resumeCmd =
+        resumePreset && resumePreset.resumeArgs
+            ? `${resumePreset.command} ${resumePreset.resumeArgs}`
+            : resumePreset?.command || initialCommand || ""
+    const resolveResume = (mode: "resume" | "fresh"): void => {
+        spawnRef.current?.(mode === "resume" ? resumeCmd : resumePreset?.command || initialCommand)
+        clearAgentResume(termId)
+        termRef.current?.focus()
+    }
 
     useEffect(() => {
         const container = containerRef.current
@@ -85,22 +101,28 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             // A per-terminal cwd override (e.g. a git worktree) wins over the project dir.
             // For agent terminals, inject the configured model (env) + API key (main
             // decrypts it from agentId + keyEnv); plain shells get neither.
-            const agentId = useStore.getState().agentOf(termId)
-            const preset = useSettings.getState().agentById(agentId)
-            const extraEnv: Record<string, string> = {}
-            if (preset?.model && preset?.modelEnv) extraEnv[preset.modelEnv] = preset.model
-            window.api.pty.create({
-                id: termId,
-                cwd: useStore.getState().termCwd[termId] ?? cwd,
-                initialCommand,
-                shell: useSettings.getState().resolveShell(useStore.getState().termShells[termId]),
-                cols: term.cols,
-                rows: term.rows,
-                env: Object.keys(extraEnv).length ? extraEnv : undefined,
-                agentId: preset ? agentId : undefined,
-                keyEnv: preset?.apiKeyEnv || undefined,
-                projectId: useStore.getState().projectIdOfTerm(termId)
-            })
+            const spawn = (cmd?: string): void => {
+                const agentId = useStore.getState().agentOf(termId)
+                const preset = useSettings.getState().agentById(agentId)
+                const extraEnv: Record<string, string> = {}
+                if (preset?.model && preset?.modelEnv) extraEnv[preset.modelEnv] = preset.model
+                window.api.pty.create({
+                    id: termId,
+                    cwd: useStore.getState().termCwd[termId] ?? cwd,
+                    initialCommand: cmd,
+                    shell: useSettings.getState().resolveShell(useStore.getState().termShells[termId]),
+                    cols: term.cols,
+                    rows: term.rows,
+                    env: Object.keys(extraEnv).length ? extraEnv : undefined,
+                    agentId: preset ? agentId : undefined,
+                    keyEnv: preset?.apiKeyEnv || undefined,
+                    projectId: useStore.getState().projectIdOfTerm(termId)
+                })
+            }
+            spawnRef.current = spawn
+            // A restored agent session holds until the user chooses resume/fresh;
+            // everything else launches immediately (or just re-attaches).
+            if (!useStore.getState().agentResumePending[termId]) spawn(initialCommand)
         })
 
         const ro = new ResizeObserver(() => safeFit())
@@ -162,6 +184,23 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             onMouseDown={() => onFocus(termId)}
         >
             <div ref={containerRef} className="term-mount" />
+            {pending && (
+                <div className="resume-overlay">
+                    <div className="resume-card">
+                        <div className="resume-title">Resume this agent session?</div>
+                        <div className="resume-sub">
+                            Restored from your last run — its conversation isn&apos;t live yet.
+                        </div>
+                        <div className="resume-actions">
+                            <button className="accent" onClick={() => resolveResume("resume")}>
+                                Resume
+                            </button>
+                            <button onClick={() => resolveResume("fresh")}>Start fresh</button>
+                        </div>
+                        {resumeCmd && <code className="resume-cmd">{resumeCmd}</code>}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
