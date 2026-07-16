@@ -10,6 +10,8 @@ import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
 import { isBlockedRemoteUrl, isReadOnlySql, tokenOk } from "./guards"
+import { readDir, readFileText, writeFileText, allFiles, isWithinRoots } from "./files"
+import { listProjects } from "./projects"
 import { exitNotice } from "../renderer/src/termExit"
 
 export interface RemoteSession {
@@ -73,6 +75,14 @@ export function localAddresses(): { tailscale: string[]; lan: string[] } {
 function send(ws: WebSocket, msg: unknown): void {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
 }
+
+// Filesystem access from the phone (the Files/AI mobile views) is confined to
+// within an added project — the same defense-in-depth guard the desktop editor
+// IPC uses. A remote client already has terminal (RCE) reach behind the token +
+// Tailscale, so this exposes no new capability; the confinement just keeps a
+// stray path from wandering outside the projects you've opened.
+const projectRoots = (): string[] => listProjects().projects.map((p) => p.path)
+const inProject = (p: string): boolean => !!p && isWithinRoots(p, projectRoots())
 
 export function broadcastSessions(deps: ServerDeps): void {
     const sessions = deps.getSessions()
@@ -206,6 +216,72 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     runQuery(id, sql).then((res) => send(ws, { t: "db:res", res }))
                     break
                 }
+                case "projects":
+                    // Full project list (not just those with a live session) so the
+                    // Files/AI views work even before any terminal is open.
+                    send(ws, {
+                        t: "projects",
+                        projects: listProjects().projects.map((p) => ({
+                            id: p.id,
+                            name: p.name,
+                            path: p.path
+                        }))
+                    })
+                    break
+                case "fs:tree": {
+                    const p = String(msg.path ?? "")
+                    if (!inProject(p)) {
+                        send(ws, { t: "fs:tree", path: p, error: "Path is outside any open project." })
+                        break
+                    }
+                    try {
+                        send(ws, { t: "fs:tree", path: p, entries: readDir(p) })
+                    } catch (e) {
+                        send(ws, { t: "fs:tree", path: p, error: String((e as Error)?.message ?? e) })
+                    }
+                    break
+                }
+                case "fs:read": {
+                    const p = String(msg.path ?? "")
+                    if (!inProject(p)) {
+                        send(ws, { t: "fs:read", path: p, error: "Path is outside any open project." })
+                        break
+                    }
+                    try {
+                        send(ws, { t: "fs:read", path: p, content: readFileText(p) })
+                    } catch (e) {
+                        send(ws, { t: "fs:read", path: p, error: String((e as Error)?.message ?? e) })
+                    }
+                    break
+                }
+                case "fs:write": {
+                    const p = String(msg.path ?? "")
+                    if (!inProject(p)) {
+                        send(ws, { t: "fs:write", path: p, error: "Path is outside any open project." })
+                        break
+                    }
+                    try {
+                        writeFileText(p, String(msg.content ?? ""))
+                        send(ws, { t: "fs:write", path: p, ok: true })
+                    } catch (e) {
+                        send(ws, { t: "fs:write", path: p, error: String((e as Error)?.message ?? e) })
+                    }
+                    break
+                }
+                case "fs:files": {
+                    // Flat file list for @-mention autocomplete in the AI composer.
+                    const root = String(msg.root ?? "")
+                    if (!inProject(root)) {
+                        send(ws, { t: "fs:files", root, files: [] })
+                        break
+                    }
+                    try {
+                        send(ws, { t: "fs:files", root, files: allFiles(root, 4000) })
+                    } catch {
+                        send(ws, { t: "fs:files", root, files: [] })
+                    }
+                    break
+                }
                 case "upload": {
                     // Save a base64 file from the phone, then type its path into the session.
                     try {
@@ -307,8 +383,14 @@ const CLIENT_HTML = `<!doctype html>
   nav#nav{display:flex;gap:4px;margin-left:8px}
   nav#nav button{padding:5px 10px;font-size:13px;color:var(--mu);border-color:transparent}
   nav#nav button.active{color:var(--tx);border-color:var(--bd)}
-  #http-view,#db-view{flex:1;display:none;flex-direction:column;min-height:0;overflow:auto;padding:12px;gap:8px}
+  #http-view,#db-view,#files-view,#ai-view{flex:1;display:none;flex-direction:column;min-height:0;overflow:auto;padding:12px;gap:8px}
   #http-view .row{display:flex;gap:6px;margin-bottom:8px}
+  .crumb{font-size:12px;color:var(--mu);font-family:monospace;padding:2px 4px;word-break:break-all}
+  #f-content{min-height:52vh;font-family:monospace;font-size:13px}
+  #f-editor{gap:8px}
+  #a-prompt{min-height:120px}
+  .mention{border:1px solid var(--bd);border-radius:8px;padding:8px;max-height:42vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+  .ghost{background:var(--bg3);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:10px 12px;flex:none}
   select,textarea,input.f{background:var(--bg3);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:10px;font-size:15px;font-family:inherit}
   input.f,textarea{width:100%}
   textarea{min-height:70px;font-family:monospace;font-size:13px}
@@ -328,6 +410,8 @@ const CLIENT_HTML = `<!doctype html>
     <span class="brand" id="title">DevDeck</span>
     <nav id="nav">
       <button data-v="list" class="active">Sessions</button>
+      <button data-v="files">Files</button>
+      <button data-v="ai">AI</button>
       <button data-v="http">HTTP</button>
       <button data-v="db">DB</button>
     </nav>
@@ -355,6 +439,37 @@ const CLIENT_HTML = `<!doctype html>
     <textarea id="d-sql">SELECT 1;</textarea>
     <button class="send-btn" id="d-run">Run</button>
     <div class="res" id="d-res" style="display:none"></div>
+  </div>
+  <div id="files-view">
+    <div class="row" id="f-projrow">
+      <select id="f-proj"><option value="">Select project…</option></select>
+    </div>
+    <div class="crumb" id="f-crumb"></div>
+    <div id="f-tree"></div>
+    <div id="f-editor" style="display:none">
+      <div class="lbl" id="f-name"></div>
+      <textarea id="f-content" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+      <div class="row">
+        <button class="send-btn" id="f-save">Save</button>
+        <button class="ghost" id="f-close">Close</button>
+      </div>
+      <div class="res" id="f-status" style="display:none"></div>
+    </div>
+  </div>
+  <div id="ai-view">
+    <div class="lbl">Send to agent session</div>
+    <select id="a-sess"><option value="">Select an agent session…</option></select>
+    <div class="lbl">Prompt</div>
+    <textarea id="a-prompt" placeholder="Ask the agent…" autocapitalize="off"></textarea>
+    <div class="row">
+      <button class="ghost" id="a-mention">@ file</button>
+      <button class="send-btn" id="a-send">Send</button>
+    </div>
+    <div class="mention" id="a-files" style="display:none">
+      <input class="f" id="a-filter" placeholder="filter files…" autocapitalize="off" autocomplete="off" autocorrect="off" />
+      <div id="a-filelist"></div>
+    </div>
+    <div class="res" id="a-status" style="display:none"></div>
   </div>
   <div id="term-view">
     <div id="term"></div>
@@ -385,7 +500,9 @@ const CLIENT_HTML = `<!doctype html>
   var titleEl = document.getElementById('title');
   var backBtn = document.getElementById('back');
   var httpView=document.getElementById('http-view'), dbView=document.getElementById('db-view');
+  var filesView=document.getElementById('files-view'), aiView=document.getElementById('ai-view');
   var ws, term, attachedId = null, sessions = [], prevStatus = {}, notifyAsked = false;
+  var projs=[], froot='', fcur='', fpath='', aFiles=[];
 
   // Ask for OS-notification permission on the first user gesture (browsers
   // require one). Notifications only fire on a secure context (https / Tailscale
@@ -409,6 +526,8 @@ const CLIENT_HTML = `<!doctype html>
     termView.style.display = v==='term'?'flex':'none';
     httpView.style.display = v==='http'?'flex':'none';
     dbView.style.display = v==='db'?'flex':'none';
+    filesView.style.display = v==='files'?'flex':'none';
+    aiView.style.display = v==='ai'?'flex':'none';
     document.getElementById('nav').style.display = v==='term'?'none':'flex';
     backBtn.style.display = v==='term'?'block':'none';
     [].forEach.call(document.querySelectorAll('#nav button'),function(b){ b.classList.toggle('active', b.getAttribute('data-v')===v); });
@@ -416,6 +535,8 @@ const CLIENT_HTML = `<!doctype html>
     if(v==='list') titleEl.textContent='DevDeck';
     if(v==='http') titleEl.textContent='HTTP';
     if(v==='db'){ titleEl.textContent='Database'; sendMsg({t:'db:conns'}); }
+    if(v==='files'){ titleEl.textContent='Files'; sendMsg({t:'projects'}); }
+    if(v==='ai'){ titleEl.textContent='AI'; fillSessSelect(); }
   }
   [].forEach.call(document.querySelectorAll('#nav button'),function(b){ b.onclick=function(){ showView(b.getAttribute('data-v')); }; });
 
@@ -438,6 +559,11 @@ const CLIENT_HTML = `<!doctype html>
       else if(m.t === 'db:res'){ renderResult(document.getElementById('d-res'), m.res); }
       else if(m.t === 'db:conns'){ var sel=document.getElementById('d-conn'); var cur=sel.value; sel.innerHTML='<option value="">Select connection…</option>'+m.conns.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+' ('+c.kind+')</option>';}).join(''); sel.value=cur; }
       else if(m.t === 'db:tables'){ var dt=document.getElementById('d-tables'); dt.innerHTML=(m.tables||[]).map(function(t){return '<div class="tbl-item" data-t="'+esc(t)+'">'+esc(t)+'</div>';}).join(''); [].forEach.call(dt.querySelectorAll('.tbl-item'),function(el){ el.onclick=function(){ document.getElementById('d-sql').value='SELECT * FROM '+el.getAttribute('data-t')+' LIMIT 100;'; }; }); }
+      else if(m.t === 'projects'){ projs=m.projects||[]; var ps=document.getElementById('f-proj'); var cur=ps.value; ps.innerHTML='<option value="">Select project…</option>'+projs.map(function(p){return '<option value="'+esc(p.path)+'">'+esc(p.name)+'</option>';}).join(''); ps.value=cur; }
+      else if(m.t === 'fs:tree'){ if(m.error){ document.getElementById('f-tree').innerHTML='<div class="empty">'+esc(m.error)+'</div>'; } else { renderTree(m.path, m.entries||[]); } }
+      else if(m.t === 'fs:read'){ if(m.error){ fstatus(m.error,true); } else { openEditor(m.path, m.content); } }
+      else if(m.t === 'fs:write'){ if(m.error){ fstatus('Save failed: '+m.error,true); } else { fstatus('Saved ✓',false); } }
+      else if(m.t === 'fs:files'){ aFiles=m.files||[]; renderMentions(); }
     };
   }
   function sendMsg(o){ if(ws && ws.readyState===1) ws.send(JSON.stringify(o)); }
@@ -522,6 +648,62 @@ const CLIENT_HTML = `<!doctype html>
   document.getElementById('inp').addEventListener('keydown',function(e){ if(e.key==='Enter'){ document.getElementById('send').click(); }});
   [].forEach.call(document.querySelectorAll('.keys button'),function(b){ b.onclick=function(){ if(attachedId) sendMsg({t:'input',id:attachedId,data:b.getAttribute('data-k')}); }; });
   window.addEventListener('resize',function(){ if(attachedId) fit(); });
+
+  // ----- Files (browse + edit + save) -----
+  function loadTree(path){ fcur=path; sendMsg({t:'fs:tree',path:path}); }
+  function renderTree(path, entries){
+    fcur=path;
+    var rel=path.slice(froot.length).replace(/^[\\\\/]+/,'');
+    document.getElementById('f-crumb').textContent='/'+rel;
+    var html = path!==froot ? '<div class="tbl-item" data-up="1">⬑ ..</div>' : '';
+    entries.forEach(function(e){ html+='<div class="tbl-item" data-p="'+esc(e.path)+'" data-d="'+(e.isDir?1:0)+'">'+(e.isDir?'📁 ':'📄 ')+esc(e.name)+'</div>'; });
+    var tree=document.getElementById('f-tree'); tree.innerHTML=html||'<div class="empty">Empty folder.</div>';
+    [].forEach.call(tree.querySelectorAll('.tbl-item'),function(el){ el.onclick=function(){
+      if(el.getAttribute('data-up')){ var up=fcur.replace(/[\\\\/][^\\\\/]+[\\\\/]?$/,''); if(up.length<froot.length) up=froot; loadTree(up); return; }
+      var p=el.getAttribute('data-p'); if(el.getAttribute('data-d')==='1') loadTree(p); else sendMsg({t:'fs:read',path:p});
+    }; });
+  }
+  function openEditor(path, content){
+    fpath=path;
+    document.getElementById('f-projrow').style.display='none';
+    document.getElementById('f-crumb').style.display='none';
+    document.getElementById('f-tree').style.display='none';
+    document.getElementById('f-editor').style.display='flex';
+    document.getElementById('f-name').textContent=path.split(/[\\\\/]/).pop();
+    document.getElementById('f-content').value=content;
+    document.getElementById('f-status').style.display='none';
+  }
+  function closeEditor(){
+    fpath='';
+    document.getElementById('f-editor').style.display='none';
+    document.getElementById('f-projrow').style.display='flex';
+    document.getElementById('f-crumb').style.display='block';
+    document.getElementById('f-tree').style.display='block';
+  }
+  function fstatus(msg, err){ var el=document.getElementById('f-status'); el.style.display='block'; el.textContent=msg; el.style.color=err?'var(--clay)':'var(--moss)'; }
+  document.getElementById('f-proj').onchange=function(){ froot=this.value; closeEditor(); if(froot) loadTree(froot); else document.getElementById('f-tree').innerHTML=''; };
+  document.getElementById('f-save').onclick=function(){ if(!fpath) return; fstatus('Saving…',false); sendMsg({t:'fs:write',path:fpath,content:document.getElementById('f-content').value}); };
+  document.getElementById('f-close').onclick=closeEditor;
+
+  // ----- AI (compose a prompt → fire at an agent session) -----
+  function fillSessSelect(){
+    var sel=document.getElementById('a-sess'), cur=sel.value;
+    var ags=sessions.filter(function(s){return s.isAgent;});
+    sel.innerHTML='<option value="">Select an agent session…</option>'+ags.map(function(s){return '<option value="'+s.termId+'">'+esc(s.tabName)+' — '+esc(s.projectName)+'</option>';}).join('');
+    if(ags.some(function(s){return s.termId===cur;})) sel.value=cur;
+  }
+  function renderMentions(){
+    var q=(document.getElementById('a-filter').value||'').toLowerCase();
+    var list=aFiles.filter(function(f){return !q||f.toLowerCase().indexOf(q)>=0;}).slice(0,100);
+    var box=document.getElementById('a-filelist');
+    box.innerHTML=list.map(function(f){return '<div class="tbl-item" data-f="'+esc(f)+'">'+esc(f)+'</div>';}).join('')||'<div class="empty">No files.</div>';
+    [].forEach.call(box.querySelectorAll('.tbl-item'),function(el){ el.onclick=function(){ var ta=document.getElementById('a-prompt'); ta.value=(ta.value?ta.value.replace(/\\s*$/,'')+' ':'')+'@'+el.getAttribute('data-f')+' '; document.getElementById('a-files').style.display='none'; ta.focus(); }; });
+  }
+  function aistatus(msg, err){ var el=document.getElementById('a-status'); el.style.display='block'; el.textContent=msg; el.style.color=err?'var(--clay)':'var(--moss)'; }
+  document.getElementById('a-send').onclick=function(){ var id=document.getElementById('a-sess').value, p=document.getElementById('a-prompt').value; if(!id){ aistatus('Pick a session first.',true); return; } if(!p.trim()) return; sendMsg({t:'input',id:id,data:p+'\\r'}); aistatus('Sent to session ✓',false); document.getElementById('a-prompt').value=''; };
+  document.getElementById('a-mention').onclick=function(){ var id=document.getElementById('a-sess').value; var s=sessions.filter(function(x){return x.termId===id;})[0]; var box=document.getElementById('a-files'); if(!s){ aistatus('Pick a session first.',true); return; } if(box.style.display==='block'){ box.style.display='none'; return; } sendMsg({t:'fs:files',root:s.projectPath}); box.style.display='block'; };
+  document.getElementById('a-filter').addEventListener('input', renderMentions);
+
   function esc(s){ return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   connect();
 </script>
