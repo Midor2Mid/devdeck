@@ -6,6 +6,7 @@ import { useSettings } from "../settings"
 import { Modal } from "./Modal"
 import { THEMES } from "../themes"
 import { frameDelay } from "../recPlayback"
+import { toAsciicast } from "../asciicast"
 
 interface RecEvent {
     dt: number
@@ -74,6 +75,18 @@ export function RecordingsModal(): JSX.Element {
     const clearTimer = (): void => {
         if (timer.current) clearTimeout(timer.current)
         timer.current = null
+    }
+
+    // Export a recording as an asciinema .cast (a shareable repro artifact).
+    const saveCast = (rec: Recording): void => {
+        const safe = (rec.label || "session").replace(/[^\w.\-]/g, "_")
+        void window.api.fs.saveFile(safe + ".cast", toAsciicast(rec), [
+            { name: "asciinema cast", extensions: ["cast"] }
+        ])
+    }
+    const exportFromList = (path: string, e: React.MouseEvent): void => {
+        e.stopPropagation()
+        window.api.rec.load(path).then(saveCast)
     }
 
     // Build the player terminal once a recording is loaded.
@@ -173,9 +186,18 @@ export function RecordingsModal(): JSX.Element {
                 <span id="recordings-modal-title">{current ? `Replay · ${current.label}` : "Recordings"}</span>
                 <div>
                     {current && (
-                        <button className="btn-min" onClick={() => setCurrent(null)}>
-                            ← list
-                        </button>
+                        <>
+                            <button
+                                className="btn-min"
+                                onClick={() => saveCast(current)}
+                                data-tip="Export as an asciinema .cast (share / upload)"
+                            >
+                                ⇪ .cast
+                            </button>
+                            <button className="btn-min" onClick={() => setCurrent(null)}>
+                                ← list
+                            </button>
+                        </>
                     )}
                     <button className="btn-min" onClick={() => close(false)}>
                         ×
@@ -202,6 +224,13 @@ export function RecordingsModal(): JSX.Element {
                                 <span className="recording-meta">
                                     {r.events} frames · {ago(r.createdAt)}
                                 </span>
+                                <button
+                                    className="btn-min recording-export"
+                                    onClick={(e) => exportFromList(r.path, e)}
+                                    data-tip="Export as .cast"
+                                >
+                                    ⇪
+                                </button>
                             </div>
                         ))
                     )}
