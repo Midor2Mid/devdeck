@@ -33,6 +33,8 @@ export function AgentKey({
         "deck-key" +
         (active ? " active" : "") +
         (compressed ? " compressed" : "") +
+        (session.status === "waiting" ? " key-waiting" : "") +
+        (session.status === "attention" ? " key-attn" : "") +
         (dragPayload ? " drop-active" : "") +
         (over ? " drag-over" : "")
 

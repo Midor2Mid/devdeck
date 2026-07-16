@@ -11,8 +11,10 @@ export function ToolCluster(): JSX.Element {
     const setInboxOpen = useStore((s) => s.setInboxOpen)
     const setUsageOpen = useStore((s) => s.setUsageOpen)
     const openSettings = useSettings((s) => s.openSettings)
+    // Count everything that wants you — bell "attention" and finished "waiting".
     const attention = useStore(
-        (s) => Object.values(s.agentStatus).filter((x) => x === "attention").length
+        (s) =>
+            Object.values(s.agentStatus).filter((x) => x === "attention" || x === "waiting").length
     )
     const [tasksOpen, setTasksOpen] = useState(false)
     const [contextOpen, setContextOpen] = useState(false)

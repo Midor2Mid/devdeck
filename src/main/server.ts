@@ -22,7 +22,7 @@ export interface RemoteSession {
     tabName: string
     badge: string
     isAgent: boolean
-    status: "working" | "idle" | "attention"
+    status: "working" | "idle" | "attention" | "waiting"
 }
 
 export interface ServerConfig {
@@ -367,6 +367,8 @@ const CLIENT_HTML = `<!doctype html>
   .dot{width:9px;height:9px;border-radius:50%;flex:none}
   .dot.shell{background:var(--moss)} .dot.agent{background:var(--clay)}
   .dot.attention{background:var(--ac);box-shadow:0 0 0 3px rgba(184,137,92,.25)}
+  .dot.waiting{background:var(--ac);animation:b 2s ease-in-out infinite}
+  @keyframes b{0%,100%{box-shadow:0 0 0 0 rgba(184,137,92,.30)}50%{box-shadow:0 0 0 4px rgba(184,137,92,.06)}}
   .dot.idle{opacity:.4} .dot.working{animation:p 1.2s infinite}
   @keyframes p{0%,100%{opacity:.4}50%{opacity:1}}
   .sess .meta{flex:1} .sess .st{font-size:11px;color:var(--mu)}

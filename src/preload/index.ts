@@ -150,7 +150,7 @@ export interface RemoteSession {
     tabName: string
     badge: string
     isAgent: boolean
-    status: "working" | "idle" | "attention"
+    status: "working" | "idle" | "attention" | "waiting"
 }
 export interface ServerStatus {
     running: boolean

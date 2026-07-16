@@ -25,7 +25,9 @@ import { parseChecklist, type BoardTask, type BoardColumn } from "./board"
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
 export type MainView = "mission" | "tasks" | "terminal" | "editor" | "api" | "database" | "browser" | "network"
-export type AgentStatus = "working" | "idle" | "attention"
+// working = producing output; waiting = finished a turn, your move (soft);
+// attention = rang the bell / blocked on input, needs you now (loud); idle = quiet.
+export type AgentStatus = "working" | "idle" | "attention" | "waiting"
 
 export interface Tab {
     id: string
@@ -351,7 +353,7 @@ export const useStore = create<AppState>((set, get) => {
         set((s) => ({
             lastAgentTermId: termId,
             agentStatus:
-                s.agentStatus[termId] === "attention"
+                s.agentStatus[termId] === "attention" || s.agentStatus[termId] === "waiting"
                     ? { ...s.agentStatus, [termId]: "idle" }
                     : s.agentStatus,
             // Acknowledging a session clears its pending notification.
@@ -412,6 +414,13 @@ export const useStore = create<AppState>((set, get) => {
         if (cfg.sound) beep()
     }
 
+    // Soft signal when an agent finishes a turn and is waiting on you (no bell).
+    // Quieter than attention: an optional beep only — the deck-key ring + inbox
+    // count carry it. No desktop notification (that's reserved for the loud tier).
+    const notifyWaiting = (): void => {
+        if (useSettings.getState().notifications.sound) beep()
+    }
+
     const pushNotification = (termId: string): void => {
         if (get().notifications.some((n) => n.termId === termId)) return
         set((s) => ({
@@ -454,7 +463,12 @@ export const useStore = create<AppState>((set, get) => {
             setTimeout(
                 () => {
                     if (get().agentStatus[id] === "working") {
-                        setStatus(id, "idle")
+                        // Finished a turn. If you're watching this pane there's nothing
+                        // to flag (idle); if it's a background session, mark it "waiting
+                        // for you" and give the soft signal so you don't have to babysit.
+                        const away = !isVisible(id)
+                        setStatus(id, away ? "waiting" : "idle")
+                        if (away) notifyWaiting()
                         // A dispatched task whose agent just finished a turn is ready to review.
                         set((s) => ({
                             boardTasks: s.boardTasks.map((t) =>

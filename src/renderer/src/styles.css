@@ -1041,6 +1041,44 @@ button .ic,
     opacity: 1;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
+/* waiting: finished a turn, your move — a calmer breathing ring than attention. */
+.tab-dot.status-waiting {
+    background: var(--accent);
+    opacity: 1;
+    animation: dot-breathe 2s ease-in-out infinite;
+}
+@keyframes dot-breathe {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 28%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 6%, transparent);
+    }
+}
+/* The key of a session waiting on you gets a soft breathing accent edge. */
+.deck-key.key-waiting {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border, transparent));
+    animation: key-breathe 2s ease-in-out infinite;
+}
+@keyframes key-breathe {
+    0%,
+    100% {
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+    50% {
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .tab-dot.status-waiting,
+    .deck-key.key-waiting {
+        animation: none;
+    }
+    .deck-key.key-waiting {
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+}
 @keyframes dot-pulse {
     0%,
     100% {

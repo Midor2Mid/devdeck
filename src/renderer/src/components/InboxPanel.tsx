@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useStore, type AgentStatus } from "../store"
 
-const ORDER: Record<AgentStatus, number> = { attention: 0, working: 1, idle: 2 }
+const ORDER: Record<AgentStatus, number> = { attention: 0, waiting: 1, working: 2, idle: 3 }
 
 // A unified "agents" command center: every agent session across projects, with the
 // ones needing attention pinned on top, a quick reply box, and jump-to. Serves the
@@ -22,7 +22,7 @@ export function InboxPanel(): JSX.Element {
     const [drafts, setDrafts] = useState<Record<string, string>>({})
 
     const sorted = [...sessions].sort((a, b) => ORDER[a.status] - ORDER[b.status])
-    const attention = sessions.filter((s) => s.status === "attention").length
+    const attention = sessions.filter((s) => s.status === "attention" || s.status === "waiting").length
 
     const send = (termId: string): void => {
         const text = (drafts[termId] ?? "").trim()

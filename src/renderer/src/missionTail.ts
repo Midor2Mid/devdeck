@@ -95,9 +95,9 @@ export function isStalled(
     return status === "working" && !!lastAt && now - lastAt > thresholdMs
 }
 
-const RANK: Record<AgentStatus, number> = { attention: 0, working: 1, idle: 2 }
+const RANK: Record<AgentStatus, number> = { attention: 0, waiting: 1, working: 2, idle: 3 }
 
-/** Order sessions attention-first (then working, then idle), stable within a status. */
+/** Order sessions attention-first, then waiting-on-you, then working, then idle. */
 export function sortForFollow(sessions: AnySession[]): AnySession[] {
     return sessions
         .map((s, i) => [s, i] as const)
