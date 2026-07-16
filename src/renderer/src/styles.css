@@ -6461,6 +6461,28 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     place-items: center;
     color: var(--accent);
 }
+/* One-click Run for the active project. Calm ghost by default; the play mark
+   picks up the accent on hover to read as the "go" action. State is in form
+   (the triangle) as well as color. */
+.topbar-run-btn {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    flex: none;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius, 6px);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+        background var(--dur-fast) var(--ease);
+}
+.topbar-run-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--bg-3);
+}
 .topbar-proj-btn {
     display: flex;
     align-items: center;
