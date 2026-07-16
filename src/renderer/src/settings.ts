@@ -207,6 +207,16 @@ export interface AppSettings {
     network: {
         port: number
     }
+    /** Upstream corporate proxy, injected into spawned terminals + child processes. */
+    proxy: {
+        enabled: boolean
+        /** Proxy URL, e.g. http://proxy.corp:8080 (may embed user:pass@). */
+        url: string
+        /** Comma-separated hosts to bypass (NO_PROXY). */
+        noProxy: string
+        /** Path to an extra CA cert bundle (NODE_EXTRA_CA_CERTS) for TLS-intercepting proxies. */
+        caPath: string
+    }
     /** Attention notifications when an agent needs you. */
     notifications: {
         /** Native OS desktop notification. */
@@ -320,6 +330,12 @@ const DEFAULTS: AppSettings = {
     network: {
         port: 8899
     },
+    proxy: {
+        enabled: false,
+        url: "",
+        noProxy: "",
+        caPath: ""
+    },
     notifications: {
         desktop: true,
         sound: false
@@ -351,6 +367,7 @@ interface SettingsState extends AppSettings {
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
     setNetwork: (patch: Partial<AppSettings["network"]>) => void
+    setProxy: (patch: Partial<AppSettings["proxy"]>) => void
     setNotifications: (patch: Partial<AppSettings["notifications"]>) => void
     setWorkspacePresets: (presets: WorkspacePreset[]) => void
     /** Record the start of an agent session (id = the pty/term id). */
@@ -374,8 +391,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -399,6 +416,12 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Push the enabled file-triggers to the main-process watcher.
     const applyTriggers = (): void => {
         window.api.triggers.apply(get().triggers.filter((t) => t.enabled))
+    }
+
+    // Reflect the proxy config into the main process's env, so newly-spawned
+    // terminals + child processes (npm/git/dotnet) inherit it.
+    const applyProxy = (): void => {
+        window.api.netproxy.apply(get().proxy)
     }
 
     return {
@@ -430,6 +453,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote },
                     network: { ...DEFAULTS.network, ...raw.network },
+                    proxy: { ...DEFAULTS.proxy, ...raw.proxy },
                     notifications: { ...DEFAULTS.notifications, ...raw.notifications },
                     workspacePresets: raw.workspacePresets ?? DEFAULTS.workspacePresets,
                     // Fresh process → no pty is actually running, so any event left
@@ -446,6 +470,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             applyStyle(get().appearance.style)
             applyServer()
             applyTriggers()
+            applyProxy()
         },
 
         setTerminal: (patch) => {
@@ -531,6 +556,11 @@ export const useSettings = create<SettingsState>((set, get) => {
             set((s) => ({ network: { ...s.network, ...patch } }))
             persist()
         },
+        setProxy: (patch) => {
+            set((s) => ({ proxy: { ...s.proxy, ...patch } }))
+            applyProxy()
+            persist()
+        },
         setNotifications: (patch) => {
             set((s) => ({ notifications: { ...s.notifications, ...patch } }))
             persist()
@@ -595,6 +625,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             applyStyle(DEFAULTS.appearance.style)
             applyServer()
             applyTriggers()
+            applyProxy()
             persist()
         },
 

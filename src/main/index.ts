@@ -18,6 +18,7 @@ import * as proxy from "./proxy"
 import * as aikeys from "./aikeys"
 import * as gitpat from "./gitpat"
 import * as projectenv from "./projectenv"
+import * as netproxy from "./netproxy"
 import * as search from "./search"
 import * as dotnet from "./dotnet"
 import * as system from "./system"
@@ -185,6 +186,9 @@ function registerIpc(): void {
     // --- Settings ---
     ipcMain.handle("settings:load", () => loadSettings())
     ipcMain.on("settings:save", (_e, data) => saveSettings(data))
+
+    // --- Corporate proxy (mutates process.env; new children inherit it) ---
+    ipcMain.on("netproxy:apply", (_e, cfg: netproxy.ProxyConfig) => netproxy.applyProxy(cfg))
 
     // --- API client ---
     ipcMain.handle("http:send", (_e, req) => httpSend(req))

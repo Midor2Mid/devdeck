@@ -25,6 +25,7 @@ type Section =
     | "ssh"
     | "mcp"
     | "remote"
+    | "proxy"
     | "notifications"
     | "shortcuts"
     | "about"
@@ -41,6 +42,7 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "ssh", label: "SSH" },
     { key: "mcp", label: "MCP" },
     { key: "remote", label: "Remote (Mobile)" },
+    { key: "proxy", label: "Proxy" },
     { key: "notifications", label: "Notifications" },
     { key: "shortcuts", label: "Shortcuts" },
     { key: "about", label: "About" }
@@ -1132,6 +1134,59 @@ function RemoteSection(): JSX.Element {
     )
 }
 
+function ProxySection(): JSX.Element {
+    const proxy = useSettings((s) => s.proxy)
+    const setProxy = useSettings((s) => s.setProxy)
+    return (
+        <div className="settings-section">
+            <h3>Corporate proxy</h3>
+            <div className="setting-row">
+                <label>Enable</label>
+                <input
+                    type="checkbox"
+                    className="checkbox"
+                    checked={proxy.enabled}
+                    onChange={(e) => setProxy({ enabled: e.target.checked })}
+                />
+            </div>
+            <div className="setting-row">
+                <label>Proxy URL</label>
+                <input
+                    type="text"
+                    placeholder="http://proxy.corp:8080"
+                    value={proxy.url}
+                    onChange={(e) => setProxy({ url: e.target.value })}
+                />
+            </div>
+            <div className="setting-row">
+                <label>No-proxy hosts</label>
+                <input
+                    type="text"
+                    placeholder="localhost,127.0.0.1,.internal"
+                    value={proxy.noProxy}
+                    onChange={(e) => setProxy({ noProxy: e.target.value })}
+                />
+            </div>
+            <div className="setting-row">
+                <label>Extra CA cert</label>
+                <input
+                    type="text"
+                    placeholder="C:\path\to\corp-ca.pem"
+                    value={proxy.caPath}
+                    onChange={(e) => setProxy({ caPath: e.target.value })}
+                />
+            </div>
+            <p className="settings-hint">
+                Sets <code>HTTP(S)_PROXY</code>, <code>NO_PROXY</code> and{" "}
+                <code>NODE_EXTRA_CA_CERTS</code> for <b>newly-opened</b> terminals and the tools
+                they run (npm, git, dotnet, gh). Existing terminals keep their old environment —
+                reopen them to pick up a change. The built-in API client and updater aren't routed
+                through the proxy yet.
+            </p>
+        </div>
+    )
+}
+
 const ACCENT_PRESETS = ["#b8895c", "#8c9a68", "#7fa0a0", "#a98ba5", "#c4855d", "#9a8c98"]
 
 const SHELLS: { value: ShellKind; label: string }[] = [
@@ -1388,6 +1443,7 @@ export function SettingsModal(): JSX.Element {
                     {section === "mcp" && <McpSection />}
 
                     {section === "remote" && <RemoteSection />}
+                    {section === "proxy" && <ProxySection />}
                     {section === "notifications" && <NotificationsSection />}
 
                     {section === "shortcuts" && (

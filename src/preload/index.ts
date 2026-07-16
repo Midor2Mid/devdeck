@@ -398,6 +398,11 @@ const api = {
         stop: (): Promise<boolean> => ipcRenderer.invoke("server:stop"),
         status: (): Promise<ServerStatus> => ipcRenderer.invoke("server:status")
     },
+    netproxy: {
+        /** Apply the corporate-proxy config to the main env (new children inherit it). */
+        apply: (cfg: { enabled: boolean; url: string; noProxy: string; caPath: string }): void =>
+            ipcRenderer.send("netproxy:apply", cfg)
+    },
     mobile: {
         syncSessions: (sessions: RemoteSession[]): void =>
             ipcRenderer.send("mobile:sessions", sessions),
