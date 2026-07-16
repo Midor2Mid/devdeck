@@ -25,8 +25,9 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 - [x] **Rich prompts** — drop/paste an image into the composer (2026-07-16):
       saved to `.devdeck/uploads` (type preserved, `fs:saveUpload`) and appended
       as an `@`-mention so the agent can read it.
-- [ ] **Pipeline conditional branching / delays / checkpoints** (we have linear
-      pipelines + gates + triggers already).
+- [x] **Pipeline conditional branching / delays / checkpoints** (2026-07-16):
+      per-step delay + manual checkpoint (pause→Continue), and gate routing
+      (onPass/onFail = next / stop / goto:<step>) with a 50-step run cap.
 
 ### Deliberately skipping (breadth, not differentiation)
 
@@ -40,16 +41,19 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 - [x] **Release / promotion board (UAT→PROD)** — shipped v0.2.0 (git-ref stages,
       promote gaps, pre-flight checklist, commands/tag — no auto-push).
 - [x] **Standup / worklog generator** — shipped v0.2.1.
-- [ ] **Record → share repro** — turn a terminal recording into a shareable
-      bug-repro / PR artifact (asciinema-style link or GIF).
+- [x] **Record → share repro** (2026-07-16) — export a recording to asciinema
+      v2 `.cast` (`asciicast.ts`); `asciinema play`/`upload` for a link. GIF
+      deferred (needs a terminal rasterizer + encoder).
 - [x] **Role-panel review** — `reviewLenses.ts` (correctness / security / .NET
       idioms / performance / tests) fan out over the uncommitted diff via the
       review flow; each lens runs in its own agent session.
 - [x] **C#/.NET-aware actions** — build/test with parsed, clickable diagnostics
       that jump to file:line (DotnetPanel, Ctrl+Shift+B) + **Watch** launches a
       live `dotnet watch` terminal (2026-07-16).
-- [ ] **Corporate-proxy friendliness** — first-class TLS-proxy config (the user's
-      environment breaks npm behind a corporate proxy).
+- [x] **Corporate-proxy friendliness** (2026-07-16) — Settings → Proxy: upstream
+      HTTP(S) proxy + no-proxy + extra CA, injected into every new terminal and
+      child process (npm/git/dotnet/gh) via process.env (`netproxy.ts`). API
+      client + updater not yet routed (no undici).
 
 ## Also shipped 2026-07-16
 
