@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useStore } from "../store"
+import { useStore, SHELL } from "../store"
 import type { DotnetResult } from "../../../preload/index"
 
 /**
@@ -11,6 +11,7 @@ export function DotnetPanel(): JSX.Element {
     const close = useStore((s) => s.setDotnetOpen)
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
     const openInEditor = useStore((s) => s.openInEditor)
+    const newTab = useStore((s) => s.newTab)
 
     const [mode, setMode] = useState<"build" | "test">("build")
     const [result, setResult] = useState<DotnetResult | null>(null)
@@ -50,6 +51,14 @@ export function DotnetPanel(): JSX.Element {
         close(false)
     }
 
+    // `dotnet watch` is a long-running, hot-reloading process — it belongs in a
+    // live terminal (like the topbar Run), not the one-shot diagnostic runner.
+    const watch = (): void => {
+        if (!activeProject) return
+        newTab(SHELL, "dotnet watch", "dotnet watch")
+        close(false)
+    }
+
     return (
         <div className="switcher-backdrop" onMouseDown={() => close(false)}>
             <div className="dotnet-panel" onMouseDown={(e) => e.stopPropagation()}>
@@ -68,6 +77,14 @@ export function DotnetPanel(): JSX.Element {
                             disabled={running}
                         >
                             Test
+                        </button>
+                        <button
+                            onClick={watch}
+                            disabled={!activeProject}
+                            data-tip="Open a terminal running dotnet watch (hot reload)"
+                            data-tip-pos="bottom"
+                        >
+                            Watch
                         </button>
                     </div>
                     <span className="dotnet-target muted small">
