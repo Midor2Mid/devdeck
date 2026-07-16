@@ -41,6 +41,11 @@ export type IconName =
     | "inbox"
     | "chart"
     | "bookOpen"
+    | "pause"
+    | "restart"
+    | "download"
+    | "arrowLeft"
+    | "close"
 
 const P: Record<IconName, JSX.Element> = {
     terminal: (
@@ -129,6 +134,37 @@ const P: Record<IconName, JSX.Element> = {
         </>
     ),
     canvas: <path d="M12 3 21 12 12 21 3 12Z" />,
+    pause: (
+        <>
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+        </>
+    ),
+    restart: (
+        <>
+            <path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" />
+            <polyline points="3 3 3 8 8 8" />
+        </>
+    ),
+    download: (
+        <>
+            <path d="M12 3v12" />
+            <polyline points="7 10 12 15 17 10" />
+            <path d="M5 21h14" />
+        </>
+    ),
+    arrowLeft: (
+        <>
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+        </>
+    ),
+    close: (
+        <>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+        </>
+    ),
     layers: (
         <>
             <path d="M12 2 2 7l10 5 10-5-10-5Z" />

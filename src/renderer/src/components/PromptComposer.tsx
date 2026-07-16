@@ -34,6 +34,7 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         null
     )
     const [sel, setSel] = useState(0)
+    const [dragging, setDragging] = useState(false)
     // Fire targets — seeded once (on open) from the focused agent. The composer
     // is mounted fresh each open, so this reseeds and is never persisted.
     const [selected, setSelected] = useState<Set<string>>(() =>
@@ -131,6 +132,7 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
     }
 
     const onDrop = (e: React.DragEvent): void => {
+        setDragging(false)
         const imgs = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"))
         if (imgs.length) {
             e.preventDefault()
@@ -138,7 +140,14 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
         }
     }
     const onDragOver = (e: React.DragEvent): void => {
-        if ([...e.dataTransfer.types].includes("Files")) e.preventDefault()
+        if ([...e.dataTransfer.types].includes("Files")) {
+            e.preventDefault()
+            if (!dragging) setDragging(true)
+        }
+    }
+    const onDragLeave = (e: React.DragEvent): void => {
+        // Ignore leaves into child nodes; only clear when the pointer exits the box.
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false)
     }
     const onPaste = (e: React.ClipboardEvent): void => {
         const item = [...e.clipboardData.items].find((i) => i.type.startsWith("image/"))
@@ -272,13 +281,14 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
             <div className="composer-body">
                 <textarea
                     ref={ref}
-                    className="composer-input"
+                    className={"composer-input" + (dragging ? " dropping" : "")}
                     placeholder="Write a prompt… @ to mention a file, / for a snippet, drop or paste an image"
                     value={text}
                     onChange={onChange}
                     onKeyDown={onKeyDown}
                     onDrop={onDrop}
                     onDragOver={onDragOver}
+                    onDragLeave={onDragLeave}
                     onPaste={onPaste}
                 />
                 {suggestions.length > 0 && (

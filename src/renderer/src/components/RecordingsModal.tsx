@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
 import { Modal } from "./Modal"
+import { Icon } from "./Icon"
 import { THEMES } from "../themes"
 import { frameDelay } from "../recPlayback"
 import { toAsciicast } from "../asciicast"
@@ -188,19 +189,19 @@ export function RecordingsModal(): JSX.Element {
                     {current && (
                         <>
                             <button
-                                className="btn-min"
+                                className="btn-min has-ico"
                                 onClick={() => saveCast(current)}
                                 data-tip="Export as an asciinema .cast (share / upload)"
                             >
-                                ⇪ .cast
+                                <Icon name="download" size={14} /> .cast
                             </button>
-                            <button className="btn-min" onClick={() => setCurrent(null)}>
-                                ← list
+                            <button className="btn-min has-ico" onClick={() => setCurrent(null)}>
+                                <Icon name="arrowLeft" size={14} /> list
                             </button>
                         </>
                     )}
-                    <button className="btn-min" onClick={() => close(false)}>
-                        ×
+                    <button className="btn-min" onClick={() => close(false)} data-tip="Close">
+                        <Icon name="close" size={14} />
                     </button>
                 </div>
             </div>
@@ -219,7 +220,9 @@ export function RecordingsModal(): JSX.Element {
                                 className="recording-row"
                                 onClick={() => window.api.rec.load(r.path).then(setCurrent)}
                             >
-                                <span className="recording-icon">⏺</span>
+                                <span className="recording-icon">
+                                    <Icon name="record" size={13} />
+                                </span>
                                 <span className="recording-label">{r.label}</span>
                                 <span className="recording-meta">
                                     {r.events} frames · {ago(r.createdAt)}
@@ -229,7 +232,7 @@ export function RecordingsModal(): JSX.Element {
                                     onClick={(e) => exportFromList(r.path, e)}
                                     data-tip="Export as .cast"
                                 >
-                                    ⇪
+                                    <Icon name="download" size={14} />
                                 </button>
                             </div>
                         ))
@@ -238,11 +241,11 @@ export function RecordingsModal(): JSX.Element {
             ) : (
                 <div className="modal-body replay-body">
                     <div className="replay-controls">
-                        <button className="icon-action" onClick={togglePlay}>
-                            {playing ? "⏸" : "▶"}
+                        <button className="icon-action" onClick={togglePlay} data-tip={playing ? "Pause" : "Play"}>
+                            <Icon name={playing ? "pause" : "play"} size={15} />
                         </button>
                         <button className="icon-action" onClick={restart} data-tip="Restart">
-                            ↺
+                            <Icon name="restart" size={15} />
                         </button>
                         <div className="replay-progress">
                             <div className="replay-progress-fill" style={{ transform: "scaleX(" + pct / 100 + ")" }} />

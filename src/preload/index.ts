@@ -478,6 +478,9 @@ const api = {
         /** Save an image (data URL) into the project's uploads dir; returns its path. */
         saveUpload: (projectPath: string, name: string, dataUrl: string): Promise<string> =>
             ipcRenderer.invoke("fs:saveUpload", { projectPath, name, dataUrl }),
+        /** Open-file dialog; returns the chosen path, or "" if cancelled. */
+        pickFile: (filters?: { name: string; extensions: string[] }[]): Promise<string> =>
+            ipcRenderer.invoke("dialog:pickFile", filters),
         /** Save-As dialog + write; returns the chosen path, or "" if cancelled. */
         saveFile: (
             defaultName: string,

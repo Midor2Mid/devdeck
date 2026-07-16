@@ -277,6 +277,19 @@ function registerIpc(): void {
         return res.canceled ? "" : (res.filePaths[0] ?? "")
     })
 
+    // Generic open-file picker (returns "" if cancelled).
+    ipcMain.handle(
+        "dialog:pickFile",
+        async (_e, filters?: { name: string; extensions: string[] }[]) => {
+            const res = await dialog.showOpenDialog(mainWindow!, {
+                title: "Select a file",
+                properties: ["openFile"],
+                filters: filters ?? [{ name: "All files", extensions: ["*"] }]
+            })
+            return res.canceled ? "" : (res.filePaths[0] ?? "")
+        }
+    )
+
     // --- Files (editor) ---
     // Confine all filesystem access to within an added project (defense in depth).
     const inProject = (p: string): boolean =>

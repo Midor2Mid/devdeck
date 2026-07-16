@@ -239,6 +239,8 @@ interface AppState extends Persisted {
     projectIdOfTerm: (termId: string) => string | undefined
 
     newTab: (agentId: string, initialCommand?: string, label?: string, cwd?: string, shellKind?: ShellKind) => string | undefined
+    /** Run a fixed command in a shell tab, focusing an existing one if it's already running it. */
+    runCommandTab: (command: string, label?: string) => void
     splitActive: (dir: SplitDir, agentId: string) => void
     closePane: (termId: string) => void
     closeActivePane: () => void
@@ -1281,6 +1283,24 @@ export const useStore = create<AppState>((set, get) => {
             }
             persist()
             return termId
+        },
+
+        runCommandTab: (command, label) => {
+            const s = get()
+            const pid = s.activeId
+            if (!pid) return
+            // Reuse a shell tab already launched with this exact command, so hitting
+            // Run/Watch twice focuses the running one instead of spawning a rival.
+            for (const tab of s.tabsByProject[pid] ?? []) {
+                for (const termId of collectLeaves(tab.root)) {
+                    const agentId = s.termAgents[termId] ?? SHELL
+                    if (!isAgentId(agentId) && s.termInit[termId] === command) {
+                        s.jumpToTerm(termId)
+                        return
+                    }
+                }
+            }
+            get().newTab(SHELL, command, label ?? command)
         },
 
         splitActive: (dir, agentId) => {

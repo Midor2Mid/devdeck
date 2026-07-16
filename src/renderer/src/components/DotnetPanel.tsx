@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useStore, SHELL } from "../store"
+import { useStore } from "../store"
 import type { DotnetResult } from "../../../preload/index"
 
 /**
@@ -11,7 +11,7 @@ export function DotnetPanel(): JSX.Element {
     const close = useStore((s) => s.setDotnetOpen)
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
     const openInEditor = useStore((s) => s.openInEditor)
-    const newTab = useStore((s) => s.newTab)
+    const runCommandTab = useStore((s) => s.runCommandTab)
 
     const [mode, setMode] = useState<"build" | "test">("build")
     const [result, setResult] = useState<DotnetResult | null>(null)
@@ -55,9 +55,11 @@ export function DotnetPanel(): JSX.Element {
     // live terminal (like the topbar Run), not the one-shot diagnostic runner.
     const watch = (): void => {
         if (!activeProject) return
-        newTab(SHELL, "dotnet watch", "dotnet watch")
+        runCommandTab("dotnet watch", "dotnet watch")
         close(false)
     }
+    // Only offer Watch once a build has confirmed this is actually a .NET project.
+    const isDotnet = result?.ran === true
 
     return (
         <div className="switcher-backdrop" onMouseDown={() => close(false)}>
@@ -80,8 +82,12 @@ export function DotnetPanel(): JSX.Element {
                         </button>
                         <button
                             onClick={watch}
-                            disabled={!activeProject}
-                            data-tip="Open a terminal running dotnet watch (hot reload)"
+                            disabled={!activeProject || !isDotnet}
+                            data-tip={
+                                isDotnet
+                                    ? "Open a terminal running dotnet watch (hot reload)"
+                                    : "No .NET project detected"
+                            }
                             data-tip-pos="bottom"
                         >
                             Watch

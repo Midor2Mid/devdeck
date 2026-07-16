@@ -648,7 +648,18 @@ function PipelinesSection(): JSX.Element {
                             ×
                         </button>
                     </div>
-                    {p.steps.map((st, si) => (
+                    {p.steps.map((st, si) => {
+                        // Steps that route back to this one (a loop) — surfaced so the
+                        // flow is legible instead of hidden in a dropdown value.
+                        const loopFrom = p.steps
+                            .map((s2, idx) => ({ s2, idx }))
+                            .filter(
+                                ({ s2 }) =>
+                                    (typeof s2.onPass === "object" && s2.onPass.goto === st.id) ||
+                                    (typeof s2.onFail === "object" && s2.onFail.goto === st.id)
+                            )
+                            .map(({ idx }) => idx + 1)
+                        return (
                         <div key={st.id} className="pipe-step">
                             <div className="pipe-step-head">
                                 <span className="pipe-step-num">{si + 1}</span>
@@ -658,6 +669,14 @@ function PipelinesSection(): JSX.Element {
                                     placeholder="Step title"
                                     onChange={(e) => updateStep(pi, si, { title: e.target.value })}
                                 />
+                                {loopFrom.length > 0 && (
+                                    <span
+                                        className="pipe-loop-chip"
+                                        data-tip={`Step ${loopFrom.join(", ")} route back to this step`}
+                                    >
+                                        loop target
+                                    </span>
+                                )}
                                 <select
                                     className="pipe-step-agent"
                                     value={st.agentId}
@@ -721,6 +740,9 @@ function PipelinesSection(): JSX.Element {
                                     />
                                     checkpoint
                                 </label>
+                            </div>
+                            <div className="pipe-step-adv pipe-routing">
+                                <span className="pipe-gate-label">routing</span>
                                 <label className="pipe-adv-field" data-tip="Where the run goes when this step passes">
                                     on pass
                                     <select
@@ -758,7 +780,8 @@ function PipelinesSection(): JSX.Element {
                                 </label>
                             </div>
                         </div>
-                    ))}
+                        )
+                    })}
                     <button className="btn-min" style={{ marginTop: 6 }} onClick={() => addStep(pi)}>
                         + Add step
                     </button>
@@ -1241,12 +1264,25 @@ function ProxySection(): JSX.Element {
             </div>
             <div className="setting-row">
                 <label>Extra CA cert</label>
-                <input
-                    type="text"
-                    placeholder="C:\path\to\corp-ca.pem"
-                    value={proxy.caPath}
-                    onChange={(e) => setProxy({ caPath: e.target.value })}
-                />
+                <div className="accent-controls">
+                    <input
+                        type="text"
+                        placeholder="C:\path\to\corp-ca.pem"
+                        value={proxy.caPath}
+                        onChange={(e) => setProxy({ caPath: e.target.value })}
+                    />
+                    <button
+                        onClick={async () => {
+                            const p = await window.api.fs.pickFile([
+                                { name: "Certificates", extensions: ["pem", "crt", "cer", "ca"] },
+                                { name: "All files", extensions: ["*"] }
+                            ])
+                            if (p) setProxy({ caPath: p })
+                        }}
+                    >
+                        Browse…
+                    </button>
+                </div>
             </div>
             <p className="settings-hint">
                 Sets <code>HTTP(S)_PROXY</code>, <code>NO_PROXY</code> and{" "}

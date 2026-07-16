@@ -1614,6 +1614,12 @@ button .ic,
     line-height: 1.5;
     padding: 10px 12px;
 }
+/* An image is being dragged over — signal that the composer accepts the drop. */
+.composer-input.dropping {
+    outline: 2px dashed var(--accent);
+    outline-offset: -3px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg-3));
+}
 .mention-pop {
     position: absolute;
     left: 12px;
@@ -3772,6 +3778,19 @@ button .ic,
 .pipe-adv-delay {
     width: 52px;
     font-size: 12px;
+}
+.pipe-routing {
+    margin-top: 4px;
+}
+.pipe-loop-chip {
+    flex: none;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius, 6px);
+    padding: 1px 6px;
+    opacity: 0.85;
 }
 .pipeline-gate {
     color: var(--accent-soft);
@@ -6497,10 +6516,20 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
         background var(--dur-fast) var(--ease);
 }
-.topbar-run-btn:hover {
+.topbar-run-btn:hover:not(:disabled) {
     color: var(--accent);
     border-color: var(--accent);
     background: var(--bg-3);
+}
+.topbar-run-btn:disabled {
+    opacity: 0.32;
+    cursor: default;
+}
+/* Buttons that pair a line-icon with a short text label. */
+.has-ico {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 .topbar-proj-btn {
     display: flex;
