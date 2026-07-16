@@ -19,8 +19,12 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 - [x] **Git worktree-per-agent** — shipped v0.1.8.
 - [x] **Unified AI diff review** — shipped v0.1.8; **AI actions on the diff** +
       **Open PR** (Azure API / web) v0.3.2 → full ticket→worktree→review→PR loop.
-- [ ] **Fire one prompt at many agents** at once (+ @mention targeting).
-- [ ] **Rich prompts** — image/drag-drop into the composer.
+- [x] **Fire one prompt at many agents** at once (+ @mention targeting) —
+      PromptComposer: checkbox targets grouped by project, All/This-project/Idle
+      presets, `broadcast()`, confirm on ≥3; `@file` + `/snippet` autocomplete.
+- [x] **Rich prompts** — drop/paste an image into the composer (2026-07-16):
+      saved to `.devdeck/uploads` (type preserved, `fs:saveUpload`) and appended
+      as an `@`-mention so the agent can read it.
 - [ ] **Pipeline conditional branching / delays / checkpoints** (we have linear
       pipelines + gates + triggers already).
 
@@ -38,13 +42,24 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 - [x] **Standup / worklog generator** — shipped v0.2.1.
 - [ ] **Record → share repro** — turn a terminal recording into a shareable
       bug-repro / PR artifact (asciinema-style link or GIF).
-- [ ] **Role-panel review** — on Claude Team, run a panel of agents with
-      different lenses (correctness / security / .NET conventions) over a diff and
-      aggregate the verdicts. The "act as a team" idea, productized.
-- [ ] **C#/.NET-aware actions** — build/test/watch with parsed, clickable build
-      errors.
+- [x] **Role-panel review** — `reviewLenses.ts` (correctness / security / .NET
+      idioms / performance / tests) fan out over the uncommitted diff via the
+      review flow; each lens runs in its own agent session.
+- [x] **C#/.NET-aware actions** — build/test with parsed, clickable diagnostics
+      that jump to file:line (DotnetPanel, Ctrl+Shift+B) + **Watch** launches a
+      live `dotnet watch` terminal (2026-07-16).
 - [ ] **Corporate-proxy friendliness** — first-class TLS-proxy config (the user's
       environment breaks npm behind a corporate proxy).
+
+## Also shipped 2026-07-16
+
+- [x] **One-click Run** — topbar play button detects the project type
+      (Node `dev`/`start`, .NET `dotnet run`, Go `go run .`) and runs it in a
+      fresh terminal at the project cwd; hidden for unrecognized types.
+- [x] **Mobile coding + AI** — the remote/mobile client gained a **Files** view
+      (browse project tree, open/edit/save, confined to project roots) and an
+      **AI** view (compose a prompt with tap-to-insert `@file` mentions, fire it
+      at any running agent session). See ROADMAP M7 "full-UI mobile client".
 
 ## Design
 
