@@ -38,13 +38,17 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const pending = useStore((s) => !!s.agentResumePending[termId])
     const clearAgentResume = useStore((s) => s.clearAgentResume)
 
-    const resumePreset = useSettings.getState().agentById(useStore.getState().agentOf(termId))
-    const resumeCmd =
-        resumePreset && resumePreset.resumeArgs
-            ? `${resumePreset.command} ${resumePreset.resumeArgs}`
-            : resumePreset?.command || initialCommand || ""
+    const resumeAgentId = useStore.getState().agentOf(termId)
+    const resumePreset = useSettings.getState().agentById(resumeAgentId)
+    // Never resolve to an empty command (which would open a bare shell for a
+    // restored agent whose preset was deleted): fall back to the launch command,
+    // then to the agent id itself as a best guess.
+    const coldCmd = resumePreset?.command || initialCommand || resumeAgentId
+    const resumeCmd = resumePreset?.resumeArgs
+        ? `${resumePreset.command} ${resumePreset.resumeArgs}`
+        : coldCmd
     const resolveResume = (mode: "resume" | "fresh"): void => {
-        spawnRef.current?.(mode === "resume" ? resumeCmd : resumePreset?.command || initialCommand)
+        spawnRef.current?.(mode === "resume" ? resumeCmd : coldCmd)
         clearAgentResume(termId)
         termRef.current?.focus()
     }

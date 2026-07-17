@@ -13,31 +13,37 @@ export interface RunConfig {
 }
 
 async function detectRun(path: string): Promise<RunConfig | null> {
-    // Node / JS — prefer a `dev` script (the usual watch/serve entry), else fall
-    // back to `npm start` (npm's conventional run target).
-    try {
-        const txt = await window.api.fs.read(path + "/package.json")
-        const scripts = (JSON.parse(txt) as { scripts?: Record<string, string> }).scripts ?? {}
-        return { command: scripts.dev ? "npm run dev" : "npm start", type: "node" }
-    } catch {
-        // no package.json / unreadable — fall through to the other types
-    }
-
     let names: string[] = []
     try {
         names = (await window.api.fs.readDir(path)).map((e) => e.name.toLowerCase())
     } catch {
         return null
     }
+    const hasSln = names.some((n) => n.endsWith(".sln"))
+    const hasCsproj = names.some((n) => n.endsWith(".csproj"))
+    const hasPkg = names.includes("package.json")
 
-    // .NET — a solution or project file in the root; `dotnet run` resolves it.
-    if (names.some((n) => n.endsWith(".sln") || n.endsWith(".csproj"))) {
-        return { command: "dotnet run", type: "dotnet" }
+    // A solution file is the strongest signal of a .NET-primary repo — prefer it
+    // even when a package.json is also present (common: a C# backend with a small
+    // front-end / JS tooling), so we don't offer `npm run dev` for a .NET project.
+    if (hasSln) return { command: "dotnet run", type: "dotnet" }
+
+    // Node / JS — prefer a `dev` script (the usual watch/serve entry), else fall
+    // back to `npm start` (npm's conventional run target).
+    if (hasPkg) {
+        try {
+            const txt = await window.api.fs.read(path + "/package.json")
+            const scripts = (JSON.parse(txt) as { scripts?: Record<string, string> }).scripts ?? {}
+            return { command: scripts.dev ? "npm run dev" : "npm start", type: "node" }
+        } catch {
+            // unreadable / malformed package.json — fall through to the other types
+        }
     }
+
+    // .NET project file (no solution) — `dotnet run` resolves it.
+    if (hasCsproj) return { command: "dotnet run", type: "dotnet" }
     // Go — a module at the root.
-    if (names.includes("go.mod")) {
-        return { command: "go run .", type: "go" }
-    }
+    if (names.includes("go.mod")) return { command: "go run .", type: "go" }
     return null
 }
 

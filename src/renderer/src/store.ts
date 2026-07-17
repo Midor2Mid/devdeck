@@ -378,6 +378,10 @@ export const useStore = create<AppState>((set, get) => {
     }
 
     const isVisible = (termId: string): boolean => {
+        // "Looking at this pane" requires the window to be focused too — otherwise
+        // an agent finishing while you've alt-tabbed away would be silently marked
+        // idle instead of raising a waiting/attention signal.
+        if (typeof document !== "undefined" && !document.hasFocus()) return false
         const s = get()
         return s.view === "terminal" && !!s.activeId && s.activePaneByProject[s.activeId] === termId
     }
@@ -1100,12 +1104,14 @@ export const useStore = create<AppState>((set, get) => {
                     }
                     const step = steps[i]
 
-                    // Optional pre-step delay (interruptible by Stop).
+                    // Optional pre-step delay (interruptible by Stop). Stays
+                    // "running" — a timer wait isn't blocked on the user, so it must
+                    // not read as "needs you" (the run's "waiting" status).
                     if (step.delayMs && step.delayMs > 0) {
                         setRun({
                             stepIndex: i,
                             stepTitle: step.title,
-                            status: "waiting",
+                            status: "running",
                             gateMsg: `waiting ${Math.round(step.delayMs / 1000)}s`
                         })
                         await delay(step.delayMs)
@@ -1192,6 +1198,14 @@ export const useStore = create<AppState>((set, get) => {
                     let nextI: number
                     if (passed) {
                         nextI = resolveTarget(step.onPass, i, steps, "next")
+                        // A goto whose target id no longer exists resolves to -1;
+                        // surface that as an error instead of a success-looking "done".
+                        if (nextI < 0 && typeof step.onPass === "object") {
+                            setStep(i, { status: "done", gateMsg: "goto target missing" })
+                            skipFrom(i + 1)
+                            setRun({ status: "error", gateMsg: "goto target missing" })
+                            return
+                        }
                     } else {
                         pushActivity("pipeline", termId, `${step.title} · gate failed`)
                         nextI = resolveTarget(failTarget(step), i, steps, "stop")
@@ -1215,6 +1229,23 @@ export const useStore = create<AppState>((set, get) => {
                                           steps: s.pipelineRun.steps.map((st, idx) =>
                                               idx >= nextI
                                                   ? { ...st, status: "pending", gateMsg: undefined }
+                                                  : st
+                                          )
+                                      }
+                                  }
+                                : s
+                        )
+                    } else if (nextI > i + 1) {
+                        // A forward goto jumped over steps — mark them skipped so the
+                        // timeline reflects what actually ran (not stuck "pending").
+                        set((s) =>
+                            s.pipelineRun
+                                ? {
+                                      pipelineRun: {
+                                          ...s.pipelineRun,
+                                          steps: s.pipelineRun.steps.map((st, idx) =>
+                                              idx > i && idx < nextI && st.status === "pending"
+                                                  ? { ...st, status: "skipped" }
                                                   : st
                                           )
                                       }
