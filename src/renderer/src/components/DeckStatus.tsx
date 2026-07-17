@@ -58,11 +58,9 @@ export function DeckStatus(): JSX.Element {
 
     return (
         <div className="deck-status">
-            {project ? (
-                <span className="sb-item sb-project">{project.name}</span>
-            ) : (
-                <span className="sb-item muted">No project</span>
-            )}
+            {/* Project name lives in the topbar; version lives in Settings → About.
+                The deck keeps only what you actively watch: branch + changes, and
+                compact icon indicators for identity / attention / remote / release. */}
             {git?.isRepo && (
                 <>
                     <span className="sb-item" data-tip="Current branch" data-tip-pos="top">
@@ -76,11 +74,11 @@ export function DeckStatus(): JSX.Element {
                     <span className="sb-git-id">
                         <span
                             className="sb-item sb-identity"
-                            data-tip="Git identity for this repo - click to switch account"
+                            data-tip={`Git identity: ${identity?.name || "not set"} — click to switch account`}
                             data-tip-pos="top"
                             onClick={() => setPickerOpen((v) => !v)}
                         >
-                            <Icon name="user" size={12} /> {identity?.name || "set identity"}
+                            <Icon name="user" size={12} />
                         </span>
                         {pickerOpen && (
                             <>
@@ -112,20 +110,19 @@ export function DeckStatus(): JSX.Element {
             )}
             {remoteEnabled && (
                 <span className="sb-item sb-remote" data-tip="Remote access enabled" data-tip-pos="top">
-                    <Icon name="broadcast" size={12} /> remote
+                    <Icon name="broadcast" size={12} />
                 </span>
             )}
             {project && (
                 <span
                     className="sb-item sb-identity"
-                    data-tip="Release board - promote Dev → UAT → PROD"
+                    data-tip="Release board — promote Dev → UAT → PROD"
                     data-tip-pos="top"
                     onClick={() => setReleaseOpen(true)}
                 >
-                    <Icon name="release" size={12} /> release
+                    <Icon name="release" size={12} />
                 </span>
             )}
-            <span className="sb-item muted">DevDeck</span>
         </div>
     )
 }

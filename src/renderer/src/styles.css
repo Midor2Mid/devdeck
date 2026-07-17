@@ -6510,8 +6510,14 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     box-shadow: inset 0 -2px 0 var(--accent);
     border-radius: 0;
 }
+/* Icon-first switcher: only the active view carries its label (state in form).
+   Inactive views are quiet icons with a hover tooltip + Ctrl+N shortcut. */
 .deck-view-name {
     font-size: 12px;
+    display: none;
+}
+.deck-view.on .deck-view-name {
+    display: inline;
 }
 .deck-tools {
     display: flex;
