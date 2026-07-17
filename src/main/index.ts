@@ -490,11 +490,17 @@ function registerIpc(): void {
     ipcMain.handle("browser:netGet", (_e, id: number) => browserNet.getRecent(id))
     ipcMain.handle("browser:netDetach", (_e, id: number) => browserNet.detach(id))
 
+    // Confine an upload's target dir to an open project (else fall back to temp),
+    // and bound the payload — defense-in-depth for these write handlers.
+    const MAX_UPLOAD = 25 * 1024 * 1024
+    const uploadBase = (projectPath: unknown): string =>
+        typeof projectPath === "string" && inProject(projectPath) ? projectPath : app.getPath("temp")
+
     // --- Browser: save a captured screenshot (data URL) into a project ---
     ipcMain.handle("browser:saveShot", (_e, { projectPath, dataUrl }) => {
         try {
-            const base = projectPath || app.getPath("temp")
-            const dir = join(base, ".devdeck", "uploads")
+            if (String(dataUrl).length > MAX_UPLOAD) return ""
+            const dir = join(uploadBase(projectPath), ".devdeck", "uploads")
             mkdirSync(dir, { recursive: true })
             const file = join(dir, "shot-" + Date.now() + ".png")
             const b64 = String(dataUrl).replace(/^data:image\/png;base64,/, "")
@@ -508,8 +514,8 @@ function registerIpc(): void {
     // dir (preserving its type), so its path can be @-mentioned to an agent.
     ipcMain.handle("fs:saveUpload", (_e, { projectPath, name, dataUrl }) => {
         try {
-            const base = projectPath || app.getPath("temp")
-            const dir = join(base, ".devdeck", "uploads")
+            if (String(dataUrl).length > MAX_UPLOAD) return ""
+            const dir = join(uploadBase(projectPath), ".devdeck", "uploads")
             mkdirSync(dir, { recursive: true })
             const m = /^data:([^;]+);base64,(.*)$/s.exec(String(dataUrl))
             if (!m) return ""

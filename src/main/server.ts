@@ -260,8 +260,13 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         send(ws, { t: "fs:write", path: p, error: "Path is outside any open project." })
                         break
                     }
+                    const content = String(msg.content ?? "")
+                    if (content.length > 5 * 1024 * 1024) {
+                        send(ws, { t: "fs:write", path: p, error: "File too large to save remotely." })
+                        break
+                    }
                     try {
-                        writeFileText(p, String(msg.content ?? ""))
+                        writeFileText(p, content)
                         send(ws, { t: "fs:write", path: p, ok: true })
                     } catch (e) {
                         send(ws, { t: "fs:write", path: p, error: String((e as Error)?.message ?? e) })
