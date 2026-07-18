@@ -37,6 +37,17 @@ export function TerminalView(): JSX.Element {
     const composerDraft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
     const termLayout = useStore((s) => s.termLayout)
     const setTermLayout = useStore((s) => s.setTermLayout)
+    // The three layout modes cycle behind one control instead of three buttons.
+    const LAYOUTS = [
+        { id: "tabs", icon: "tabs", label: "Tabs" },
+        { id: "grid", icon: "grid", label: "Grid" },
+        { id: "canvas", icon: "canvas", label: "Canvas" }
+    ] as const
+    const layoutIdx = Math.max(
+        0,
+        LAYOUTS.findIndex((l) => l.id === termLayout)
+    )
+    const nextLayout = LAYOUTS[(layoutIdx + 1) % LAYOUTS.length]
     const focusPane = useStore((s) => s.focusPane)
     const agents = useSettings((s) => s.agents)
     const sshProfiles = useSettings((s) => s.sshProfiles)
@@ -410,25 +421,11 @@ export function TerminalView(): JSX.Element {
                     </div>
                     <span className="action-sep" />
                     <button
-                        className={"icon-action" + (termLayout === "tabs" ? " on" : "")}
-                        onClick={() => setTermLayout("tabs")}
-                        data-tip="Tabs - one terminal at a time"
+                        className="icon-action"
+                        onClick={() => setTermLayout(nextLayout.id)}
+                        data-tip={`Layout: ${LAYOUTS[layoutIdx].label} — click for ${nextLayout.label}`}
                     >
-                        <Icon name="tabs" />
-                    </button>
-                    <button
-                        className={"icon-action" + (termLayout === "grid" ? " on" : "")}
-                        onClick={() => setTermLayout("grid")}
-                        data-tip="Grid - all this project's terminals at once"
-                    >
-                        <Icon name="grid" />
-                    </button>
-                    <button
-                        className={"icon-action" + (termLayout === "canvas" ? " on" : "")}
-                        onClick={() => setTermLayout("canvas")}
-                        data-tip="Canvas - free-form board of all terminals"
-                    >
-                        <Icon name="canvas" />
+                        <Icon name={LAYOUTS[layoutIdx].icon} />
                     </button>
                     <span className="action-sep" />
                     <button
