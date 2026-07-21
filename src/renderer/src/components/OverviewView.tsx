@@ -23,6 +23,55 @@ function dotClass(s: AnySession): string {
     return s.isAgent ? "tab-dot claude status-" + s.status : "tab-dot shell"
 }
 
+/** A session name that becomes an inline editor on double-click (reuses the
+ *  same renameSession the deck keys / tabs use). */
+function EditableName({
+    termId,
+    name,
+    className
+}: {
+    termId: string
+    name: string
+    className: string
+}): JSX.Element {
+    const rename = useStore((s) => s.renameSession)
+    const [editing, setEditing] = useState(false)
+    const [text, setText] = useState(name)
+    if (editing) {
+        const commit = (): void => {
+            rename(termId, text.trim() || name)
+            setEditing(false)
+        }
+        return (
+            <input
+                className="session-rename"
+                autoFocus
+                value={text}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setText(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter") commit()
+                    else if (e.key === "Escape") setEditing(false)
+                }}
+            />
+        )
+    }
+    return (
+        <span
+            className={className}
+            data-tip="Double-click to rename"
+            onDoubleClick={(e) => {
+                e.stopPropagation()
+                setText(name)
+                setEditing(true)
+            }}
+        >
+            {name}
+        </span>
+    )
+}
+
 export function OverviewView(): JSX.Element {
     const sessionsFn = useStore((s) => s.sessions)
     const projects = useStore((s) => s.projects)
@@ -134,7 +183,7 @@ export function OverviewView(): JSX.Element {
                     <div className="ov-main">
                         <div className="ov-main-head">
                             <span className={dotClass(focused)} />
-                            <span className="ov-main-name">{focused.sessionName}</span>
+                            <EditableName termId={focused.termId} name={focused.sessionName} className="ov-main-name" />
                             {focused.isAgent && <span className="agent-badge sm">{focused.badge}</span>}
                             {focused.status === "attention" && <span className="claude-attn">!</span>}
                             <span className="ov-main-proj">{focused.projectName}</span>
@@ -189,11 +238,33 @@ export function OverviewView(): JSX.Element {
                 <div className="ov-grid-scroll">
                     {groups.map((g) => (
                         <div key={g.key} className={"ov-group" + (collapsed.has(g.key) ? " collapsed" : "")}>
-                            <div className="ov-group-head" onClick={() => toggleFold(g.key)}>
+                            <div
+                                className="ov-group-head"
+                                role="button"
+                                tabIndex={0}
+                                aria-expanded={!collapsed.has(g.key)}
+                                onClick={() => toggleFold(g.key)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault()
+                                        toggleFold(g.key)
+                                    }
+                                }}
+                            >
                                 <Icon name="chevronDown" size={12} className="ov-chev" />
                                 {g.isGroup ? <span className="ov-grp-tag">{g.label}</span> : g.label}
                                 <span className="ov-grp-count">
                                     · {g.sessions.length} terminal{g.sessions.length === 1 ? "" : "s"}
+                                </span>
+                                {collapsed.has(g.key) && (
+                                    <span className="ov-grp-mini" aria-hidden="true">
+                                        {g.sessions.map((s) => (
+                                            <span key={s.termId} className={dotClass(s)} />
+                                        ))}
+                                    </span>
+                                )}
+                                <span className="ov-grp-expand">
+                                    {collapsed.has(g.key) ? "show" : "hide"}
                                 </span>
                             </div>
                             <div className="ov-grid">
@@ -201,7 +272,7 @@ export function OverviewView(): JSX.Element {
                                     <div key={s.termId} className="ov-card">
                                         <div className="ov-card-head">
                                             <span className={dotClass(s)} />
-                                            <span className="ov-card-name">{s.sessionName}</span>
+                                            <EditableName termId={s.termId} name={s.sessionName} className="ov-card-name" />
                                             {s.isAgent && (
                                                 <span className="agent-badge sm">{s.badge}</span>
                                             )}
