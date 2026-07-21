@@ -10,6 +10,7 @@ import type { Tab } from "../store"
 import { SplitView } from "./SplitView"
 import { PromptComposer } from "./PromptComposer"
 import { CanvasView } from "./CanvasView"
+import { OverviewView } from "./OverviewView"
 import { Icon } from "./Icon"
 
 // Shell choices offered in the "new terminal" menu (overrides the global default
@@ -37,11 +38,13 @@ export function TerminalView(): JSX.Element {
     const composerDraft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
     const termLayout = useStore((s) => s.termLayout)
     const setTermLayout = useStore((s) => s.setTermLayout)
-    // The three layout modes cycle behind one control instead of three buttons.
+    // Layout modes cycle behind one control instead of separate buttons. The
+    // first three are per-project; Overview is the cross-project board.
     const LAYOUTS = [
         { id: "tabs", icon: "tabs", label: "Tabs" },
         { id: "grid", icon: "grid", label: "Grid" },
-        { id: "canvas", icon: "canvas", label: "Canvas" }
+        { id: "canvas", icon: "canvas", label: "Canvas" },
+        { id: "overview", icon: "layers", label: "Overview (all projects)" }
     ] as const
     const layoutIdx = Math.max(
         0,
@@ -185,7 +188,7 @@ export function TerminalView(): JSX.Element {
     )
 
     return (
-        <div className="terminal-view">
+        <div className={"terminal-view" + (termLayout === "overview" ? " overview-mode" : "")}>
             <div className="term-tabbar">
                 <div className="term-tabs" role="tablist">
                     {tabs.map((tab) => {
@@ -549,7 +552,9 @@ export function TerminalView(): JSX.Element {
                     </div>
                 )}
                 <div className="stage-body">
-                    {tabs.length === 0 || !activeTab ? (
+                    {termLayout === "overview" ? (
+                        <OverviewView />
+                    ) : tabs.length === 0 || !activeTab ? (
                         <div className="empty-state">
                             <p>No terminals yet in {activeProject.name}.</p>
                             <p className="muted">

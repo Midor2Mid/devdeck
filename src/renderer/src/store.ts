@@ -91,7 +91,7 @@ interface Persisted {
     boardTasks: BoardTask[]
 }
 
-export type TermLayout = "tabs" | "grid" | "canvas"
+export type TermLayout = "tabs" | "grid" | "canvas" | "overview"
 
 export interface CanvasPos {
     x: number
