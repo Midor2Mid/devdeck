@@ -72,6 +72,24 @@ function EditableName({
     )
 }
 
+// Which groups are folded, persisted across view switches + restarts (localStorage,
+// same lightweight store the project MRU uses — no workspace-schema change needed).
+const COLLAPSE_KEY = "devdeck.overviewCollapsed"
+function loadCollapsed(): Set<string> {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "[]") as string[])
+    } catch {
+        return new Set()
+    }
+}
+function saveCollapsed(s: Set<string>): void {
+    try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...s]))
+    } catch {
+        /* storage unavailable — ignore */
+    }
+}
+
 export function OverviewView(): JSX.Element {
     const sessionsFn = useStore((s) => s.sessions)
     const projects = useStore((s) => s.projects)
@@ -87,7 +105,7 @@ export function OverviewView(): JSX.Element {
 
     const [mode, setMode] = useState<"focus" | "grid">("focus")
     const [focusId, setFocusId] = useState<string | null>(null)
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+    const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed)
 
     // Refresh the rail peeks (tails live outside the store, fed by the pty stream).
     const [, setTick] = useState(0)
@@ -128,8 +146,17 @@ export function OverviewView(): JSX.Element {
             const next = new Set(prev)
             if (next.has(key)) next.delete(key)
             else next.add(key)
+            saveCollapsed(next)
             return next
         })
+
+    const allKeys = groups.map((g) => g.key)
+    const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsed.has(k))
+    const toggleAll = (): void => {
+        const next = allCollapsed ? new Set<string>() : new Set(allKeys)
+        saveCollapsed(next)
+        setCollapsed(next)
+    }
 
     const modeToggle = (
         <div className="ov-seg" role="group" aria-label="Overview mode">
@@ -155,7 +182,7 @@ export function OverviewView(): JSX.Element {
             <div className="overview">
                 <div className="ov-bar">
                     <span className="ov-bar-title">Overview · all projects</span>
-                    {modeToggle}
+                    <div className="ov-bar-right">{modeToggle}</div>
                 </div>
                 <div className="empty-state">
                     <p>No terminals running across your projects.</p>
@@ -175,7 +202,18 @@ export function OverviewView(): JSX.Element {
                     Overview · {sessions.length} terminal{sessions.length === 1 ? "" : "s"} ·{" "}
                     {new Set(sessions.map((s) => s.projectId)).size} projects
                 </span>
-                {modeToggle}
+                <div className="ov-bar-right">
+                    {mode === "grid" && groups.length > 1 && (
+                        <button
+                            className="ov-foldall"
+                            onClick={toggleAll}
+                            data-tip={allCollapsed ? "Expand every group" : "Collapse every group"}
+                        >
+                            {allCollapsed ? "Expand all" : "Collapse all"}
+                        </button>
+                    )}
+                    {modeToggle}
+                </div>
             </div>
 
             {mode === "focus" ? (
