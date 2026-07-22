@@ -69,6 +69,11 @@ export function TerminalView(): JSX.Element {
     const draggingTabId = useStore((s) => s.draggingTabId)
     const composerOpen = useStore((s) => s.composerOpen)
     const setComposerOpen = useStore((s) => s.setComposerOpen)
+    // The prompt composer only sends into agent sessions, so its launcher bar
+    // earns its space only when at least one exists. With none (pure shell /
+    // running `claude` yourself in a terminal) the bar is hidden — Ctrl+Shift+I
+    // still opens the composer as a power-user escape hatch.
+    const hasAgentSession = useStore((s) => s.agentSessions().length > 0)
     const recordingTermId = useStore((s) => s.recordingTermId)
     const setRecordingTermId = useStore((s) => s.setRecordingTermId)
     const setRecordingsOpen = useStore((s) => s.setRecordingsOpen)
@@ -627,7 +632,7 @@ export function TerminalView(): JSX.Element {
             </div>
             {composerOpen ? (
                 <PromptComposer onClose={() => setComposerOpen(false)} />
-            ) : (
+            ) : hasAgentSession ? (
                 <div
                     className="composer-launcher"
                     onClick={() => setComposerOpen(true)}
@@ -642,7 +647,7 @@ export function TerminalView(): JSX.Element {
                     {composerDraft.trim() && <span className="cl-draft">● draft</span>}
                     <span className="cl-kbd">Ctrl+Shift+I</span>
                 </div>
-            )}
+            ) : null}
         </div>
     )
 }
