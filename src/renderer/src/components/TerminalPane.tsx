@@ -74,6 +74,44 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         fitRef.current = fit
         paneRegistry.set(termId, { term, search })
 
+        // Copy/paste. Ctrl+Shift+C copies the selection; Ctrl+Shift+V (and
+        // right-click) paste the clipboard into the shell. Ctrl+C is left as-is
+        // (SIGINT), and plain Ctrl+V still hits xterm's native paste. Clipboard
+        // goes through Electron's module (the renderer's deny-all permission
+        // handler blocks the async Clipboard API).
+        const pasteFromClipboard = (): void => {
+            window.api.clipboard.readText().then((t) => {
+                if (t) window.api.pty.input(termId, t)
+            })
+        }
+        term.attachCustomKeyEventHandler((e) => {
+            if (e.type !== "keydown") return true
+            const mod = e.ctrlKey || e.metaKey
+            if (!mod || !e.shiftKey || e.altKey) return true
+            const k = e.key.toLowerCase()
+            if (k === "c") {
+                const sel = term.getSelection()
+                if (sel) {
+                    window.api.clipboard.writeText(sel)
+                    term.clearSelection()
+                }
+                return false
+            }
+            if (k === "v") {
+                pasteFromClipboard()
+                return false
+            }
+            return true
+        })
+        const onContextMenu = (e: MouseEvent): void => {
+            e.preventDefault()
+            const sel = term.getSelection()
+            // Right-click copies a selection if there is one, else pastes.
+            if (sel) window.api.clipboard.writeText(sel)
+            else pasteFromClipboard()
+        }
+        container.addEventListener("contextmenu", onContextMenu)
+
         const safeFit = (): void => {
             if (!container.clientWidth || !container.clientHeight) return
             try {
@@ -137,6 +175,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             offExit()
             inputSub.dispose()
             ro.disconnect()
+            container.removeEventListener("contextmenu", onContextMenu)
             paneRegistry.delete(termId)
             term.dispose()
             // NOTE: intentionally NOT killing the pty - session persists.

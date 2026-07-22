@@ -12,6 +12,43 @@ export interface RunConfig {
     type: "node" | "dotnet" | "go"
 }
 
+// From all the .csproj files in a repo, guess the startup project to run.
+// `dotnet run` at the root fails when the runnable project lives in a subfolder
+// (the common src/*/Foo.Api.csproj layout) or when the root only has a .sln, so
+// we resolve a specific --project. Skips test/library projects and prefers a
+// web/api-looking one; ties break toward shallower, shorter paths.
+export function pickStartupProject(csprojs: string[]): string | undefined {
+    if (csprojs.length === 0) return undefined
+    const nonTest = csprojs.filter((f) => !/test|spec/i.test(f))
+    const pool = nonTest.length ? nonTest : csprojs
+    const isLib = /\.(core|infra|infrastructure|common|shared|domain|data|abstractions|contracts|models?|entities|dto)\.csproj$/i
+    const score = (f: string): number => {
+        const n = f.toLowerCase()
+        let s = 0
+        if (n.includes("webapi")) s += 40
+        else if (/(^|[./\\])api[./\\]/.test(n) || n.includes(".api.")) s += 30
+        else if (/web|server|host|\bapp\b/.test(n)) s += 20
+        if (isLib.test(f)) s -= 25
+        s -= f.split(/[/\\]/).length // shallower wins
+        s -= f.length / 200 // shorter breaks ties
+        return s
+    }
+    return [...pool].sort((a, b) => score(b) - score(a))[0]
+}
+
+async function dotnetCommand(path: string): Promise<string> {
+    try {
+        const csprojs = (await window.api.fs.allFiles(path)).filter((f) =>
+            f.toLowerCase().endsWith(".csproj")
+        )
+        const pick = pickStartupProject(csprojs)
+        if (pick) return `dotnet run --project "${pick}"`
+    } catch {
+        /* couldn't scan — fall back to plain dotnet run */
+    }
+    return "dotnet run"
+}
+
 async function detectRun(path: string): Promise<RunConfig | null> {
     let names: string[] = []
     try {
@@ -26,7 +63,7 @@ async function detectRun(path: string): Promise<RunConfig | null> {
     // A solution file is the strongest signal of a .NET-primary repo — prefer it
     // even when a package.json is also present (common: a C# backend with a small
     // front-end / JS tooling), so we don't offer `npm run dev` for a .NET project.
-    if (hasSln) return { command: "dotnet run", type: "dotnet" }
+    if (hasSln) return { command: await dotnetCommand(path), type: "dotnet" }
 
     // Node / JS — prefer a `dev` script (the usual watch/serve entry), else fall
     // back to `npm start` (npm's conventional run target).
@@ -40,8 +77,8 @@ async function detectRun(path: string): Promise<RunConfig | null> {
         }
     }
 
-    // .NET project file (no solution) — `dotnet run` resolves it.
-    if (hasCsproj) return { command: "dotnet run", type: "dotnet" }
+    // .NET project file(s) but no solution — resolve the startup --project too.
+    if (hasCsproj) return { command: await dotnetCommand(path), type: "dotnet" }
     // Go — a module at the root.
     if (names.includes("go.mod")) return { command: "go run .", type: "go" }
     return null

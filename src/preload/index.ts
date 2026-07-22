@@ -403,6 +403,10 @@ const api = {
         apply: (cfg: { enabled: boolean; url: string; noProxy: string; caPath: string }): void =>
             ipcRenderer.send("netproxy:apply", cfg)
     },
+    clipboard: {
+        readText: (): Promise<string> => ipcRenderer.invoke("clipboard:read"),
+        writeText: (text: string): void => ipcRenderer.send("clipboard:write", text)
+    },
     mobile: {
         syncSessions: (sessions: RemoteSession[]): void =>
             ipcRenderer.send("mobile:sessions", sessions),

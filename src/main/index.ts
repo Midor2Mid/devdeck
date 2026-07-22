@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, session } from "electron"
+import { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard } from "electron"
 import { join } from "path"
 import { mkdirSync, writeFileSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
@@ -189,6 +189,11 @@ function registerIpc(): void {
 
     // --- Corporate proxy (mutates process.env; new children inherit it) ---
     ipcMain.on("netproxy:apply", (_e, cfg: netproxy.ProxyConfig) => netproxy.applyProxy(cfg))
+
+    // --- Clipboard (via Electron's module — the renderer's deny-all permission
+    //     handler blocks navigator.clipboard, so terminal copy/paste routes here) ---
+    ipcMain.handle("clipboard:read", () => clipboard.readText())
+    ipcMain.on("clipboard:write", (_e, text: string) => clipboard.writeText(String(text ?? "")))
 
     // --- API client ---
     ipcMain.handle("http:send", (_e, req) => httpSend(req))
