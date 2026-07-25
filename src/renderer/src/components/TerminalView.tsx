@@ -11,6 +11,7 @@ import { SplitView } from "./SplitView"
 import { PromptComposer } from "./PromptComposer"
 import { CanvasView } from "./CanvasView"
 import { OverviewView } from "./OverviewView"
+import { CommandLauncher } from "./CommandLauncher"
 import { Icon } from "./Icon"
 
 // Shell choices offered in the "new terminal" menu (overrides the global default
@@ -87,7 +88,9 @@ export function TerminalView(): JSX.Element {
     const tabs = activeId ? tabsByProject[activeId] ?? [] : []
     const activeTabId = activeId ? activeTabByProject[activeId] : undefined
     const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
-    const primaryAgent = agents[0]
+    // The one-click "+" button is the first AI-agent preset; normal-mode startup
+    // commands live in the ▾ menu only.
+    const primaryAgent = agents.find((a) => a.runMode !== "normal") ?? agents[0]
 
     const runFind = (forward: boolean): void => {
         const s = useStore.getState()
@@ -347,19 +350,31 @@ export function TerminalView(): JSX.Element {
                             <>
                                 <div className="menu-backdrop" onClick={() => setMenuOpen(false)} />
                                 <div className="agent-menu">
-                                    {agents.map((a) => (
+                                    {agents.map((a) => {
+                                        const normal = a.runMode === "normal"
+                                        return (
                                         <div key={a.id} className="agent-menu-row">
                                             <span
                                                 className="agent-menu-name"
                                                 onClick={() => {
-                                                    newTab(a.id)
+                                                    // Agent mode → an AI session; normal mode → a
+                                                    // plain shell that auto-runs the command.
+                                                    if (normal)
+                                                        newTab(SHELL, a.command || undefined, a.name)
+                                                    else newTab(a.id)
                                                     setMenuOpen(false)
                                                 }}
                                             >
-                                                <span className="agent-badge">{a.badge}</span>
+                                                {normal ? (
+                                                    <span className="agent-badge cmd-badge">
+                                                        {a.icon || "❯"}
+                                                    </span>
+                                                ) : (
+                                                    <span className="agent-badge">{a.badge}</span>
+                                                )}
                                                 {a.name}
                                             </span>
-                                            {a.resumeArgs && (
+                                            {!normal && a.resumeArgs && (
                                                 <span
                                                     className="agent-menu-resume"
                                                     data-tip={`Resume (${a.command} ${a.resumeArgs})`}
@@ -372,7 +387,8 @@ export function TerminalView(): JSX.Element {
                                                 </span>
                                             )}
                                         </div>
-                                    ))}
+                                        )
+                                    })}
                                     {sshProfiles.length > 0 && (
                                         <div className="agent-menu-divider">SSH</div>
                                     )}
@@ -560,13 +576,7 @@ export function TerminalView(): JSX.Element {
                     {termLayout === "overview" ? (
                         <OverviewView />
                     ) : tabs.length === 0 || !activeTab ? (
-                        <div className="empty-state">
-                            <p>No terminals yet in {activeProject.name}.</p>
-                            <p className="muted">
-                                <b>+ Terminal</b> for a shell, <b>+ {primaryAgent?.name ?? "agent"}</b>{" "}
-                                for an AI session. Split with the ⇆ / ⇅ buttons.
-                            </p>
-                        </div>
+                        <CommandLauncher projectName={activeProject.name} />
                     ) : termLayout === "grid" ? (
                         <div className="term-grid">
                             {allPanes.map(({ termId, tabName, tabId }) => {

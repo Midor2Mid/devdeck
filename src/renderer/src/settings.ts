@@ -82,7 +82,14 @@ export interface Collection {
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
 
-/** A launchable AI CLI agent (Claude, Codex, Gemini, custom…). */
+/** How a startup command runs when launched. */
+export type RunMode = "agent" | "normal"
+
+/**
+ * A launchable startup command. In "agent" mode it's an AI CLI session (Claude,
+ * Codex, …) with prompts/orchestration/idle detection; in "normal" mode it's a
+ * plain shell that auto-runs `command` (a dev server, a build, etc.).
+ */
 export interface AgentPreset {
     id: string
     name: string
@@ -95,6 +102,12 @@ export interface AgentPreset {
     model: string
     /** Env var that carries the model (e.g. ANTHROPIC_MODEL for Claude Code). */
     modelEnv: string
+    /** "agent" = AI session; "normal" = plain shell that auto-runs the command. */
+    runMode: RunMode
+    /** Optional emoji/glyph shown on launcher cards and menus. "" = none. */
+    icon: string
+    /** Optional grouping label for pickers/launcher. "" = ungrouped. */
+    category: string
 }
 
 /** Default API-key env var per built-in agent (for migrating older saved settings). */
@@ -259,9 +272,9 @@ const DEFAULTS: AppSettings = {
         minimap: false
     },
     agents: [
-        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL" },
-        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY", model: "", modelEnv: "" },
-        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY", model: "", modelEnv: "" }
+        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✳", category: "AI Agents" },
+        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◆", category: "AI Agents" },
+        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◇", category: "AI Agents" }
     ],
     agentIdleMs: 1000,
     snippets: [
@@ -442,7 +455,11 @@ export const useSettings = create<SettingsState>((set, get) => {
                         ...a,
                         apiKeyEnv: a.apiKeyEnv ?? KNOWN_KEY_ENV[a.id] ?? "",
                         model: a.model ?? "",
-                        modelEnv: a.modelEnv ?? KNOWN_MODEL_ENV[a.id] ?? ""
+                        modelEnv: a.modelEnv ?? KNOWN_MODEL_ENV[a.id] ?? "",
+                        // Pre-existing presets are all AI agents; new fields default in.
+                        runMode: a.runMode ?? "agent",
+                        icon: a.icon ?? "",
+                        category: a.category ?? ""
                     })),
                     agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
                     snippets: raw.snippets ?? DEFAULTS.snippets,

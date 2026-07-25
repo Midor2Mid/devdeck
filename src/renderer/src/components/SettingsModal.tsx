@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
-import { useSettings, type ShellKind, type GitAccount } from "../settings"
+import { useSettings, type ShellKind, type GitAccount, type AgentPreset, type RunMode } from "../settings"
 import { useStore } from "../store"
 import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
@@ -682,11 +682,13 @@ function PipelinesSection(): JSX.Element {
                                     value={st.agentId}
                                     onChange={(e) => updateStep(pi, si, { agentId: e.target.value })}
                                 >
-                                    {agents.map((a) => (
-                                        <option key={a.id} value={a.id}>
-                                            {a.name}
-                                        </option>
-                                    ))}
+                                    {agents
+                                        .filter((a) => a.runMode !== "normal")
+                                        .map((a) => (
+                                            <option key={a.id} value={a.id}>
+                                                {a.name}
+                                            </option>
+                                        ))}
                                 </select>
                                 <label className="pipe-fresh" data-tip="Start a new session for this step instead of reusing the agent's">
                                     <input
@@ -813,70 +815,115 @@ function AgentsSection(): JSX.Element {
         else setEnvSet({})
     }, [keyNames.join(",")])
 
-    const update = (i: number, patch: Record<string, string>): void => {
+    const update = (i: number, patch: Partial<AgentPreset>): void => {
         setAgents(agents.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
     }
     const remove = (i: number): void => setAgents(agents.filter((_, idx) => idx !== i))
-    const add = (): void =>
+    const add = (mode: RunMode): void =>
         setAgents([
             ...agents,
             {
                 id: crypto.randomUUID(),
-                name: "New agent",
+                name: mode === "normal" ? "New command" : "New agent",
                 command: "",
                 resumeArgs: "",
-                badge: "AGENT",
+                badge: mode === "normal" ? "" : "AGENT",
                 apiKeyEnv: "",
                 model: "",
-                modelEnv: ""
+                modelEnv: "",
+                runMode: mode,
+                icon: "",
+                category: mode === "normal" ? "" : "AI Agents"
             }
         ])
 
     return (
         <div className="settings-section">
-            <h3>AI agents</h3>
-            <div className="agents-head">
-                <span>Name</span>
-                <span>Command</span>
-                <span>Resume</span>
-                <span>Badge</span>
-                <span>Key env var</span>
-                <span />
-            </div>
+            <h3>Startup commands</h3>
+            <p className="settings-hint" style={{ marginTop: -4 }}>
+                A startup command opens a terminal and runs. In <b>AI agent</b> mode it's a CLI
+                session with prompts, orchestration and idle detection; in <b>Normal</b> mode it's a
+                plain shell that auto-runs the command (a dev server, a build…).
+            </p>
             {agents.map((a, i) => {
                 const overridden = !!a.apiKeyEnv && envSet[a.apiKeyEnv]
+                const normal = a.runMode === "normal"
                 return (
-                    <div key={a.id}>
-                        <div className="agent-edit-row">
+                    <div key={a.id} className="cmd-edit-card">
+                        <div className="cmd-edit-top">
+                            <div className="cmd-mode-toggle" role="group" aria-label="Run mode">
+                                <button
+                                    className={normal ? "" : "on"}
+                                    onClick={() => update(i, { runMode: "agent" })}
+                                >
+                                    ✳ AI agent
+                                </button>
+                                <button
+                                    className={normal ? "on" : ""}
+                                    onClick={() => update(i, { runMode: "normal" })}
+                                >
+                                    ❯ Normal
+                                </button>
+                            </div>
                             <input
+                                className="cmd-icon-input"
+                                value={a.icon}
+                                maxLength={2}
+                                placeholder="◆"
+                                data-tip="Icon (emoji or glyph, optional)"
+                                onChange={(e) => update(i, { icon: e.target.value })}
+                            />
+                            <input
+                                className="cmd-name-input"
                                 value={a.name}
+                                placeholder="Name"
                                 onChange={(e) => update(i, { name: e.target.value })}
-                            />
-                            <input
-                                value={a.command}
-                                placeholder="claude"
-                                onChange={(e) => update(i, { command: e.target.value })}
-                            />
-                            <input
-                                value={a.resumeArgs}
-                                placeholder="--continue"
-                                onChange={(e) => update(i, { resumeArgs: e.target.value })}
-                            />
-                            <input
-                                value={a.badge}
-                                onChange={(e) => update(i, { badge: e.target.value.toUpperCase() })}
-                            />
-                            <input
-                                value={a.apiKeyEnv}
-                                placeholder="ANTHROPIC_API_KEY"
-                                className={overridden ? "warn-field" : ""}
-                                onChange={(e) => update(i, { apiKeyEnv: e.target.value.trim() })}
                             />
                             <button className="row-remove" data-tip="Remove" onClick={() => remove(i)}>
                                 ×
                             </button>
                         </div>
-                        {overridden && (
+                        <div className="cmd-edit-grid">
+                            <label>Command</label>
+                            <input
+                                value={a.command}
+                                placeholder={normal ? "npm run dev" : "claude"}
+                                onChange={(e) => update(i, { command: e.target.value })}
+                            />
+                            <label>Category</label>
+                            <input
+                                value={a.category}
+                                placeholder={normal ? "Dev Servers" : "AI Agents"}
+                                onChange={(e) => update(i, { category: e.target.value })}
+                            />
+                            {!normal && (
+                                <>
+                                    <label>Resume</label>
+                                    <input
+                                        value={a.resumeArgs}
+                                        placeholder="--continue"
+                                        onChange={(e) => update(i, { resumeArgs: e.target.value })}
+                                    />
+                                    <label>Badge</label>
+                                    <input
+                                        value={a.badge}
+                                        onChange={(e) =>
+                                            update(i, { badge: e.target.value.toUpperCase() })
+                                        }
+                                    />
+                                    <label>Key env var</label>
+                                    <input
+                                        value={a.apiKeyEnv}
+                                        placeholder="ANTHROPIC_API_KEY"
+                                        className={overridden ? "warn-field" : ""}
+                                        onChange={(e) =>
+                                            update(i, { apiKeyEnv: e.target.value.trim() })
+                                        }
+                                    />
+                                </>
+                            )}
+                        </div>
+                        {!normal && overridden && (
                             <div className="agent-warn">
                                 ⚠ <b>{a.apiKeyEnv}</b> is set - {a.name} will bill pay-as-you-go
                                 <b> API usage</b> instead of a subscription login. Unset it (and
@@ -886,9 +933,10 @@ function AgentsSection(): JSX.Element {
                     </div>
                 )
             })}
-            <button onClick={add} style={{ marginTop: 8 }}>
-                + Add agent
-            </button>
+            <div className="cmd-add-row">
+                <button onClick={() => add("agent")}>+ AI agent</button>
+                <button onClick={() => add("normal")}>+ Terminal command</button>
+            </div>
             <div className="setting-row" style={{ marginTop: 18 }}>
                 <label>Idle → attention (ms)</label>
                 <input
@@ -901,10 +949,9 @@ function AgentsSection(): JSX.Element {
                 />
             </div>
             <p className="settings-hint">
-                Each agent is a CLI launched in a terminal. The first is the one-click <b>+</b>{" "}
-                button; the rest are in the ▾ menu. "Key env var" is the API key that would
-                override that CLI's subscription login - DevDeck warns when it's present in the
-                environment.
+                The first AI agent is the one-click <b>+</b> button; the rest (and your terminal
+                commands) are in the ▾ menu. "Key env var" is the API key that would override that
+                CLI's subscription login - DevDeck warns when it's present in the environment.
             </p>
         </div>
     )

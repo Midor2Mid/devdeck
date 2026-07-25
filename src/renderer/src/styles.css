@@ -1189,6 +1189,89 @@ button .ic,
     color: var(--muted);
     position: relative;
 }
+/* Launcher: the empty-terminal screen — startup commands as click-to-run cards. */
+.launcher {
+    height: 100%;
+    width: 100%;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 34px 24px;
+    overflow-y: auto;
+}
+.launcher-head {
+    text-align: center;
+    margin-bottom: 18px;
+}
+.launcher-head h2 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--text);
+}
+.launcher-head .muted {
+    font-size: 12px;
+}
+.launcher-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+.launcher-group {
+    margin-bottom: 22px;
+}
+.launcher-group-title {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--faint);
+    text-align: center;
+    margin-bottom: 12px;
+}
+.launcher-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+}
+.launch-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 16px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-2);
+    text-align: center;
+    cursor: pointer;
+    transition:
+        border-color 0.12s,
+        background 0.12s,
+        transform 0.12s;
+}
+.launch-card:hover {
+    border-color: var(--accent);
+    background: var(--bg-3);
+    transform: translateY(-1px);
+}
+.launch-card-icon {
+    font-size: 20px;
+    line-height: 1;
+    color: var(--accent);
+}
+.launch-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+}
+.launch-card-cmd {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--faint);
+}
 /* A large, faint ensō behind empty states - turns void into intentional ma. */
 .empty-state::before,
 .resp-placeholder::before {
@@ -1436,6 +1519,82 @@ button .ic,
 .row-remove:hover {
     color: var(--danger);
     background: transparent;
+}
+/* Startup-command editor: one card per command, with an agent/normal run-mode
+   toggle, an icon + name header, and a details grid that adapts to the mode. */
+.cmd-edit-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: var(--bg-2);
+}
+.cmd-edit-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.cmd-mode-toggle {
+    display: inline-flex;
+    flex: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.cmd-mode-toggle button {
+    border: none;
+    border-radius: 0;
+    padding: 4px 9px;
+    font-size: 11px;
+    color: var(--faint);
+    background: transparent;
+}
+.cmd-mode-toggle button.on {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+.cmd-icon-input {
+    width: 34px;
+    flex: none;
+    text-align: center;
+    font-size: 13px;
+    padding: 4px 2px;
+}
+.cmd-name-input {
+    flex: 1;
+    font-size: 12px;
+    padding: 4px 6px;
+}
+.cmd-edit-grid {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr;
+    gap: 6px 8px;
+    align-items: center;
+    margin-top: 8px;
+}
+.cmd-edit-grid label {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--faint);
+    text-align: right;
+}
+.cmd-edit-grid input {
+    width: 100%;
+    font-size: 12px;
+    padding: 4px 6px;
+}
+.cmd-edit-grid .warn-field {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+.cmd-add-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.agent-badge.cmd-badge {
+    color: var(--accent);
 }
 .icon-action {
     display: inline-flex;
