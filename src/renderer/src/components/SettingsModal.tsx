@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
-import { useSettings, type ShellKind, type GitAccount, type AgentPreset, type RunMode } from "../settings"
+import {
+    useSettings,
+    RECOMMENDED_COMMANDS,
+    type ShellKind,
+    type GitAccount,
+    type AgentPreset,
+    type RunMode
+} from "../settings"
 import { useStore } from "../store"
 import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
@@ -819,6 +826,16 @@ function AgentsSection(): JSX.Element {
         setAgents(agents.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
     }
     const remove = (i: number): void => setAgents(agents.filter((_, idx) => idx !== i))
+    // Recommended commands the current config is missing (matched by id, or by the
+    // same command + run mode), so "Add recommended" never creates duplicates.
+    const missingRecommended = RECOMMENDED_COMMANDS.filter((r) => {
+        const key = `${r.runMode}:${r.command.trim()}`
+        return !agents.some((a) => a.id === r.id || `${a.runMode}:${a.command.trim()}` === key)
+    })
+    const addRecommended = (): void => {
+        if (missingRecommended.length)
+            setAgents([...agents, ...missingRecommended.map((r) => ({ ...r }))])
+    }
     const add = (mode: RunMode): void =>
         setAgents([
             ...agents,
@@ -936,6 +953,14 @@ function AgentsSection(): JSX.Element {
             <div className="cmd-add-row">
                 <button onClick={() => add("agent")}>+ AI agent</button>
                 <button onClick={() => add("normal")}>+ Terminal command</button>
+                {missingRecommended.length > 0 && (
+                    <button
+                        onClick={addRecommended}
+                        data-tip="Add the recommended starter commands you don't have yet (no duplicates)"
+                    >
+                        ↺ Add recommended ({missingRecommended.length})
+                    </button>
+                )}
             </div>
             <div className="setting-row" style={{ marginTop: 18 }}>
                 <label>Idle → attention (ms)</label>

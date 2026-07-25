@@ -110,6 +110,23 @@ export interface AgentPreset {
     category: string
 }
 
+/**
+ * The curated starter set. Ships as the default for a fresh install and is the
+ * source for the "Add recommended" action, which merges any of these an existing
+ * config is missing. Model-pinned/skip-permissions variants exist to pair with
+ * DevDeck features (parallel models via broadcast, skip-permissions in worktrees).
+ */
+export const RECOMMENDED_COMMANDS: AgentPreset[] = [
+    { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✳", category: "AI Agents" },
+    { id: "claude-opus", name: "Claude Opus", command: "claude", resumeArgs: "--continue", badge: "OPUS", apiKeyEnv: "ANTHROPIC_API_KEY", model: "claude-opus-4-8", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✦", category: "AI Agents" },
+    { id: "claude-yolo", name: "Claude YOLO", command: "claude --dangerously-skip-permissions", resumeArgs: "", badge: "YOLO", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "⚡", category: "AI Agents" },
+    { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◆", category: "AI Agents" },
+    { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◇", category: "AI Agents" },
+    { id: "dev", name: "Dev server", command: "npm run dev", resumeArgs: "", badge: "", apiKeyEnv: "", model: "", modelEnv: "", runMode: "normal", icon: "▶", category: "Dev Servers" },
+    { id: "build", name: "Build", command: "npm run build", resumeArgs: "", badge: "", apiKeyEnv: "", model: "", modelEnv: "", runMode: "normal", icon: "⚒", category: "Build & Test" },
+    { id: "test", name: "Test", command: "npm test", resumeArgs: "", badge: "", apiKeyEnv: "", model: "", modelEnv: "", runMode: "normal", icon: "✓", category: "Build & Test" }
+]
+
 /** Default API-key env var per built-in agent (for migrating older saved settings). */
 export const KNOWN_KEY_ENV: Record<string, string> = {
     claude: "ANTHROPIC_API_KEY",
@@ -271,11 +288,7 @@ const DEFAULTS: AppSettings = {
         wordWrap: false,
         minimap: false
     },
-    agents: [
-        { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✳", category: "AI Agents" },
-        { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◆", category: "AI Agents" },
-        { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◇", category: "AI Agents" }
-    ],
+    agents: RECOMMENDED_COMMANDS,
     agentIdleMs: 1000,
     snippets: [
         {
