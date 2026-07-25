@@ -233,6 +233,8 @@ interface AppState extends Persisted {
     sendToAgent: (text: string) => boolean
     /** Send the same text to every given terminal (fire-to-many). */
     broadcast: (termIds: string[], text: string) => void
+    /** Send a raw keystroke sequence to one agent (e.g. answering a permission prompt). */
+    respondApproval: (termId: string, keys: string) => void
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
     /** Jump to the oldest agent session that wants you (waiting or attention). */
@@ -1279,6 +1281,11 @@ export const useStore = create<AppState>((set, get) => {
             for (const id of termIds) window.api.pty.input(id, text)
             // Keep the focused-agent notion coherent after a fan-out.
             if (termIds.length) set({ lastAgentTermId: termIds[termIds.length - 1] })
+        },
+
+        respondApproval: (termId, keys) => {
+            window.api.pty.input(termId, keys)
+            pushActivity("attention", termId, "answered prompt")
         },
 
         setComposerDraft: (projectId, text) => {

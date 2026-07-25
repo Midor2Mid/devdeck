@@ -3,7 +3,8 @@ import { useStore } from "../store"
 import type { AnySession } from "../store"
 import { SplitView } from "./SplitView"
 import { Icon } from "./Icon"
-import { getTail, peekLine, sortForFollow } from "../missionTail"
+import { getTail, getFullTail, peekLine, sortForFollow } from "../missionTail"
+import { detectApproval, type ApprovalPrompt } from "../approval"
 
 /**
  * Cross-project live-terminal Overview. Two modes:
@@ -69,6 +70,42 @@ function EditableName({
         >
             {name}
         </span>
+    )
+}
+
+/** A permission prompt detected in a session's output an agent already ran, if
+ *  any — only computed for sessions flagged attention/waiting to avoid noise. */
+function approvalFor(s: AnySession): ApprovalPrompt | null {
+    if (!s.isAgent || (s.status !== "attention" && s.status !== "waiting")) return null
+    return detectApproval(getFullTail(s.termId, 16))
+}
+
+/** One-click Approve / Deny for a detected prompt — answers the agent without
+ *  opening its terminal. stopPropagation so it doesn't also trigger the row. */
+function ApprovalActions({ termId, prompt }: { termId: string; prompt: ApprovalPrompt }): JSX.Element {
+    const respond = useStore((s) => s.respondApproval)
+    return (
+        <div className="ov-approve" onClick={(e) => e.stopPropagation()}>
+            <div className="ov-approve-q" data-tip={prompt.question}>
+                {prompt.question}
+            </div>
+            <div className="ov-approve-row">
+                <button
+                    className="ov-approve-yes"
+                    onClick={() => respond(termId, prompt.approve)}
+                    data-tip="Send Yes to the agent"
+                >
+                    ✓ Approve
+                </button>
+                <button
+                    className="ov-approve-no"
+                    onClick={() => respond(termId, prompt.deny)}
+                    data-tip="Reject this action"
+                >
+                    ✕ Deny
+                </button>
+            </div>
+        </div>
     )
 }
 
@@ -247,11 +284,20 @@ export function OverviewView(): JSX.Element {
                         <div className="ov-rail-title">Other sessions · {rest.length}</div>
                         {rest.map((s) => {
                             const peek = peekLine(getTail(s.termId))
+                            const approval = approvalFor(s)
                             return (
-                                <button
+                                <div
                                     key={s.termId}
                                     className="ov-rail-item"
+                                    role="button"
+                                    tabIndex={0}
                                     onClick={() => setFocusId(s.termId)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault()
+                                            setFocusId(s.termId)
+                                        }
+                                    }}
                                     data-tip="Bring into focus"
                                 >
                                     <div className="ov-ri-head">
@@ -267,7 +313,10 @@ export function OverviewView(): JSX.Element {
                                         </div>
                                     )}
                                     {peek && <div className="ov-ri-peek">{peek}</div>}
-                                </button>
+                                    {approval && (
+                                        <ApprovalActions termId={s.termId} prompt={approval} />
+                                    )}
+                                </div>
                             )
                         })}
                     </div>
@@ -306,7 +355,9 @@ export function OverviewView(): JSX.Element {
                                 </span>
                             </div>
                             <div className="ov-grid">
-                                {g.sessions.map((s) => (
+                                {g.sessions.map((s) => {
+                                    const approval = approvalFor(s)
+                                    return (
                                     <div key={s.termId} className="ov-card">
                                         <div className="ov-card-head">
                                             <span className={dotClass(s)} />
@@ -340,6 +391,9 @@ export function OverviewView(): JSX.Element {
                                                 </button>
                                             </span>
                                         </div>
+                                        {approval && (
+                                            <ApprovalActions termId={s.termId} prompt={approval} />
+                                        )}
                                         <div className="ov-card-body">
                                             <SplitView
                                                 node={{ kind: "leaf", termId: s.termId }}
@@ -348,7 +402,8 @@ export function OverviewView(): JSX.Element {
                                             />
                                         </div>
                                     </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         </div>
                     ))}
