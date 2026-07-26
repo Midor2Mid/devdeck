@@ -1,5 +1,98 @@
 # Changelog
 
+## 0.7.6 - 2026-07-27
+
+- **One-click Resume** - the primary agent's launch button gains a quieter paired
+  **↻ Resume**, so continuing your last session (`claude --continue`) is a peer of
+  starting a fresh one instead of being buried in the agent dropdown. Only shown
+  for agents that define resume args.
+- **Terminal pane no longer sticks to the previous project** - after switching
+  projects the pane kept rendering, and typing into, the *previous* project's
+  shell, so anything typed after a switch went to the wrong session. Its
+  xterm/pty attach effect is mount-once and the pane wasn't keyed on its terminal
+  id, so React reused the instance without re-binding.
+- **Commit honours staging** - the review modal offers per-file stage/unstage, but
+  committing ran `git add -A` first, so a file you deliberately *unstaged* was
+  re-staged and committed anyway. Staging anything now scopes the commit
+  ("Commit staged (N)"); with nothing staged, commit-everything is unchanged.
+- **Multi-statement SQL no longer silently truncated** - a pasted SQLite script
+  (`CREATE …; INSERT …;`) ran only its first statement and dropped the rest with
+  no error.
+- **Pre-flight on the two clicks that spend money** - dispatching a board task
+  fired instantly without naming which agent it used, created a worktree, and
+  pasted the card title into the CLI; running a pipeline starts an agent session
+  per step in whatever project is active. Both now confirm first. File triggers
+  are already opted into, so they bypass it.
+- **Permission-bypassing agents are marked** - `--dangerously-skip-permissions`
+  (and `--yolo` / `--full-auto` / `--auto-approve`) were one-click cards styled as
+  peers of a normal launch; they now carry a danger stripe and say what they skip.
+  Matched on the command line, so custom agents are flagged too.
+- **Ctrl+K no longer leaks into the shell** - app-reserved chords (Ctrl+K,
+  Ctrl+1..9, Ctrl+Tab, Ctrl+Shift+P/F/B/R/J/K) were still encoded by xterm, so
+  opening the switcher left a stray `^K` on the command line.
+- **Ctrl+Shift+I works everywhere** - the prompt-composer chord was dead outside
+  Terminal view while the launcher, shortcuts overlay and palette all advertised
+  it; it now switches view first.
+- **Palette finds the buried panels** - AI usage, the agents inbox and the
+  pipeline builder had no palette entries (they existed only as unlabelled deck
+  icons); rows now also show their shortcut.
+- **Smaller legibility fixes** - the deck's "N changes" chip opens the diff;
+  Mission's SYSTEM row folds ephemeral ports into "+N more" instead of ~24 chips;
+  the usage dashboard's unexplained "other" bucket is now "outside DevDeck
+  projects"; Run explains itself when `package.json` won't parse instead of
+  claiming no runnable project type; HTTP errors surface the real
+  `ECONNREFUSED`/`ENOTFOUND` instead of a bare "fetch failed"; agent-menu rows are
+  keyboard-reachable buttons; a saved request no longer repeats its method chip;
+  a newly added DB connection is selected.
+
+## 0.7.5 - 2026-07-26
+
+- **Inline Approve / Deny for agent permission prompts** - answer an agent that's
+  waiting on a permission question straight from its Overview tile, without
+  jumping into the session.
+- **Curated recommended startup commands** - an "Add recommended" action that
+  merges any of the bundled agent/command presets your config is missing.
+
+## 0.7.3 - 2026-07-26
+
+Consolidated entry: this release accumulated ~60 commits over two weeks and was
+tagged without a changelog pass, so it is grouped by theme rather than split into
+the untagged 0.7.1/0.7.2 that never shipped.
+
+- **Extend Agent hub** - browse, preview, install and remove agent **skills and
+  subagents** from a catalog (or a URL), scoped per project or per user, with
+  full read-before-install and path-traversal guards.
+- **Per-project visual identity** - a colored monogram tile per project (with
+  optional emoji/color overrides), shown in the switcher and topbar.
+- **Console deck declutter + cross-project Overview** - icon-first views and a
+  leaner status bar; a new Overview terminal layout (focus+rail / grouped grid)
+  spanning projects, with session rename and collapsible, persisted groups.
+- **Agent supervision** - an explicit **"waiting for you"** state when an agent
+  finishes a turn, a jump-to-waiting hotkey (Ctrl+Shift+J), per-tier notification
+  sounds, and **one-click resume of agent sessions after a restart**.
+- **Pipelines: branching, delays and manual checkpoints** - conditional routing
+  between steps, delay nodes, and checkpoints that pause for you.
+- **One-click Run** - a topbar Run for Node/.NET/Go projects, plus **Watch** in
+  the .NET panel (build/test/watch now complete).
+- **Startup commands** - per-agent and per-terminal startup commands.
+- **Corporate proxy support** - proxy configuration applied to terminals and
+  child processes.
+- **Mobile client gains coding + AI** - not just terminals.
+- **Session recordings export** - save a session as an asciinema `.cast`.
+- **Composer image input** - drop or paste an image into the prompt.
+- **Switcher** - MRU ordering, preselect-previous, Ctrl+Shift+K to flip to the
+  previous project, and responsive columns with arrow-key navigation.
+- **Accessibility pass** - a shared `<Modal>` (Escape, focus trap, roles) adopted
+  across every modal, `IconButton` with aria-labels, deck keys / terminal tabs /
+  accent swatches as real buttons, keyboard-and-focus tooltips, and full
+  arrow/Enter/Escape navigation in context menus.
+- **Design polish** - bundled mono font, scrim/radius token sweep, `--faint`
+  retuned to clear AA contrast, unified section-label typography, and unified
+  overlay entrance easing.
+- **Hardening** - IPC upload directory confined to a project, write payloads
+  capped, and traversal guards on skill install/remove.
+- **Terminal** - explains *why* a shell died, including an Avast/fast-fail hint.
+
 ## 0.7.0 - 2026-07-10
 
 - **Agent context files** - the tool cluster gains a **Context** popover listing the
