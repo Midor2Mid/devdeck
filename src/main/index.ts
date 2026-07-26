@@ -11,7 +11,8 @@ import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken } from "./git"
-import { readMcp, writeMcp, type McpServer } from "./mcp"
+import { readMcp, writeMcp, registerDevdeck, unregisterDevdeck, type McpServer } from "./mcp"
+import * as mcpserver from "./mcpserver"
 import * as skills from "./skills"
 import * as browserNet from "./browserNet"
 import * as proxy from "./proxy"
@@ -261,6 +262,34 @@ function registerIpc(): void {
         running: server.isRunning(),
         ...server.localAddresses()
     }))
+
+    // --- MCP server (DevDeck's own tools, exposed to agent CLIs) ---
+    // The project list is read fresh on each tool call so an agent always sees the
+    // projects currently open, not a snapshot from when the server started.
+    const mcpDeps = {
+        projects: () =>
+            projects.listProjects().projects.map((p) => ({ id: p.id, name: p.name, path: p.path }))
+    }
+    ipcMain.handle("mcpsrv:start", async (_e, cfg: { port: number; token: string }) => {
+        const res = await mcpserver.start(cfg, mcpDeps)
+        return { ...res, ...mcpserver.status() }
+    })
+    ipcMain.handle("mcpsrv:stop", async () => {
+        await mcpserver.stop()
+        return mcpserver.status()
+    })
+    ipcMain.handle("mcpsrv:status", () => mcpserver.status())
+    ipcMain.handle("mcpsrv:token", () => mcpserver.generateToken())
+    ipcMain.handle("mcpsrv:register", (_e, { cwd, port, token }) => {
+        guardRepo(cwd)
+        registerDevdeck(cwd, port, token)
+        return readMcp(cwd)
+    })
+    ipcMain.handle("mcpsrv:unregister", (_e, cwd: string) => {
+        guardRepo(cwd)
+        unregisterDevdeck(cwd)
+        return readMcp(cwd)
+    })
 
     // --- Database ---
     ipcMain.handle("db:list", (_e, projectId: string) => db.listConnections(projectId))
@@ -618,6 +647,7 @@ app.on("window-all-closed", () => {
     ptyMgr.killAll()
     db.closeAll()
     server.stop()
+    void mcpserver.stop()
     proxy.stop()
     if (process.platform !== "darwin") app.quit()
 })

@@ -253,6 +253,16 @@ export interface AppSettings {
         /** Serve over HTTPS/WSS with a self-signed cert. */
         tls: boolean
     }
+    /**
+     * DevDeck's own MCP server: lets agent CLIs pull context (query the project's
+     * database) instead of us pasting it into the prompt. Loopback-only and
+     * read-only, but a listening port is still a surface — off by default.
+     */
+    mcpServer: {
+        enabled: boolean
+        port: number
+        token: string
+    }
     network: {
         port: number
     }
@@ -374,6 +384,11 @@ const DEFAULTS: AppSettings = {
         token: "",
         tls: false
     },
+    mcpServer: {
+        enabled: false,
+        port: 8787,
+        token: ""
+    },
     network: {
         port: 8899
     },
@@ -416,6 +431,7 @@ interface SettingsState extends AppSettings {
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
+    setMcpServer: (patch: Partial<AppSettings["mcpServer"]>) => void
     setNetwork: (patch: Partial<AppSettings["network"]>) => void
     setProxy: (patch: Partial<AppSettings["proxy"]>) => void
     setNotifications: (patch: Partial<AppSettings["notifications"]>) => void
@@ -441,8 +457,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -461,6 +477,12 @@ export const useSettings = create<SettingsState>((set, get) => {
         const { enabled, port, token, tls } = get().remote
         if (enabled && token) window.api.server.start({ port, token, tls })
         else window.api.server.stop()
+    }
+
+    const applyMcpServer = (): void => {
+        const { enabled, port, token } = get().mcpServer
+        if (enabled && token) void window.api.mcpsrv.start({ port, token })
+        else void window.api.mcpsrv.stop()
     }
 
     // Push the enabled file-triggers to the main-process watcher.
@@ -507,6 +529,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                     collections: raw.collections ?? DEFAULTS.collections,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
                     remote: { ...DEFAULTS.remote, ...raw.remote },
+                    mcpServer: { ...DEFAULTS.mcpServer, ...raw.mcpServer },
                     network: { ...DEFAULTS.network, ...raw.network },
                     proxy: { ...DEFAULTS.proxy, ...raw.proxy },
                     notifications: { ...DEFAULTS.notifications, ...raw.notifications },
@@ -524,6 +547,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             applyTheme(get().appearance.theme, get().appearance.accent)
             applyStyle(get().appearance.style)
             applyServer()
+            applyMcpServer()
             applyTriggers()
             applyProxy()
         },
@@ -605,6 +629,16 @@ export const useSettings = create<SettingsState>((set, get) => {
                 return { remote }
             })
             applyServer()
+            persist()
+        },
+        setMcpServer: (patch) => {
+            set((s) => {
+                const mcpServer = { ...s.mcpServer, ...patch }
+                // Mint a bearer token the first time it's switched on, same as remote.
+                if (mcpServer.enabled && !mcpServer.token) mcpServer.token = generateToken()
+                return { mcpServer }
+            })
+            applyMcpServer()
             persist()
         },
         setNetwork: (patch) => {

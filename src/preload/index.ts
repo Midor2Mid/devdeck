@@ -178,6 +178,9 @@ export interface McpServer {
     command: string
     args: string[]
     env: Record<string, string>
+    /** Set for HTTP-transport servers (DevDeck's own); empty for stdio. */
+    url?: string
+    headers?: Record<string, string>
 }
 export type ExtendScope = "global" | "project"
 export type ItemKind = "skill" | "agent"
@@ -397,6 +400,29 @@ const api = {
             ipcRenderer.invoke("server:start", cfg),
         stop: (): Promise<boolean> => ipcRenderer.invoke("server:stop"),
         status: (): Promise<ServerStatus> => ipcRenderer.invoke("server:status")
+    },
+    /**
+     * DevDeck's own MCP server — exposes DevDeck's panels as tools so an agent CLI
+     * can pull context (query the project DB, list tables) instead of us pasting it
+     * in. Loopback-only, bearer-token guarded, read-only, off by default.
+     */
+    mcpsrv: {
+        start: (cfg: {
+            port: number
+            token: string
+        }): Promise<{ ok: boolean; error?: string; running: boolean; port: number | null }> =>
+            ipcRenderer.invoke("mcpsrv:start", cfg),
+        stop: (): Promise<{ running: boolean; port: number | null }> =>
+            ipcRenderer.invoke("mcpsrv:stop"),
+        status: (): Promise<{ running: boolean; port: number | null }> =>
+            ipcRenderer.invoke("mcpsrv:status"),
+        /** Fresh random bearer token (caller persists it in settings). */
+        newToken: (): Promise<string> => ipcRenderer.invoke("mcpsrv:token"),
+        /** Write DevDeck's entry into this project's .mcp.json. */
+        register: (cwd: string, port: number, token: string): Promise<McpServer[]> =>
+            ipcRenderer.invoke("mcpsrv:register", { cwd, port, token }),
+        unregister: (cwd: string): Promise<McpServer[]> =>
+            ipcRenderer.invoke("mcpsrv:unregister", cwd)
     },
     netproxy: {
         /** Apply the corporate-proxy config to the main env (new children inherit it). */

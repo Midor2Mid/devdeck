@@ -67,6 +67,115 @@ const SECTIONS: { key: Section; label: string }[] = [
     { key: "about", label: "About" }
 ]
 
+/**
+ * DevDeck's own MCP server. The inverse of the "→ Agent" buttons elsewhere in the
+ * app: instead of pushing a query result into the prompt, the agent pulls what it
+ * needs — so it reads the live database rather than a table you pasted earlier.
+ */
+function DevdeckMcpBlock(): JSX.Element {
+    const project = useStore((s) => s.activeProject())
+    const mcpServer = useSettings((s) => s.mcpServer)
+    const setMcpServer = useSettings((s) => s.setMcpServer)
+    const [status, setStatus] = useState<{ running: boolean; port: number | null }>({
+        running: false,
+        port: null
+    })
+    const [err, setErr] = useState("")
+    const [note, setNote] = useState("")
+
+    const refresh = (): void => {
+        window.api.mcpsrv.status().then(setStatus).catch(() => void 0)
+    }
+    useEffect(() => {
+        refresh()
+        const iv = setInterval(refresh, 4000)
+        return () => clearInterval(iv)
+    }, [])
+
+    const toggle = async (enabled: boolean): Promise<void> => {
+        setErr("")
+        setMcpServer({ enabled })
+        // setMcpServer starts/stops the server; surface a bind failure (port in use).
+        if (enabled) {
+            const s = useSettings.getState().mcpServer
+            const res = await window.api.mcpsrv.start({ port: s.port, token: s.token })
+            if (!res.ok) setErr(res.error ?? "Could not start")
+            setStatus({ running: res.running, port: res.port })
+        } else {
+            setStatus(await window.api.mcpsrv.stop())
+        }
+    }
+
+    const registerHere = async (): Promise<void> => {
+        if (!project) return
+        const s = useSettings.getState().mcpServer
+        await window.api.mcpsrv.register(project.path, s.port, s.token)
+        setNote(`Added to ${project.name}/.mcp.json — restart the agent CLI to pick it up.`)
+        setTimeout(() => setNote(""), 4000)
+    }
+
+    return (
+        <div className="settings-block">
+            <div className="settings-block-head">
+                <span className="section-label">DEVDECK AS AN MCP SERVER</span>
+                <label className="switch-row">
+                    <input
+                        type="checkbox"
+                        checked={mcpServer.enabled}
+                        onChange={(e) => void toggle(e.target.checked)}
+                    />
+                    <span>{status.running ? `Running on 127.0.0.1:${status.port}` : "Off"}</span>
+                </label>
+            </div>
+            <p className="muted small">
+                Lets your agent CLI query this project&apos;s database itself — no copy-paste. Exposes{" "}
+                <code>devdeck_projects</code>, <code>devdeck_db_connections</code>,{" "}
+                <code>devdeck_db_tables</code> and <code>devdeck_db_query</code>.
+            </p>
+            <p className="muted small mcp-safety">
+                Read-only: writes are refused, and credentials are never sent to the agent. Bound to
+                127.0.0.1 and guarded by a bearer token, so nothing off this machine can reach it.
+            </p>
+            <div className="form-grid">
+                <label>Port</label>
+                <input
+                    type="number"
+                    value={mcpServer.port}
+                    onChange={(e) => setMcpServer({ port: Number(e.target.value) || 8787 })}
+                />
+                <label>Token</label>
+                <div className="row-inline">
+                    <input value={mcpServer.token} readOnly placeholder="generated when enabled" />
+                    <button onClick={() => setMcpServer({ token: "" })} data-tip="Generate a new token">
+                        Rotate
+                    </button>
+                </div>
+            </div>
+            <div className="row-inline">
+                <button
+                    className="accent"
+                    disabled={!project || !mcpServer.token}
+                    onClick={() => void registerHere()}
+                    data-tip={
+                        project
+                            ? `Write the devdeck entry into ${project.name}/.mcp.json`
+                            : "Select a project first"
+                    }
+                >
+                    Add to this project
+                </button>
+                {project && (
+                    <button onClick={() => void window.api.mcpsrv.unregister(project.path)}>
+                        Remove from project
+                    </button>
+                )}
+            </div>
+            {err && <p className="small err-text">{err}</p>}
+            {note && <p className="small ok-text">{note}</p>}
+        </div>
+    )
+}
+
 function McpSection(): JSX.Element {
     const project = useStore((s) => s.activeProject())
     const [servers, setServers] = useState<McpServer[]>([])
@@ -93,6 +202,9 @@ function McpSection(): JSX.Element {
         return (
             <div className="settings-section">
                 <h3>MCP servers</h3>
+                {/* The DevDeck server itself isn't per-project, so it stays reachable
+                    here even with nothing selected — only registering it needs a project. */}
+                <DevdeckMcpBlock />
                 <p className="muted">Select a project first - MCP servers are per-project.</p>
             </div>
         )
@@ -101,6 +213,7 @@ function McpSection(): JSX.Element {
     return (
         <div className="settings-section">
             <h3>MCP servers · {project.name}</h3>
+            <DevdeckMcpBlock />
             {servers.map((s, i) => (
                 <div key={i} className="git-account">
                     <div className="git-account-head">

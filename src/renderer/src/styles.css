@@ -1503,6 +1503,41 @@ button .ic,
 .launch-card-unsafe .launch-card-cmd {
     color: color-mix(in srgb, var(--danger) 70%, var(--muted));
 }
+/* A bordered sub-block inside a settings section — used for DevDeck's own MCP
+   server, which sits above the per-project server list it isn't part of. */
+.settings-block {
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+}
+.settings-block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.settings-block .form-grid,
+.settings-block .row-inline {
+    margin-top: 10px;
+}
+.settings-block code {
+    font-family: var(--mono, monospace);
+    font-size: 11px;
+    color: var(--accent-soft);
+}
+/* Security posture reads as a caveat, not decoration — quiet, with a soft rule. */
+.mcp-safety {
+    border-left: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    padding-left: 9px;
+}
+.err-text {
+    color: var(--danger);
+}
+.ok-text {
+    color: var(--accent);
+}
 .agent-menu-divider {
     font-size: 9px;
     letter-spacing: 1px;

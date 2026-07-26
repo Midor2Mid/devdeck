@@ -81,7 +81,15 @@ not a subsystem.
 Five ideas that go past 1DevTool rather than catching up to it. Ranked.
 
 ### 1. DevDeck *as* an MCP server — let the agent pull ★★★
-The highest-leverage idea in this document, and it reuses code that already exists.
+**Shipped 2026-07-27** (`main/mcpserver.ts`, `main/mcptools.ts`) — as an **HTTP**
+server hosted by the main process rather than the stdio server sketched below.
+Stdio would have spawned a separate process that couldn't see DevDeck's in-memory
+connection pools, needing a second bridge back in, and would have had to ship
+unpacked outside `app.asar`. Claude Code accepts `{"type":"http","url":…,"headers":…}`
+in `.mcp.json`, so hosting it here removes both problems. The DB tools landed
+(`devdeck_projects` / `db_connections` / `db_tables` / `db_query`, read-only,
+loopback, bearer-token, off by default); HTTP-replay and console-log tools are
+still open — see the note at the end of this section.
 
 Both apps push context at the agent via buttons. Invert it: expose DevDeck's
 in-process tools as MCP tools so Claude fetches what it needs, unprompted.
@@ -107,6 +115,12 @@ Why this is strictly better than their model:
 Nothing on 1DevTool's page suggests they serve their *own* panels as MCP tools —
 they list "MCP server integration" as consuming external servers, the same thing
 DevDeck's catalog does.
+
+**Still open after the first cut.** `devdeck_http_send` needs the saved-request
+tree parsed out of `settings.json` (`collections`) in main; `devdeck_console_logs`
+needs a registry of attached `webContents` ids, since `browserNet.getRecent(id)`
+is keyed by one and the MCP server has no way to know which tab you mean. Both
+are additive — drop a case into `callTool` and an entry into `TOOLS`.
 
 ### 2. Gate pipelines on ground truth, not agent prose ★★★
 `StepGate` currently inspects the agent's **output text**. DevDeck owns real
