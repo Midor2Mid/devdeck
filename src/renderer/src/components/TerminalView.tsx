@@ -330,13 +330,29 @@ export function TerminalView(): JSX.Element {
                         + Terminal
                     </button>
                     {primaryAgent && (
-                        <button
-                            className="accent"
-                            onClick={() => newTab(primaryAgent.id)}
-                            data-tip={`New ${primaryAgent.name} session (Ctrl+Shift+Enter)`}
-                        >
-                            + {primaryAgent.name}
-                        </button>
+                        <span className="term-launch">
+                            <button
+                                className="accent term-launch-new"
+                                onClick={() => newTab(primaryAgent.id)}
+                                data-tip={`New ${primaryAgent.name} session (Ctrl+Shift+Enter)`}
+                            >
+                                + {primaryAgent.name}
+                            </button>
+                            {primaryAgent.resumeArgs && (
+                                <button
+                                    className="term-launch-resume"
+                                    onClick={() =>
+                                        newTab(
+                                            primaryAgent.id,
+                                            `${primaryAgent.command} ${primaryAgent.resumeArgs}`
+                                        )
+                                    }
+                                    data-tip={`Resume ${primaryAgent.name} — continues your last session (${primaryAgent.command} ${primaryAgent.resumeArgs})`}
+                                >
+                                    <span className="term-launch-glyph">↻</span> Resume
+                                </button>
+                            )}
+                        </span>
                     )}
                     <div className="agent-menu-wrap">
                         <button
