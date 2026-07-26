@@ -191,6 +191,10 @@ select:focus {
 }
 .sb-changes {
     color: var(--accent-soft);
+    cursor: pointer;
+}
+.sb-changes:hover {
+    color: var(--accent);
 }
 .sb-attn {
     color: var(--accent);

@@ -204,7 +204,9 @@ export function MissionControl(): JSX.Element {
             <div className="mission-section">
                 <div className="mission-head">
                     <span className="section-label">REVIEW QUEUE</span>
-                    <span className="muted small">AI-produced changes awaiting review</span>
+                    {/* Lists any uncommitted work (see the empty-state copy below) —
+                        it can't tell AI-written changes from hand-written ones. */}
+                    <span className="muted small">uncommitted changes awaiting review</span>
                 </div>
                 {reviewRows.length === 0 ? (
                     <div className="muted mission-empty">No uncommitted changes across your projects.</div>

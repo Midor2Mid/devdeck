@@ -42,10 +42,13 @@ export async function httpSend(req: HttpRequest): Promise<HttpResponse> {
             timeMs: Date.now() - start
         }
     } catch (err) {
-        return {
-            ok: false,
-            error: err instanceof Error ? err.message : String(err),
-            timeMs: Date.now() - start
-        }
+        // Undici reports every transport failure as a bare "fetch failed" and
+        // hides the useful part (ECONNREFUSED, ENOTFOUND, cert errors) in
+        // err.cause - so surface that too or the UI says nothing actionable.
+        let error = err instanceof Error ? err.message : String(err)
+        const cause = err instanceof Error ? (err.cause as { code?: string; message?: string }) : null
+        const detail = cause?.code || cause?.message
+        if (detail && !error.includes(detail)) error += ` (${detail})`
+        return { ok: false, error, timeMs: Date.now() - start }
     }
 }

@@ -409,9 +409,9 @@ function registerIpc(): void {
         guardRepo(cwd)
         return changes.discardFile(cwd, path, !!untracked)
     })
-    ipcMain.handle("git:commit", (_e, { cwd, message }) => {
+    ipcMain.handle("git:commit", (_e, { cwd, message, stagedOnly }) => {
         guardRepo(cwd)
-        return changes.commitAll(cwd, message)
+        return changes.commit(cwd, message, !!stagedOnly)
     })
     ipcMain.handle("git:fullDiff", (_e, cwd: string) => {
         guardRepo(cwd)

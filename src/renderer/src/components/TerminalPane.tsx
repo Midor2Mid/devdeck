@@ -84,24 +84,41 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 if (t) window.api.pty.input(termId, t)
             })
         }
+        // App-reserved chords must not reach the pty. App.tsx preventDefaults them
+        // at window capture, but that doesn't stop xterm from *encoding* them —
+        // plain Ctrl+K writes \x0b, so opening the switcher left a stray ^K on the
+        // command line. Returning false means "xterm ignores this key"; the DOM
+        // event still propagates, so the app handler (and find-in-terminal) run.
+        // Keep in sync with the shortcut block in App.tsx.
+        const isAppChord = (e: KeyboardEvent): boolean => {
+            if (e.code === "Tab") return true // Ctrl+Tab / Ctrl+Shift+Tab — cycle sessions
+            if (e.shiftKey) {
+                // Ctrl+Shift+ P palette · F search/find · B build · R review · J jump · K prev project
+                return ["KeyP", "KeyF", "KeyB", "KeyR", "KeyJ", "KeyK"].includes(e.code)
+            }
+            if (e.code === "KeyK") return true // Ctrl+K — project switcher
+            return /^Digit[1-9]$/.test(e.code) // Ctrl+1..9 — switch view
+        }
         term.attachCustomKeyEventHandler((e) => {
             if (e.type !== "keydown") return true
             const mod = e.ctrlKey || e.metaKey
-            if (!mod || !e.shiftKey || e.altKey) return true
-            const k = e.key.toLowerCase()
-            if (k === "c") {
-                const sel = term.getSelection()
-                if (sel) {
-                    window.api.clipboard.writeText(sel)
-                    term.clearSelection()
+            if (!mod || e.altKey) return true
+            if (e.shiftKey) {
+                const k = e.key.toLowerCase()
+                if (k === "c") {
+                    const sel = term.getSelection()
+                    if (sel) {
+                        window.api.clipboard.writeText(sel)
+                        term.clearSelection()
+                    }
+                    return false
                 }
-                return false
+                if (k === "v") {
+                    pasteFromClipboard()
+                    return false
+                }
             }
-            if (k === "v") {
-                pasteFromClipboard()
-                return false
-            }
-            return true
+            return !isAppChord(e)
         })
         const onContextMenu = (e: MouseEvent): void => {
             e.preventDefault()

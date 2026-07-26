@@ -135,8 +135,14 @@ function killTree(proc) {
 
 // Launch the built app, attach to the renderer, run `fn(cdp)`, then tear down
 // hard so Node exits promptly. Requires a current build (`npx electron-vite build`).
-async function withApp(fn, { debugPort = 9222 } = {}) {
-    const proc = spawn(electronPath, [".", `--remote-debugging-port=${debugPort}`], {
+// `userDataDir` points app.getPath("userData") at a scratch dir instead of the
+// real one - required for concurrent runs (there's no single-instance lock, and
+// every store in main/ writes into userData, so two instances would clobber each
+// other's projects.json/settings.json) and for not touching real user state.
+async function withApp(fn, { debugPort = 9222, userDataDir = null, extraArgs = [] } = {}) {
+    const args = [".", `--remote-debugging-port=${debugPort}`]
+    if (userDataDir) args.push(`--user-data-dir=${userDataDir}`)
+    const proc = spawn(electronPath, [...args, ...extraArgs], {
         cwd: PROJ,
         env: process.env,
         stdio: "ignore"

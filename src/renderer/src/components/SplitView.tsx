@@ -66,7 +66,12 @@ export function SplitView({ node, projectId, cwd, tabId }: Props): JSX.Element {
         const termId = node.termId
         return (
             <div className="pane-host">
+                {/* key={termId} is load-bearing: TerminalPane's xterm/pty attach
+                    effect is mount-once, so without it React reuses the instance
+                    across a project switch and the pane keeps rendering (and
+                    typing into) the previous project's session. */}
                 <TerminalPane
+                    key={termId}
                     termId={termId}
                     initialCommand={initialCommand}
                     cwd={cwd}

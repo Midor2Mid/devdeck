@@ -75,7 +75,9 @@ export function ChangesModal(): JSX.Element | null {
     const commit = async (): Promise<void> => {
         if (!msg.trim()) return
         setBusy(true)
-        const res = await window.api.git.commit(cwd, msg.trim())
+        // Staging anything is taken as "commit exactly this"; with nothing staged
+        // we keep the stage-everything behaviour.
+        const res = await window.api.git.commit(cwd, msg.trim(), stagedCount > 0)
         setBusy(false)
         if (res.ok) {
             setMsg("")
@@ -164,12 +166,16 @@ export function ChangesModal(): JSX.Element | null {
             <div className="ch-commit">
                 <input
                     value={msg}
-                    placeholder={`Commit message (${stagedCount || "no"} staged · commits all changes)`}
+                    placeholder={
+                        stagedCount > 0
+                            ? `Commit message (${stagedCount} staged file${stagedCount === 1 ? "" : "s"} only)`
+                            : `Commit message (commits all ${files.length} changed file${files.length === 1 ? "" : "s"})`
+                    }
                     onChange={(e) => setMsg(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && commit()}
                 />
                 <button className="accent" disabled={!msg.trim() || busy || files.length === 0} onClick={commit}>
-                    Commit all
+                    {stagedCount > 0 ? `Commit staged (${stagedCount})` : "Commit all"}
                 </button>
                 {note && <span className="ch-note">{note}</span>}
             </div>

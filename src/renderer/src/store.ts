@@ -21,6 +21,7 @@ import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail } from "./missionTail"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, type BoardTask, type BoardColumn } from "./board"
+import { confirm } from "./confirm"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -196,7 +197,8 @@ interface AppState extends Persisted {
     pipelineRun: PipelineRun | null
     /** Transient signal: set by resumePipeline to release a paused checkpoint. */
     pipelineResume: boolean
-    runPipeline: (pipelineId: string) => void
+    /** `viaTrigger` skips the pre-flight confirm — a file trigger is pre-authorized. */
+    runPipeline: (pipelineId: string, viaTrigger?: boolean) => void
     stopPipeline: () => void
     /** Continue a run paused at a checkpoint step. */
     resumePipeline: () => void
@@ -790,7 +792,21 @@ export const useStore = create<AppState>((set, get) => {
             if (!task) return
             const proj = get().projects.find((p) => p.id === task.projectId)
             if (!proj) return
-            const agentId = useSettings.getState().agents[0]?.id ?? "claude"
+            const agent = useSettings.getState().agents[0]
+            const agentId = agent?.id ?? "claude"
+            // One beat before spending real tokens: dispatch silently picked the
+            // first agent preset, created a worktree, and pasted the card title
+            // into the CLI — an accidental click cost money and left a worktree
+            // behind. Name what's about to happen and let it be cancelled.
+            const ok = await confirm({
+                title: "Dispatch to an agent",
+                message:
+                    `Start ${agent?.name ?? agentId} on "${task.title}" in ${proj.name}` +
+                    (opts.worktree ? ", in a new git worktree" : "") +
+                    "? The card title is sent as its first prompt.",
+                confirmLabel: "Dispatch"
+            })
+            if (!ok) return
             // newTab spawns into the active project — make sure it's this task's.
             await get().setActiveProject(proj.id)
 
@@ -980,7 +996,7 @@ export const useStore = create<AppState>((set, get) => {
                 window.api.projects.setActive(proj.id)
             }
             pushActivity("pipeline", get().lastAgentTermId ?? "", `${trig.glob || "any file"} changed · triggered`)
-            get().runPipeline(trig.pipelineId)
+            get().runPipeline(trig.pipelineId, true)
         },
 
         stopPipeline: () => {
@@ -993,11 +1009,27 @@ export const useStore = create<AppState>((set, get) => {
 
         resumePipeline: () => set({ pipelineResume: true }),
 
-        runPipeline: (pipelineId) => {
+        runPipeline: async (pipelineId, viaTrigger) => {
             const pipeline = useSettings.getState().pipelines.find((p) => p.id === pipelineId)
             if (!pipeline || !get().activeId) return
             const steps = runnableSteps(pipeline)
             if (steps.length === 0) return
+
+            // A run spawns an agent session per step in whatever project is
+            // *currently* active, which isn't always the one you think. Name both
+            // before spending tokens. File triggers are already opted into, so
+            // they bypass this.
+            if (!viaTrigger) {
+                const where = get().activeProject()?.name ?? "this project"
+                const ok = await confirm({
+                    title: "Run pipeline",
+                    message:
+                        `Run "${pipeline.name}" (${steps.length} step${steps.length === 1 ? "" : "s"}) in ${where}? ` +
+                        `Each step starts an agent session.`,
+                    confirmLabel: "Run"
+                })
+                if (!ok) return
+            }
 
             pipelineToken += 1
             const token = pipelineToken

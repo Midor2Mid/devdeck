@@ -335,6 +335,22 @@ export async function runQuery(profileId: string, sql: string): Promise<QueryRes
                     timeMs: Date.now() - start
                 }
             }
+            // run() executes only the FIRST statement, so a pasted script
+            // (CREATE…; INSERT…;) silently dropped everything after it. exec()
+            // runs the whole script but reports no counts, so only reach for it
+            // when there really is more than one statement. A stray ';' inside a
+            // string literal can misroute a single statement here - harmless, it
+            // still executes correctly, we just report it as a script.
+            if (/;/.test(sql.replace(/;\s*$/, ""))) {
+                live.sqlite.exec(sql)
+                return {
+                    ok: true,
+                    columns: ["result"],
+                    rows: [{ result: "script executed" }],
+                    rowCount: 0,
+                    timeMs: Date.now() - start
+                }
+            }
             const res = live.sqlite.run(sql)
             return {
                 ok: true,

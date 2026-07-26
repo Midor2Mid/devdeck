@@ -481,7 +481,9 @@ export function ApiPanel(): JSX.Element {
     }
 
     const openSaveDialog = (): void => {
-        const guess = url ? `${method} ${splitUrl(url).base.replace(/^https?:\/\//, "")}` : "New request"
+        // No method prefix: the saved-request row already renders a method chip,
+        // so including it here read as "GET GET 127.0.0.1/users".
+        const guess = url ? splitUrl(url).base.replace(/^https?:\/\//, "") : "New request"
         setSaveName(guess.slice(0, 60))
         setSaveColId(collections[0]?.id ?? "")
         setSaveNewCol("")

@@ -176,6 +176,19 @@ export function App(): JSX.Element {
                 s.setReviewOpen(!s.reviewOpen)
                 return
             }
+            // Ctrl+Shift+I — prompt composer. Handled here rather than in
+            // TerminalView so it works from any view (it switches to Terminal
+            // first, matching the palette's "Open prompt composer" action).
+            if (mod && e.shiftKey && e.code === "KeyI") {
+                e.preventDefault()
+                e.stopPropagation()
+                const s = useStore.getState()
+                if (!s.activeId) return
+                const open = !s.composerOpen
+                if (open) s.setView("terminal")
+                s.setComposerOpen(open)
+                return
+            }
             // Ctrl+Shift+J — jump to the oldest agent that's waiting on you.
             if (mod && e.shiftKey && e.code === "KeyJ") {
                 e.preventDefault()

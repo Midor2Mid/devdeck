@@ -119,8 +119,11 @@ export function TerminalView(): JSX.Element {
                 Minus: () => s.splitActive("col", SHELL),
                 BracketRight: () => s.cycleTab(1),
                 BracketLeft: () => s.cycleTab(-1),
-                KeyF: () => setFindOpen((v) => !v),
-                KeyI: () => s.setComposerOpen(!s.composerOpen)
+                KeyF: () => setFindOpen((v) => !v)
+                // Ctrl+Shift+I (composer) lives in App.tsx instead: this handler
+                // early-returns outside Terminal view, which made the chord dead
+                // everywhere else even though the launcher, shortcuts overlay and
+                // palette all advertise it unconditionally.
             }
             const action = map[e.code]
             if (action) {

@@ -516,8 +516,13 @@ const api = {
             ipcRenderer.invoke("git:unstage", { cwd, path }),
         discard: (cwd: string, path: string, untracked: boolean): Promise<boolean> =>
             ipcRenderer.invoke("git:discard", { cwd, path, untracked }),
-        commit: (cwd: string, message: string): Promise<{ ok: boolean; error?: string }> =>
-            ipcRenderer.invoke("git:commit", { cwd, message }),
+        /** `stagedOnly` commits just the index, leaving unstaged files out. */
+        commit: (
+            cwd: string,
+            message: string,
+            stagedOnly?: boolean
+        ): Promise<{ ok: boolean; error?: string }> =>
+            ipcRenderer.invoke("git:commit", { cwd, message, stagedOnly }),
         fullDiff: (cwd: string): Promise<string> => ipcRenderer.invoke("git:fullDiff", cwd),
         // Personal access tokens (encrypted at rest; plaintext never returns here)
         setPat: (accountId: string, pat: string): Promise<void> =>

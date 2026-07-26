@@ -128,9 +128,22 @@ export async function fullDiff(cwd: string, maxChars = 14000): Promise<string> {
     return out.slice(0, maxChars) + "\n\n…[diff truncated]"
 }
 
-export async function commitAll(cwd: string, message: string): Promise<{ ok: boolean; error?: string }> {
-    const add = await git(cwd, ["add", "-A"])
-    if (!add.ok) return { ok: false, error: add.stderr.trim() }
+/**
+ * Commit the working tree. By default stages everything first (`add -A`).
+ *
+ * `stagedOnly` commits just the index instead — needed because the UI offers
+ * per-file stage/unstage, and an unconditional `add -A` silently re-staged a
+ * file the user had deliberately unstaged, committing it anyway.
+ */
+export async function commit(
+    cwd: string,
+    message: string,
+    stagedOnly = false
+): Promise<{ ok: boolean; error?: string }> {
+    if (!stagedOnly) {
+        const add = await git(cwd, ["add", "-A"])
+        if (!add.ok) return { ok: false, error: add.stderr.trim() }
+    }
     const r = await git(cwd, ["commit", "-m", message])
     return r.ok ? { ok: true } : { ok: false, error: r.stderr.trim() || r.stdout.trim() }
 }

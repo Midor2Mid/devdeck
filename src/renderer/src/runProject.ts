@@ -49,7 +49,8 @@ async function dotnetCommand(path: string): Promise<string> {
     return "dotnet run"
 }
 
-async function detectRun(path: string): Promise<RunConfig | null> {
+/** Exported for unit tests; UI consumers should use `useRunConfig`. */
+export async function detectRun(path: string): Promise<RunConfig | null> {
     let names: string[] = []
     try {
         names = (await window.api.fs.readDir(path)).map((e) => e.name.toLowerCase())
@@ -67,13 +68,17 @@ async function detectRun(path: string): Promise<RunConfig | null> {
 
     // Node / JS — prefer a `dev` script (the usual watch/serve entry), else fall
     // back to `npm start` (npm's conventional run target).
+    let pkgUnparsed = false
     if (hasPkg) {
         try {
             const txt = await window.api.fs.read(path + "/package.json")
             const scripts = (JSON.parse(txt) as { scripts?: Record<string, string> }).scripts ?? {}
             return { command: scripts.dev ? "npm run dev" : "npm start", type: "node" }
         } catch {
-            // unreadable / malformed package.json — fall through to the other types
+            // Unreadable / malformed package.json (a trailing comma mid-edit is
+            // enough). Try the other project types first, but remember it — a
+            // package.json we can't parse is still a Node repo.
+            pkgUnparsed = true
         }
     }
 
@@ -81,6 +86,11 @@ async function detectRun(path: string): Promise<RunConfig | null> {
     if (hasCsproj) return { command: await dotnetCommand(path), type: "dotnet" }
     // Go — a module at the root.
     if (names.includes("go.mod")) return { command: "go run .", type: "go" }
+    // No other signal, but there *is* a package.json we couldn't parse: offer the
+    // conventional target rather than disabling Run and reporting "no runnable
+    // project type" — npm will then name the manifest error in the terminal,
+    // which points at the real problem instead of hiding it.
+    if (pkgUnparsed) return { command: "npm start", type: "node" }
     return null
 }
 

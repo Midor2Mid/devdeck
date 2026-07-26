@@ -9,6 +9,7 @@ export function DeckStatus(): JSX.Element {
     const sessions = useStore((s) => s.sessions)
     const remoteEnabled = useSettings((s) => s.remote.enabled)
     const setReleaseOpen = useStore((s) => s.setReleaseOpen)
+    const openChanges = useStore((s) => s.openChanges)
     const gitAccounts = useSettings((s) => s.gitAccounts)
     const [git, setGit] = useState<GitStatus | null>(null)
     const [identity, setIdentity] = useState<GitIdentity | null>(null)
@@ -66,8 +67,13 @@ export function DeckStatus(): JSX.Element {
                     <span className="sb-item" data-tip="Current branch" data-tip-pos="top">
                         <Icon name="gitBranch" size={12} /> {git.branch}
                     </span>
-                    {git.changes > 0 && (
-                        <span className="sb-item sb-changes" data-tip="Uncommitted changes" data-tip-pos="top">
+                    {git.changes > 0 && project && (
+                        <span
+                            className="sb-item sb-changes"
+                            data-tip="Uncommitted changes — click to review the diff"
+                            data-tip-pos="top"
+                            onClick={() => openChanges(project.path, project.name)}
+                        >
                             ● {git.changes} change{git.changes === 1 ? "" : "s"}
                         </span>
                     )}
