@@ -141,7 +141,10 @@ export function tokenUsage(sinceDays = 7): UsageSummary {
         } catch {
             continue
         }
-        const project = nameByFolder.get(folder.toLowerCase()) ?? "other"
+        // Claude Code transcripts cover the whole machine, so plenty of usage
+        // belongs to folders that aren't DevDeck projects. "other" left users
+        // staring at an unexplained bucket holding the entire headline figure.
+        const project = nameByFolder.get(folder.toLowerCase()) ?? "outside DevDeck projects"
         for (const file of files) {
             const fp = join(dir, file)
             try {

@@ -96,6 +96,15 @@ export function MissionControl(): JSX.Element {
     }, [view])
     const showSystem = !!sys && (sys.docker.length > 0 || sys.ports.length > 0)
 
+    // Every listening socket used to get its own chip — two dozen of them, mostly
+    // OS noise in the dynamic/ephemeral range (49152+ on Windows) plus whatever
+    // tooling happened to be attached. Keep the ones that plausibly belong to a
+    // dev server up front and fold the rest into one chip.
+    const EPHEMERAL_FROM = 32768
+    const allPorts = [...(sys?.ports ?? [])].sort((a, b) => a.port - b.port)
+    const devPorts = allPorts.filter((p) => p.port < EPHEMERAL_FROM)
+    const otherPorts = allPorts.filter((p) => p.port >= EPHEMERAL_FROM)
+
     // File-ownership / conflict map: which agent is changing which files, across worktrees.
     const [ownership, setOwnership] = useState<OwnershipMap | null>(null)
     useEffect(() => {
@@ -276,11 +285,21 @@ export function MissionControl(): JSX.Element {
                                 <span className="muted small"> {c.status}</span>
                             </span>
                         ))}
-                        {sys!.ports.map((p) => (
+                        {devPorts.map((p) => (
                             <span key={"p" + p.port} className="mission-chip" data-tip={`pid ${p.pid}`}>
                                 :{p.port}
                             </span>
                         ))}
+                        {otherPorts.length > 0 && (
+                            <span
+                                className="mission-chip muted"
+                                data-tip={`Ephemeral / high ports (${EPHEMERAL_FROM}+), usually not dev servers: ${otherPorts
+                                    .map((p) => p.port)
+                                    .join(", ")}`}
+                            >
+                                +{otherPorts.length} more
+                            </span>
+                        )}
                     </div>
                 </div>
             )}

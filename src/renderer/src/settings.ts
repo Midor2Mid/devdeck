@@ -174,6 +174,25 @@ export interface SshProfile {
     args: string
 }
 
+/**
+ * Flags that hand an agent unattended write/exec authority over the repo.
+ * Matched on the command line rather than on a preset id, so a hand-rolled
+ * agent carrying one of these is flagged the same as the bundled YOLO preset.
+ */
+const PERMISSION_BYPASS = [
+    "--dangerously-skip-permissions", // Claude Code
+    "--yolo", // Gemini CLI / misc
+    "--full-auto", // Codex
+    "--auto-approve",
+    "--dangerously-bypass-approvals-and-sandbox"
+]
+
+/** True if this command lets an agent act without asking — show it as risky. */
+export function isUnsafeAgent(command: string): boolean {
+    const c = command.toLowerCase()
+    return PERMISSION_BYPASS.some((f) => c.includes(f))
+}
+
 /** Build an `ssh` command line from a profile. */
 export function sshCommand(p: SshProfile): string {
     const parts = ["ssh"]
@@ -377,6 +396,8 @@ const DEFAULTS: AppSettings = {
 
 interface SettingsState extends AppSettings {
     settingsOpen: boolean
+    /** Section to land on when opening Settings (null = keep the last one). */
+    settingsSection: string | null
     flush: () => void
     load: () => Promise<void>
     setTerminal: (patch: Partial<AppSettings["terminal"]>) => void
@@ -410,7 +431,7 @@ interface SettingsState extends AppSettings {
     setProjectCommands: (projectId: string, commands: SavedCommand[]) => void
     regenerateToken: () => void
     resetAll: () => void
-    openSettings: () => void
+    openSettings: (section?: string) => void
     closeSettings: () => void
     /** Resolve the configured shell to a launchable file + args (Windows). */
     resolveShell: (kind?: ShellKind) => { file: string; args: string[] }
@@ -456,6 +477,7 @@ export const useSettings = create<SettingsState>((set, get) => {
     return {
         ...DEFAULTS,
         settingsOpen: false,
+        settingsSection: null,
         flush,
 
         load: async () => {
@@ -662,7 +684,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             persist()
         },
 
-        openSettings: () => set({ settingsOpen: true }),
+        openSettings: (section) => set({ settingsOpen: true, settingsSection: section ?? null }),
         closeSettings: () => set({ settingsOpen: false }),
 
         resolveShell: (kind) => {

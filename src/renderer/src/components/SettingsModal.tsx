@@ -1404,6 +1404,13 @@ export function SettingsModal(): JSX.Element {
     const s = useSettings()
     const [section, setSection] = useState<Section>("appearance")
 
+    // Honour a deep-link (e.g. the palette's "Edit pipelines…"), so a buried
+    // section can be reached directly instead of hunting through the nav.
+    const wanted = s.settingsSection
+    useEffect(() => {
+        if (wanted && SECTIONS.some((sec) => sec.key === wanted)) setSection(wanted as Section)
+    }, [wanted])
+
     return (
         <Modal onClose={s.closeSettings} className="settings-modal" labelledBy="settings-modal-title">
                 <div className="settings-nav">

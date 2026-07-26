@@ -972,6 +972,21 @@ button .ic,
 }
 .palette-title {
     color: var(--text);
+    flex: 1;
+}
+/* The palette should teach the chord, not just run the action — quiet enough not
+   to compete with the title, which takes the slack. */
+.palette-kbd {
+    font-family: var(--mono, monospace);
+    font-size: 10.5px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 5px;
+    color: var(--faint);
+    white-space: nowrap;
+}
+.palette-item.sel .palette-kbd {
+    color: var(--muted);
 }
 .palette-section {
     font-size: 10px;
@@ -1413,6 +1428,9 @@ button .ic,
     right: 0;
     z-index: 20;
     min-width: 180px;
+    /* Rows are nowrap, so bound the growth a pathological preset name could cause. */
+    max-width: 340px;
+    overflow: hidden;
     background: var(--bg-2);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -1428,6 +1446,20 @@ button .ic,
 .agent-menu-row:hover {
     background: var(--bg-3);
 }
+/* Menu rows are <button role="menuitem"> for keyboard reach — strip the base
+   button chrome so they still read as plain menu lines. */
+.agent-menu-name,
+.agent-menu-resume {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    font-size: inherit;
+    text-align: left;
+}
+.agent-menu-name:hover,
+.agent-menu-resume:hover {
+    border-color: transparent;
+}
 .agent-menu-name {
     flex: 1;
     display: flex;
@@ -1436,6 +1468,12 @@ button .ic,
     padding: 7px 9px;
     cursor: pointer;
     color: var(--text);
+    /* Explicit line-height so the <button> rows and the remaining <span> rows
+       (shells, pipelines) come out the same height — a button's UA line-height
+       is `normal`, which made them 3px shorter than their neighbours. nowrap
+       keeps every row one line; the menu has no fixed width, so it just widens. */
+    line-height: 1.45;
+    white-space: nowrap;
 }
 .agent-menu-name.disabled {
     color: var(--faint);
@@ -1448,6 +1486,22 @@ button .ic,
 }
 .agent-menu-resume:hover {
     color: var(--accent-soft);
+}
+/* Permission-bypassing agents (e.g. --dangerously-skip-permissions) carry a
+   danger stripe rather than sitting as visual peers of a normal launch —
+   DESIGN.md reserves the danger colour for exactly this kind of semantics. */
+.agent-menu-unsafe {
+    box-shadow: inset 2px 0 0 var(--danger);
+}
+.launch-card-unsafe {
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+    box-shadow: inset 2px 0 0 var(--danger);
+}
+.launch-card-unsafe:hover {
+    border-color: var(--danger);
+}
+.launch-card-unsafe .launch-card-cmd {
+    color: color-mix(in srgb, var(--danger) 70%, var(--muted));
 }
 .agent-menu-divider {
     font-size: 9px;

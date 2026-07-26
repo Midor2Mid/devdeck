@@ -1,4 +1,4 @@
-import { useSettings, type AgentPreset } from "../settings"
+import { useSettings, isUnsafeAgent, type AgentPreset } from "../settings"
 import { useStore, SHELL } from "../store"
 
 /**
@@ -50,12 +50,16 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
                         {g.items.map((a) => (
                             <button
                                 key={a.id}
-                                className="launch-card"
+                                className={
+                                    "launch-card" + (isUnsafeAgent(a.command) ? " launch-card-unsafe" : "")
+                                }
                                 onClick={() => launch(a)}
                                 data-tip={
                                     a.runMode === "normal"
                                         ? `Run: ${a.command || "(no command)"}`
-                                        : `Start a ${a.name} session`
+                                        : isUnsafeAgent(a.command)
+                                          ? `Start a ${a.name} session — skips permission prompts, so it can edit and run anything in this project without asking`
+                                          : `Start a ${a.name} session`
                                 }
                             >
                                 <span className="launch-card-icon">

@@ -8,6 +8,8 @@ interface Command {
     id: string
     title: string
     section: string
+    /** Shown right-aligned so the palette teaches the keyboard path, not just runs it. */
+    kbd?: string
     run: () => void
 }
 
@@ -107,12 +109,17 @@ export function CommandPalette(): JSX.Element {
                 run: () => store.jumpToTerm(s.termId)
             })
 
-        cmds.push({ id: "act:switcher", section: "Actions", title: "Switch project…", run: () => store.openSwitcher() })
-        cmds.push({ id: "act:search", section: "Actions", title: "Search across projects", run: () => store.setSearchOpen(true) })
-        cmds.push({ id: "act:tasks", section: "Actions", title: "Task board", run: () => store.setView("tasks") })
-        cmds.push({ id: "act:dotnet", section: "Actions", title: "Build / test (.NET)", run: () => store.setDotnetOpen(true) })
-        cmds.push({ id: "act:review-panel", section: "Actions", title: "Review changes — agent panel", run: () => store.setReviewOpen(true) })
-        cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
+        cmds.push({ id: "act:switcher", section: "Actions", title: "Switch project…", kbd: "Ctrl+K", run: () => store.openSwitcher() })
+        cmds.push({ id: "act:search", section: "Actions", title: "Search across projects", kbd: "Ctrl+Shift+F", run: () => store.setSearchOpen(true) })
+        cmds.push({ id: "act:tasks", section: "Actions", title: "Task board", kbd: "Ctrl+2", run: () => store.setView("tasks") })
+        cmds.push({ id: "act:dotnet", section: "Actions", title: "Build / test (.NET)", kbd: "Ctrl+Shift+B", run: () => store.setDotnetOpen(true) })
+        cmds.push({ id: "act:review-panel", section: "Actions", title: "Review changes — agent panel", kbd: "Ctrl+Shift+R", run: () => store.setReviewOpen(true) })
+        cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", kbd: "Ctrl+Shift+I", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
+        // These three panels existed only as unlabelled deck icons, so searching
+        // "usage" / "cost" / "inbox" / "pipeline" in the palette found nothing.
+        cmds.push({ id: "act:usage", section: "Actions", title: "AI usage — tokens & cost", run: () => store.setUsageOpen(true) })
+        cmds.push({ id: "act:inbox", section: "Actions", title: "Agents inbox — triage what needs you", kbd: "Ctrl+Shift+J", run: () => store.setInboxOpen(true) })
+        cmds.push({ id: "act:pipelines", section: "Actions", title: "Edit pipelines…", run: () => openSettings("pipelines") })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
         cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })
         cmds.push({ id: "act:extend", section: "Actions", title: "Extend agent — skills & agents…", run: () => store.setExtendOpen(true) })
@@ -192,6 +199,7 @@ export function CommandPalette(): JSX.Element {
                             onClick={() => exec(c)}
                         >
                             <span className="palette-title">{c.title}</span>
+                            {c.kbd && <span className="palette-kbd">{c.kbd}</span>}
                             <span className="palette-section">{c.section}</span>
                         </div>
                     ))}

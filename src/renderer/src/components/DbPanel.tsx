@@ -44,7 +44,7 @@ function ConnForm({
 }: {
     initial: ConnInput
     onCancel: () => void
-    onSaved: () => void
+    onSaved: (savedId?: string) => void
 }): JSX.Element {
     const [form, setForm] = useState<ConnInput>(initial)
     const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -69,9 +69,11 @@ function ConnForm({
         if (!form.name.trim()) return
         if (form.kind === "sqlite" ? !form.database.trim() : !form.host.trim()) return
         setBusy(true)
-        await window.api.db.save(form)
+        const list = await window.api.db.save(form)
         setBusy(false)
-        onSaved()
+        // Hand back the saved id so the panel can select it: landing on "Select or
+        // add a connection to run SQL" right after adding one cost a needless click.
+        onSaved(form.id || list.find((p) => p.name === form.name.trim())?.id)
     }
 
     return (
@@ -584,9 +586,11 @@ export function DbPanel(): JSX.Element {
                 <ConnForm
                     initial={editing}
                     onCancel={() => setEditing(null)}
-                    onSaved={() => {
+                    onSaved={async (savedId) => {
                         setEditing(null)
-                        reload()
+                        await reload()
+                        // selectConn (not just setActiveId) so its tables load too.
+                        if (savedId) void selectConn(savedId)
                     }}
                 />
             )}

@@ -356,7 +356,10 @@ export async function runQuery(profileId: string, sql: string): Promise<QueryRes
                 ok: true,
                 columns: ["changes", "lastInsertRowid"],
                 rows: [{ changes: res.changes, lastInsertRowid: Number(res.lastInsertRowid) }],
-                rowCount: res.changes,
+                // Lead with the effect. Reusing the row counter for `changes` put a
+                // green "0 rows" directly above a metadata row you could see.
+                command: `${res.changes} changed`,
+                rowCount: 1,
                 timeMs: Date.now() - start
             }
         }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
-import { useSettings, sshCommand, type ShellKind } from "../settings"
+import { useSettings, sshCommand, isUnsafeAgent, type ShellKind } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { isRunnable } from "../pipeline"
 import { confirm } from "../confirm"
@@ -372,9 +372,24 @@ export function TerminalView(): JSX.Element {
                                     {agents.map((a) => {
                                         const normal = a.runMode === "normal"
                                         return (
-                                        <div key={a.id} className="agent-menu-row">
-                                            <span
+                                        <div
+                                            key={a.id}
+                                            className={
+                                                "agent-menu-row" +
+                                                (isUnsafeAgent(a.command) ? " agent-menu-unsafe" : "")
+                                            }
+                                        >
+                                            {/* A real button, not a span: menu rows have to be
+                                                reachable by keyboard as well as by mouse. */}
+                                            <button
+                                                type="button"
+                                                role="menuitem"
                                                 className="agent-menu-name"
+                                                data-tip={
+                                                    isUnsafeAgent(a.command)
+                                                        ? "Skips permission prompts — can edit and run anything here without asking"
+                                                        : undefined
+                                                }
                                                 onClick={() => {
                                                     // Agent mode → an AI session; normal mode → a
                                                     // plain shell that auto-runs the command.
@@ -392,9 +407,11 @@ export function TerminalView(): JSX.Element {
                                                     <span className="agent-badge">{a.badge}</span>
                                                 )}
                                                 {a.name}
-                                            </span>
+                                            </button>
                                             {!normal && a.resumeArgs && (
-                                                <span
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
                                                     className="agent-menu-resume"
                                                     data-tip={`Resume (${a.command} ${a.resumeArgs})`}
                                                     onClick={() => {
@@ -402,8 +419,8 @@ export function TerminalView(): JSX.Element {
                                                         setMenuOpen(false)
                                                     }}
                                                 >
-                                                    ↻
-                                                </span>
+                                                    <span className="term-launch-glyph">↻</span>
+                                                </button>
                                             )}
                                         </div>
                                         )
