@@ -32,6 +32,12 @@ The shared screenshot shows the cockpit shape I'm picturing — a clean Settings
 - **Git** — multi-account, per-account PAT (GitHub/GitLab), custom SSH command, token verification ("this token belongs to …"), linked/pinned projects per account.
 - **SSH**, **Remote**, **MCP** (Model Context Protocol servers), **AI**, **Browser**, **IDE**, **File Tree**, **Shortcuts**, **Notifications**, **Appearance/Layout**, **License**, **Dependencies**, **About**.
 - Takeaway: a real **Settings hub** + **per-project Git identity** are high-value later additions; the all-in-one vision clearly includes Git account management, SSH, and MCP.
+> **⚠️ The three 1DevTool sections below are stale (v1.26, 2026-06-27).** Re-researched
+> 2026-07-27 against v0.7.6: DevDeck now matches or exceeds 16 of ~20 advertised
+> features — *Agent Pipelines* and *QR pairing* are listed below as aspirational but
+> shipped weeks ago. Read `docs/research/2026-07-27-1devtool-gap-analysis.md` first;
+> it has the current scorecard, the 3 real gaps, and 5 go-past-them ideas.
+
 ### Reference VIDEO (extracted frames 2026-06-27) — "1DevTool v1.26"
 The shared screen recording is a real, polished app (**"1DevTool"**) that is almost exactly DevDeck's vision. Confirmed/new features observed:
 - **Project groups** — projects nested under named groups (Mobile Apps, 1DevTool, StoicSoft, 1MarketingTool, 1AI Vault), each project a colored dot. Searchable.
