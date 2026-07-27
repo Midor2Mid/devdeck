@@ -286,9 +286,9 @@ function registerIpc(): void {
         checks.runCheck(cwd, command, timeoutMs)
     )
     ipcMain.handle("mcpsrv:token", () => mcpserver.generateToken())
-    ipcMain.handle("mcpsrv:register", (_e, { cwd, port, token }) => {
+    ipcMain.handle("mcpsrv:register", (_e, { cwd, port }) => {
         guardRepo(cwd)
-        registerDevdeck(cwd, port, token)
+        registerDevdeck(cwd, port)
         return readMcp(cwd)
     })
     ipcMain.handle("mcpsrv:unregister", (_e, cwd: string) => {

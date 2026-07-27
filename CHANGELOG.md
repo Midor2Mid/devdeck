@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.8 - 2026-07-27
+
+- **Fix: the MCP bearer token is no longer written into `.mcp.json`** (security).
+  0.7.7 inlined it as `"Authorization": "Bearer <token>"` — but `.mcp.json` is the
+  file Claude Code expects you to commit ("designed to be checked into version
+  control"), so the first commit after registering would have put a live token in
+  git history. The entry now references `${DEVDECK_MCP_TOKEN}`, which Claude Code
+  expands from the environment, and DevDeck sets that var in the agent sessions it
+  starts. `.mcp.json` is safe to commit and share — a teammate supplies their own
+  token. Re-running **Add to this project** rewrites an inlined token from 0.7.7.
+  **If you registered on 0.7.7 and committed, treat that token as leaked:** rotate
+  it in Settings → MCP.
+
 ## 0.7.7 - 2026-07-27
 
 - **DevDeck is an MCP server** - agent CLIs can now *pull* context instead of you

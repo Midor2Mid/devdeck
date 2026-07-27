@@ -7,6 +7,7 @@ import { useSettings } from "../settings"
 import { useStore } from "../store"
 import { THEMES } from "../themes"
 import { exitNotice } from "../termExit"
+import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
 
 const IS_WINDOWS = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
 
@@ -165,6 +166,14 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 const preset = useSettings.getState().agentById(agentId)
                 const extraEnv: Record<string, string> = {}
                 if (preset?.model && preset?.modelEnv) extraEnv[preset.modelEnv] = preset.model
+                // Bearer token for DevDeck's own MCP server. It lives here rather
+                // than in .mcp.json because that file is meant to be committed —
+                // the file references ${DEVDECK_MCP_TOKEN} and this supplies it.
+                // Agent sessions only: a plain shell has no MCP client.
+                const mcpSrv = useSettings.getState().mcpServer
+                if (preset && mcpSrv.enabled && mcpSrv.token) {
+                    extraEnv[DEVDECK_TOKEN_ENV] = mcpSrv.token
+                }
                 window.api.pty.create({
                     id: termId,
                     cwd: useStore.getState().termCwd[termId] ?? cwd,

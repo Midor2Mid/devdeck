@@ -26,6 +26,7 @@ function decodeTarget(v: string): BranchTarget | undefined {
     return undefined
 }
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
+import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
 import { Modal } from "./Modal"
 
 const THEME_LIST = Object.values(THEMES)
@@ -109,9 +110,11 @@ function DevdeckMcpBlock(): JSX.Element {
     const registerHere = async (): Promise<void> => {
         if (!project) return
         const s = useSettings.getState().mcpServer
-        await window.api.mcpsrv.register(project.path, s.port, s.token)
-        setNote(`Added to ${project.name}/.mcp.json — restart the agent CLI to pick it up.`)
-        setTimeout(() => setNote(""), 4000)
+        await window.api.mcpsrv.register(project.path, s.port)
+        setNote(
+            `Added to ${project.name}/.mcp.json — start a new agent session to pick it up.`
+        )
+        setTimeout(() => setNote(""), 5000)
     }
 
     return (
@@ -135,6 +138,11 @@ function DevdeckMcpBlock(): JSX.Element {
             <p className="muted small mcp-safety">
                 Read-only: writes are refused, and credentials are never sent to the agent. Bound to
                 127.0.0.1 and guarded by a bearer token, so nothing off this machine can reach it.
+                The token is <em>not</em> written into <code>.mcp.json</code> — that file references{" "}
+                <code>${"{"}
+                {DEVDECK_TOKEN_ENV}
+                {"}"}</code>, which DevDeck sets in the agent sessions it starts, so the file stays
+                safe to commit.
             </p>
             <div className="form-grid">
                 <label>Port</label>

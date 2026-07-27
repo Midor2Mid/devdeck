@@ -1,6 +1,7 @@
 import { readFileSync } from "fs"
 import { join } from "path"
 import { atomicWrite } from "./atomic"
+import { DEVDECK_AUTH_HEADER } from "../shared/mcpEnv"
 
 // Reads/writes a project's .mcp.json (the standard Claude Code project MCP config).
 // Two entry shapes are supported, matching what Claude Code accepts:
@@ -72,8 +73,15 @@ export const DEVDECK_SERVER_NAME = "devdeck"
  * leaving every other server entry untouched. Claude Code prompts for approval
  * the first time it sees a project-scoped server, so this does not silently grant
  * the agent access — the user still confirms on the CLI side.
+ *
+ * The token is written as `${DEVDECK_MCP_TOKEN}`, never inlined. `.mcp.json` is
+ * the file Claude Code expects you to commit ("designed to be checked into
+ * version control"), so a literal token here would land in git history on the
+ * first commit. The placeholder is expanded from the environment at load time,
+ * and DevDeck injects that var into the agent sessions it starts — so the file
+ * stays safe to commit and share with a teammate, who supplies their own token.
  */
-export function registerDevdeck(projectPath: string, port: number, token: string): void {
+export function registerDevdeck(projectPath: string, port: number): void {
     const others = readMcp(projectPath).filter((s) => s.name !== DEVDECK_SERVER_NAME)
     writeMcp(projectPath, [
         ...others,
@@ -83,7 +91,7 @@ export function registerDevdeck(projectPath: string, port: number, token: string
             args: [],
             env: {},
             url: `http://127.0.0.1:${port}/mcp`,
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: DEVDECK_AUTH_HEADER }
         }
     ])
 }

@@ -426,9 +426,13 @@ const api = {
             ipcRenderer.invoke("mcpsrv:status"),
         /** Fresh random bearer token (caller persists it in settings). */
         newToken: (): Promise<string> => ipcRenderer.invoke("mcpsrv:token"),
-        /** Write DevDeck's entry into this project's .mcp.json. */
-        register: (cwd: string, port: number, token: string): Promise<McpServer[]> =>
-            ipcRenderer.invoke("mcpsrv:register", { cwd, port, token }),
+        /**
+         * Write DevDeck's entry into this project's .mcp.json. The token is NOT
+         * written — the header references `${DEVDECK_MCP_TOKEN}`, which DevDeck
+         * injects into agent terminals, so the file stays safe to commit.
+         */
+        register: (cwd: string, port: number): Promise<McpServer[]> =>
+            ipcRenderer.invoke("mcpsrv:register", { cwd, port }),
         unregister: (cwd: string): Promise<McpServer[]> =>
             ipcRenderer.invoke("mcpsrv:unregister", cwd)
     },
