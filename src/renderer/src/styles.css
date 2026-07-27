@@ -1390,6 +1390,9 @@ button .ic,
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    /* Anchor for the launch-options popover. Without it the popover positions
+       against a distant ancestor and lands clipped at the window edge. */
+    position: relative;
 }
 .term-launch-resume {
     font-size: 12px;
@@ -1503,6 +1506,103 @@ button .ic,
 .launch-card-unsafe .launch-card-cmd {
     color: color-mix(in srgb, var(--danger) 70%, var(--muted));
 }
+/* Split-button caret: reads as part of the accent launch button, not a second
+   control competing with it. */
+.term-launch-caret {
+    padding: 0 6px;
+    color: var(--on-accent);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-left-color: color-mix(in srgb, var(--on-accent) 30%, transparent);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+    /* Match the launch button's height exactly rather than guessing padding —
+       an icon-only button's line box is shorter than a text one's. */
+    align-self: stretch;
+}
+.term-launch-caret:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
+    color: var(--on-accent);
+}
+.deck-add-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+/* Launch options popover. `fixed`, with coordinates computed from the anchor in
+   LaunchOptions — the deck strip is an overflow scroller, so an absolutely
+   positioned popover is clipped by it and never becomes visible. */
+.launch-opts {
+    position: fixed;
+    z-index: 40;
+    min-width: 236px;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 11px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: var(--elev-2);
+    outline: none;
+}
+.launch-opts-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.launch-opts-row select,
+.launch-opts-row input {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+}
+.launch-opts-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--faint);
+    min-width: 46px;
+}
+.launch-opts-check {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.launch-opts-hint,
+.launch-opts-warn {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+.launch-opts-warn {
+    color: var(--danger);
+    border-left: 2px solid var(--danger);
+    padding-left: 8px;
+}
+.launch-opts-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 2px;
+}
+.launch-opts-kbd {
+    font-family: var(--mono, monospace);
+    font-size: 10px;
+    color: var(--faint);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+
 /* A bordered sub-block inside a settings section — used for DevDeck's own MCP
    server, which sits above the per-project server list it isn't part of. */
 /* "with [agent ▾]" — which agent receives the diff. Quiet: it's a qualifier on

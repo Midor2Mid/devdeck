@@ -12,6 +12,7 @@ import { PromptComposer } from "./PromptComposer"
 import { CanvasView } from "./CanvasView"
 import { OverviewView } from "./OverviewView"
 import { CommandLauncher } from "./CommandLauncher"
+import { LaunchOptions } from "./LaunchOptions"
 import { Icon } from "./Icon"
 
 // Shell choices offered in the "new terminal" menu (overrides the global default
@@ -86,6 +87,9 @@ export function TerminalView(): JSX.Element {
     const setRecordingTermId = useStore((s) => s.setRecordingTermId)
     const setRecordingsOpen = useStore((s) => s.setRecordingsOpen)
     const setWorktreesOpen = useStore((s) => s.setWorktreesOpen)
+    const newAgentInWorktree = useStore((s) => s.newAgentInWorktree)
+    const [launchOptsOpen, setLaunchOptsOpen] = useState(false)
+    const launchCaretRef = useRef<HTMLButtonElement>(null)
     const openChanges = useStore((s) => s.openChanges)
     const noteRecording = useStore((s) => s.noteRecording)
     const activePaneId = useStore((s) => (s.activeId ? s.activePaneByProject[s.activeId] : undefined))
@@ -348,6 +352,31 @@ export function TerminalView(): JSX.Element {
                             >
                                 + {primaryAgent.name}
                             </button>
+                            {/* Split button: the body above launches instantly, this
+                                caret opens options for one launch. Deliberately not a
+                                dialog in front of the click — that action is bound to
+                                Ctrl+Shift+Enter and should stay one keystroke. */}
+                            <button
+                                ref={launchCaretRef}
+                                className="term-launch-caret"
+                                aria-label={`${primaryAgent.name} launch options`}
+                                data-tip="Launch options — worktree"
+                                onClick={() => setLaunchOptsOpen((v) => !v)}
+                            >
+                                <Icon name="chevronDown" size={11} />
+                            </button>
+                            {launchOptsOpen && (
+                                <LaunchOptions
+                                    anchor={launchCaretRef.current}
+                                    agents={[primaryAgent]}
+                                    allowWorktree
+                                    onLaunch={(agentId, opts) => {
+                                        if (opts.worktree) void newAgentInWorktree(agentId, opts.branch)
+                                        else newTab(agentId)
+                                    }}
+                                    onClose={() => setLaunchOptsOpen(false)}
+                                />
+                            )}
                             {primaryAgent.resumeArgs && (
                                 <button
                                     className="term-launch-resume"
