@@ -13,6 +13,7 @@ import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken } from "./git"
 import { readMcp, writeMcp, registerDevdeck, unregisterDevdeck, type McpServer } from "./mcp"
 import * as mcpserver from "./mcpserver"
+import * as checks from "./checks"
 import * as skills from "./skills"
 import * as browserNet from "./browserNet"
 import * as proxy from "./proxy"
@@ -279,6 +280,11 @@ function registerIpc(): void {
         return mcpserver.status()
     })
     ipcMain.handle("mcpsrv:status", () => mcpserver.status())
+
+    // --- Pipeline ground-truth checks (command gates) ---
+    ipcMain.handle("checks:run", (_e, { cwd, command, timeoutMs }) =>
+        checks.runCheck(cwd, command, timeoutMs)
+    )
     ipcMain.handle("mcpsrv:token", () => mcpserver.generateToken())
     ipcMain.handle("mcpsrv:register", (_e, { cwd, port, token }) => {
         guardRepo(cwd)

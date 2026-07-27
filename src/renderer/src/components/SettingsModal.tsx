@@ -541,7 +541,17 @@ const GATE_MODE_LABEL: Record<GateMode, string> = {
     none: "No gate",
     contains: "Output contains",
     absent: "Output does NOT contain",
-    regex: "Output matches /regex/"
+    regex: "Output matches /regex/",
+    // Ground truth: the machine decides, not the agent's prose.
+    command: "Command succeeds (exit 0)",
+    commandFails: "Command fails (non-zero exit)"
+}
+
+function gatePlaceholder(mode: GateMode): string {
+    if (mode === "command") return "e.g. npm test"
+    if (mode === "commandFails") return "e.g. git diff --quiet   (fails when there are changes)"
+    if (mode === "regex") return "e.g. \\b0 errors?\\b"
+    return "e.g. All tests passed"
 }
 
 function GateEditor({
@@ -570,9 +580,17 @@ function GateEditor({
             {g.mode !== "none" && (
                 <>
                     <input
-                        className="pipe-gate-pattern"
+                        className={
+                            "pipe-gate-pattern" +
+                            (g.mode === "command" || g.mode === "commandFails" ? " mono" : "")
+                        }
                         value={g.pattern}
-                        placeholder={g.mode === "regex" ? "e.g. \\b0 errors?\\b" : "e.g. All tests passed"}
+                        placeholder={gatePlaceholder(g.mode)}
+                        data-tip={
+                            g.mode === "command" || g.mode === "commandFails"
+                                ? "Runs in the active project directory; its exit code decides the gate"
+                                : undefined
+                        }
                         onChange={(e) => patch({ pattern: e.target.value })}
                     />
                     <label className="pipe-gate-retries" data-tip="Extra attempts if the gate fails">

@@ -4,6 +4,8 @@ import {
     gateActive,
     evaluateGate,
     maxAttempts,
+    isCommandGate,
+    commandGatePasses,
     type StepGate
 } from "../src/renderer/src/gate"
 
@@ -69,5 +71,56 @@ describe("maxAttempts", () => {
         expect(maxAttempts(gate({ retries: 2 }))).toBe(3)
         expect(maxAttempts(gate({ retries: 0 }))).toBe(1)
         expect(maxAttempts(gate({ retries: 99 }))).toBe(11)
+    })
+})
+
+describe("command (ground-truth) gates", () => {
+    it("recognises the command modes", () => {
+        expect(isCommandGate(gate({ mode: "command" }))).toBe(true)
+        expect(isCommandGate(gate({ mode: "commandFails" }))).toBe(true)
+        expect(isCommandGate(gate({ mode: "contains" }))).toBe(false)
+        expect(isCommandGate(gate({ mode: "regex" }))).toBe(false)
+        expect(isCommandGate(undefined)).toBe(false)
+    })
+
+    it("is active only with a command to run", () => {
+        expect(gateActive(gate({ mode: "command", pattern: "npm test" }))).toBe(true)
+        expect(gateActive(gate({ mode: "command", pattern: "   " }))).toBe(false)
+    })
+
+    it("`command` passes on exit 0 only", () => {
+        expect(commandGatePasses("command", 0)).toBe(true)
+        expect(commandGatePasses("command", 1)).toBe(false)
+        expect(commandGatePasses("command", 137)).toBe(false)
+    })
+
+    // `git diff --quiet` exits non-zero exactly when the tree is dirty, which is
+    // how you assert "the agent actually changed something".
+    it("`commandFails` passes on a non-zero exit only", () => {
+        expect(commandGatePasses("commandFails", 1)).toBe(true)
+        expect(commandGatePasses("commandFails", 0)).toBe(false)
+    })
+
+    // -1 is what the main process reports when the command never launched or was
+    // killed on timeout. That must never read as success.
+    it("treats a never-launched command (-1) as a failure for `command`", () => {
+        expect(commandGatePasses("command", -1)).toBe(false)
+    })
+
+    it("never passes a text mode through the command verdict", () => {
+        expect(commandGatePasses("contains", 0)).toBe(false)
+        expect(commandGatePasses("none", 0)).toBe(false)
+    })
+
+    // The important safety property: if a caller forgets the async path and
+    // sends a command gate through the text evaluator, it must NOT silently pass
+    // a check that was never run.
+    it("evaluateGate fails closed on a command gate", () => {
+        expect(evaluateGate(gate({ mode: "command", pattern: "npm test" }), "All tests passed!")).toBe(
+            false
+        )
+        expect(
+            evaluateGate(gate({ mode: "commandFails", pattern: "git diff --quiet" }), "done")
+        ).toBe(false)
     })
 })

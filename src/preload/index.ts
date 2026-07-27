@@ -173,6 +173,14 @@ export interface GitIdentity {
     email: string
     sshCommand: string
 }
+/** Result of a pipeline command gate. `exitCode: -1` = never launched, or timed out. */
+export interface CheckResult {
+    exitCode: number
+    output: string
+    timedOut: boolean
+    error?: string
+    ms: number
+}
 export interface McpServer {
     name: string
     command: string
@@ -423,6 +431,11 @@ const api = {
             ipcRenderer.invoke("mcpsrv:register", { cwd, port, token }),
         unregister: (cwd: string): Promise<McpServer[]> =>
             ipcRenderer.invoke("mcpsrv:unregister", cwd)
+    },
+    /** Ground-truth checks for pipeline command gates: run it, read the exit code. */
+    checks: {
+        run: (cwd: string, command: string, timeoutMs?: number): Promise<CheckResult> =>
+            ipcRenderer.invoke("checks:run", { cwd, command, timeoutMs })
     },
     netproxy: {
         /** Apply the corporate-proxy config to the main env (new children inherit it). */

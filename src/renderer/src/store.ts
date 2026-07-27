@@ -15,7 +15,7 @@ import {
 } from "./layout"
 import type { PipelineRun, PipelineStepState } from "./pipeline"
 import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } from "./pipeline"
-import { gateActive, evaluateGate, maxAttempts } from "./gate"
+import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail } from "./missionTail"
@@ -1213,13 +1213,37 @@ export const useStore = create<AppState>((set, get) => {
                             setStep(i, { status: "done" })
                             break
                         }
-                        passed = evaluateGate(step.gate, buf)
+                        // A command gate asks the machine, not the agent: run it in
+                        // the project and let the exit code decide. A text gate reads
+                        // what the agent claimed.
+                        let gateNote = ""
+                        if (isCommandGate(step.gate)) {
+                            const cwd = get().activeProject()?.path ?? ""
+                            if (!cwd) {
+                                passed = false
+                                gateNote = "no project directory to run the check in"
+                            } else {
+                                setRun({ gateMsg: `running check: ${step.gate!.pattern}` })
+                                const r = await window.api.checks.run(cwd, step.gate!.pattern.trim())
+                                if (stale()) return
+                                passed = commandGatePasses(step.gate!.mode, r.exitCode)
+                                gateNote = r.timedOut
+                                    ? (r.error ?? "timed out")
+                                    : r.error
+                                      ? r.error
+                                      : `exit ${r.exitCode} in ${r.ms} ms`
+                            }
+                        } else {
+                            passed = evaluateGate(step.gate, buf)
+                        }
                         if (passed) {
-                            setRun({ gateMsg: "✓ gate passed" })
-                            setStep(i, { status: "done", gateMsg: "✓ gate passed" })
+                            const msg = gateNote ? `✓ gate passed · ${gateNote}` : "✓ gate passed"
+                            setRun({ gateMsg: msg })
+                            setStep(i, { status: "done", gateMsg: msg })
                             pushActivity("pipeline", termId, `${step.title} · gate passed`)
                             break
                         }
+                        if (gateNote) setStep(i, { gateMsg: `✗ ${gateNote}` })
                         if (attempt < attempts) {
                             setRun({ gateMsg: `✗ gate failed - retrying (${attempt}/${attempts - 1})` })
                             pushActivity("pipeline", termId, `${step.title} · gate failed, retrying`)

@@ -5,12 +5,21 @@
  * logic is unit-testable without React/IPC.
  */
 
-export type GateMode = "none" | "contains" | "absent" | "regex"
+/**
+ * Text modes inspect what the agent *said*; command modes inspect what is
+ * actually *true*. "I've fixed it!" passes a `contains` gate whether or not the
+ * build compiles — a `command` gate running `npm test` cannot be talked into
+ * passing. Prefer a command gate whenever the claim is checkable.
+ */
+export type GateMode = "none" | "contains" | "absent" | "regex" | "command" | "commandFails"
 
 export interface StepGate {
     /** Pass condition. "none" = no gate (always passes). */
     mode: GateMode
-    /** Text or regex source to match against the (ANSI-stripped) output. */
+    /**
+     * Text/regex to match against the ANSI-stripped output, or — for the command
+     * modes — the shell command to run in the project directory.
+     */
     pattern: string
     /** Extra attempts if the gate fails before giving up (0 = single attempt). */
     retries: number
@@ -38,6 +47,28 @@ export function gateActive(gate?: StepGate | null): boolean {
 }
 
 /**
+ * True if this gate is decided by running a command rather than by reading the
+ * agent's output. The pipeline runner must resolve these through the main
+ * process (see `commandGatePasses`) — `evaluateGate` cannot decide them.
+ */
+export function isCommandGate(gate?: StepGate | null): boolean {
+    return !!gate && (gate.mode === "command" || gate.mode === "commandFails")
+}
+
+/**
+ * Verdict for a command gate, given the process exit code.
+ * `command` wants success (exit 0); `commandFails` wants a non-zero exit, which
+ * is how you assert a negative — e.g. `git diff --quiet` exits non-zero exactly
+ * when the tree is dirty, so it's the "the agent actually changed something" check.
+ * A command that couldn't be launched at all is a failure, never a pass.
+ */
+export function commandGatePasses(mode: GateMode, exitCode: number): boolean {
+    if (mode === "command") return exitCode === 0
+    if (mode === "commandFails") return exitCode !== 0
+    return false
+}
+
+/**
  * Evaluate a gate against raw terminal output. ANSI codes are stripped first.
  * An inactive gate always passes. An invalid regex fails closed (returns false)
  * rather than throwing.
@@ -45,6 +76,10 @@ export function gateActive(gate?: StepGate | null): boolean {
 export function evaluateGate(gate: StepGate | undefined | null, rawOutput: string): boolean {
     if (!gateActive(gate)) return true
     const g = gate as StepGate
+    // Command gates are decided by an exit code, not by this text. Fail closed if
+    // one reaches here: a caller that forgot the async path must not get a silent
+    // pass on a check it never actually ran.
+    if (isCommandGate(g)) return false
     const text = stripAnsi(rawOutput)
     const pattern = g.pattern.trim()
     switch (g.mode) {
