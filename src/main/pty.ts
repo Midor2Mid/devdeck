@@ -37,6 +37,35 @@ function defaultShell(): { file: string; args: string[] } {
     return { file: process.env.SHELL || "/bin/bash", args: [] }
 }
 
+/**
+ * Environment for a terminal child, derived from DevDeck's own.
+ *
+ * `NO_COLOR` is stripped. It's the no-color.org convention and chalk checks it
+ * *before* anything else, so a single inherited `NO_COLOR=1` makes every Node
+ * TUI — Claude Code, Codex, Gemini are all ink/chalk — render flat monochrome no
+ * matter what TERM or COLORTERM say. It's meant for pipes and CI, not for a
+ * terminal a human is looking at, and DevDeck inherits whatever launched it: a
+ * CI shell, a parent agent harness, or a user who set it globally years ago.
+ * Someone who wants colourless output can turn it off in the agent's own config;
+ * inheriting it silently is just a broken-looking terminal with no explanation.
+ *
+ * TERM and COLORTERM are set because xterm.js renders 24-bit colour and nothing
+ * otherwise tells the child that, leaving it on a 256- or 16-colour ramp. TERM
+ * matters more than it looks: node-pty's `name` option sets it on macOS/Linux but
+ * conpty ignores it, so on Windows the child inherited whatever the *launcher*
+ * happened to export — `xterm-256color` from Git Bash, nothing at all from the
+ * Start Menu. Colour support that depends on how you started the app is a bug
+ * you can't reproduce on demand. Declaring it here makes it deterministic, and
+ * the claim is true: this really is an xterm-compatible 256-colour terminal.
+ */
+export function terminalEnv(extra?: Record<string, string>): Record<string, string> {
+    const env: Record<string, string> = { ...(process.env as Record<string, string>) }
+    delete env.NO_COLOR
+    env.TERM = "xterm-256color"
+    env.COLORTERM = "truecolor"
+    return { ...env, ...(extra ?? {}) }
+}
+
 export function hasSession(id: string): boolean {
     return sessions.has(id)
 }
@@ -59,15 +88,7 @@ export function createPty(opts: CreateOpts): void {
         cwd: opts.cwd || process.env.USERPROFILE || process.cwd(),
         cols: opts.cols ?? 80,
         rows: opts.rows ?? 24,
-        env: {
-            ...(process.env as Record<string, string>),
-            // xterm.js renders 24-bit colour, but nothing told the child that.
-            // Node TUIs (Claude Code, Codex, Gemini — all ink/chalk) check
-            // COLORTERM for truecolor and otherwise fall back to a 256- or
-            // 16-colour ramp, which flattens their palette.
-            COLORTERM: "truecolor",
-            ...(opts.env ?? {})
-        }
+        env: terminalEnv(opts.env)
     })
     const session: Session = { proc, buffer: "" }
     sessions.set(id, session)
