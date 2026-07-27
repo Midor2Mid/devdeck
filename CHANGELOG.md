@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.7.7 - 2026-07-27
+
+- **DevDeck is an MCP server** - agent CLIs can now *pull* context instead of you
+  pasting it in. Turn it on in **Settings → MCP** and "Add to this project", and
+  Claude Code gets `devdeck_projects`, `devdeck_db_connections`,
+  `devdeck_db_tables` and `devdeck_db_query` - so an agent reads your project's
+  live database itself, mid-task, rather than reasoning over a table you copied
+  ten minutes ago. Registered in `.mcp.json` over HTTP (hosted by DevDeck, so the
+  tools run in the process that already holds the connection pools).
+  **Read-only and local:** writes are refused, credentials are never sent to the
+  agent, results are row-capped, it binds to `127.0.0.1` only behind a bearer
+  token, and it's off by default.
+- **Pipeline gates can check ground truth** - two new gate modes, **Command
+  succeeds (exit 0)** and **Command fails (non-zero exit)**, decide from the
+  machine instead of from the agent's prose. "All tests pass now" satisfies a
+  text gate whether or not it's true; `npm test` cannot be talked into passing.
+  The second mode is how you assert a negative - `git diff --quiet` exits
+  non-zero exactly when the tree is dirty, i.e. when the agent really did change
+  something. Commands run in the project directory, are killed at their timeout,
+  and a check that never launched fails rather than passing.
+- **Hand a diff to a different agent** - the AI actions in Review changes gain a
+  **with \<agent\>** picker, so "have Codex review what Claude just wrote" is one
+  click. When the reviewer isn't the agent that last worked in the project, the
+  prompt says so and tells it not to assume the changes are correct - an agent
+  re-reading its own diff tends to defend it.
+- **Conflict warning at dispatch, not after** - dispatching a task without a
+  worktree now names any agent already editing that project ("claude 1 is
+  already editing this project (store.ts, gate.ts)") and points at the worktree
+  toggle. The in-flight conflict map only tells you once both agents have
+  written; this is the same question asked while it's still avoidable.
+- **`npm run typecheck`** - added, and now at zero errors. `electron-vite` builds
+  without typechecking, so nothing had been running `tsc`; a stale error in the
+  editor panel had been sitting there long enough that any new error was just
+  more noise. Fixed by typing the editor ref from Monaco's own signature.
+
 ## 0.7.6 - 2026-07-27
 
 - **One-click Resume** - the primary agent's launch button gains a quieter paired
