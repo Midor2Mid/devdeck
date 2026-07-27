@@ -80,12 +80,19 @@
         "portable"
       ],
       "icon": "build/icon.png",
-      "publisherName": "DevDeck Dev"
+      "signtoolOptions": {
+        "publisherName": "DevDeck Dev",
+        "certificateSubjectName": "DevDeck Dev"
+      }
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
     },
     "publish": [
       {
