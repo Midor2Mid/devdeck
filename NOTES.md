@@ -85,6 +85,46 @@ First installable build shipped (`release/DevDeck Setup 0.1.0.exe` + portable `D
 
 **Friction log:**
 - 2026-06-27 — Automated engine dogfood (headless under real Electron) all green: atomic persistence, pty spawn+I/O, sqlite CRUD via db.ts, git identity round-trip, remote WS attach+stream, **SSRF guard blocks**, **remote DB read-only enforced**, bad-token rejected. + 26 unit tests pass. Engine is solid; UI "feel" still needs human use.
+- 2026-07-28 — **First real human-use friction.** Four things, verbatim:
+  > "the terminal created also too monochrome … Claude display with just black and
+  > white text, which make it not good to follow up"
+
+  Root cause was **`NO_COLOR`**, not the theme and not xterm. It's the no-color.org
+  convention and chalk checks it *before* TERM/COLORTERM/isTTY, so one inherited
+  `NO_COLOR=1` flattens every ink/chalk TUI (Claude Code, Codex, Gemini). DevDeck
+  forwarded its whole parent env to the pty, so **whatever launched the app decided
+  whether agents got colour**. Also found: node-pty's `name` is ignored by conpty,
+  so on Windows `TERM` was whatever the launcher exported — `xterm-256color` from Git
+  Bash, nothing from the Start Menu. Both now pinned in `terminalEnv()`. Confirmed
+  fixed by the user. *Lesson: a colour probe must check `NO_COLOR` first — my first
+  probe checked TERM/COLORTERM/FORCE_COLOR/isTTY and missed the one variable that
+  overrides all four, so the first fix I shipped was aimed at the wrong thing.*
+
+  > "I think the Write a prompt for Claude is not worth it, since if going like that
+  > we force the user to use Claude … in future I would like to add other AIs"
+
+  The composer was never Claude-locked — it fans out to any selected agent sessions.
+  The *label* named `agents[0]`, which read as a lock. Now names live sessions or
+  their count. *Lesson: a label that misdescribes a feature is as costly as not
+  having it — the user was ready to delete a capability they already had.*
+
+  > "how to see the template of Claude start template commands?"
+
+  They exist (Settings → Agents → "Add recommended") but nothing at the launch
+  point hints at them. Also revealed there's **no per-agent startup-command field**
+  at all — the preset's `command` *is* the startup command, so "templates" means the
+  recommended presets. Discoverability still unfixed.
+
+  > "what do you think about options for user to select when user click +Claude?"
+
+  Became the split-button caret (worktree + branch) and made the deck `+` ask which
+  agent instead of firing `agents[0]`. Kept the plain click instant — one keystroke
+  to a new session is a stated priority.
+
+  Also surfaced, unprompted: remote was **enabled and bound to `0.0.0.0` over plain
+  HTTP** on this machine (no Tailscale), and the panel reported *available* addresses
+  rather than the bound one — so installing Tailscale later would show a private
+  `100.x` address while still listening on every interface. Fixed to report the truth.
 - _(add human-use friction here as you hit it)_
 
 ### Hardening audit (2026-06-27) — multi-agent workflow, 17 confirmed findings
