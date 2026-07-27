@@ -19,6 +19,7 @@ import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail } from "./missionTail"
+import { holdersOf, holdersSummary } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
@@ -799,13 +800,36 @@ export const useStore = create<AppState>((set, get) => {
             // first agent preset, created a worktree, and pasted the card title
             // into the CLI — an accidental click cost money and left a worktree
             // behind. Name what's about to happen and let it be cancelled.
+            // Without a worktree the new agent shares the project's working tree.
+            // If someone is already editing it, say who and what they're holding —
+            // the conflict map only tells you this after both have written.
+            let clash = ""
+            if (!opts.worktree) {
+                const st = get()
+                const entries = await Promise.all(
+                    st.agentSessions().map(async (s) => ({
+                        termId: s.termId,
+                        sessionName: s.sessionName,
+                        cwd: st.termCwd[s.termId] ?? s.projectPath,
+                        files: (
+                            await window.api.git
+                                .changes(st.termCwd[s.termId] ?? s.projectPath)
+                                .catch(() => [])
+                        ).map((c) => c.path)
+                    }))
+                )
+                clash = holdersSummary(holdersOf(entries, proj.path))
+            }
+
             const ok = await confirm({
                 title: "Dispatch to an agent",
                 message:
                     `Start ${agent?.name ?? agentId} on "${task.title}" in ${proj.name}` +
                     (opts.worktree ? ", in a new git worktree" : "") +
-                    "? The card title is sent as its first prompt.",
-                confirmLabel: "Dispatch"
+                    "? The card title is sent as its first prompt." +
+                    (clash ? `\n\n⚠ ${clash} Turn on "worktree" to give it its own copy.` : ""),
+                confirmLabel: "Dispatch",
+                danger: !!clash
             })
             if (!ok) return
             // newTab spawns into the active project — make sure it's this task's.
