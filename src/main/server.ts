@@ -43,6 +43,14 @@ interface Client extends WebSocket {
 
 let httpServer: Server | null = null
 let wss: WebSocketServer | null = null
+/**
+ * The interface we actually bound to, as opposed to the ones currently available.
+ * The two can diverge: the bind happens once in `start()`, so bringing Tailscale
+ * up afterwards leaves the server on 0.0.0.0 (every interface, LAN included)
+ * while the UI would happily show the new private address — telling you you're
+ * private when you are not. Reporting the real value lets the panel say so.
+ */
+let boundHost: string | null = null
 let clients = new Set<Client>()
 let onData: ((d: { id: string; data: string }) => void) | null = null
 let onExit: ((d: { id: string; exitCode: number }) => void) | null = null
@@ -87,6 +95,11 @@ const inProject = (p: string): boolean => !!p && isWithinRoots(p, projectRoots()
 export function broadcastSessions(deps: ServerDeps): void {
     const sessions = deps.getSessions()
     for (const c of clients) send(c, { t: "sessions", sessions })
+}
+
+/** The interface the running server is bound to; null when stopped. */
+export function boundAddress(): string | null {
+    return boundHost
 }
 
 export function isRunning(): boolean {
@@ -325,6 +338,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     httpServer.on("error", (err) => console.error("[server] error:", err.message))
     // Prefer binding to the Tailscale interface (private) over all-interfaces (LAN).
     const host = addrs.tailscale[0] ?? "0.0.0.0"
+    boundHost = host
     httpServer.listen(config.port, host)
     const scheme = config.tls ? "https" : "http"
     console.log(`[server] DevDeck remote listening on ${scheme}://${host}:${config.port}`)
@@ -342,6 +356,7 @@ export function stop(): void {
         }
     }
     clients = new Set()
+    boundHost = null
     wss?.close()
     wss = null
     httpServer?.close()

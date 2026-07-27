@@ -154,6 +154,13 @@ export interface RemoteSession {
 }
 export interface ServerStatus {
     running: boolean
+    /**
+     * The interface actually bound — a Tailscale address, or "0.0.0.0" meaning
+     * every interface including the LAN. Distinct from the lists below, which are
+     * merely *available*: the bind is decided once at start, so these diverge if
+     * Tailscale comes up later.
+     */
+    boundHost: string | null
     tailscale: string[]
     lan: string[]
 }

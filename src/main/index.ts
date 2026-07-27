@@ -261,6 +261,7 @@ function registerIpc(): void {
     })
     ipcMain.handle("server:status", () => ({
         running: server.isRunning(),
+        boundHost: server.boundAddress(),
         ...server.localAddresses()
     }))
 

@@ -1346,9 +1346,24 @@ function RemoteSection(): JSX.Element {
     const [status, setStatus] = useState<ServerStatus | null>(null)
     const [qr, setQr] = useState<string>("")
 
-    const host = status?.tailscale[0] ?? status?.lan[0] ?? ""
+    // Derive the URL from what the server is actually bound to, not from what
+    // happens to be available. 0.0.0.0 isn't dialable, so show the LAN address —
+    // but say plainly that it *is* the LAN. Otherwise the panel can display a
+    // private Tailscale address while the server is still listening on every
+    // interface, which reads as "private" when it isn't.
+    const bound = status?.boundHost ?? null
+    const onTailnet = !!bound && bound !== "0.0.0.0"
+    const host = onTailnet ? bound : (status?.lan[0] ?? "")
     const scheme = remote.tls ? "https" : "http"
     const url = host ? `${scheme}://${host}:${remote.port}/?token=${remote.token}` : ""
+    // Tailscale appeared after the server started: it's bound wider than intended.
+    const staleBind = !!bound && !onTailnet && (status?.tailscale.length ?? 0) > 0
+
+    const restartServer = async (): Promise<void> => {
+        await window.api.server.stop()
+        await window.api.server.start({ port: remote.port, token: remote.token, tls: remote.tls })
+        setStatus(await window.api.server.status())
+    }
 
     useEffect(() => {
         let on = true
@@ -1409,8 +1424,23 @@ function RemoteSection(): JSX.Element {
                 <div className="remote-connect">
                     <div className="remote-status">
                         Server: {status?.running ? "running" : "stopped"}
-                        {status?.tailscale.length ? " · Tailscale detected" : ""}
+                        {/* Say what it's reachable on, not just that it's up — the
+                            difference decides whether this works off your Wi-Fi. */}
+                        {status?.running &&
+                            (onTailnet
+                                ? " · Tailscale only (reachable anywhere on your tailnet)"
+                                : " · this Wi-Fi only (same network required)")}
                     </div>
+                    {staleBind && (
+                        <div className="settings-hint warn">
+                            ⚠ Tailscale came up after the server started, so it&apos;s still
+                            listening on <b>every interface</b>, including this Wi-Fi — not just
+                            your tailnet. Restart it to bind privately.
+                            <div className="row-inline" style={{ marginTop: 6 }}>
+                                <button onClick={() => void restartServer()}>Restart remote</button>
+                            </div>
+                        </div>
+                    )}
                     {url ? (
                         <div className="remote-url-block">
                             {qr && <img className="qr" src={qr} alt="connect QR" />}
