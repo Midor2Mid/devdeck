@@ -31,6 +31,16 @@ drives it over the DevTools Protocol to click/evaluate/screenshot. Notes:
 that import `electron`/native drivers (e.g. `main/db.ts`, `main/aikeys.ts`) are
 tested by mocking `electron` (see `tests/aikeys.test.ts`, `tests/projects.test.ts`).
 
+**`npm run typecheck` must stay at zero errors.** The build (`electron-vite`) does
+*not* typecheck, so nothing catches type errors unless you run this — a single
+stale error had been sitting in `EditorPanel.tsx` for months, and while it was
+there any *new* error was just one more line of noise nobody read. Run it before
+committing.
+
+Neither the build nor the typecheck catches a React render loop (e.g. selecting
+`useSettings(s => s.agents.filter(...))` returns a fresh array each render and
+spins forever). Only running the app does — see the `run-app` skill below.
+
 ## Releasing a signed build
 
 `npm run cert:make` (once) then `npm run package:signed` produce a self-signed

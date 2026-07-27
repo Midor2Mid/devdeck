@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import Editor from "@monaco-editor/react"
+import Editor, { type OnMount } from "@monaco-editor/react"
 import { marked } from "marked"
 import DOMPurify from "dompurify"
 import { useStore } from "../store"
@@ -195,13 +195,12 @@ export function EditorPanel(): JSX.Element {
     const saveRef = useRef<() => void>(() => undefined)
 
     // Editor instance + a pending line to reveal (handed in from cross-project search).
-    const editorRef = useRef<{
-        revealLineInCenter: (line: number) => void
-        setPosition: (pos: { lineNumber: number; column: number }) => void
-        getSelection: () => unknown
-        executeEdits: (source: string, edits: { range: unknown; text: string }[]) => void
-        focus: () => void
-    } | null>(null)
+    // Take the type straight from Monaco's own onMount signature rather than
+    // hand-rolling a structural one: the hand-rolled version declared
+    // `executeEdits(edits: { range: unknown }[])`, and `unknown` isn't assignable
+    // to Monaco's IRange, so assigning the real editor to this ref never
+    // typechecked — leaving a permanent error that masked every other one.
+    const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
     const revealLineRef = useRef<number | null>(null)
 
     // Insert a snippet body at the editor's cursor/selection.
