@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.7.9 - 2026-07-28
+
+Everything here came out of real use, not the roadmap.
+
+- **Agent output has colour again.** Claude Code, Codex and Gemini were rendering
+  flat monochrome, which makes a long agent session genuinely hard to follow. The
+  cause was `NO_COLOR`: chalk checks it *before* `TERM`, `COLORTERM` or the TTY
+  test, so a single inherited `NO_COLOR=1` silences colour in every ink/chalk CLI.
+  DevDeck passed its whole parent environment to the terminal, so whatever launched
+  the app decided whether your agents got colour. It's now stripped for terminal
+  children — it's a convention for pipes and CI, not for a terminal you're reading.
+  `TERM` is pinned too: conpty ignores node-pty's terminal name, so on Windows the
+  child previously inherited `xterm-256color` from Git Bash or *nothing* from the
+  Start Menu. Colour no longer depends on how you started DevDeck.
+- **Launch options on the agent button.** `+ <agent>` gains a caret; the button
+  itself still launches instantly (one keystroke to a new session, unchanged). The
+  caret opens options for that one launch — currently **a git worktree with a
+  branch name**, so you can act on the "another agent is already editing this
+  project" warning at the moment it matters instead of going to a separate modal.
+- **The deck's per-project `+` asks which agent** instead of firing your first
+  configured one. It names no agent, so launching a paid CLI off it was a guess.
+- **The prompt composer no longer says "for Claude".** It always fanned out to
+  whichever agent sessions you picked; the label just named your first preset,
+  implying a lock that was never there. It now names the live session, or the count
+  ("Write a prompt · 3 agent sessions…").
+- **Remote panel tells you whether the phone will work off your Wi-Fi.** It now
+  reports the interface actually bound — "Tailscale only (reachable anywhere on
+  your tailnet)" vs "this Wi-Fi only (same network required)" — rather than what
+  addresses merely exist. That difference was previously left for you to infer, and
+  bringing Tailscale up *after* starting the server would show a private `100.x`
+  address while the server was still listening on every interface, including the
+  LAN. That case is now flagged with a **Restart remote** button.
+- **Auto-update would have rejected every installer.** `package:signed` signed the
+  exes *after* electron-builder had hashed them, so `latest.yml` described the
+  unsigned bytes — ~7 KB and a different sha512 from what shipped. electron-builder
+  now signs during the build, artifact names lost their spaces (GitHub rewrites
+  those, 404ing the updater), stale artifacts are cleared first, and the script
+  fails loudly if the manifest and the installer disagree. **If you published
+  0.7.7 or 0.7.8, re-publish from this build.**
+
 ## 0.7.8 - 2026-07-27
 
 - **Fix: the MCP bearer token is no longer written into `.mcp.json`** (security).
