@@ -1505,6 +1505,19 @@ button .ic,
 }
 /* A bordered sub-block inside a settings section — used for DevDeck's own MCP
    server, which sits above the per-project server list it isn't part of. */
+/* "with [agent ▾]" — which agent receives the diff. Quiet: it's a qualifier on
+   the actions beside it, not an action of its own. */
+.ch-ai-agent {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+}
+.ch-ai-agent select {
+    font-size: 11px;
+    padding: 2px 5px;
+}
 .settings-block {
     border: 1px solid var(--border-soft);
     border-radius: 8px;

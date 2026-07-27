@@ -173,7 +173,8 @@ interface AppState extends Persisted {
     openChanges: (cwd: string, label: string) => void
     closeChanges: () => void
     newAgentInWorktree: (agentId: string, branch: string) => Promise<string | undefined>
-    aiOnDiff: (cwd: string, kind: DiffAiKind) => Promise<void>
+    /** `agentId` hands the diff to a specific agent — omit for your default one. */
+    aiOnDiff: (cwd: string, kind: DiffAiKind, agentId?: string) => Promise<void>
 
     // Pull request composer
     prTarget: { cwd: string; label: string } | null
@@ -906,10 +907,18 @@ export const useStore = create<AppState>((set, get) => {
             return termId
         },
 
-        aiOnDiff: async (cwd, kind) => {
-            const agentId = useSettings.getState().agents[0]?.id ?? "claude"
+        aiOnDiff: async (cwd, kind, pickedAgentId) => {
+            const agentId = pickedAgentId || useSettings.getState().agents[0]?.id || "claude"
+            // Hand-off detection: if the agent about to review isn't the one that
+            // last worked here, tell it so — an independent reviewer that knows it
+            // didn't write the code reviews it more honestly than one that assumes
+            // it did. Unknown provenance is treated as self-review (no claim made).
+            const lastId = get().lastAgentTermId
+            const lastAgent = lastId ? get().agentOf(lastId) : ""
+            const independent = !!lastAgent && lastAgent !== agentId
+
             const diff = await window.api.git.fullDiff(cwd)
-            const prompt = diffPrompt(kind, diff)
+            const prompt = diffPrompt(kind, diff, { independent })
             const label = { review: "review", explain: "explain", commit: "commit msg", pr: "PR desc" }[kind]
             const termId = get().newTab(agentId, undefined, label, cwd)
             if (!termId) return

@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { useStore } from "../store"
+import { useSettings } from "../settings"
 import { Modal } from "./Modal"
 import type { ChangeFile } from "../../../preload/index"
 
@@ -42,6 +43,16 @@ export function ChangesModal(): JSX.Element | null {
     const [msg, setMsg] = useState("")
     const [busy, setBusy] = useState(false)
     const [note, setNote] = useState("")
+    // Select the stable array and filter in a memo — filtering *inside* the
+    // selector returns a fresh array every render, which zustand reads as a new
+    // value and spins into an infinite update loop (React #185).
+    const agents = useSettings((s) => s.agents)
+    // Only AI-mode presets can take a diff; normal-mode ones are plain commands.
+    const aiAgents = useMemo(() => agents.filter((a) => a.runMode !== "normal"), [agents])
+    const [handoffTo, setHandoffTo] = useState("")
+    // Settings load async, so the first render can precede the agent list; fall
+    // back to the first agent until an explicit pick is made.
+    const handoffAgent = aiAgents.some((a) => a.id === handoffTo) ? handoffTo : (aiAgents[0]?.id ?? "")
 
     const cwd = target?.cwd
 
@@ -153,10 +164,25 @@ export function ChangesModal(): JSX.Element | null {
 
             <div className="ch-ai">
                 <span className="ch-ai-label">AI</span>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "review")} data-tip="Have an agent review this diff">Review</button>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "explain")}>Explain</button>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "commit")}>Commit msg</button>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "pr")}>PR description</button>
+                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "review", handoffAgent)} data-tip="Have an agent review this diff">Review</button>
+                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "explain", handoffAgent)}>Explain</button>
+                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "commit", handoffAgent)}>Commit msg</button>
+                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "pr", handoffAgent)}>PR description</button>
+                {/* Hand the diff to a *different* agent than the one that wrote it —
+                    a second opinion from another model, not the same one re-reading
+                    its own work. The prompt says so when the agents differ. */}
+                {aiAgents.length > 1 && (
+                    <label className="ch-ai-agent" data-tip="Which agent gets the diff">
+                        with
+                        <select value={handoffAgent} onChange={(e) => setHandoffTo(e.target.value)}>
+                            {aiAgents.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
                 <span className="spacer" style={{ flex: 1 }} />
                 <button className="btn-min" onClick={() => openPr(cwd, target.label)} data-tip="Push branch and open a pull request">
                     Open PR ↗

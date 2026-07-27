@@ -17,7 +17,24 @@ const INTRO: Record<DiffAiKind, string> = {
         "**## Testing** sections for the following diff. Output only the description."
 }
 
-export function diffPrompt(kind: DiffAiKind, diff: string): string {
+/**
+ * Prepended when the work is handed to a *different* agent than the one that
+ * wrote it. An agent reviewing its own diff tends to defend it; one told plainly
+ * that someone else wrote this, and not to assume it is right, reviews it as a
+ * reviewer. Only added for `review` — it would be noise on commit/PR text.
+ */
+const INDEPENDENT =
+    "These changes were written by a different agent, not by you. Review them " +
+    "independently: do not assume they are correct, and say so plainly if the " +
+    "approach itself is wrong rather than only commenting on details."
+
+export function diffPrompt(
+    kind: DiffAiKind,
+    diff: string,
+    opts: { independent?: boolean } = {}
+): string {
     const body = diff.trim() ? diff : "(no changes detected)"
-    return `${INTRO[kind]}\n\n\`\`\`diff\n${body}\n\`\`\``
+    const intro =
+        opts.independent && kind === "review" ? `${INDEPENDENT}\n\n${INTRO[kind]}` : INTRO[kind]
+    return `${intro}\n\n\`\`\`diff\n${body}\n\`\`\``
 }
