@@ -75,6 +75,13 @@ export function TerminalView(): JSX.Element {
     // running `claude` yourself in a terminal) the bar is hidden — Ctrl+Shift+I
     // still opens the composer as a power-user escape hatch.
     const hasAgentSession = useStore((s) => s.agentSessions().length > 0)
+    // The composer fans out to whichever agent sessions you pick — it was never
+    // Claude-specific. Naming the *live sessions* instead of the first configured
+    // preset stops the label implying otherwise, and surfaces the fan-out.
+    const agentSessionCount = useStore((s) => s.agentSessions().length)
+    const soleAgentSession = useStore((s) =>
+        s.agentSessions().length === 1 ? s.agentSessions()[0].sessionName : ""
+    )
     const recordingTermId = useStore((s) => s.recordingTermId)
     const setRecordingTermId = useStore((s) => s.setRecordingTermId)
     const setRecordingsOpen = useStore((s) => s.setRecordingsOpen)
@@ -688,7 +695,9 @@ export function TerminalView(): JSX.Element {
                     <span className="cl-text">
                         {composerDraft.trim()
                             ? "Resume your prompt draft…"
-                            : `Write a prompt${primaryAgent ? " for " + primaryAgent.name : ""}…`}
+                            : soleAgentSession
+                              ? `Write a prompt for ${soleAgentSession}…`
+                              : `Write a prompt · ${agentSessionCount} agent sessions…`}
                     </span>
                     {composerDraft.trim() && <span className="cl-draft">● draft</span>}
                     <span className="cl-kbd">Ctrl+Shift+I</span>

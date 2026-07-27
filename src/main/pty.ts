@@ -51,11 +51,23 @@ export function createPty(opts: CreateOpts): void {
 
     const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
     const proc = nodePty.spawn(file, args, {
-        name: "xterm-color",
+        // `xterm-color` is a legacy 8-colour terminfo — a CLI that trusts TERM
+        // caps itself at 16 colours, which is a big part of why agent output
+        // looks washed out. Windows/conpty ignores `name`, but it *is* TERM on
+        // macOS and Linux, so this matters as soon as we ship there.
+        name: "xterm-256color",
         cwd: opts.cwd || process.env.USERPROFILE || process.cwd(),
         cols: opts.cols ?? 80,
         rows: opts.rows ?? 24,
-        env: { ...(process.env as Record<string, string>), ...(opts.env ?? {}) }
+        env: {
+            ...(process.env as Record<string, string>),
+            // xterm.js renders 24-bit colour, but nothing told the child that.
+            // Node TUIs (Claude Code, Codex, Gemini — all ink/chalk) check
+            // COLORTERM for truecolor and otherwise fall back to a 256- or
+            // 16-colour ramp, which flattens their palette.
+            COLORTERM: "truecolor",
+            ...(opts.env ?? {})
+        }
     })
     const session: Session = { proc, buffer: "" }
     sessions.set(id, session)
