@@ -43,6 +43,12 @@
     /* Theme-adaptive detail (derive from --text/--border, so they self-tune light/dark). */
     --edge-hi: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
     --border-strong: color-mix(in srgb, var(--border) 65%, var(--text));
+    /* Active-segment tint. A tint can never carry a segment on its own — 18% of
+       Washi's accent over its ground is 1.2:1, and even a 100% fill is 2.9:1, so
+       it never clears the 3:1 floor on a light theme. Active segments therefore
+       pair this with font-weight 600 (the .ov-seg idiom); the tint is the hue
+       cue, the weight is the form. */
+    --seg-tint: color-mix(in srgb, var(--accent) 18%, transparent);
     /* Spacing scale (4px base). xs–lg formalize existing usage; xl/2xl are new breathing room. */
     --sp-xs: 4px;
     --sp-sm: 8px;
@@ -825,9 +831,11 @@ button .ic,
     border-radius: var(--radius, 7px);
     cursor: pointer;
 }
+/* A panel-header mode switcher is a segment, not a document tab. */
 .dotnet-modes button.on {
     color: var(--text);
-    box-shadow: inset 0 -2px 0 var(--accent);
+    background: var(--seg-tint);
+    font-weight: 600;
     border-radius: 0;
 }
 .dotnet-target {
@@ -1782,11 +1790,11 @@ button .ic,
     color: var(--faint);
     background: transparent;
 }
-/* Segments mark active with an accent tint fill — the underline is reserved
-   for document tabs, so the two actives never share a form axis. */
+/* Segments: tint + weight. The underline is reserved for document tabs. */
 .cmd-mode-toggle button.on {
     color: var(--text);
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    background: var(--seg-tint);
+    font-weight: 600;
 }
 .cmd-icon-input {
     width: 34px;
@@ -1925,7 +1933,7 @@ button .ic,
 .ov-seg { display: flex; border: 1px solid var(--border); border-radius: var(--radius, 7px); overflow: hidden; }
 .ov-seg button { border: none; background: transparent; color: var(--muted); font-size: 12px; padding: 4px 11px;
     display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.ov-seg button.on { background: var(--accent); color: var(--bg); font-weight: 600; }
+.ov-seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .ov-seg button:not(.on):hover { color: var(--text); background: var(--bg-2); }
 
 /* focus + rail */
@@ -3278,10 +3286,11 @@ button .ic,
 .md-modes span:hover {
     color: var(--text);
 }
-/* Same segment grammar as .cmd-mode-toggle — accent tint, plain text. */
+/* Same segment grammar as .cmd-mode-toggle — tint + weight. */
 .md-modes span.active {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    background: var(--seg-tint);
     color: var(--text);
+    font-weight: 600;
 }
 .md-preview {
     flex: 1 1 50%;
@@ -3334,13 +3343,14 @@ button .ic,
     padding: 0;
 }
 /* A quote isn't interactive, so it doesn't spend the accent — the accent means
-   "you can act here". Structure carries it instead. */
+   "you can act here". The bar plus muted text carries it instead. Deliberately
+   NOT italic: that would make *emphasis* inside a quote indistinguishable from
+   the quote around it. */
 .md-preview blockquote {
     border-left: 2px solid var(--border-strong);
     margin: 1em 0;
     padding: 0.2em 0 0.2em 14px;
     color: var(--muted);
-    font-style: italic;
 }
 .md-preview table {
     border-collapse: collapse;
@@ -4954,7 +4964,8 @@ button .ic,
     box-shadow: 0 0 0 1px var(--accent), 0 0 14px -4px var(--accent);
 }
 /* Active terminal tab + focused pane get a neon edge */
-[data-style="neon"] .term-tab.active {
+[data-style="neon"] .term-tab.active,
+[data-style="neon"] .editor-tab.active {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
         0 0 14px -4px var(--accent);
 }
@@ -5252,7 +5263,8 @@ button .ic,
 }
 [data-style="crt"] button.accent,
 [data-style="crt"] .icon-action.on,
-[data-style="crt"] .term-tab.active {
+[data-style="crt"] .term-tab.active,
+[data-style="crt"] .editor-tab.active {
     box-shadow: 0 0 12px -4px var(--accent);
 }
 [data-style="crt"] .term-pane.focused {
@@ -6123,9 +6135,6 @@ kbd {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 /* Active tab: crisp accent underline (no glow). */
-[data-style="modernplus"] .term-tab.active {
-    box-shadow: inset 0 -2px 0 var(--accent);
-}
 /* Cards & rows: hairline border + soft elevation; hover raises. */
 [data-style="modernplus"] .switcher-card,
 [data-style="modernplus"] .theme-card,
@@ -6419,7 +6428,7 @@ kbd {
 }
 .usage-windows .btn-min.on {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 }
 .usage-body {
     display: flex;
@@ -6812,6 +6821,13 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 [data-style="kinetic"] .term-tab,
 [data-style="kinetic"] .editor-tab {
     position: relative;
+}
+/* Kinetic draws its own springing underline below, so it must drop the base
+   one — otherwise the static full-width line paints instantly and the spring
+   is invisible behind it. */
+[data-style="kinetic"] .term-tab.active,
+[data-style="kinetic"] .editor-tab.active {
+    box-shadow: none;
 }
 [data-style="kinetic"] .term-tab.active::after,
 [data-style="kinetic"] .editor-tab.active::after {

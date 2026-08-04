@@ -83,6 +83,12 @@ const WASHI_VARS = {
     "--panel": "#ece5d6",
     "--border": "#d8cdb8",
     "--border-soft": "#e3dac8",
+    // The :root derivation (border 65% + text 35%) is asymmetric across modes:
+    // mixing toward a dark text on a light ground gains far less contrast than
+    // mixing toward light text on a dark one, so Washi's derived border-strong
+    // lands at 2.51:1 where the dark themes get ~3.7:1. Washi is the only light
+    // theme, so it states its own value — 3.05:1, clear of the 3:1 floor.
+    "--border-strong": "#918879",
     "--text": "#3a342b",
     "--muted": "#6f6757",
     "--faint": "#756c5c",

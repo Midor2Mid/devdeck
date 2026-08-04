@@ -205,34 +205,61 @@ component changes:
 
 ### Active-state grammar
 
-Every "active" is marked in **form**, and each kind of active gets its **own form
-axis** — so two different actives on screen are never ambiguous:
+Every "active" is marked in **form**, and each kind of active has its own marker,
+so two different actives on screen aren't ambiguous. This table is **descriptive
+of the main surfaces** — the known exceptions are listed below it, deliberately,
+rather than left to be discovered:
 
 | What's active | Form marker |
 | --- | --- |
-| **Container** (deck key, project row) | 3px accent **left stripe** |
+| **Container** (deck key) | 2–3px accent **left stripe** (3px on the deck key, 2px on list rows) |
 | **Document tab** (terminal, editor) | 2px accent **bottom underline** |
-| **Segment** (Edit/Split/Preview, AI/normal toggle) | accent **tint fill** |
-| **Focused pane** in a split | brighter **border** + dot |
+| **Segment** (Edit/Split/Preview, AI/normal, panel mode switchers) | `--seg-tint` fill **+ font-weight 600** |
+| **Focused pane** in a split | brighter accent **border** |
 
-Fill-shift to `--bg-3` still happens on tabs and rows, but it is never the *only*
+A segment needs *both* the tint and the weight. The tint alone cannot carry it:
+18% accent over Washi's ground is 1.2:1, and even a 100% accent fill is only
+2.9:1, so on the one light theme a tint never clears the 3:1 floor for non-text
+UI. The weight is the part that survives; the tint is a hue cue on top.
+
+Fill-shift to `--bg-3` accompanies some actives, but should never be the *only*
 marker — a surface change alone reads as hover, not selection. Style layers may
-substitute a stronger idiom (Bauhaus fills the tab with accent, Neon/CRT/Aurora
-swap the underline for a glow ring) as long as exactly one axis carries it.
+substitute a stronger idiom (Bauhaus fills the tab with accent; Neon/CRT/Aurora/Neo
+swap the underline for a glow ring; Kinetic springs its own underline in and drops
+the base one).
+
+**Known exceptions** — real today, not endorsed. Fix opportunistically; don't cite
+them as precedent:
+
+- `.deck-view.on` (the main view switcher) uses the *document-tab* underline. It's
+  a segment by shape but selects the main view, so the tab idiom is arguable — it
+  is called out here rather than silently contradicting the table.
+- `.switcher-card.active` marks the active project with a `--moss` ring, i.e. the
+  semantic success color standing in for an active state. Should be an accent
+  stripe.
+- `.deck-key.active` carries *two* axes — the 3px stripe plus a 14% accent tint.
+- `.ov-seg button.on` and `.usage-windows .btn-min.on` use a full accent fill for
+  a segment, which the badge tiers reserve for urgency.
+- On/off **toggles** (`.icon-action.on`, `.net-toggle.on`, …) are marked by border
+  or text color only. The table has no axis for toggles; that's a gap in both.
+- Menu/keyboard-cursor highlights (`.mention-item.active`) intentionally share
+  their rule with `:hover` — a transient cursor, not a persisted selection.
 
 ### Badge tiers
 
-Four tiers, distinguished by *treatment* rather than color, so urgency can never
-be confused with identity:
+Distinguished by *treatment* rather than color, so urgency is never confused with
+identity:
 
-- **Filled** count badge — **urgency** only (attention counts). Accent fill,
-  on-accent text.
 - **Outlined** micro-pill — **identity**, never urgency (agent/model names, on
-  `--clay`). Outline is what marks it as "this is what, not how urgent".
+  `--clay`). Outline marks it as "this is *what*, not *how urgent*".
 - **Bare uppercase** micro-label — **classification** (`--faint`, letter-spaced).
-- **Tint fill** — **active segment** (see above).
+- **Tint fill + weight** — **active segment** (see above).
+- **Accent fill** — reserved for the primary CTA (`button-accent`), and otherwise
+  scarce. If something is filled, it is the one thing to act on.
 
-Fill is the scarcest treatment. If a badge is filled, it means *act now*.
+Attention/urgency is **not** a badge tier — it is form plus the accent: a flag
+icon beside the count in the status region (`.sb-attn`), and a bare `!` glyph on a
+deck key. There is no filled count badge in the app.
 
 ## Do's and Don'ts
 

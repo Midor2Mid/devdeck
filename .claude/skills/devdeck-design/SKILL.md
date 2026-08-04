@@ -20,8 +20,19 @@ have:
    active-state grammar and badge-tier tables.
 2. `src/renderer/src/themes.ts` — the 7 color themes. Each is a `*_VARS` map that
    re-binds the same token names.
-3. `src/renderer/src/styles.css` — `:root` tokens (lines ~7–64), then the
+3. `src/renderer/src/styles.css` — the `:root` token block at the top, then the
    `[data-style="…"]` blocks, one per style.
+
+**Two traps in `themes.ts` that will waste your time if you don't know them:**
+
+- `applyTheme()` sets each theme's `*_VARS` as *inline* CSS variables on
+  `documentElement` — **not** via `[data-theme=…]` CSS blocks. So flipping the
+  `data-theme` attribute does not rebind colors, and a probe that does so is
+  measuring the previous theme's palette.
+- `applyTheme()` then **overwrites `--accent-soft`** with `shade(accent, ±0.18)`
+  after applying the theme vars. Every `--accent-soft` entry in the `*_VARS` maps
+  is therefore dead — editing one changes nothing. Change the accent, or the
+  `shade()` call.
 
 ## 2. The constraint that makes DevDeck different
 
@@ -65,8 +76,16 @@ The workflow, in order:
 4. Only then add a token — and add it to `:root` plus every theme that needs to
    differ, not just the one you're looking at.
 
-Spacing is a fixed scale — **xs 4 · sm 8 · md 12 · lg 16 · xl 24 · 2xl 32**. Radii
-step **sm 6 · md 8 · lg 12**. No values in between.
+Spacing at the **layout** level uses the scale — **xs 4 · sm 8 · md 12 · lg 16 ·
+xl 24 · 2xl 32** — for gaps, padding and margins between regions. Control-level
+micro-padding in the existing CSS legitimately uses off-scale values (5/6/7/9/14px)
+and is **not** something to go "fix"; match the neighbours instead.
+
+Radii come from `--radius`, which is a **theme** variable, not a fixed constant:
+Sumi/Washi set `7px` (COMPACT), Zen sets `11px` (AIRY), and components read
+`var(--radius, 7px)`. The `sm 6 · md 8 · lg 12` steps in DESIGN.md describe the
+default identity, not a whitelist — never hard-code a radius, and don't "correct"
+a 7px to 8px.
 
 Type: **Inter for chrome, Geist Mono for content.** Within a row, sans for names
 and mono for machine-readable values (branch, path, token count, percentage).
@@ -86,7 +105,10 @@ A UI change ships only if all of these hold:
 - [ ] Motion (if any) uses `--ease`/`--dur*` and is disabled under
       `prefers-reduced-motion`.
 - [ ] Icons come from `components/Icon.tsx` (24 grid, 1.75 stroke,
-      `currentColor`). **No Unicode glyphs or emoji in chrome.**
+      `currentColor`). **No emoji, and no decorative Unicode symbols** — reach for
+      `Icon` instead. (A bare typographic character carrying meaning is fine and
+      shipped: the `!` on an attention deck key, the `●` in the project switcher.
+      The rule is against emoji and pictographic glyphs, not against text.)
 - [ ] `npm run typecheck` is at **zero errors** — the build does not typecheck, so
       nothing else catches this.
 - [ ] `npm test` passes.
