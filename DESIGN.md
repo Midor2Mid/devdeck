@@ -118,6 +118,15 @@ One accent carries the eye; semantic colors are separate from it.
 - **ok (#5fce8f) / danger (#e9786b):** semantic only — success and destructive.
   They never stand in for the accent.
 
+There is deliberately **no warning/attention color token**, and that constraint is
+load-bearing: the default accent *is* amber, so an "attention amber" would be the
+same hue as brand, active, and focus — urgency would be indistinguishable from
+"this tab is selected". Attention therefore has to carry a **form** marker (the
+flag icon on the status count, the `!` glyph on a deck key, the dot state) and may
+use the accent only *in addition* to it. Tools whose accent is blue can afford a
+lone orange for urgency; DevDeck cannot. Never add a warning color to fix this —
+add form.
+
 ## Typography
 
 Two families: a humanist UI sans for chrome and a mono for everything terminal-
@@ -194,8 +203,36 @@ component changes:
 - **section-label:** muted, uppercase, letter-spaced.
 - **terminal:** `surfaceDeep` ground, mono type, generous line-height.
 
-Active tabs, selected rows, and focused panes are marked with an accent edge
-stripe (form) on top of any color change.
+### Active-state grammar
+
+Every "active" is marked in **form**, and each kind of active gets its **own form
+axis** — so two different actives on screen are never ambiguous:
+
+| What's active | Form marker |
+| --- | --- |
+| **Container** (deck key, project row) | 3px accent **left stripe** |
+| **Document tab** (terminal, editor) | 2px accent **bottom underline** |
+| **Segment** (Edit/Split/Preview, AI/normal toggle) | accent **tint fill** |
+| **Focused pane** in a split | brighter **border** + dot |
+
+Fill-shift to `--bg-3` still happens on tabs and rows, but it is never the *only*
+marker — a surface change alone reads as hover, not selection. Style layers may
+substitute a stronger idiom (Bauhaus fills the tab with accent, Neon/CRT/Aurora
+swap the underline for a glow ring) as long as exactly one axis carries it.
+
+### Badge tiers
+
+Four tiers, distinguished by *treatment* rather than color, so urgency can never
+be confused with identity:
+
+- **Filled** count badge — **urgency** only (attention counts). Accent fill,
+  on-accent text.
+- **Outlined** micro-pill — **identity**, never urgency (agent/model names, on
+  `--clay`). Outline is what marks it as "this is what, not how urgent".
+- **Bare uppercase** micro-label — **classification** (`--faint`, letter-spaced).
+- **Tint fill** — **active segment** (see above).
+
+Fill is the scarcest treatment. If a badge is filled, it means *act now*.
 
 ## Do's and Don'ts
 

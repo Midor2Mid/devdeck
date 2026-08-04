@@ -1350,6 +1350,9 @@ button .ic,
 .term-tab.active {
     background: var(--bg-3);
     color: var(--text);
+    /* Document tabs mark active with a bottom underline (form), so the state
+       survives a theme swap and never relies on the fill alone. */
+    box-shadow: inset 0 -2px 0 var(--accent);
 }
 .tab-dot {
     width: 6px;
@@ -1779,10 +1782,11 @@ button .ic,
     color: var(--faint);
     background: transparent;
 }
+/* Segments mark active with an accent tint fill — the underline is reserved
+   for document tabs, so the two actives never share a form axis. */
 .cmd-mode-toggle button.on {
     color: var(--text);
     background: color-mix(in srgb, var(--accent) 18%, transparent);
-    box-shadow: inset 0 -2px 0 var(--accent);
 }
 .cmd-icon-input {
     width: 34px;
@@ -3199,6 +3203,7 @@ button .ic,
 .editor-tab.active {
     background: var(--bg-3);
     color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--accent);
 }
 .editor-tab-state {
     display: flex;
@@ -3273,9 +3278,10 @@ button .ic,
 .md-modes span:hover {
     color: var(--text);
 }
+/* Same segment grammar as .cmd-mode-toggle — accent tint, plain text. */
 .md-modes span.active {
-    background: var(--bg-3);
-    color: var(--accent-soft);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--text);
 }
 .md-preview {
     flex: 1 1 50%;
@@ -3327,11 +3333,14 @@ button .ic,
     background: none;
     padding: 0;
 }
+/* A quote isn't interactive, so it doesn't spend the accent — the accent means
+   "you can act here". Structure carries it instead. */
 .md-preview blockquote {
-    border-left: 3px solid var(--accent);
+    border-left: 2px solid var(--border-strong);
     margin: 1em 0;
     padding: 0.2em 0 0.2em 14px;
     color: var(--muted);
+    font-style: italic;
 }
 .md-preview table {
     border-collapse: collapse;
