@@ -125,6 +125,46 @@ First installable build shipped (`release/DevDeck Setup 0.1.0.exe` + portable `D
   HTTP** on this machine (no Tailscale), and the panel reported *available* addresses
   rather than the bound one — so installing Tailscale later would show a private
   `100.x` address while still listening on every interface. Fixed to report the truth.
+- 2026-08-07 — **Used the app instead of testing it, and the difference mattered.**
+  Everything below came from opening the real window and looking, after a batch of
+  changes had already passed typecheck, 461 unit tests and a build.
+
+  **The overlap warning was confidently wrong.** Having just wired the "who's
+  already in this working tree" warning into the launch caret, opening it showed:
+  *"claude 1, claude 2, claude 3, claude 5, claude 6 are already editing this
+  project (docs/managements/SPCSG_Jira_Reconciliation_2026-07-29.md)"* — while the
+  status bar two inches below said **1 change**. Five agents named as editors of a
+  file none of them may have touched; it could equally have been my own edit.
+
+  Cause: `git changes(cwd)` answers "what is dirty in this directory", never
+  "which pty changed it". Every session sharing a cwd therefore reports the tree's
+  *whole* dirty list, so `holdersOf` marks all of them as holding all of it. The
+  wording then claimed an attribution the data cannot support. It had shipped that
+  way for `dispatchBoardTask`; surfacing it in the caret — a far more frequent
+  surface — is what made it visible. *Lesson: the tests encoded the bug. One even
+  asserted "are already editing" for two agents sharing a file, which is exactly
+  the false claim. A test written from the implementation will happily bless it —
+  it took a number on screen contradicting another number on screen to notice.*
+  Now: names the sessions running there (true), attributes changes to the tree
+  (true), claims nothing about who made them, and switches to a count past two
+  sessions.
+
+  **Then it was still too heavy.** Truthful but five lines of red, because one repo
+  path wrapped. With a habitually dirty tree that block appears on every launch and
+  becomes wallpaper — the wabi-sabi rule failing in the small. Now shows file names
+  rather than paths; the count and the name are what inform the decision.
+
+  **Enter didn't add a task.** The board's input is a `textarea` so a pasted
+  checklist keeps its line breaks, and it committed on Ctrl+Enter — labelled, but
+  the common case is a one-line card and Enter is what a one-line field is expected
+  to do. Enter now adds, Shift+Enter types a newline, Ctrl+Enter still works, and
+  checklist paste is untouched because pasting never uses the key.
+
+  **The starter-commands button is invisible to me.** It only renders when
+  `missingRecommended()` is non-empty, and this config has all of them — so the fix
+  for "how do I see the template start commands?" cannot be seen by anyone whose
+  config is already complete. Correct behaviour, but worth knowing it only helps
+  someone who deleted presets or upgraded across a defaults change.
 - _(add human-use friction here as you hit it)_
 
 ### Hardening audit (2026-06-27) — multi-agent workflow, 17 confirmed findings

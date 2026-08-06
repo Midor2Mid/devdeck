@@ -103,21 +103,59 @@ describe("holdersSummary", () => {
         expect(holdersSummary([])).toBe("")
     })
 
-    it("names the agent and its files", () => {
+    it("names a single session and the tree's changes", () => {
         const s = holdersSummary([h("claude 1", ["src/a.ts"])])
-        expect(s).toContain("claude 1")
-        expect(s).toContain("src/a.ts")
-        expect(s).toContain("is already editing")
+        expect(s).toContain("claude 1 is already working in this tree")
+        expect(s).toContain("1 uncommitted change (a.ts)")
     })
 
-    it("pluralises and dedupes across agents", () => {
+    // A repo path is long enough to wrap the popover to five lines of red, which
+    // stops being read. The name is what identifies the file at a glance.
+    it("shows file names rather than full paths", () => {
+        const s = holdersSummary([h("claude 1", ["docs/managements/SPCSG_Recon_2026-07-29.md"])])
+        expect(s).toContain("(SPCSG_Recon_2026-07-29.md)")
+        expect(s).not.toContain("docs/managements")
+    })
+
+    it("handles backslash paths from Windows git output", () => {
+        expect(holdersSummary([h("claude 1", ["src\\main\\db.ts"])])).toContain("(db.ts)")
+    })
+
+    it("names two sessions, and dedupes the shared file list", () => {
         const s = holdersSummary([h("claude 1", ["src/a.ts"]), h("codex 1", ["src/a.ts"])])
-        expect(s).toContain("are already editing")
-        expect(s.match(/src\/a\.ts/g)).toHaveLength(1)
+        expect(s).toContain("claude 1 and codex 1 are")
+        expect(s.match(/a\.ts/g)).toHaveLength(1)
     })
 
-    it("caps the file list so the dialog stays readable", () => {
+    /**
+     * The bug this wording replaced. Sessions sharing a cwd all report the same
+     * dirty file list, so the old text named five agents as "already editing" a
+     * single file that none of them may have touched. It must never claim who
+     * changed what — only what the tree has.
+     */
+    it("does not attribute the tree's changes to any session", () => {
+        const five = ["claude 1", "claude 2", "claude 3", "claude 5", "claude 6"].map((n) =>
+            h(n, ["docs/one-file.md"])
+        )
+        const s = holdersSummary(five)
+        expect(s).not.toMatch(/editing/)
+        expect(s).toContain("5 agent sessions are already working in this tree")
+        expect(s).toContain("1 uncommitted change")
+    })
+
+    it("switches from names to a count past two sessions, to stay scannable", () => {
+        const s = holdersSummary([h("a", ["f"]), h("b", ["f"]), h("c", ["f"])])
+        expect(s).toContain("3 agent sessions")
+        expect(s).not.toContain("a, b, c")
+    })
+
+    it("pluralises the change count", () => {
+        expect(holdersSummary([h("claude 1", ["a", "b"])])).toContain("2 uncommitted changes")
+    })
+
+    it("caps the file list so the warning stays readable", () => {
         const s = holdersSummary([h("claude 1", ["a", "b", "c", "d", "e"])])
-        expect(s).toContain("+2 more")
+        expect(s).toContain("+3 more")
+        expect(s).toContain("5 uncommitted changes")
     })
 })

@@ -86,14 +86,21 @@ export function TaskBoard(): JSX.Element {
                             <div className="board-add">
                                 <textarea
                                     className="board-add-input"
-                                    placeholder="New task… (Ctrl+Enter to add; paste a checklist for many)"
+                                    placeholder="New task… (Enter to add; paste a checklist for many)"
                                     value={draft}
                                     onChange={(e) => setDraft(e.target.value)}
                                     onKeyDown={(e) => {
-                                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                                            e.preventDefault()
-                                            add()
-                                        }
+                                        if (e.key !== "Enter") return
+                                        // A textarea so a pasted checklist keeps its
+                                        // line breaks — but almost every card is one
+                                        // line, and Enter is what a one-line field is
+                                        // expected to do. Shift+Enter still types a
+                                        // newline, paste is untouched (it doesn't use
+                                        // this key), and Ctrl/Cmd+Enter keeps working
+                                        // for anyone who learned it.
+                                        if (e.shiftKey) return
+                                        e.preventDefault()
+                                        add()
                                     }}
                                 />
                                 <div className="board-add-foot">
