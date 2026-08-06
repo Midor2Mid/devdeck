@@ -19,9 +19,9 @@ import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail } from "./missionTail"
-import { holdersOf, holdersSummary } from "./ownership"
+import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
-import { parseChecklist, type BoardTask, type BoardColumn } from "./board"
+import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
@@ -125,7 +125,19 @@ interface AppState extends Persisted {
     addBoardTask: (projectId: string, title: string) => void
     moveBoardTask: (id: string, column: BoardColumn) => void
     removeBoardTask: (id: string) => void
+    /**
+     * Price a dispatched card from the transcripts and cache it on the card. Reads
+     * files on disk, so it's called on demand (board mount, card finishing) rather
+     * than during render.
+     */
+    refreshTaskCost: (id: string) => Promise<void>
     dispatchBoardTask: (id: string, opts: { worktree: boolean }) => Promise<void>
+    /**
+     * Agents already holding uncommitted changes in `cwd` — the "who is in here
+     * already" question, asked before a second agent joins them rather than after
+     * they have both written. Hits git per live session, so call it on demand.
+     */
+    holdersIn: (cwd: string) => Promise<CwdHolder[]>
     flush: () => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
@@ -782,12 +794,60 @@ export const useStore = create<AppState>((set, get) => {
             persist()
         },
         moveBoardTask: (id, column) => {
-            set((s) => ({ boardTasks: s.boardTasks.map((t) => (t.id === id ? { ...t, column } : t)) }))
+            set((s) => ({
+                boardTasks: s.boardTasks.map((t) => {
+                    if (t.id !== id) return t
+                    // Reaching done closes the cost window; moving back out of done
+                    // reopens it, so a reopened card keeps accruing.
+                    if (column === "done" && t.dispatchedAt && !t.endedAt) {
+                        return { ...t, column, endedAt: Date.now() }
+                    }
+                    if (column !== "done" && t.endedAt) {
+                        return { ...t, column, endedAt: undefined, cost: undefined, costTokens: undefined }
+                    }
+                    return { ...t, column }
+                })
+            }))
+            persist()
+        },
+        refreshTaskCost: async (id) => {
+            const st = get()
+            const task = st.boardTasks.find((t) => t.id === id)
+            if (!task) return
+            const win = costWindow(task, Date.now())
+            if (!win) return
+            // A worktree has its own path, and Claude Code names transcripts by
+            // directory — so an isolated card is priced from its worktree, not the
+            // project it branched from.
+            const path = task.worktree || st.projects.find((p) => p.id === task.projectId)?.path
+            if (!path) return
+            const b = await window.api.usage.window(path, win.from, win.to).catch(() => null)
+            if (!b) return
+            set((s) => ({
+                boardTasks: s.boardTasks.map((t) =>
+                    t.id === id ? { ...t, cost: b.cost, costTokens: b.tokens } : t
+                )
+            }))
             persist()
         },
         removeBoardTask: (id) => {
             set((s) => ({ boardTasks: s.boardTasks.filter((t) => t.id !== id) }))
             persist()
+        },
+        holdersIn: async (cwd) => {
+            const st = get()
+            const entries = await Promise.all(
+                st.agentSessions().map(async (s) => {
+                    const dir = st.termCwd[s.termId] ?? s.projectPath
+                    return {
+                        termId: s.termId,
+                        sessionName: s.sessionName,
+                        cwd: dir,
+                        files: (await window.api.git.changes(dir).catch(() => [])).map((c) => c.path)
+                    }
+                })
+            )
+            return holdersOf(entries, cwd)
         },
         dispatchBoardTask: async (id, opts) => {
             const task = get().boardTasks.find((t) => t.id === id)
@@ -803,23 +863,7 @@ export const useStore = create<AppState>((set, get) => {
             // Without a worktree the new agent shares the project's working tree.
             // If someone is already editing it, say who and what they're holding —
             // the conflict map only tells you this after both have written.
-            let clash = ""
-            if (!opts.worktree) {
-                const st = get()
-                const entries = await Promise.all(
-                    st.agentSessions().map(async (s) => ({
-                        termId: s.termId,
-                        sessionName: s.sessionName,
-                        cwd: st.termCwd[s.termId] ?? s.projectPath,
-                        files: (
-                            await window.api.git
-                                .changes(st.termCwd[s.termId] ?? s.projectPath)
-                                .catch(() => [])
-                        ).map((c) => c.path)
-                    }))
-                )
-                clash = holdersSummary(holdersOf(entries, proj.path))
-            }
+            const clash = opts.worktree ? "" : holdersSummary(await get().holdersIn(proj.path))
 
             const ok = await confirm({
                 title: "Dispatch to an agent",
@@ -849,7 +893,19 @@ export const useStore = create<AppState>((set, get) => {
             if (!termId) return
             set((s) => ({
                 boardTasks: s.boardTasks.map((t) =>
-                    t.id === id ? { ...t, column: "doing", termId, worktree: worktreePath } : t
+                    t.id === id
+                        ? {
+                              ...t,
+                              column: "doing",
+                              termId,
+                              worktree: worktreePath,
+                              // Opens the cost window; closed when the card hits done.
+                              dispatchedAt: Date.now(),
+                              endedAt: undefined,
+                              cost: undefined,
+                              costTokens: undefined
+                          }
+                        : t
                 )
             }))
             persist()
@@ -1150,6 +1206,9 @@ export const useStore = create<AppState>((set, get) => {
                     total: steps.length,
                     stepTitle: steps[0].title,
                     status: "running",
+                    // Opens the run's cost window; the bar prices it from here.
+                    startedAt: Date.now(),
+                    projectPath: get().activeProject()?.path ?? "",
                     steps: steps.map((s) => ({
                         title: s.title,
                         agentId: s.agentId,

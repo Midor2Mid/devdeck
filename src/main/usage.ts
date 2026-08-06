@@ -118,6 +118,52 @@ export function summarize(tagged: { rec: UsageRec; project: string }[], sinceDay
     }
 }
 
+/**
+ * What one project's agent work cost inside a time window.
+ *
+ * The dashboard slices spend by model / project / day, which answers "how much am
+ * I spending" but never "what did *this* cost". Given a project path and the
+ * window a unit of work occupied — a dispatched card, a pipeline run — this reads
+ * that project's transcripts and totals only the records inside it.
+ *
+ * Necessarily an attribution, not a receipt: everything the agent did in this
+ * project during the window counts, so a second session running alongside is
+ * included. That's the honest reading of "what did this piece of work cost" on a
+ * shared working tree, and the alternative (per-session transcript mapping) isn't
+ * available — Claude Code names transcripts by project, not by pty.
+ */
+export function costInWindow(projectPath: string, fromMs: number, toMs: number): UsageBucket {
+    const bucket = mkBucket("window")
+    if (!projectPath || !Number.isFinite(fromMs)) return bucket
+    const until = Number.isFinite(toMs) ? toMs : Date.now()
+    if (until < fromMs) return bucket
+
+    const dir = join(homedir(), ".claude", "projects", encodePath(projectPath))
+    let files: string[]
+    try {
+        files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"))
+    } catch {
+        return bucket // no transcripts for this project yet
+    }
+    for (const file of files) {
+        const fp = join(dir, file)
+        try {
+            // A transcript last written before the window opened cannot hold a
+            // record inside it — skip the read entirely.
+            if (statSync(fp).mtimeMs < fromMs) continue
+            for (const rec of parseUsageLines(readFileSync(fp, "utf8"))) {
+                if (!rec.ts) continue
+                const t = Date.parse(rec.ts)
+                if (Number.isNaN(t) || t < fromMs || t > until) continue
+                addTo(bucket, rec)
+            }
+        } catch {
+            continue
+        }
+    }
+    return bucket
+}
+
 /** Read Claude Code's local transcripts and roll up token usage + estimated cost. */
 export function tokenUsage(sinceDays = 7): UsageSummary {
     const root = join(homedir(), ".claude", "projects")

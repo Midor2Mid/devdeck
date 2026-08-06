@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import QRCode from "qrcode"
 import {
     useSettings,
-    RECOMMENDED_COMMANDS,
+    missingRecommended,
     type ShellKind,
     type GitAccount,
     type AgentPreset,
@@ -947,6 +947,7 @@ function PipelinesSection(): JSX.Element {
 function AgentsSection(): JSX.Element {
     const agents = useSettings((s) => s.agents)
     const setAgents = useSettings((s) => s.setAgents)
+    const addRecommended = useSettings((s) => s.addRecommended)
     const agentIdleMs = useSettings((s) => s.agentIdleMs)
     const setAgentIdleMs = useSettings((s) => s.setAgentIdleMs)
     const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
@@ -965,16 +966,9 @@ function AgentsSection(): JSX.Element {
         setAgents(agents.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
     }
     const remove = (i: number): void => setAgents(agents.filter((_, idx) => idx !== i))
-    // Recommended commands the current config is missing (matched by id, or by the
-    // same command + run mode), so "Add recommended" never creates duplicates.
-    const missingRecommended = RECOMMENDED_COMMANDS.filter((r) => {
-        const key = `${r.runMode}:${r.command.trim()}`
-        return !agents.some((a) => a.id === r.id || `${a.runMode}:${a.command.trim()}` === key)
-    })
-    const addRecommended = (): void => {
-        if (missingRecommended.length)
-            setAgents([...agents, ...missingRecommended.map((r) => ({ ...r }))])
-    }
+    // Shared with the launcher, which offers the same action at the point where
+    // someone actually asks "where are the starter commands?".
+    const missing = missingRecommended(agents)
     const add = (mode: RunMode): void =>
         setAgents([
             ...agents,
@@ -1092,12 +1086,12 @@ function AgentsSection(): JSX.Element {
             <div className="cmd-add-row">
                 <button onClick={() => add("agent")}>+ AI agent</button>
                 <button onClick={() => add("normal")}>+ Terminal command</button>
-                {missingRecommended.length > 0 && (
+                {missing.length > 0 && (
                     <button
                         onClick={addRecommended}
                         data-tip="Add the recommended starter commands you don't have yet (no duplicates)"
                     >
-                        ↺ Add recommended ({missingRecommended.length})
+                        ↺ Add recommended ({missing.length})
                     </button>
                 )}
             </div>

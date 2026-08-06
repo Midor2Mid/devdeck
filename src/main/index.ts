@@ -384,6 +384,11 @@ function registerIpc(): void {
 
     // --- Token usage + cost (parsed from Claude Code's local transcripts) ---
     ipcMain.handle("usage:tokens", (_e, sinceDays?: number) => usage.tokenUsage(sinceDays))
+    ipcMain.handle(
+        "usage:window",
+        (_e, { projectPath, from, to }: { projectPath: string; from: number; to: number }) =>
+            usage.costInWindow(projectPath, from, to)
+    )
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))

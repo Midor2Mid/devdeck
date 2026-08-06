@@ -116,6 +116,25 @@ export interface AgentPreset {
  * config is missing. Model-pinned/skip-permissions variants exist to pair with
  * DevDeck features (parallel models via broadcast, skip-permissions in worktrees).
  */
+/**
+ * The recommended commands a config doesn't have yet — matched by id, or by the
+ * same command + run mode, so adding them never creates a duplicate of something
+ * the user already renamed. Pure so both the launcher and Settings can ask, and
+ * so the dedupe rule is unit-testable.
+ */
+export function missingRecommended(agents: AgentPreset[]): AgentPreset[] {
+    return (
+        RECOMMENDED_COMMANDS.filter((r) => {
+            const key = `${r.runMode}:${r.command.trim()}`
+            return !agents.some((a) => a.id === r.id || `${a.runMode}:${a.command.trim()}` === key)
+        })
+            // Copies, not the canonical objects: RECOMMENDED_COMMANDS is also
+            // DEFAULTS.agents, so handing out live references would let a caller
+            // editing "their" preset rewrite the starter set for the whole app.
+            .map((r) => ({ ...r }))
+    )
+}
+
 export const RECOMMENDED_COMMANDS: AgentPreset[] = [
     { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✳", category: "AI Agents" },
     { id: "claude-opus", name: "Claude Opus", command: "claude", resumeArgs: "--continue", badge: "OPUS", apiKeyEnv: "ANTHROPIC_API_KEY", model: "claude-opus-4-8", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✦", category: "AI Agents" },
@@ -418,6 +437,8 @@ interface SettingsState extends AppSettings {
     setTerminal: (patch: Partial<AppSettings["terminal"]>) => void
     setEditor: (patch: Partial<AppSettings["editor"]>) => void
     setAgents: (agents: AgentPreset[]) => void
+    /** Merge in the recommended commands not already configured; returns how many. */
+    addRecommended: () => number
     setAgentIdleMs: (ms: number) => void
     setSnippets: (snippets: Snippet[]) => void
     setPipelines: (pipelines: Pipeline[]) => void
@@ -563,6 +584,14 @@ export const useSettings = create<SettingsState>((set, get) => {
         setAgents: (agents) => {
             set({ agents })
             persist()
+        },
+        addRecommended: () => {
+            // missingRecommended already returns copies.
+            const missing = missingRecommended(get().agents)
+            if (missing.length === 0) return 0
+            set((s) => ({ agents: [...s.agents, ...missing] }))
+            persist()
+            return missing.length
         },
         setAgentIdleMs: (ms) => {
             set({ agentIdleMs: ms })

@@ -111,6 +111,10 @@ export interface PipelineRun {
     gateMsg?: string
     /** Per-step status for the run timeline. */
     steps: PipelineStepState[]
+    /** When the run started — the start of its cost window. */
+    startedAt?: number
+    /** Project the run is executing in, so its spend can be attributed. */
+    projectPath?: string
 }
 
 /** A pipeline is runnable if it has a name and at least one step with a prompt. */

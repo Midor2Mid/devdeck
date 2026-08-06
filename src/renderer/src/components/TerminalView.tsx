@@ -370,6 +370,7 @@ export function TerminalView(): JSX.Element {
                                     anchor={launchCaretRef.current}
                                     agents={[primaryAgent]}
                                     allowWorktree
+                                    cwd={activeProject.path}
                                     onLaunch={(agentId, opts) => {
                                         if (opts.worktree) void newAgentInWorktree(agentId, opts.branch)
                                         else newTab(agentId)

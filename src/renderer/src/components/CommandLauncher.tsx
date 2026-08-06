@@ -1,15 +1,23 @@
-import { useSettings, isUnsafeAgent, type AgentPreset } from "../settings"
+import { useSettings, isUnsafeAgent, missingRecommended, type AgentPreset } from "../settings"
 import { useStore, SHELL } from "../store"
+import { toast } from "../toast"
 
 /**
  * The empty-terminal launch screen: every configured startup command surfaced as
  * a click-to-run card, grouped by category. An AI-agent card starts a CLI session;
  * a Normal card opens a plain shell that auto-runs its command.
+ *
+ * The starter set is offered here, not only in Settings, because this is where the
+ * question actually gets asked — a user looking at a thin launcher wanted to know
+ * "how do I see the template start commands?" and nothing at this point said they
+ * existed. A feature the UI never reveals is a feature nobody has.
  */
 export function CommandLauncher({ projectName }: { projectName: string }): JSX.Element {
     const agents = useSettings((s) => s.agents)
     const newTab = useStore((s) => s.newTab)
     const openSettings = useSettings((s) => s.openSettings)
+    const addRecommended = useSettings((s) => s.addRecommended)
+    const missing = missingRecommended(agents)
 
     const launch = (a: AgentPreset): void => {
         if (a.runMode === "normal") newTab(SHELL, a.command || undefined, a.name)
@@ -41,6 +49,17 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
                 <button className="accent" onClick={() => newTab(SHELL)}>
                     + New terminal
                 </button>
+                {missing.length > 0 && (
+                    <button
+                        onClick={() => {
+                            const n = addRecommended()
+                            if (n > 0) toast(`Added ${n} starter command${n === 1 ? "" : "s"}`)
+                        }}
+                        data-tip="Add the recommended starter commands you don't have yet (Claude, Codex, Gemini, dev server…). Nothing is duplicated or overwritten."
+                    >
+                        ↺ Add starter commands ({missing.length})
+                    </button>
+                )}
                 <button onClick={() => openSettings()}>Settings</button>
             </div>
             {groups.map((g) => (

@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { tasksByColumn, COLUMNS, type BoardColumn } from "../board"
+import { tasksByColumn, COLUMNS, formatCost, type BoardColumn } from "../board"
 
 const COL_LABEL: Record<BoardColumn, string> = {
     todo: "Todo",
@@ -24,9 +24,28 @@ export function TaskBoard(): JSX.Element {
     const dispatchBoardTask = useStore((s) => s.dispatchBoardTask)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const openChanges = useStore((s) => s.openChanges)
+    const refreshTaskCost = useStore((s) => s.refreshTaskCost)
 
     const [draft, setDraft] = useState("")
     const [worktree, setWorktree] = useState(true)
+
+    // Price dispatched cards when the board opens, when one is dispatched, and
+    // when its agent settles or it finishes.
+    //
+    // The dependency is a key built from id + endedAt + agent status, deliberately
+    // NOT the cost itself — refreshTaskCost writes cost back into boardTasks, so
+    // depending on the whole array (or on cost) would re-trigger this effect with
+    // every write and spin forever. Neither the build nor typecheck catches that;
+    // only running the app does.
+    const dispatched = boardTasks.filter((t) => t.dispatchedAt && t.projectId === activeProject?.id)
+    const costKey = dispatched
+        .map((t) => `${t.id}:${t.endedAt ?? "live"}:${t.termId ? (agentStatus[t.termId] ?? "") : ""}`)
+        .join(",")
+    useEffect(() => {
+        for (const id of costKey ? costKey.split(",").map((s) => s.split(":")[0]) : []) {
+            void refreshTaskCost(id)
+        }
+    }, [costKey, refreshTaskCost])
 
     if (!activeProject) {
         return (
@@ -106,6 +125,18 @@ export function TaskBoard(): JSX.Element {
                                         <div className="board-card-title">{t.title}</div>
                                         <div className="board-card-foot">
                                             {status && <span className={"tab-dot claude status-" + status} />}
+                                            {t.cost !== undefined && t.cost > 0 && (
+                                                <span
+                                                    className="board-card-cost"
+                                                    data-tip={
+                                                        `About ${formatCost(t.cost)} of agent work` +
+                                                        (t.costTokens ? ` · ${t.costTokens.toLocaleString()} tokens` : "") +
+                                                        `\nEverything this project's agents did while the card was open${t.endedAt ? "" : " (still running)"}.`
+                                                    }
+                                                >
+                                                    {formatCost(t.cost)}
+                                                </span>
+                                            )}
                                             {t.column === "todo" && (
                                                 <button
                                                     className="board-btn accent"

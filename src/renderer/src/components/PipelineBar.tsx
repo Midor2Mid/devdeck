@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useStore } from "../store"
+import { formatCost } from "../board"
 import type { StepRunStatus } from "../pipeline"
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,6 +31,40 @@ export function PipelineBar(): JSX.Element | null {
     const resume = useStore((s) => s.resumePipeline)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const [open, setOpen] = useState(false)
+    const [cost, setCost] = useState<number | null>(null)
+
+    // What the run has spent so far. Polled rather than derived, because the
+    // numbers come from transcript files the agents are still writing. Local state
+    // only — putting this in the store would re-render every pipeline consumer on
+    // each tick for a figure only this bar shows.
+    const startedAt = run?.startedAt
+    const projectPath = run?.projectPath
+    const runStatus = run?.status
+    useEffect(() => {
+        if (!startedAt || !projectPath) return
+        let live = true
+        const read = (): void => {
+            void window.api.usage
+                .window(projectPath, startedAt, Date.now())
+                .then((b) => {
+                    if (live) setCost(b.cost)
+                })
+                .catch(() => undefined)
+        }
+        read()
+        // Stop polling once the run has settled — one last read has already run.
+        if (runStatus !== "running" && runStatus !== "waiting" && runStatus !== "paused") {
+            return () => {
+                live = false
+            }
+        }
+        const t = setInterval(read, 15_000)
+        return () => {
+            live = false
+            clearInterval(t)
+        }
+    }, [startedAt, projectPath, runStatus])
+
     if (!run) return null
 
     const pct = Math.round(((run.stepIndex + (run.status === "done" ? 1 : 0)) / run.total) * 100)
@@ -53,6 +88,14 @@ export function PipelineBar(): JSX.Element | null {
                     <span className={"pipeline-status s-" + run.status}>
                         {STATUS_LABEL[run.status] ?? run.status}
                     </span>
+                    {cost !== null && cost > 0 && (
+                        <span
+                            className="board-card-cost"
+                            data-tip={`About ${formatCost(cost)} spent since this run started${live ? " (so far)" : ""}`}
+                        >
+                            {formatCost(cost)}
+                        </span>
+                    )}
                 </div>
                 {!open && (
                     <div className="pipeline-step">

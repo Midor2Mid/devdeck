@@ -7274,6 +7274,15 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     gap: 6px;
     flex-wrap: wrap;
 }
+/* Cost is metadata, not an action — bare and quiet, mono so figures line up
+   down a column of cards. Deliberately not a filled badge: filled means urgency. */
+.board-card-cost {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: var(--faint);
+    cursor: default;
+}
 .board-btn {
     background: var(--bg-2);
     border: 1px solid var(--border);

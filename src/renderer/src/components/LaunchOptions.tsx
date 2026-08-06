@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import type { AgentPreset } from "../settings"
 import { isUnsafeAgent } from "../settings"
+import { useStore } from "../store"
+import { holdersSummary, type CwdHolder } from "../ownership"
 
 /**
  * Options for one agent launch, hung off the launch button rather than placed in
@@ -22,6 +24,7 @@ export function LaunchOptions({
     agents,
     allowWorktree,
     defaultBranch,
+    cwd,
     anchor,
     onLaunch,
     onClose
@@ -30,6 +33,11 @@ export function LaunchOptions({
     allowWorktree: boolean
     /** Seed for the branch name when launching into a worktree. */
     defaultBranch?: string
+    /**
+     * Working tree this launch would join. Given it, the popover names the agents
+     * already holding changes there instead of only warning that they might.
+     */
+    cwd?: string
     /** The button this hangs off — used to position it. */
     anchor: HTMLElement | null
     onLaunch: (agentId: string, opts: { worktree: boolean; branch: string }) => void
@@ -41,6 +49,22 @@ export function LaunchOptions({
     const branchRef = useRef<HTMLInputElement>(null)
     const rootRef = useRef<HTMLDivElement>(null)
     const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+    const holdersIn = useStore((s) => s.holdersIn)
+    const [holders, setHolders] = useState<CwdHolder[]>([])
+
+    // Asked once when the popover opens: the answer needs a git call per live
+    // session, and this is a transient surface. Ignored if it resolves after the
+    // popover has gone.
+    useEffect(() => {
+        if (!cwd) return
+        let live = true
+        void holdersIn(cwd).then((h) => {
+            if (live) setHolders(h)
+        })
+        return () => {
+            live = false
+        }
+    }, [cwd, holdersIn])
 
     /**
      * Rendered through a portal to <body> and positioned from the anchor's rect.
@@ -151,6 +175,11 @@ export function LaunchOptions({
                                     onChange={(e) => setBranch(e.target.value)}
                                 />
                             </label>
+                        ) : holders.length > 0 ? (
+                            // Someone is actually in here: name them and what they're
+                            // holding, so the worktree checkbox is a decision rather
+                            // than a precaution.
+                            <p className="launch-opts-warn">{holdersSummary(holders)}</p>
                         ) : (
                             <p className="launch-opts-hint">
                                 Its own checkout, so it can&apos;t collide with an agent already

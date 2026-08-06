@@ -520,7 +520,10 @@ const api = {
     },
     usage: {
         tokens: (sinceDays?: number): Promise<UsageSummary> =>
-            ipcRenderer.invoke("usage:tokens", sinceDays)
+            ipcRenderer.invoke("usage:tokens", sinceDays),
+        /** What a project's agent work cost between two epoch-ms instants. */
+        window: (projectPath: string, from: number, to: number): Promise<UsageBucket> =>
+            ipcRenderer.invoke("usage:window", { projectPath, from, to })
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),
