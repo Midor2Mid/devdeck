@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.11 - 2026-08-07
+
+Three things from the backlog, and one bug that only turned up by opening the
+window rather than running the tests.
+
+- **The starter commands are offered where you'd ask for them.** "How do I see the
+  template start commands?" had an answer — Settings → Startup commands → *Add
+  recommended* — but nothing at the launch screen said so. The empty-terminal
+  launcher now offers the ones you're missing directly. It only appears when some
+  are actually missing, so a complete config never sees it.
+- **The worktree option tells you who is already in the tree.** It used to say only
+  that a worktree "can't collide with an agent already working in this project" —
+  advice, where it could give you the facts. It now names the sessions running
+  there and what the tree has uncommitted, so ticking the box is a decision instead
+  of a precaution. Still not a dialog: the plain click stays one keystroke.
+- **Task cards and pipeline runs show what they cost.** DevDeck already read real
+  token spend from Claude Code's transcripts, but only ever sliced it by model,
+  project and day — never "what did *this* cost". A dispatched card now carries its
+  estimated spend, and a running pipeline shows the total so far. Read it as an
+  attribution rather than a receipt: everything that project's agents did while the
+  card was open counts, because transcripts are keyed by project, not by terminal.
+  Sub-cent work shows as `<$0.01`, never `$0.00`.
+- **Fix: that same warning was naming agents that hadn't touched anything.** It
+  claimed "claude 1, claude 2, claude 3, claude 5, claude 6 are already editing
+  this project (one-file.md)" while the status bar said *1 change* — because git can
+  say what changed in a directory but never which session changed it, so every
+  session sharing a tree was credited with all of it. It now names who is working
+  there, says what the tree has uncommitted, and claims nothing about who did it.
+- **Enter adds a task again.** The board's box is multi-line so a pasted checklist
+  keeps its rows, but it only committed on Ctrl+Enter, and almost every card is one
+  line. Enter adds, Shift+Enter makes a newline, Ctrl+Enter still works, and pasting
+  a checklist is unchanged.
+
 ## 0.7.10 - 2026-08-07
 
 The MCP surface gets the two tools it was missing, plus a design pass that started

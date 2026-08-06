@@ -1,6 +1,6 @@
 ---
 name: DevDeck
-version: 0.7.10
+version: 0.7.11
 description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
