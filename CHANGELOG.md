@@ -2,8 +2,31 @@
 
 ## 0.7.10 - 2026-08-07
 
-A design pass. It started as a competitor teardown and ended up auditing DevDeck's
-own UI against its own written rules — where the rules lost, twice.
+The MCP surface gets the two tools it was missing, plus a design pass that started
+as a competitor teardown and ended up auditing DevDeck's own UI against its own
+written rules — where the rules lost, twice.
+
+- **An agent can replay your saved API requests.** `devdeck_http_requests` lists
+  what you've saved in the API panel and `devdeck_http_send` replays one, returning
+  the real status, timing and body — so an agent checks what an endpoint actually
+  returns instead of guessing from the code. It can only send a request **you
+  already saved**: it picks one by id and cannot supply a URL of its own, so there
+  is no way to aim it at a host you didn't choose. Params, headers and auth
+  (bearer/basic/api-key) are applied as the panel would; bodies are capped at
+  20,000 characters. It's the one MCP tool that isn't read-only, because an HTTP
+  request is whatever the endpoint makes of it — the tool description tells the
+  agent not to replay anything that mutates state unasked.
+- **An agent can read the browser panel's console and network log.**
+  `devdeck_console_logs` returns console messages, uncaught exceptions, CSP and
+  deprecation warnings, and recent requests with their status codes — so "the page
+  is broken, here's the console" no longer needs you to copy anything out of
+  DevTools. With one page open you don't even pass an id. Console capture is new:
+  the panel only ever recorded network activity before this.
+- Console messages are rendered the way DevTools renders them, so `%c`-styled logs
+  (Electron's own security warnings, most logging libraries) no longer arrive with
+  their CSS spliced into the message text, and `%s`/`%d` placeholders are filled in.
+  One caveat worth knowing: capture starts when the Browser panel attaches, so
+  anything a page logged before that isn't in the buffer.
 
 - **Active tabs are marked, not just tinted.** A terminal or editor tab showed it
   was active by shifting its background, which reads as *hover*, not *selected* —

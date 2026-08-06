@@ -13,6 +13,7 @@ import type { RemoteSession, ServerDeps } from "./server"
 import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken } from "./git"
 import { readMcp, writeMcp, registerDevdeck, unregisterDevdeck, type McpServer } from "./mcp"
 import * as mcpserver from "./mcpserver"
+import * as mcptools from "./mcptools"
 import * as checks from "./checks"
 import * as skills from "./skills"
 import * as browserNet from "./browserNet"
@@ -266,11 +267,30 @@ function registerIpc(): void {
     }))
 
     // --- MCP server (DevDeck's own tools, exposed to agent CLIs) ---
-    // The project list is read fresh on each tool call so an agent always sees the
-    // projects currently open, not a snapshot from when the server started.
-    const mcpDeps = {
+    // Every dep reads fresh on each tool call so an agent always sees the current
+    // state — the projects open now, the requests saved now — not a snapshot from
+    // when the server started.
+    const mcpDeps: mcptools.McpDeps = {
         projects: () =>
-            projects.listProjects().projects.map((p) => ({ id: p.id, name: p.name, path: p.path }))
+            projects.listProjects().projects.map((p) => ({ id: p.id, name: p.name, path: p.path })),
+        // Saved requests live in settings.json under `collections`; flatten them
+        // and tag each with its collection name so the agent can tell them apart.
+        savedRequests: () => {
+            const raw = loadSettings() as
+                | { collections?: { name?: string; requests?: mcptools.McpSavedRequest[] }[] }
+                | undefined
+            const out: mcptools.McpSavedRequest[] = []
+            for (const c of raw?.collections ?? []) {
+                for (const r of c.requests ?? []) {
+                    if (r && typeof r.id === "string") out.push({ ...r, collection: c.name })
+                }
+            }
+            return out
+        },
+        httpSend: (req) => httpSend(req),
+        browserPages: () => browserNet.attachedPages(),
+        consoleLog: (id, limit) => browserNet.getConsole(id, limit),
+        networkLog: (id, limit) => browserNet.getRecent(id, limit)
     }
     ipcMain.handle("mcpsrv:start", async (_e, cfg: { port: number; token: string }) => {
         const res = await mcpserver.start(cfg, mcpDeps)

@@ -116,11 +116,24 @@ Nothing on 1DevTool's page suggests they serve their *own* panels as MCP tools �
 they list "MCP server integration" as consuming external servers, the same thing
 DevDeck's catalog does.
 
-**Still open after the first cut.** `devdeck_http_send` needs the saved-request
-tree parsed out of `settings.json` (`collections`) in main; `devdeck_console_logs`
-needs a registry of attached `webContents` ids, since `browserNet.getRecent(id)`
-is keyed by one and the MCP server has no way to know which tab you mean. Both
-are additive — drop a case into `callTool` and an entry into `TOOLS`.
+~~**Still open after the first cut.**~~ **Closed 2026-08-07 (0.7.10).** Both
+landed as predicted — a case in `callTool`, an entry in `TOOLS`, and a dep in
+`mcpDeps`. Notes on what the sketch above got wrong:
+
+- `devdeck_http_send` is split in two: `devdeck_http_requests` lists, `_send`
+  replays by id. The agent never supplies a URL, which is what keeps the tool from
+  being an SSRF primitive — the reachable target set is exactly what the user
+  saved. It is also the **only non-read-only tool** in the surface, so the module
+  header's blanket "every tool is read-only" claim had to be corrected.
+- `devdeck_console_logs` needed more than a registry: **console output wasn't being
+  captured at all.** `browserNet` only had `Network.*`; it now also enables
+  `Runtime` and `Log` and buffers `consoleAPICalled` / `exceptionThrown` /
+  `entryAdded`. The registry itself is `attachedPages()`, which also prunes dead
+  ids. Console text needs printf-style rendering (`%c` consumes its CSS argument
+  and emits nothing) or Electron's own security warnings arrive with styling
+  spliced into the message.
+- Known limit: capture begins at attach, so anything logged before the Browser
+  panel mounted is not in the buffer.
 
 ### 2. Gate pipelines on ground truth, not agent prose ★★★
 `StepGate` currently inspects the agent's **output text**. DevDeck owns real
@@ -160,8 +173,19 @@ token/cost dashboard is the better answer and DevDeck already has it.
 
 ## Recommended order
 
-1. **MCP server** (#1) — biggest differentiator, mostly wiring existing modules
-2. **Ground-truth gates** (#2) — makes pipelines trustworthy
-3. **Agent-to-agent handoff** (gap 3) — small, completes the multi-agent story
-4. Cost-per-task (#3), dispatch conflict guard (#4)
+1. ~~**MCP server** (#1)~~ — **done.** First cut 0.7.7, `http_send` +
+   `console_logs` in 0.7.10. The tool surface is complete as sketched.
+2. ~~**Ground-truth gates** (#2)~~ — **done in 0.7.7**: the `Command succeeds` /
+   `Command fails` gate modes.
+3. **Agent-to-agent handoff** (gap 3) — *mostly done*: `ChangesModal` has a
+   handoff-agent picker that sends a diff to a chosen agent for Review / Explain /
+   Commit-msg. What's still missing is handoff from a live **session** rather than
+   from a diff.
+4. Cost-per-task (#3), dispatch conflict guard (#4) — both still open. The data
+   exists for each (`usage.ts`, `buildOwnership()`); neither is wired to the unit
+   of work or to dispatch yet.
 5. Mongo/Redis (gap 2) only if a real project needs them
+
+**Read this scorecard sceptically.** Two of its "open" items were already shipped
+when it was re-read on 2026-08-07 — the same staleness it warns about in NOTES.md.
+Check the code before believing any line here.
