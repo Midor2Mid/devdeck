@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.7.10 - 2026-08-07
+
+A design pass. It started as a competitor teardown and ended up auditing DevDeck's
+own UI against its own written rules — where the rules lost, twice.
+
+- **Active tabs are marked, not just tinted.** A terminal or editor tab showed it
+  was active by shifting its background, which reads as *hover*, not *selected* —
+  and DESIGN.md had been claiming for months that tabs carried an accent stripe
+  they didn't have. They now carry a 2px accent underline. Three of the twelve
+  design styles were already doing this; the default just never got it.
+- **Segmented controls mark the active segment with weight, not only colour.**
+  Edit/Split/Preview, the AI toggle, and the .NET panel modes tint the active
+  segment *and* set it bold. The tint alone can't do the job: on Washi, 18% of the
+  accent over its own ground measures 1.2:1, and even a solid accent fill only
+  reaches 2.9:1 — under the 3:1 floor for a UI element. On a light theme a tint can
+  never be the marker, so the weight is what actually carries it.
+- **Quotes in the markdown preview no longer italicise the whole block.** Italic
+  made `*emphasis*` inside a quote render exactly like the quote around it, so the
+  emphasis vanished. The quote is now marked by its bar and muted text only.
+- **Washi's dividers hold up where they're load-bearing.** The "strong border"
+  value is derived by mixing the border toward the text colour, which gains far
+  less contrast on a light ground than a dark one — 2.51:1 on Washi against ~3.7:1
+  everywhere else. Washi now states its own value, at 3.05:1.
+- **Two accent-filled buttons had labels you couldn't read on Washi** — the
+  overview segments and the usage window picker used the page background as their
+  text colour instead of the on-accent token, giving cream-on-amber at 3.2:1. Now
+  5.13:1.
+- **Fix: the Kinetic style's tab animation works again.** Kinetic springs its own
+  underline in, and the new base underline painted instantly at full width behind
+  it — so the animation was invisible and at rest you saw a doubled line. Kinetic
+  drops the base rule.
+
+Also, for anyone (or anything) doing UI work here: `DESIGN.md` now documents the
+active-state grammar and badge tiers, **including a list of the places the code
+doesn't follow them** rather than asserting a compliance it doesn't have. There's a
+new `devdeck-design` skill carrying the token-first workflow and a review checklist
+— including the two `themes.ts` traps that make theme changes look like no-ops.
+
 ## 0.7.9 - 2026-07-28
 
 Everything here came out of real use, not the roadmap.
