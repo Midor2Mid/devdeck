@@ -1951,8 +1951,13 @@ button .ic,
     padding: 9px 10px; cursor: pointer; color: var(--text); }
 .ov-rail-item:hover { border-color: var(--border); color: var(--text); }
 .ov-ri-head { display: flex; align-items: center; gap: 7px; }
-.ov-ri-name { font-size: 12.5px; font-weight: 600; }
-.ov-ri-proj { font-family: var(--font-mono); font-size: 10px; color: var(--faint); margin-left: auto; }
+/* The session name is the thing you scan for, so it never wraps; the project
+   name gives way instead. Needed once the close button started reserving width
+   at the end of the row — the longest project name pushed "claude 2" onto two
+   lines. */
+.ov-ri-name { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.ov-ri-proj { font-family: var(--font-mono); font-size: 10px; color: var(--faint); margin-left: auto;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Close, revealed on hover or keyboard focus. Reuses .tab-close (faint → danger)
    so it reads as the same control as a tab's ×, and inherits every style's
    override of it. Hidden with opacity rather than display, so the row's layout
@@ -5461,6 +5466,15 @@ kbd {
 .intro-tip-title {
     font-weight: 600;
     margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm, 8px);
+}
+/* The mark carries the accent here — it's the brand, and this card is the one
+   place the app introduces itself. Enso draws in currentColor. */
+.intro-tip-mark {
+    color: var(--accent);
+    flex: none;
 }
 .intro-tip-text {
     font-size: 12px;

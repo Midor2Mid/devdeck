@@ -86,7 +86,7 @@ export function WorkPanel(): JSX.Element {
                                 No provider connected. Hit ⚙ to connect Jira or Azure DevOps.
                             </div>
                         ) : items.length === 0 && errors.length === 0 ? (
-                            <div className="muted sidebar-empty">No assigned items. 🎉</div>
+                            <div className="muted sidebar-empty">No assigned items.</div>
                         ) : (
                             items.map((it) => (
                                 <div key={it.provider + it.key} className="work-item">

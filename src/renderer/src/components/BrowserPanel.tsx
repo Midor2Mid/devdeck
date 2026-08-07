@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore } from "../store"
 import { Modal } from "./Modal"
+import { Icon } from "./Icon"
 
 interface PageComment {
     id: string
@@ -198,8 +199,9 @@ export function BrowserPanel(): JSX.Element {
                     className={"icon-action" + (commentMode ? " on" : "")}
                     onClick={toggleComment}
                     data-tip="Comment mode - click elements to annotate"
+                    aria-label="Comment mode"
                 >
-                    💬
+                    <Icon name="pencil" size={14} />
                 </button>
                 <button
                     className="accent"

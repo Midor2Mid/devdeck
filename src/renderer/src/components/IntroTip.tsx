@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useStore } from "../store"
+import { Enso } from "./Enso"
 
 // One-time, dismissible orientation card for first-time users. The "seen" flag
 // lives in localStorage (decoupled from the settings store) so it persists across
@@ -30,7 +31,12 @@ export function IntroTip(): JSX.Element | null {
     return (
         <div className="intro-tip">
             <div className="intro-tip-body">
-                <div className="intro-tip-title">Welcome to DevDeck 👋</div>
+                {/* The brand mark rather than a waving hand: this is the one card
+                    that introduces the app, so it's where the ensō belongs. */}
+                <div className="intro-tip-title">
+                    <Enso size={15} className="intro-tip-mark" />
+                    Welcome to DevDeck
+                </div>
                 <div className="intro-tip-text">
                     <kbd>Ctrl + K</kbd> switch projects · <kbd>Ctrl + Shift + P</kbd> run any command ·{" "}
                     <kbd>F1</kbd> all shortcuts
