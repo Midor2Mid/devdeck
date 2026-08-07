@@ -1953,6 +1953,17 @@ button .ic,
 .ov-ri-head { display: flex; align-items: center; gap: 7px; }
 .ov-ri-name { font-size: 12.5px; font-weight: 600; }
 .ov-ri-proj { font-family: var(--font-mono); font-size: 10px; color: var(--faint); margin-left: auto; }
+/* Close, revealed on hover or keyboard focus. Reuses .tab-close (faint → danger)
+   so it reads as the same control as a tab's ×, and inherits every style's
+   override of it. Hidden with opacity rather than display, so the row's layout
+   doesn't shift under the cursor and the button stays keyboard-reachable —
+   :focus-within is what brings it back for Tab users. */
+.ov-ri-close { opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.ov-rail-item:hover .ov-ri-close,
+.ov-rail-item:focus-within .ov-ri-close { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+    .ov-ri-close { transition: none; }
+}
 .ov-ri-flag { font-size: 9.5px; margin-top: 5px; letter-spacing: 0.3px; }
 .ov-ri-flag.attention { color: var(--accent); }
 .ov-ri-flag.waiting { color: var(--accent-soft); }

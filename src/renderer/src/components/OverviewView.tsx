@@ -292,13 +292,32 @@ export function OverviewView(): JSX.Element {
                                     role="button"
                                     tabIndex={0}
                                     onClick={() => setFocusId(s.termId)}
+                                    // Middle-click closes, the way it does on a browser
+                                    // or editor tab. Costs no pixels and is the fastest
+                                    // path once you know it; the hover × is what teaches
+                                    // it. mousedown is where the autoscroll cursor gets
+                                    // suppressed — auxclick is too late.
+                                    onMouseDown={(e) => {
+                                        if (e.button === 1) e.preventDefault()
+                                    }}
+                                    onAuxClick={(e) => {
+                                        if (e.button !== 1) return
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        closePane(s.termId)
+                                    }}
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" || e.key === " ") {
                                             e.preventDefault()
                                             setFocusId(s.termId)
+                                        } else if (e.key === "Delete") {
+                                            // The row is already focusable, so this is
+                                            // the keyboard equivalent of the hover ×.
+                                            e.preventDefault()
+                                            closePane(s.termId)
                                         }
                                     }}
-                                    data-tip="Bring into focus"
+                                    data-tip="Bring into focus · middle-click or Del to close"
                                 >
                                     <div className="ov-ri-head">
                                         <span className={dotClass(s)} />
@@ -306,6 +325,20 @@ export function OverviewView(): JSX.Element {
                                         {s.isAgent && <span className="agent-badge sm">{s.badge}</span>}
                                         {s.status === "attention" && <span className="claude-attn">!</span>}
                                         <span className="ov-ri-proj">{s.projectName}</span>
+                                        <button
+                                            type="button"
+                                            className="tab-close ov-ri-close"
+                                            aria-label={`Close ${s.sessionName}`}
+                                            data-tip="Close this session"
+                                            onClick={(e) => {
+                                                // The whole row is a button that swaps
+                                                // focus — this must not trigger it.
+                                                e.stopPropagation()
+                                                closePane(s.termId)
+                                            }}
+                                        >
+                                            ×
+                                        </button>
                                     </div>
                                     {(s.status === "attention" || s.status === "waiting") && (
                                         <div className={"ov-ri-flag " + s.status}>
