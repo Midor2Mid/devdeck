@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.7.12 - 2026-08-11
+
+Two things that were a trip to the terminal, and one design rule the app wasn't
+keeping.
+
+- **Pull latest without leaving the deck.** The status bar told you the branch and
+  what was uncommitted, but getting the branch current still meant a terminal. A
+  pull button now sits beside the branch, and carries the behind-count itself
+  rather than adding a chip: neutral when there's nothing to fetch, accented with
+  a number once you're behind. It only appears when the branch has an upstream. It
+  is `--ff-only` on purpose — a one-click action should never invent a merge commit
+  or leave a conflicted tree, so a diverged branch fails with git's own message and
+  the resolution stays a conscious call in the terminal. The behind-count comes off
+  the porcelain status the deck was already polling, so watching for it costs no
+  extra process.
+- **Closing another session takes one click.** Tidying up used to mean pulling a
+  row into focus and then closing the focused pane — two steps, and it moved the
+  thing you were watching. Rail rows now take a × on hover, a middle-click, or
+  Delete when focused. No confirmation, matching every other single-pane close; the
+  row vanishing is the feedback. At rest no row shows a ×, so the list weighs the
+  same as before.
+- **Fix: emoji out of the chrome.** DESIGN.md forbids them and three had slipped
+  in — the welcome card's 👋 becomes the ensō (the brand mark belongs on the one
+  card that introduces the app, and it draws in currentColor so it re-themes), the
+  browser panel's 💬 becomes the pencil its tooltip already promised, and the empty
+  work panel loses its party popper. Left alone deliberately: the 🚀 in the
+  project-icon placeholder, which is user content teaching you an emoji is allowed
+  there, and typographic marks like ✓ ✗ ❯ ⚑, which are text carrying meaning rather
+  than pictographs.
+- **Fix: rail rows stopped wrapping.** Reserving width for that hidden × is what
+  keeps a row from shifting under the cursor, but it narrowed the row enough that a
+  long project name pushed the session name onto a second line. The session name is
+  what you scan for, so it never wraps now and the project name ellipsizes instead.
+
 ## 0.7.11 - 2026-08-07
 
 Three things from the backlog, and one bug that only turned up by opening the
