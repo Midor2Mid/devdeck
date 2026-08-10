@@ -174,6 +174,17 @@ export interface GitStatus {
     isRepo: boolean
     branch: string
     changes: number
+    /** Tracking branch (e.g. "origin/main"), empty when the branch has no upstream. */
+    upstream: string
+    /** Commits the local branch is ahead / behind its upstream (0 when unknown). */
+    ahead: number
+    behind: number
+}
+/** Outcome of a fast-forward pull. */
+export interface PullResult {
+    ok: boolean
+    summary?: string
+    error?: string
 }
 export interface GitIdentity {
     name: string
@@ -552,6 +563,8 @@ const api = {
             ipcRenderer.invoke("git:getIdentity", cwd),
         setIdentity: (cwd: string, identity: GitIdentity): Promise<GitIdentity> =>
             ipcRenderer.invoke("git:setIdentity", { cwd, identity }),
+        /** Fast-forward the current branch from its upstream (`git pull --ff-only`). */
+        pull: (cwd: string): Promise<PullResult> => ipcRenderer.invoke("git:pull", cwd),
         // Worktrees
         worktrees: (repoPath: string): Promise<Worktree[]> =>
             ipcRenderer.invoke("git:worktrees", repoPath),

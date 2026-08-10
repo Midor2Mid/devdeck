@@ -5,9 +5,23 @@ export interface GitStatus {
     isRepo: boolean
     branch: string
     changes: number
+    /** Tracking branch (e.g. "origin/main"), empty when the branch has no upstream. */
+    upstream: string
+    /** Commits the local branch is ahead / behind its upstream (0 when unknown). */
+    ahead: number
+    behind: number
+}
+
+export interface PullResult {
+    ok: boolean
+    /** Git's own summary line on success (e.g. "Already up to date."). */
+    summary?: string
+    error?: string
 }
 
 const OPTS = { timeout: 4000, windowsHide: true } as const
+/** Pull talks to the network, so it gets a far longer leash than the status polls. */
+const NET_OPTS = { timeout: 120000, windowsHide: true } as const
 
 export interface GitIdentity {
     name: string
@@ -126,19 +140,65 @@ export function verifyGitHubToken(
     })
 }
 
+/**
+ * Parse the `## ` header line of `git status --porcelain -b`, which carries the
+ * tracking branch and divergence:
+ *   `## main...origin/main [ahead 1, behind 2]`
+ * A branch with no upstream has no `...` part, and a detached HEAD reads
+ * `## HEAD (no branch)` - both yield an empty upstream and zero counts. Pure.
+ */
+export function parseBranchLine(line: string): { upstream: string; ahead: number; behind: number } {
+    const none = { upstream: "", ahead: 0, behind: 0 }
+    if (!line.startsWith("## ")) return none
+    const head = line.slice(3)
+    const sep = head.indexOf("...")
+    if (sep < 0) return none
+    const rest = head.slice(sep + 3)
+    // Upstream name runs to the divergence bracket (or end of line).
+    const upstream = (rest.split(" [")[0] ?? "").trim()
+    if (!upstream) return none
+    const ahead = Number(rest.match(/ahead (\d+)/)?.[1] ?? 0)
+    const behind = Number(rest.match(/behind (\d+)/)?.[1] ?? 0)
+    return { upstream, ahead, behind }
+}
+
 /** Branch + uncommitted-change count for a directory (empty if not a git repo). */
 export function gitStatus(cwd: string): Promise<GitStatus> {
     return new Promise((resolve) => {
         execFile("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, ...OPTS }, (err, stdout) => {
             if (err) {
-                resolve({ isRepo: false, branch: "", changes: 0 })
+                resolve({ isRepo: false, branch: "", changes: 0, upstream: "", ahead: 0, behind: 0 })
                 return
             }
             const branch = stdout.trim()
-            execFile("git", ["status", "--porcelain"], { cwd, ...OPTS }, (e2, out2) => {
-                const changes = e2 ? 0 : out2.split("\n").filter((l) => l.trim()).length
-                resolve({ isRepo: true, branch, changes })
+            // `-b` adds the tracking header for free - same process, no extra poll
+            // cost, and it's what tells the deck whether a pull has anything to do.
+            execFile("git", ["status", "--porcelain", "-b"], { cwd, ...OPTS }, (e2, out2) => {
+                const lines = e2 ? [] : out2.split("\n")
+                const changes = lines.filter((l) => l.trim() && !l.startsWith("## ")).length
+                const track = parseBranchLine(lines.find((l) => l.startsWith("## ")) ?? "")
+                resolve({ isRepo: true, branch, changes, ...track })
             })
+        })
+    })
+}
+
+/**
+ * Fast-forward the current branch from its upstream. `--ff-only` is deliberate:
+ * a one-click button must never invent a merge commit or drop the working tree
+ * into a conflicted state - if the branch has diverged, it fails and says so,
+ * and the resolution stays a conscious decision in the terminal.
+ */
+export function pullLatest(cwd: string): Promise<PullResult> {
+    return new Promise((resolve) => {
+        execFile("git", ["pull", "--ff-only"], { cwd, ...NET_OPTS }, (err, stdout, stderr) => {
+            const out = (stdout ?? "").trim()
+            const errOut = (stderr ?? "").trim()
+            if (!err) {
+                resolve({ ok: true, summary: out.split("\n")[0] || "Pulled." })
+                return
+            }
+            resolve({ ok: false, error: errOut.split("\n")[0] || out.split("\n")[0] || "git pull failed" })
         })
     })
 }

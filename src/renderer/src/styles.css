@@ -214,6 +214,31 @@ select:focus {
 .sb-identity:hover {
     color: var(--accent-soft);
 }
+/* Pull latest. Neutral while there's nothing to fetch, and accent-soft with a
+   count once the branch is behind — same "there's work here" language as
+   .sb-changes. It's a real <button> for keyboard reach, so it has to shed the
+   button chrome to sit level with the sibling chips. */
+.sb-pull {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+.sb-pull:hover:not(:disabled) {
+    color: var(--accent-soft);
+}
+.sb-pull.behind {
+    color: var(--accent-soft);
+}
+.sb-pull.behind:hover:not(:disabled) {
+    color: var(--accent);
+}
+.sb-pull:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
 .sb-git-id {
     position: relative;
 }
@@ -5274,6 +5299,7 @@ button .ic,
 [data-style="crt"] .lc-sha,
 [data-style="crt"] .work-key,
 [data-style="crt"] .sb-changes,
+[data-style="crt"] .sb-pull.behind,
 [data-style="crt"] .sb-identity {
     text-shadow: 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent);
 }

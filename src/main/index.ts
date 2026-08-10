@@ -10,7 +10,7 @@ import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
-import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken } from "./git"
+import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken, pullLatest } from "./git"
 import { readMcp, writeMcp, registerDevdeck, unregisterDevdeck, type McpServer } from "./mcp"
 import * as mcpserver from "./mcpserver"
 import * as mcptools from "./mcptools"
@@ -406,6 +406,11 @@ function registerIpc(): void {
     const guardRepo = (cwd: string): void => {
         if (!isAllowedRepo(cwd)) throw new Error("Path is outside any open project.")
     }
+
+    ipcMain.handle("git:pull", (_e, cwd: string) => {
+        guardRepo(cwd)
+        return pullLatest(cwd)
+    })
 
     // --- Git worktrees ---
     ipcMain.handle("git:worktrees", (_e, repoPath: string) => {

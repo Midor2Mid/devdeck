@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { parseWorktreeList, safeBranch, worktreeBase } from "../src/main/worktrees"
 import { parseStatus } from "../src/main/changes"
+import { parseBranchLine } from "../src/main/git"
 
 describe("safeBranch", () => {
     it("slugs spaces and strips unsafe chars", () => {
@@ -50,6 +51,37 @@ describe("parseWorktreeList", () => {
 
     it("returns empty for empty input", () => {
         expect(parseWorktreeList("")).toEqual([])
+    })
+})
+
+describe("parseBranchLine", () => {
+    it("reads the upstream when in sync", () => {
+        expect(parseBranchLine("## main...origin/main")).toEqual({
+            upstream: "origin/main",
+            ahead: 0,
+            behind: 0
+        })
+    })
+
+    it("reads ahead and behind counts", () => {
+        expect(parseBranchLine("## main...origin/main [ahead 1, behind 2]")).toEqual({
+            upstream: "origin/main",
+            ahead: 1,
+            behind: 2
+        })
+        expect(parseBranchLine("## fix/x...origin/fix/x [behind 7]")).toMatchObject({
+            upstream: "origin/fix/x",
+            ahead: 0,
+            behind: 7
+        })
+    })
+
+    it("returns no upstream for an untracked branch or detached head", () => {
+        const none = { upstream: "", ahead: 0, behind: 0 }
+        expect(parseBranchLine("## local-only")).toEqual(none)
+        expect(parseBranchLine("## HEAD (no branch)")).toEqual(none)
+        expect(parseBranchLine("")).toEqual(none)
+        expect(parseBranchLine(" M src/a.ts")).toEqual(none)
     })
 })
 

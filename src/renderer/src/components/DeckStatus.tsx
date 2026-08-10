@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
-import type { GitStatus, GitIdentity } from "../../../preload/index"
+import { toast } from "../toast"
+import type { GitStatus, GitIdentity, PullResult } from "../../../preload/index"
 import { Icon } from "./Icon"
 
 export function DeckStatus(): JSX.Element {
@@ -14,7 +15,14 @@ export function DeckStatus(): JSX.Element {
     const [git, setGit] = useState<GitStatus | null>(null)
     const [identity, setIdentity] = useState<GitIdentity | null>(null)
     const [pickerOpen, setPickerOpen] = useState(false)
+    const [pulling, setPulling] = useState(false)
     const path = project?.path
+
+    /** Re-read branch/divergence now (after a pull), outside the poll cadence. */
+    const refreshGit = useCallback(() => {
+        if (!path) return
+        window.api.git.status(path).then(setGit).catch(() => undefined)
+    }, [path])
 
     useEffect(() => {
         if (!path) {
@@ -55,6 +63,17 @@ export function DeckStatus(): JSX.Element {
         setPickerOpen(false)
     }
 
+    const pull = async (): Promise<void> => {
+        if (!path || pulling) return
+        setPulling(true)
+        const res: PullResult = await window.api.git
+            .pull(path)
+            .catch((e: Error) => ({ ok: false, error: e.message }))
+        setPulling(false)
+        toast(res.ok ? (res.summary ?? "Pulled.") : `Pull failed - ${res.error ?? "unknown error"}`)
+        refreshGit()
+    }
+
     const attention = sessions().filter((s) => s.status === "attention").length
 
     return (
@@ -67,6 +86,30 @@ export function DeckStatus(): JSX.Element {
                     <span className="sb-item" data-tip="Current branch" data-tip-pos="top">
                         <Icon name="gitBranch" size={12} /> {git.branch}
                     </span>
+                    {/* Only offered when there's an upstream to pull from. The
+                        behind-count rides on the button itself rather than adding
+                        a second chip — one control carries both the state and the
+                        action it invites. */}
+                    {git.upstream && (
+                        <button
+                            type="button"
+                            className={"sb-item sb-pull" + (git.behind > 0 ? " behind" : "")}
+                            disabled={pulling}
+                            aria-label={`Pull latest from ${git.upstream}`}
+                            data-tip={
+                                pulling
+                                    ? `Pulling from ${git.upstream}`
+                                    : git.behind > 0
+                                      ? `Pull latest — ${git.behind} commit${git.behind === 1 ? "" : "s"} behind ${git.upstream}`
+                                      : `Pull latest from ${git.upstream} — up to date`
+                            }
+                            data-tip-pos="top"
+                            onClick={pull}
+                        >
+                            <Icon name="download" size={12} />
+                            {git.behind > 0 && ` ${git.behind}`}
+                        </button>
+                    )}
                     {git.changes > 0 && project && (
                         <span
                             className="sb-item sb-changes"
