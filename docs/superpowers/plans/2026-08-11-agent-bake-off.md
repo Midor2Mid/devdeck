@@ -992,6 +992,79 @@ survived a failed land; the fix made it worse.
 
 Call `startPoll(cardId)` on the failure branch before returning.
 
+#### Task 3 corrections (round 4) — simplify, stop patching
+
+Round 3 fixed its three findings and introduced a fourth: with the timeout narrowed
+to `working` (N2) and the race surviving a failed land (N3), a tick whose generation
+bumps between writing `gating` and writing the verdict leaves that entrant in
+`gating` with nothing able to move it — `raceSettled` never becomes true and the
+poll runs for the rest of the app session.
+
+That is four rounds where a correction broke the guarantee the previous correction
+bought. The instance is easy to patch again; the *pattern* says the design is wrong.
+The cause is that a 5-second poll drives 120-second operations against state the
+user can tear down at any instant, so every guard creates a new interleaving. Two
+changes remove whole classes of interleaving rather than another instance.
+
+- [ ] **S1 — one tick at a time per race**
+
+Overlapping ticks are what made a stale snapshot able to re-gate an entrant (M1),
+and what made "is this tick current" a question worth asking at all. Remove the
+overlap:
+
+```typescript
+// A tick can outlive its interval — checks.run blocks for up to 120s against a
+// 5s poll — so ticks must not overlap. Without this, a lagging tick and a fresh
+// one both act on the same entrant from different snapshots.
+const inFlight = new Map<string, Promise<void>>()
+
+const runTick = (cardId: string, gen: number): void => {
+    if (inFlight.has(cardId)) return
+    const p = raceTick(cardId, gen).finally(() => inFlight.delete(cardId))
+    inFlight.set(cardId, p)
+}
+```
+
+The interval calls `runTick`, never `raceTick` directly.
+
+- [ ] **S2 — teardown waits for the tick instead of racing it**
+
+The generation counter exists only because teardown could not stop a tick already
+running. Let it wait:
+
+```typescript
+/** Stop polling and wait for any tick still in flight to finish. */
+const settlePoll = async (cardId: string): Promise<void> => {
+    stopPoll(cardId)
+    await inFlight.get(cardId)?.catch(() => undefined)
+}
+```
+
+`landRaceWinner` and `abandonRace` `await settlePoll(cardId)` as their first step.
+After that there is provably no tick running, so nothing can write into a race being
+torn down, spend inside a directory being deleted, or strand an entrant mid-`gating`.
+
+Keep `raceGen` and the `stale()` checks. They are now a cheap belt-and-braces
+against a tick that somehow outlives its await rather than the primary mechanism,
+and removing them in the same round that changes the concurrency model would be
+trading one untested arrangement for another.
+
+**The cost of S2, stated rather than discovered:** Abandon can now wait up to the
+gate command's runtime before it starts tearing down. That is a real UX cost and it
+is the right trade — the alternative is the current behaviour, where Abandon returns
+instantly and leaves a gate running inside a directory it is deleting. If the wait
+proves annoying in Task 5's live run, the fix is a shorter `timeoutMs` passed to
+`checks.run` for races, not a return to racing teardown against the tick.
+
+- [ ] **S3 — give `gating` its own deadline**
+
+Even with S1 and S2, an entrant should not be able to sit in a non-terminal status
+indefinitely. Stamp `gateStartedAt` on the entrant when it enters `gating`, and time
+it out to `failed` (with "the gate did not return" in `gateOutput`) at twice
+`checks.run`'s own 120s cap. This closes the class — any future path that abandons a
+tick mid-gate ages out instead of stranding — rather than the one instance round 3
+created.
+
 ---
 
 ### Task 4: `RaceModal`
