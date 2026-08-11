@@ -45,9 +45,25 @@ This is the crux of the whole feature. Raw pty bytes would lie: Claude Code's sp
 - Modify: `src/renderer/src/missionTail.ts` (add after `lastLines`, around line 40)
 - Test: `tests/missionTail.test.ts`
 
+Two things this function must get right that a naive `\r` rule gets wrong, both
+found in review of a first attempt:
+
+- **`\r\n` is a line terminator, not a redraw.** ConPTY emits it by default and
+  DevDeck is Windows-first. Discarding the pending segment on every `\r` scored
+  `"hello\r\n"` as **0** — the exact inverse of the bug this function exists to
+  prevent, and silent. Only a **bare** `\r` (one not followed by `\n`) is a redraw.
+- **Lines arrive split across chunks.** Agents stream token by token, so a single
+  line routinely spans many `onData` chunks with no newline until the end. A
+  stateless function drops every one of those fragments. The pending segment must
+  therefore be **carried between calls** by the caller.
+
 **Interfaces:**
 - Consumes: the existing module-private regexes `OSC`, `CSI`, `OTHER`, `CTRL` (`missionTail.ts:7-11`). Note `CTRL` deliberately does not strip `\r` (0x0d falls between its `\x0c` and `\x0e-\x1f` ranges), so the carriage returns survive to be interpreted here.
-- Produces: `export function printableDelta(chunk: string): number`
+- Produces: `export function printableDelta(chunk: string, carry?: string): { chars: number; carry: string }`
+  — `chars` is this call's committed non-whitespace count; `carry` is the unfinished
+  segment to pass back in on the next call for the same session.
+- `export const CARRY_MAX = 4000` — cap on a carried segment, so a stream that never
+  emits a newline cannot grow it without bound.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -56,35 +72,66 @@ Add to `tests/missionTail.test.ts`. Import `printableDelta` by adding it to the 
 ```typescript
 describe("printableDelta", () => {
     it("counts non-whitespace characters in completed lines", () => {
-        expect(printableDelta("hello world\n")).toBe(10)
+        expect(printableDelta("hello world\n").chars).toBe(10)
     })
 
-    it("scores a carriage-return spinner frame as zero", () => {
+    it("treats CRLF as a line terminator, not a redraw", () => {
+        // ConPTY emits \r\n by default and DevDeck is Windows-first. Scoring this
+        // as a redraw would zero almost all genuine output.
+        expect(printableDelta("hello\r\n").chars).toBe(5)
+        expect(printableDelta("a\r\nb\r\n").chars).toBe(2)
+    })
+
+    it("scores a bare-carriage-return spinner frame as zero", () => {
         // A spinner rewrites one line in place and never commits it.
-        expect(printableDelta("\r| Thinking...")).toBe(0)
-        expect(printableDelta("\r/ Thinking...\r- Thinking...")).toBe(0)
+        expect(printableDelta("\r| Thinking...").chars).toBe(0)
+        expect(printableDelta("\r/ Thinking...\r- Thinking...").chars).toBe(0)
     })
 
     it("scores an ANSI-only chunk as zero", () => {
-        expect(printableDelta("\x1b[2K\x1b[1G")).toBe(0)
-        expect(printableDelta("\x1b[31m\x1b[0m")).toBe(0)
-    })
-
-    it("does not count a trailing unterminated segment", () => {
-        expect(printableDelta("done\nbut not this")).toBe(4)
+        expect(printableDelta("\x1b[2K\x1b[1G").chars).toBe(0)
+        expect(printableDelta("\x1b[31m\x1b[0m").chars).toBe(0)
     })
 
     it("counts a line that a carriage return revised before committing", () => {
         // The final revision is what reached the screen.
-        expect(printableDelta("draft\rfinal\n")).toBe(5)
+        expect(printableDelta("draft\rfinal\n").chars).toBe(5)
     })
 
     it("ignores whitespace and tabs in the count", () => {
-        expect(printableDelta("  a\tb  \n")).toBe(2)
+        expect(printableDelta("  a\tb  \n").chars).toBe(2)
     })
 
     it("returns zero for an empty chunk", () => {
-        expect(printableDelta("")).toBe(0)
+        expect(printableDelta("").chars).toBe(0)
+    })
+
+    it("carries an unterminated segment out instead of dropping it", () => {
+        const first = printableDelta("but not ")
+        expect(first.chars).toBe(0)
+        expect(first.carry).toBe("but not ")
+    })
+
+    it("counts a line assembled from several chunks, once", () => {
+        // Agents stream token by token; this is the common case, not an edge case.
+        const a = printableDelta("Now let me ")
+        const b = printableDelta("check the tests\n", a.carry)
+        expect(a.chars).toBe(0)
+        expect(b.chars).toBe(21)
+        expect(b.carry).toBe("")
+    })
+
+    it("handles a CRLF split across two chunks", () => {
+        const a = printableDelta("hello\r")
+        const b = printableDelta("\nworld\n", a.carry)
+        expect(a.chars).toBe(0)
+        expect(b.chars + a.chars).toBe(10)
+    })
+
+    it("caps a carry that never sees a newline", () => {
+        const out = printableDelta("x".repeat(9000))
+        expect(out.chars).toBe(0)
+        expect(out.carry).toHaveLength(CARRY_MAX)
     })
 })
 ```
@@ -99,33 +146,55 @@ Expected: FAIL — `printableDelta is not a function` / TypeScript cannot resolv
 Add to `src/renderer/src/missionTail.ts`, directly after `lastLines` (line 40):
 
 ```typescript
+/** Cap on a carried segment, so a stream with no newline can't grow it unbounded. */
+export const CARRY_MAX = 4000
+
 /**
  * Committed printable characters in a raw pty chunk — the trace's unit of work.
  *
  * Deliberately NOT cleanTail: that rewrites \r to \n, which is right for a
  * readable peek and wrong here, because every spinner frame would then look like
- * a completed line and a wedged agent would draw a healthy trace. Here \r
- * discards the pending segment, the way a carriage return overwrites a terminal
- * line, so redraw-in-place scores zero and only text that actually scrolled past
- * counts.
+ * a completed line and a wedged agent would draw a healthy trace. Here only a
+ * BARE \r discards the pending segment, the way a carriage return overwrites a
+ * terminal line — \r\n is an ordinary terminator, which matters because ConPTY
+ * emits it by default and treating it as a redraw would score real output as
+ * silence.
+ *
+ * `carry` is the caller's unfinished segment from last time and comes back out
+ * on every call: agents stream token by token, so a line routinely spans many
+ * chunks and a stateless count would drop nearly all of it.
  */
-export function printableDelta(chunk: string): number {
-    const s = chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
+export function printableDelta(chunk: string, carry = ""): { chars: number; carry: string } {
+    const s = carry + chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
+    // A chunk may end mid-CRLF; hold the \r back so the next chunk can complete it.
+    const heldCr = s.endsWith("\r")
+    const body = heldCr ? s.slice(0, -1) : s
     let committed = ""
     let pending = ""
-    for (const ch of s) {
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i]
         if (ch === "\n") {
             committed += pending
             pending = ""
         } else if (ch === "\r") {
-            pending = ""
+            if (body[i + 1] === "\n") {
+                committed += pending
+                pending = ""
+                i++
+            } else {
+                pending = ""
+            }
         } else {
             pending += ch
         }
     }
-    return committed.replace(/\s/g, "").length
+    if (pending.length > CARRY_MAX) pending = pending.slice(-CARRY_MAX)
+    return { chars: committed.replace(/\s/g, "").length, carry: pending + (heldCr ? "\r" : "") }
 }
 ```
+
+Note the loop is index-based, not `for…of`: the CRLF case has to look ahead one
+character and skip it, which `for…of` cannot do.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -157,7 +226,7 @@ The scale is logarithmic against a fixed ceiling. Not a per-session rolling max 
 - Test: `tests/missionTail.test.ts`
 
 **Interfaces:**
-- Consumes: `printableDelta(chunk: string): number` from Task 1.
+- Consumes: `printableDelta(chunk: string, carry?: string): { chars: number; carry: string }` and `CARRY_MAX` from Task 1. The carry is per session and lives on the ring, so a line split across pty chunks is counted once when it completes.
 - Produces:
   - `export const STALL_MS: number` (= 120000)
   - `export function recordRate(id: string, chunk: string, now?: number): void`
@@ -220,6 +289,21 @@ describe("trace ring", () => {
         expect(isFlat(getTrace("r8", T0))).toBe(true)
     })
 
+    it("counts a line streamed across chunks once, when it completes", () => {
+        recordRate("r9", "Now let me ", T0)
+        expect(isFlat(getTrace("r9", T0))).toBe(true)
+        recordRate("r9", "check the tests\n", T0 + 100)
+        expect(getTrace("r9", T0 + 100)[59]).toBeGreaterThan(0)
+    })
+
+    it("keeps each session's carry separate", () => {
+        recordRate("rA", "half ", T0)
+        recordRate("rB", "other\n", T0)
+        recordRate("rA", "done\n", T0)
+        // rA committed "half done" (8 non-space chars), rB committed "other" (5).
+        expect(getTrace("rA", T0)[59]).toBeGreaterThan(getTrace("rB", T0)[59])
+    })
+
     it("STALL_MS is the width of the whole window", () => {
         expect(STALL_MS).toBe(120000)
     })
@@ -280,6 +364,8 @@ interface Ring {
     buckets: number[]
     /** Start time of the newest bucket. */
     at: number
+    /** printableDelta's unfinished segment, carried between chunks. */
+    carry: string
 }
 const rings = new Map<string, Ring>()
 
@@ -312,11 +398,15 @@ function scale(chars: number): number {
 export function recordRate(id: string, chunk: string, now = Date.now()): void {
     let r = rings.get(id)
     if (!r) {
-        r = { buckets: new Array<number>(BUCKETS).fill(0), at: now }
+        r = { buckets: new Array<number>(BUCKETS).fill(0), at: now, carry: "" }
         rings.set(id, r)
     }
     roll(r, now)
-    r.buckets[BUCKETS - 1] += printableDelta(chunk)
+    // The carry is per session: a line split across chunks is counted once, when
+    // it completes, rather than lost.
+    const out = printableDelta(chunk, r.carry)
+    r.carry = out.carry
+    r.buckets[BUCKETS - 1] += out.chars
 }
 
 /** A session's trace, oldest first, each sample 0..1. Always BUCKETS long. */
