@@ -169,11 +169,24 @@ export function MissionControl(): JSX.Element {
                                     role="button"
                                     tabIndex={0}
                                     // The trace shows silence as a flatline, which a screen reader
-                                    // cannot see — so the sentence it replaces lives here.
-                                    aria-label={
-                                        `${s.sessionName} · ${s.projectName} · ${s.status}` +
-                                        (stalled ? ` · stalled, no output ${ago}` : ago ? ` · last output ${ago} ago` : "")
-                                    }
+                                    // cannot see — so the sentence it replaces lives here. An
+                                    // aria-label overrides the tile's content entirely, so it has
+                                    // to carry everything a sighted user reads off the tile: the
+                                    // badge included, or the running model becomes unannounceable.
+                                    aria-label={[
+                                        s.sessionName,
+                                        s.projectName,
+                                        s.badge,
+                                        s.status === "attention"
+                                            ? "needs you"
+                                            : stalled
+                                              ? `stalled, no output ${ago}`
+                                              : ago
+                                                ? `last output ${ago} ago`
+                                                : s.status
+                                    ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
                                     data-tip={
                                         stalled
                                             ? `Stalled — no output ${ago}`
