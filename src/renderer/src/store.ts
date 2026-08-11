@@ -29,7 +29,6 @@ import {
     parseShortstat,
     entrantBranch,
     raceSettled,
-    isTerminal,
     samePath,
     type Entrant,
     type Race
@@ -350,6 +349,15 @@ const startingRaces = new Set<string>()
 // every spend inside a tick re-checks the generation it started under; bumping
 // it (stopPoll, or a fresh startPoll) makes any in-flight tick a no-op from
 // that instant on. Same device as pipelineToken above, for the same reason.
+//
+// Entries are NEVER deleted, including on teardown — one integer per card,
+// bounded by the number of cards that have ever raced, is a cost worth paying.
+// Deleting it on land/abandon would let bumpGen restart at 1 next time that
+// card races, which a still-suspended tick from the OLD race could also be
+// carrying (startPoll's stopPoll-bump-plus-bumpGen lands on the same small
+// number every time from a fresh 0). That tick would then read as current,
+// write its verdict into the new race, and call checks.run inside a worktree
+// that no longer exists — precisely what this counter exists to prevent.
 const raceGen = new Map<string, number>()
 const bumpGen = (cardId: string): number => {
     const next = (raceGen.get(cardId) ?? 0) + 1
@@ -676,59 +684,68 @@ export const useStore = create<AppState>((set, get) => {
         if (stale()) return
 
         for (const e of r.entrants) {
-            if (isTerminal(e.status)) continue
-            if (e.status === "working") {
-                // samePath, not ===: worktreeAdd's path.join result (backslashes on
-                // Windows) and git worktree list's own output (forward slashes)
-                // otherwise never compare equal, and no commit is ever detected.
-                const head = wts.find((w) => samePath(w.path, e.worktree))?.head
-                if (head && head !== e.baseHead) {
-                    // The loop's snapshot may be many ticks old — checks.run can
-                    // block for 120s against a 5s poll. Re-read before spending
-                    // anything, so a tick that's behind can't re-gate an entrant a
-                    // newer tick already resolved.
-                    const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
-                    if (!live || live.status !== "working") continue
-                    if (stale()) return
-                    setEntrant(cardId, e.agentId, { status: "gating", head })
-                    // The ENTRANT'S worktree, never r.projectPath. Running the gate
-                    // at the project root verifies the user's tree instead of this
-                    // entrant's and scores every entrant identically — the single
-                    // most damaging thing to get wrong here.
-                    const res = await window.api.checks
-                        .run(e.worktree, r.gateCommand)
-                        .catch(
-                            (err): CheckResult => ({
-                                exitCode: -1,
-                                output: err instanceof Error ? err.message : String(err),
-                                timedOut: false,
-                                ms: 0
-                            })
-                        )
-                    if (stale()) return
-                    setEntrant(cardId, e.agentId, {
-                        status: res.exitCode === 0 ? "passed" : "failed",
-                        gateExit: res.exitCode,
-                        gateMs: res.ms,
-                        gateOutput: (res.output || "").slice(0, 400)
-                    })
-                    const [usage, stat] = await Promise.all([
-                        window.api.usage.window(e.worktree, r.startedAt, Date.now()).catch(() => null),
-                        window.api.git.shortstat(e.worktree, e.baseHead).catch(() => "")
-                    ])
-                    if (stale()) return
-                    setEntrant(cardId, e.agentId, {
-                        cost: usage?.cost,
-                        costTokens: usage?.tokens,
-                        ...parseShortstat(stat)
-                    })
-                    continue
-                }
+            // Narrow to "working" deliberately — do not widen this again. Every
+            // one of checks.run/usage.window/git.shortstat below is wrapped in a
+            // .catch, so a rejection always resolves an entrant to a terminal
+            // status instead of stranding it in "gating"; and checks.run caps
+            // itself at 120s, so "gating" cannot legitimately last the 20-minute
+            // timeout. Applying the timeout to "gating" too can flip an entrant
+            // that is genuinely mid-gate to nocommit, and if that happens to
+            // settle the race, stopPoll bumps the generation and the real
+            // verdict — which is still in flight — gets discarded as stale.
+            if (e.status !== "working") continue
+            // samePath, not ===: worktreeAdd's path.join result (backslashes on
+            // Windows) and git worktree list's own output (forward slashes)
+            // otherwise never compare equal, and no commit is ever detected.
+            const head = wts.find((w) => samePath(w.path, e.worktree))?.head
+            if (head && head !== e.baseHead) {
+                // The loop's snapshot may be many ticks old — checks.run can
+                // block for 120s against a 5s poll. Re-read before spending
+                // anything, so a tick that's behind can't re-gate an entrant a
+                // newer tick already resolved.
+                const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
+                if (!live || live.status !== "working") continue
+                if (stale()) return
+                setEntrant(cardId, e.agentId, { status: "gating", head })
+                // The ENTRANT'S worktree, never r.projectPath. Running the gate
+                // at the project root verifies the user's tree instead of this
+                // entrant's and scores every entrant identically — the single
+                // most damaging thing to get wrong here.
+                const res = await window.api.checks
+                    .run(e.worktree, r.gateCommand)
+                    .catch(
+                        (err): CheckResult => ({
+                            exitCode: -1,
+                            output: err instanceof Error ? err.message : String(err),
+                            timedOut: false,
+                            ms: 0
+                        })
+                    )
+                if (stale()) return
+                setEntrant(cardId, e.agentId, {
+                    status: res.exitCode === 0 ? "passed" : "failed",
+                    gateExit: res.exitCode,
+                    gateMs: res.ms,
+                    gateOutput: (res.output || "").slice(0, 400)
+                })
+                const [usage, stat] = await Promise.all([
+                    window.api.usage.window(e.worktree, r.startedAt, Date.now()).catch(() => null),
+                    window.api.git.shortstat(e.worktree, e.baseHead).catch(() => "")
+                ])
+                if (stale()) return
+                setEntrant(cardId, e.agentId, {
+                    cost: usage?.cost,
+                    costTokens: usage?.tokens,
+                    ...parseShortstat(stat)
+                })
+                continue
             }
-            // Applies to any non-terminal status still here — not just "working":
-            // an IPC rejection could otherwise strand an entrant in "gating"
-            // forever, and the timeout is the only thing that would ever move it.
             if (Date.now() - r.startedAt > RACE_TIMEOUT_MS) {
+                // Re-read before writing, same reason as the gate path above: a
+                // lagging tick must not overwrite a newer verdict with nocommit.
+                const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
+                if (!live || live.status !== "working") continue
+                if (stale()) return
                 setEntrant(cardId, e.agentId, { status: "nocommit" })
             }
         }
@@ -1246,7 +1263,12 @@ export const useStore = create<AppState>((set, get) => {
             const res = await window.api.git.landFrom(winner.worktree, winner.baseHead, race.projectPath)
             if (!res.ok) {
                 // Leave every worktree in place — nothing is lost, the user can
-                // retry or land by hand.
+                // retry or land by hand. But the race object is still here and
+                // startRace would refuse to touch it, so without restarting the
+                // poll the remaining entrants would never gate, never time out,
+                // and raceSettled would never go true — agents left running and
+                // billing with nothing watching them.
+                startPoll(cardId)
                 pushActivity("attention", "", `Land failed: ${res.error ?? "unknown error"}`)
                 return
             }
@@ -1271,7 +1293,13 @@ export const useStore = create<AppState>((set, get) => {
                     )
                 }
             }
-            raceGen.delete(cardId)
+            // Deliberately not raceGen.delete(cardId): the map is one integer per
+            // card, bounded by the number of cards that have ever raced, and its
+            // whole point is to be monotonic for the app's lifetime. Deleting it
+            // lets bumpGen restart at 1 next time this card races — the same
+            // generation an old, still-suspended tick from THIS race may be
+            // carrying — which reopens exactly the spend-in-a-deleted-worktree
+            // hole the counter exists to close. Leave it be.
             set((s) => {
                 const rest = { ...s.races }
                 delete rest[cardId]
@@ -1321,7 +1349,8 @@ export const useStore = create<AppState>((set, get) => {
                     )
                 }
             }
-            raceGen.delete(cardId)
+            // See the comment in landRaceWinner: raceGen is deliberately never
+            // deleted, only ever bumped.
             set((s) => {
                 const rest = { ...s.races }
                 delete rest[cardId]
