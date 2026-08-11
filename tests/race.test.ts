@@ -54,8 +54,17 @@ describe("parseShortstat", () => {
 })
 
 describe("entrantBranch", () => {
-    it("combines the card title, the agent name and a slice of its id", () => {
-        expect(entrantBranch("Add pull button", "Claude", "a3f9c1d2")).toBe("Add pull button Claude a3f9c1")
+    it("combines the card title with the agent id", () => {
+        expect(entrantBranch("Add pull button", "Claude", "claude-opus")).toBe(
+            "Add pull button claude-opus"
+        )
+    })
+
+    it("separates the built-in presets that share a prefix", () => {
+        // claude / claude-opus / claude-yolo all start with "claude", so any
+        // truncation of the id collapses the most likely race there is.
+        const b = ["claude", "claude-opus", "claude-yolo"].map((id) => entrantBranch("card", "n", id))
+        expect(new Set(b).size).toBe(3)
     })
 
     it("gives two agents on one card different branches", () => {

@@ -65,15 +65,20 @@ export function parseShortstat(out: string): { added: number; removed: number } 
  * `worktrees.addWorktree` already runs `safeBranch` over whatever it is given, and
  * a second naming scheme would be one more thing to keep in sync.
  *
- * The id slice is what actually guarantees two entrants differ. The name alone is
- * not enough: AgentPreset.name is user-editable and two presets called "Claude"
- * are entirely plausible, which would put both agents in ONE worktree and silently
- * invalidate both their cost figures — cost is attributed per directory, so a
- * shared worktree destroys the property that makes this feature fair. The name is
- * carried too, because a branch called `...-a3f9c1` alone is unreadable.
+ * The agent id is what guarantees two entrants differ, and it is used WHOLE. The
+ * name alone is not enough — AgentPreset.name is user-editable and two presets
+ * called "Claude" are entirely plausible. Nor is a prefix of the id: the built-in
+ * presets are `claude`, `claude-opus` and `claude-yolo`, so any slice shorter than
+ * the full string collapses the most likely race of all — Claude against Claude
+ * Opus — into a single branch.
+ *
+ * A collision is not cosmetic. Two entrants sharing a branch share a worktree, and
+ * cost here is attributed per directory, so both their figures become meaningless
+ * while still rendering as if they were real. The ids are readable enough
+ * (`claude-opus`) to serve as the branch's human label too.
  */
 export function entrantBranch(title: string, agentName: string, agentId: string): string {
-    return `${title} ${agentName} ${agentId.slice(0, 6)}`
+    return `${title} ${agentId}`
 }
 
 export function isTerminal(s: EntrantStatus): boolean {
