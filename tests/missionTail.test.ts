@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { cleanTail, peekLine, relTime, sortForFollow, lastLines, isStalled } from "../src/renderer/src/missionTail"
+import { cleanTail, peekLine, relTime, sortForFollow, lastLines, isStalled, printableDelta } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 
 function sess(over: Partial<AnySession>): AnySession {
@@ -99,5 +99,39 @@ describe("peekLine", () => {
     })
     it("returns empty string for all-blank input", () => {
         expect(peekLine("  \n \n")).toBe("")
+    })
+})
+
+describe("printableDelta", () => {
+    it("counts non-whitespace characters in completed lines", () => {
+        expect(printableDelta("hello world\n")).toBe(10)
+    })
+
+    it("scores a carriage-return spinner frame as zero", () => {
+        // A spinner rewrites one line in place and never commits it.
+        expect(printableDelta("\r| Thinking...")).toBe(0)
+        expect(printableDelta("\r/ Thinking...\r- Thinking...")).toBe(0)
+    })
+
+    it("scores an ANSI-only chunk as zero", () => {
+        expect(printableDelta("\x1b[2K\x1b[1G")).toBe(0)
+        expect(printableDelta("\x1b[31m\x1b[0m")).toBe(0)
+    })
+
+    it("does not count a trailing unterminated segment", () => {
+        expect(printableDelta("done\nbut not this")).toBe(4)
+    })
+
+    it("counts a line that a carriage return revised before committing", () => {
+        // The final revision is what reached the screen.
+        expect(printableDelta("draft\rfinal\n")).toBe(5)
+    })
+
+    it("ignores whitespace and tabs in the count", () => {
+        expect(printableDelta("  a\tb  \n")).toBe(2)
+    })
+
+    it("returns zero for an empty chunk", () => {
+        expect(printableDelta("")).toBe(0)
     })
 })

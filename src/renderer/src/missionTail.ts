@@ -39,6 +39,33 @@ export function lastLines(tail: string, n: number): string {
         .join("\n")
 }
 
+/**
+ * Committed printable characters in a raw pty chunk — the trace's unit of work.
+ *
+ * Deliberately NOT cleanTail: that rewrites \r to \n, which is right for a
+ * readable peek and wrong here, because every spinner frame would then look like
+ * a completed line and a wedged agent would draw a healthy trace. Here \r
+ * discards the pending segment, the way a carriage return overwrites a terminal
+ * line, so redraw-in-place scores zero and only text that actually scrolled past
+ * counts.
+ */
+export function printableDelta(chunk: string): number {
+    const s = chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
+    let committed = ""
+    let pending = ""
+    for (const ch of s) {
+        if (ch === "\n") {
+            committed += pending
+            pending = ""
+        } else if (ch === "\r") {
+            pending = ""
+        } else {
+            pending += ch
+        }
+    }
+    return committed.replace(/\s/g, "").length
+}
+
 import type { AgentStatus, AnySession } from "./store"
 
 const tails = new Map<string, string>()
