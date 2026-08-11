@@ -90,6 +90,84 @@ import type { AgentStatus, AnySession } from "./store"
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
 
+const BUCKET_MS = 2000
+const BUCKETS = 60
+/**
+ * The trace window and the stall threshold are the same number by construction.
+ * The design claims a flat trace on a working session IS a stall; deriving one
+ * from the other is what stops that claim quietly becoming false in a later edit.
+ */
+export const STALL_MS = BUCKET_MS * BUCKETS
+/** Characters in one bucket that count as a full-height bar. */
+const CEILING = 4096
+
+interface Ring {
+    /** Oldest first, newest last; always BUCKETS long. */
+    buckets: number[]
+    /** Start time of the newest bucket. */
+    at: number
+    /** printableDelta's unfinished segment, carried between chunks. */
+    carry: string
+}
+const rings = new Map<string, Ring>()
+
+/** Advance a ring to `now`, zero-filling the buckets that elapsed. */
+function roll(r: Ring, now: number): void {
+    const steps = Math.floor((now - r.at) / BUCKET_MS)
+    if (steps <= 0) return
+    r.at += steps * BUCKET_MS
+    if (steps >= BUCKETS) {
+        r.buckets.fill(0)
+        return
+    }
+    for (let i = 0; i < steps; i++) {
+        r.buckets.shift()
+        r.buckets.push(0)
+    }
+}
+
+/** Log scale against a fixed ceiling, so quiet and loud agents both stay legible. */
+function scale(chars: number): number {
+    if (chars <= 0) return 0
+    return Math.min(1, Math.log(1 + chars) / Math.log(1 + CEILING))
+}
+
+/**
+ * Add a pty chunk's committed output to a session's current bucket. Called from
+ * the same place as recordTail; a chunk that scores zero still keeps the ring
+ * current, so a spinning agent flatlines rather than showing no trace at all.
+ */
+export function recordRate(id: string, chunk: string, now = Date.now()): void {
+    let r = rings.get(id)
+    if (!r) {
+        r = { buckets: new Array<number>(BUCKETS).fill(0), at: now, carry: "" }
+        rings.set(id, r)
+    }
+    roll(r, now)
+    // The carry is per session: a line split across chunks is counted once, when
+    // it completes, rather than lost.
+    const out = printableDelta(chunk, r.carry)
+    r.carry = out.carry
+    r.buckets[BUCKETS - 1] += out.chars
+}
+
+/** A session's trace, oldest first, each sample 0..1. Always BUCKETS long. */
+export function getTrace(id: string, now = Date.now()): number[] {
+    const r = rings.get(id)
+    if (!r) return new Array<number>(BUCKETS).fill(0)
+    roll(r, now)
+    return r.buckets.map(scale)
+}
+
+/**
+ * Every bucket empty. Read together with the session's status: flat + working is
+ * a stall, flat + idle is just a finished agent being quiet. Exported because the
+ * test suite asserts it agrees with isStalled — that agreement is the design.
+ */
+export function isFlat(trace: number[]): boolean {
+    return trace.every((v) => v === 0)
+}
+
 /** Record a raw pty chunk for a terminal (cheap; no React state). */
 export function recordTail(id: string, chunk: string): void {
     // Keep a larger window than the one-line peek so tiles can expand to context.
@@ -112,10 +190,11 @@ export function getLastAt(id: string): number | undefined {
     return lastAt.get(id)
 }
 
-/** Drop a terminal's tail when its session closes. */
+/** Drop a terminal's tail and trace when its session closes. */
 export function forgetTail(id: string): void {
     tails.delete(id)
     lastAt.delete(id)
+    rings.delete(id)
 }
 
 /** A short "time since" label: "" · "now" · "35s" · "2m" · "1h". */
@@ -136,7 +215,7 @@ export function isStalled(
     status: AgentStatus,
     lastAt: number | undefined,
     now: number,
-    thresholdMs = 120000
+    thresholdMs = STALL_MS
 ): boolean {
     return status === "working" && !!lastAt && now - lastAt > thresholdMs
 }

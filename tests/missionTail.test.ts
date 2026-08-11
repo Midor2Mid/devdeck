@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest"
-import { cleanTail, peekLine, relTime, sortForFollow, lastLines, isStalled, printableDelta, CARRY_MAX } from "../src/renderer/src/missionTail"
+import {
+    cleanTail,
+    peekLine,
+    relTime,
+    sortForFollow,
+    lastLines,
+    isStalled,
+    printableDelta,
+    CARRY_MAX,
+    recordRate,
+    getTrace,
+    isFlat,
+    STALL_MS
+} from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 
 function sess(over: Partial<AnySession>): AnySession {
@@ -164,5 +177,103 @@ describe("printableDelta", () => {
         const out = printableDelta("x".repeat(9000))
         expect(out.chars).toBe(0)
         expect(out.carry).toHaveLength(CARRY_MAX)
+    })
+})
+
+describe("trace ring", () => {
+    const T0 = 1_700_000_000_000
+
+    it("returns 60 empty buckets for an unknown session", () => {
+        const tr = getTrace("never-seen", T0)
+        expect(tr).toHaveLength(60)
+        expect(tr.every((v) => v === 0)).toBe(true)
+    })
+
+    it("puts a chunk in the newest bucket", () => {
+        recordRate("r1", "hello\n", T0)
+        const tr = getTrace("r1", T0)
+        expect(tr[59]).toBeGreaterThan(0)
+        expect(tr.slice(0, 59).every((v) => v === 0)).toBe(true)
+    })
+
+    it("rolls older samples left as time passes", () => {
+        recordRate("r2", "hello\n", T0)
+        // Two buckets later the sample has moved two places left.
+        const tr = getTrace("r2", T0 + 4000)
+        expect(tr[57]).toBeGreaterThan(0)
+        expect(tr[58]).toBe(0)
+        expect(tr[59]).toBe(0)
+    })
+
+    it("clears entirely once the whole window has elapsed", () => {
+        recordRate("r3", "hello\n", T0)
+        expect(getTrace("r3", T0 + STALL_MS + 1).every((v) => v === 0)).toBe(true)
+    })
+
+    it("accumulates several chunks inside one bucket", () => {
+        recordRate("r4", "aaa\n", T0)
+        recordRate("r4", "bbb\n", T0 + 500)
+        const one = getTrace("r4", T0)[59]
+        recordRate("r5", "aaa\n", T0)
+        expect(one).toBeGreaterThan(getTrace("r5", T0)[59])
+    })
+
+    it("scales logarithmically, clamped to 1", () => {
+        recordRate("r6", "x".repeat(4096) + "\n", T0)
+        expect(getTrace("r6", T0)[59]).toBeCloseTo(1, 2)
+        recordRate("r7", "x".repeat(100000) + "\n", T0)
+        expect(getTrace("r7", T0)[59]).toBe(1)
+    })
+
+    it("gives a spinner-only session a flat trace", () => {
+        recordRate("r8", "\r| Thinking...", T0)
+        expect(isFlat(getTrace("r8", T0))).toBe(true)
+    })
+
+    it("counts a line streamed across chunks once, when it completes", () => {
+        recordRate("r9", "Now let me ", T0)
+        expect(isFlat(getTrace("r9", T0))).toBe(true)
+        recordRate("r9", "check the tests\n", T0 + 100)
+        expect(getTrace("r9", T0 + 100)[59]).toBeGreaterThan(0)
+    })
+
+    it("keeps each session's carry separate", () => {
+        recordRate("rA", "half ", T0)
+        recordRate("rB", "other\n", T0)
+        recordRate("rA", "done\n", T0)
+        // rA committed "half done" (8 non-space chars), rB committed "other" (5).
+        expect(getTrace("rA", T0)[59]).toBeGreaterThan(getTrace("rB", T0)[59])
+    })
+
+    it("STALL_MS is the width of the whole window", () => {
+        expect(STALL_MS).toBe(120000)
+    })
+})
+
+describe("flatline agrees with isStalled", () => {
+    const T0 = 1_700_000_000_000
+
+    it("a working session that has gone quiet past the window is both flat and stalled", () => {
+        recordRate("s1", "hello\n", T0)
+        const now = T0 + STALL_MS + 1000
+        expect(isFlat(getTrace("s1", now))).toBe(true)
+        expect(isStalled("working", T0, now)).toBe(true)
+    })
+
+    it("a working session inside the window is neither", () => {
+        recordRate("s2", "hello\n", T0)
+        const now = T0 + 30000
+        expect(isFlat(getTrace("s2", now))).toBe(false)
+        expect(isStalled("working", T0, now)).toBe(false)
+    })
+
+    it("a flat trace on a non-working session is NOT stalled", () => {
+        // The false alarm this design must never produce: a finished agent is
+        // quiet on purpose.
+        recordRate("s3", "hello\n", T0)
+        const now = T0 + STALL_MS + 1000
+        expect(isFlat(getTrace("s3", now))).toBe(true)
+        expect(isStalled("idle", T0, now)).toBe(false)
+        expect(isStalled("waiting", T0, now)).toBe(false)
     })
 })
