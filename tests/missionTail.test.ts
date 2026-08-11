@@ -6,15 +6,18 @@ import {
     sortForFollow,
     lastLines,
     isStalled,
+    lineNovelty,
     printableDelta,
     CARRY_MAX,
     recordRate,
     getTrace,
     isFlat,
     barsPath,
+    ringAge,
     STALL_MS
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
+import type { DeltaState } from "../src/renderer/src/missionTail"
 
 function sess(over: Partial<AnySession>): AnySession {
     return {
@@ -116,6 +119,39 @@ describe("peekLine", () => {
     })
 })
 
+describe("lineNovelty", () => {
+    it("scores identical lines as zero", () => {
+        expect(lineNovelty("hello world", "hello world")).toBe(0)
+    })
+
+    it("scores a one-glyph spinner rotation on a ~40-char line as zero", () => {
+        const prev = "⠋ Thinking… (12s) — press esc to interrupt"
+        const next = "⠙ Thinking… (12s) — press esc to interrupt"
+        expect(prev.length).toBeGreaterThan(30)
+        expect(lineNovelty(next, prev)).toBe(0)
+    })
+
+    it("scores a ticking elapsed-time counter as zero", () => {
+        const prev = "⠋ Thinking… (12s) — press esc to interrupt"
+        const next = "⠋ Thinking… (13s) — press esc to interrupt"
+        expect(lineNovelty(next, prev)).toBe(0)
+    })
+
+    it("scores a wholly different line as its non-whitespace length", () => {
+        const line = "Wrote 3 files, ran the tests"
+        expect(lineNovelty(line, "")).toBe(line.replace(/\s/g, "").length)
+    })
+
+    it("scores a blank line as zero", () => {
+        expect(lineNovelty("   ", "hello")).toBe(0)
+    })
+
+    it("scores a short real line that clears the floor", () => {
+        // Length 10 → floor 3; a wholesale change of a short line still registers.
+        expect(lineNovelty("helloworld", "")).toBe(10)
+    })
+})
+
 describe("printableDelta", () => {
     it("counts non-whitespace characters in completed lines", () => {
         expect(printableDelta("hello world\n").chars).toBe(10)
@@ -125,7 +161,8 @@ describe("printableDelta", () => {
         // ConPTY emits \r\n by default and DevDeck is Windows-first. Scoring this
         // as a redraw would zero almost all genuine output.
         expect(printableDelta("hello\r\n").chars).toBe(5)
-        expect(printableDelta("a\r\nb\r\n").chars).toBe(2)
+        const two = printableDelta("first line\r\nsecond one\r\n")
+        expect(two.chars).toBe("firstline".length + "secondone".length)
     })
 
     it("scores a bare-carriage-return spinner frame as zero", () => {
@@ -155,29 +192,77 @@ describe("printableDelta", () => {
     it("carries an unterminated segment out instead of dropping it", () => {
         const first = printableDelta("but not ")
         expect(first.chars).toBe(0)
-        expect(first.carry).toBe("but not ")
+        expect(first.state.carry).toBe("but not ")
     })
 
     it("counts a line assembled from several chunks, once", () => {
         // Agents stream token by token; this is the common case, not an edge case.
         const a = printableDelta("Now let me ")
-        const b = printableDelta("check the tests\n", a.carry)
+        const b = printableDelta("check the tests\n", a.state)
         expect(a.chars).toBe(0)
-        expect(b.chars).toBe(21)
-        expect(b.carry).toBe("")
+        expect(b.chars).toBe("Now let me check the tests".replace(/\s/g, "").length)
+        expect(b.state.carry).toBe("")
     })
 
     it("handles a CRLF split across two chunks", () => {
         const a = printableDelta("hello\r")
-        const b = printableDelta("\nworld\n", a.carry)
+        const b = printableDelta("\nworld\n", a.state)
         expect(a.chars).toBe(0)
-        expect(b.chars + a.chars).toBe(10)
+        expect(b.chars + a.chars).toBe("hello".length + "world".length)
     })
 
     it("caps a carry that never sees a newline", () => {
         const out = printableDelta("x".repeat(9000))
         expect(out.chars).toBe(0)
-        expect(out.carry).toHaveLength(CARRY_MAX)
+        expect(out.state.carry).toHaveLength(CARRY_MAX)
+    })
+
+    it("scores ten distinct real output lines at their full length", () => {
+        const lines = [
+            "Reading src/main.ts",
+            "Found 3 matches in components/App.tsx",
+            "Editing src/renderer/src/store.ts",
+            "Running npm run typecheck",
+            "Typecheck passed with zero errors",
+            "Running npx vitest run",
+            "497 tests passed",
+            "Wrote DESIGN.md",
+            "Committed as feat: add mission trace",
+            "Done — branch is ready for review"
+        ]
+        let state: DeltaState | undefined
+        let total = 0
+        let expected = 0
+        for (const line of lines) {
+            const out = printableDelta(line + "\n", state)
+            state = out.state
+            total += out.chars
+            expected += line.replace(/\s/g, "").length
+        }
+        expect(total).toBe(expected)
+    })
+
+    it("scores ten CSI-positioned, \\r\\n-terminated spinner frames as zero in total", () => {
+        // The regression test for the bug that motivated this rewrite: Claude
+        // Code's Ink TUI repaints with CSI cursor moves terminated by ordinary
+        // \r\n, never a bare \r. The old bare-\r redraw rule never fired against
+        // bytes shaped like this, so every repaint committed its whole frame and
+        // a wedged agent would have drawn a saturated trace instead of a flat one.
+        const GLYPHS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        const frame = (i: number): string =>
+            `[2K[1G[36m${GLYPHS[i % GLYPHS.length]}[0m Thinking… (${12 + i}s)\r\n`
+        // Seed a baseline as if the spinner were already mid-run — the very
+        // first frame a session ever draws is new content by construction (there
+        // is nothing on screen to compare it against); the bug this guards
+        // against is REPEATED redraws scoring nonzero, not the first paint.
+        let state = printableDelta(frame(0)).state
+        let total = 0
+        for (let i = 1; i <= 10; i++) {
+            const out = printableDelta(frame(i), state)
+            state = out.state
+            total += out.chars
+        }
+        expect(total).toBe(0)
     })
 })
 
@@ -212,10 +297,12 @@ describe("trace ring", () => {
     })
 
     it("accumulates several chunks inside one bucket", () => {
-        recordRate("r4", "aaa\n", T0)
-        recordRate("r4", "bbb\n", T0 + 500)
+        // Short lines like "aaa"/"bbb" wouldn't clear lineNovelty's floor against
+        // each other, so use lines long and distinct enough to both register.
+        recordRate("r4", "alpha status line\n", T0)
+        recordRate("r4", "beta status line\n", T0 + 500)
         const one = getTrace("r4", T0)[59]
-        recordRate("r5", "aaa\n", T0)
+        recordRate("r5", "alpha status line\n", T0)
         expect(one).toBeGreaterThan(getTrace("r5", T0)[59])
     })
 
@@ -224,6 +311,10 @@ describe("trace ring", () => {
         expect(getTrace("r6", T0)[59]).toBeCloseTo(1, 2)
         recordRate("r7", "x".repeat(100000) + "\n", T0)
         expect(getTrace("r7", T0)[59]).toBe(1)
+        // A regression to a linear scale would give 64/4096 ≈ 0.016 here — a
+        // mid-range value must still read as well above the floor.
+        recordRate("r6b", "x".repeat(64) + "\n", T0)
+        expect(getTrace("r6b", T0)[59]).toBeGreaterThan(0.4)
     })
 
     it("gives a spinner-only session a flat trace", () => {
@@ -248,6 +339,44 @@ describe("trace ring", () => {
 
     it("STALL_MS is the width of the whole window", () => {
         expect(STALL_MS).toBe(120000)
+    })
+})
+
+describe("ringAge", () => {
+    const T0 = 1_700_000_000_000
+
+    it("is zero for an unknown session", () => {
+        expect(ringAge("never-seen-ring", T0)).toBe(0)
+    })
+
+    it("grows with the injected clock from when the ring was created", () => {
+        recordRate("age1", "hello\n", T0)
+        expect(ringAge("age1", T0)).toBe(0)
+        expect(ringAge("age1", T0 + 5000)).toBe(5000)
+        expect(ringAge("age1", T0 + STALL_MS)).toBe(STALL_MS)
+    })
+
+    it("is stamped once — a later chunk doesn't reset it", () => {
+        recordRate("age2", "hello\n", T0)
+        recordRate("age2", "more\n", T0 + 1000)
+        expect(ringAge("age2", T0 + 1000)).toBe(1000)
+    })
+})
+
+describe("stall condition (isFlat + ringAge, as wired in Mission Control)", () => {
+    const T0 = 1_700_000_000_000
+
+    it("a session emitting spinner frames for longer than STALL_MS is flat with a full-age ring", () => {
+        recordRate("stall1", "\r| Thinking...", T0)
+        const now = T0 + STALL_MS + 1000
+        expect(isFlat(getTrace("stall1", now))).toBe(true)
+        expect(ringAge("stall1", now)).toBeGreaterThanOrEqual(STALL_MS)
+    })
+
+    it("a session that just started is flat but young, and must NOT read as stalled", () => {
+        recordRate("stall2", "\r| Thinking...", T0)
+        expect(isFlat(getTrace("stall2", T0))).toBe(true)
+        expect(ringAge("stall2", T0)).toBeLessThan(STALL_MS)
     })
 })
 
@@ -289,6 +418,13 @@ describe("barsPath", () => {
         const d = barsPath([0])
         expect(d).toContain("Z")
         expect(d.length).toBeGreaterThan(0)
+    })
+
+    it("gives an empty bucket a bar top of height - 1, the baseline that makes silence read as a line", () => {
+        const height = 12
+        const d = barsPath([0], height)
+        const top = Number(d.split("L")[1].trim().split(" ")[1])
+        expect(top).toBe(height - 1)
     })
 
     it("makes a full sample taller than a quiet one", () => {

@@ -43,38 +43,84 @@ export function lastLines(tail: string, n: number): string {
 export const CARRY_MAX = 4000
 
 /**
- * Committed printable characters in a raw pty chunk — the trace's unit of work.
+ * How much a committed line actually changed from the line it replaced.
+ *
+ * A TUI repaint re-emits a line that is nearly identical to its predecessor —
+ * a spinner rotates one glyph, an elapsed timer moves a digit or two. Real
+ * output differs wholesale. Comparing position by position captures that
+ * without needing to know how the redraw was encoded, which matters because
+ * Claude Code repaints with CSI cursor moves and \r\n, not carriage returns.
+ *
+ * Below the floor the line is treated as a redraw and scores nothing. The floor
+ * is proportional so a long status bar with a ticking counter stays silent
+ * while a short genuine line still registers.
+ */
+export function lineNovelty(line: string, prev: string): number {
+    if (!line.trim()) return 0
+    let diff = Math.abs(line.length - prev.length)
+    const shared = Math.min(line.length, prev.length)
+    for (let i = 0; i < shared; i++) if (line[i] !== prev[i]) diff++
+    const floor = Math.max(3, Math.floor(line.length * 0.1))
+    if (diff <= floor) return 0
+    return line.replace(/\s/g, "").length
+}
+
+/** printableDelta's state, threaded by the caller between chunks of one stream. */
+export interface DeltaState {
+    /** Unfinished segment from the last chunk — a line routinely spans many chunks. */
+    carry: string
+    /** The last line committed, so the next one can be scored against it. */
+    prevLine: string
+}
+
+const EMPTY_STATE: DeltaState = { carry: "", prevLine: "" }
+
+/**
+ * Novel printable characters in a raw pty chunk — the trace's unit of work.
  *
  * Deliberately NOT cleanTail: that rewrites \r to \n, which is right for a
  * readable peek and wrong here, because every spinner frame would then look like
- * a completed line and a wedged agent would draw a healthy trace. Here only a
- * BARE \r discards the pending segment, the way a carriage return overwrites a
- * terminal line — \r\n is an ordinary terminator, which matters because ConPTY
- * emits it by default and treating it as a redraw would score real output as
- * silence.
+ * a completed line. A bare \r still overwrites the pending segment in place, the
+ * way a terminal cursor return does, and \r\n and \n still commit it — but a
+ * commit is no longer counted at face value. It is scored with lineNovelty
+ * against the previously committed line, which is what actually catches a
+ * redraw: Claude Code's Ink TUI repaints with CSI cursor moves terminated by
+ * ordinary \r\n, never a bare \r, so the redraw has to be caught on content, not
+ * on how the line was terminated.
  *
- * `carry` is the caller's unfinished segment from last time and comes back out
- * on every call: agents stream token by token, so a line routinely spans many
- * chunks and a stateless count would drop nearly all of it.
+ * `state` is the caller's carry and last committed line from the previous call
+ * and comes back out on every call: agents stream token by token, so a line
+ * routinely spans many chunks and a stateless count would drop nearly all of it.
  */
-export function printableDelta(chunk: string, carry = ""): { chars: number; carry: string } {
-    const s = carry + chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
+export function printableDelta(
+    chunk: string,
+    state: DeltaState = EMPTY_STATE
+): { chars: number; state: DeltaState } {
+    const s = state.carry + chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
     // A chunk may end mid-CRLF; hold the \r back so the next chunk can complete it.
     const heldCr = s.endsWith("\r")
     const body = heldCr ? s.slice(0, -1) : s
-    let committed = ""
+    let chars = 0
     let pending = ""
+    let prevLine = state.prevLine
+    const commit = (line: string): void => {
+        chars += lineNovelty(line, prevLine)
+        prevLine = line
+    }
     for (let i = 0; i < body.length; i++) {
         const ch = body[i]
         if (ch === "\n") {
-            committed += pending
+            commit(pending)
             pending = ""
         } else if (ch === "\r") {
             if (body[i + 1] === "\n") {
-                committed += pending
+                commit(pending)
                 pending = ""
                 i++
             } else {
+                // A bare \r overwrites the pending segment in place — it never
+                // reaches the screen, so it neither scores nor becomes the line
+                // the next commit is compared against.
                 pending = ""
             }
         } else {
@@ -82,7 +128,7 @@ export function printableDelta(chunk: string, carry = ""): { chars: number; carr
         }
     }
     if (pending.length > CARRY_MAX) pending = pending.slice(-CARRY_MAX)
-    return { chars: committed.replace(/\s/g, "").length, carry: pending + (heldCr ? "\r" : "") }
+    return { chars, state: { carry: pending + (heldCr ? "\r" : ""), prevLine } }
 }
 
 import type { AgentStatus, AnySession } from "./store"
@@ -106,8 +152,10 @@ interface Ring {
     buckets: number[]
     /** Start time of the newest bucket. */
     at: number
-    /** printableDelta's unfinished segment, carried between chunks. */
-    carry: string
+    /** printableDelta's carry and last committed line, threaded between chunks. */
+    state: DeltaState
+    /** When this ring was created (ms epoch) — how ringAge measures a full window. */
+    born: number
 }
 const rings = new Map<string, Ring>()
 
@@ -133,22 +181,35 @@ function scale(chars: number): number {
 }
 
 /**
- * Add a pty chunk's committed output to a session's current bucket. Called from
- * the same place as recordTail; a chunk that scores zero still keeps the ring
- * current, so a spinning agent flatlines rather than showing no trace at all.
+ * Add a pty chunk's novel output to a session's current bucket. Called from the
+ * same place as recordTail, on every pty data event — a chunk that scores zero
+ * still keeps the ring current, so a spinning agent flatlines rather than
+ * showing no trace at all. Never throws: this runs in the hot path of every
+ * agent's raw output, so a bad chunk must not take the pty listener down with it.
  */
 export function recordRate(id: string, chunk: string, now = Date.now()): void {
-    let r = rings.get(id)
-    if (!r) {
-        r = { buckets: new Array<number>(BUCKETS).fill(0), at: now, carry: "" }
-        rings.set(id, r)
+    try {
+        let r = rings.get(id)
+        if (!r) {
+            r = { buckets: new Array<number>(BUCKETS).fill(0), at: now, state: EMPTY_STATE, born: now }
+            rings.set(id, r)
+        }
+        roll(r, now)
+        // The state is per session: a line split across chunks is scored once,
+        // when it completes, against the line it actually replaced on screen.
+        const out = printableDelta(chunk, r.state)
+        r.state = out.state
+        r.buckets[BUCKETS - 1] += out.chars
+    } catch {
+        // Losing one chunk's contribution to the trace is harmless; losing the
+        // pty listener is not.
     }
-    roll(r, now)
-    // The carry is per session: a line split across chunks is counted once, when
-    // it completes, rather than lost.
-    const out = printableDelta(chunk, r.carry)
-    r.carry = out.carry
-    r.buckets[BUCKETS - 1] += out.chars
+}
+
+/** Milliseconds since a session's ring was created; 0 if it has none yet. */
+export function ringAge(id: string, now = Date.now()): number {
+    const r = rings.get(id)
+    return r ? now - r.born : 0
 }
 
 /** A session's trace, oldest first, each sample 0..1. Always BUCKETS long. */

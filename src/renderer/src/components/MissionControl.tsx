@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { getTail, getFullTail, getLastAt, relTime, sortForFollow, isStalled, getTrace, barsPath } from "../missionTail"
+import {
+    getTail,
+    getFullTail,
+    getLastAt,
+    relTime,
+    sortForFollow,
+    getTrace,
+    barsPath,
+    isFlat,
+    ringAge,
+    STALL_MS
+} from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
 import type { SystemInfo } from "../../../preload/index"
 
@@ -160,8 +171,17 @@ export function MissionControl(): JSX.Element {
                         {sessions.map((s) => {
                             const ago = relTime(Date.now(), getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
-                            const stalled = isStalled(s.status, getLastAt(s.termId), Date.now())
                             const trace = getTrace(s.termId)
+                            // The picture is the test: output arriving but none of
+                            // it novel means a wedged agent. isStalled cannot see
+                            // this — it needs 120s of silence while "working", and
+                            // agentIdleMs drops the status off "working" after 1s.
+                            // Requires a full window of history, or a session that
+                            // just started would read as stalled immediately.
+                            const stalled =
+                                s.status === "working" &&
+                                isFlat(trace) &&
+                                ringAge(s.termId) >= STALL_MS
                             return (
                                 <div
                                     key={s.termId}
