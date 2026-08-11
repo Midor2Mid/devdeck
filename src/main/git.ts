@@ -202,3 +202,60 @@ export function pullLatest(cwd: string): Promise<PullResult> {
         })
     })
 }
+
+/** Raw `git diff --shortstat <fromRef>..HEAD` for a worktree; "" on any failure. */
+export function shortstat(cwd: string, fromRef: string): Promise<string> {
+    return new Promise((resolve) => {
+        execFile("git", ["diff", "--shortstat", `${fromRef}..HEAD`], { cwd, ...OPTS }, (err, out) => {
+            resolve(err ? "" : out.trim())
+        })
+    })
+}
+
+/**
+ * Land a race entrant's work: take everything it committed in its worktree and
+ * apply it to the target tree as unstaged changes.
+ *
+ * Both halves run here rather than in the renderer so a large patch never crosses
+ * IPC. `--binary` so image and asset changes survive; `--3way` so a patch that
+ * does not apply cleanly can still be reconciled against blobs both sides share.
+ *
+ * The caller is responsible for refusing to land onto a dirty tree - see the
+ * store. `git apply` leaves the target untouched when it fails, so a rejected
+ * patch is not a half-applied mess.
+ */
+export function landFrom(
+    worktree: string,
+    baseHead: string,
+    target: string
+): Promise<{ ok: boolean; error?: string }> {
+    return new Promise((resolve) => {
+        execFile(
+            "git",
+            ["diff", "--binary", `${baseHead}..HEAD`],
+            { cwd: worktree, maxBuffer: 64 * 1024 * 1024, ...OPTS },
+            (err, patch) => {
+                if (err) {
+                    resolve({ ok: false, error: "could not read the winner's diff" })
+                    return
+                }
+                if (!patch.trim()) {
+                    resolve({ ok: false, error: "the winner committed nothing to land" })
+                    return
+                }
+                const child = execFile(
+                    "git",
+                    ["apply", "--3way", "--whitespace=nowarn"],
+                    { cwd: target, ...OPTS },
+                    (e2, _o, stderr) =>
+                        resolve(
+                            e2
+                                ? { ok: false, error: (stderr || "").trim().split("\n")[0] || "git apply failed" }
+                                : { ok: true }
+                        )
+                )
+                child.stdin?.end(patch)
+            }
+        )
+    })
+}

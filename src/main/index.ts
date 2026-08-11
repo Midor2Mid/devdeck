@@ -10,7 +10,16 @@ import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerDeps } from "./server"
-import { gitStatus, getIdentity, setIdentity, cacheCredential, verifyGitHubToken, pullLatest } from "./git"
+import {
+    gitStatus,
+    getIdentity,
+    setIdentity,
+    cacheCredential,
+    verifyGitHubToken,
+    pullLatest,
+    shortstat,
+    landFrom
+} from "./git"
 import { readMcp, writeMcp, registerDevdeck, unregisterDevdeck, type McpServer } from "./mcp"
 import * as mcpserver from "./mcpserver"
 import * as mcptools from "./mcptools"
@@ -411,6 +420,21 @@ function registerIpc(): void {
         guardRepo(cwd)
         return pullLatest(cwd)
     })
+
+    ipcMain.handle("git:shortstat", (_e, { cwd, fromRef }: { cwd: string; fromRef: string }) => {
+        guardRepo(cwd)
+        return shortstat(cwd, fromRef)
+    })
+    ipcMain.handle(
+        "git:landFrom",
+        (_e, { worktree, baseHead, target }: { worktree: string; baseHead: string; target: string }) => {
+            // BOTH paths are guarded. Checking only one would leave the other an
+            // unchecked path arriving from the renderer.
+            guardRepo(worktree)
+            guardRepo(target)
+            return landFrom(worktree, baseHead, target)
+        }
+    )
 
     // --- Git worktrees ---
     ipcMain.handle("git:worktrees", (_e, repoPath: string) => {
