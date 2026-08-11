@@ -178,6 +178,30 @@ Ran a parallel audit (6 subsystem reviewers + adversarial verify). Fixed in batc
 
 Remaining (batch 2, lower severity): token-in-URL (WS limitation), fs binary read/write + path confinement, DPAPI/b64 password fallback when safeStorage unavailable, FitAddon zero-dim guard, splitActive termInit for shell. See task output wr8a4sogg for full detail.
 
+### Mission trace: two defects found while stripping the novelty heuristic (2026-08-11)
+
+Three successive designs tried to make the Mission Control trace distinguish real
+agent work from a TUI repainting a spinner — the last one saturated on
+multi-row repaints while scoring genuinely new but near-identical lines (two
+vitest result lines differing by a filename) as zero. That question needs the
+rendered terminal buffer, not the pty byte stream, so the trace was cut back to
+an honest terminal-activity measure with no claim about usefulness. Two
+pre-existing defects surfaced while doing that cut:
+
+**`isStalled` can never fire.** It requires `status === "working"` **and** no
+output for 120s, but `onPtyData` arms an idle timer that flips `working` off
+after `agentIdleMs` — default **1000ms** (`settings.ts:340`, UI range
+300–5000ms). The two conditions are mutually exclusive, so the
+`.mission-tile.stalled` stripe and its tooltip have never rendered in
+production. Detecting a wedged agent needs a different signal, most likely
+diffing the rendered xterm buffer rather than the pty byte stream.
+
+**`.claude/skills/run-app/cdp.js` spawns Electron with `env: process.env`**, so
+an agent driving DevDeck over CDP leaks `CLAUDE_CODE_CHILD_SESSION` /
+`CLAUDECODE` into every pty DevDeck opens, and every agent session started
+under the harness is a nested one with transcript saving off. This silently
+invalidated one investigation run before it was spotted.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).

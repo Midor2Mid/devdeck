@@ -202,17 +202,12 @@ component changes:
   shadow.
 - **section-label:** muted, uppercase, letter-spaced.
 - **terminal:** `surfaceDeep` ground, mono type, generous line-height.
-- **trace:** a two-minute sparkline of *novelty*, not raw output, on an agent
-  tile — one SVG path in `currentColor` at `--muted`. Never accent-coloured — it
-  is a reading, not an action. Each committed line is scored against the line
-  it replaced, not counted at face value, so a TUI repaint (a spinner glyph, a
-  ticking counter) scores nothing while genuinely new output still registers;
-  this is what a raw byte-count would get backwards, since a wedged agent's
-  repaints would otherwise read as healthy. Empty buckets draw a baseline, so
-  silence reads as a flat line; the stall marker fires on a *working* tile
-  whose trace has been flat for a full window, which is what makes a wedged
-  agent (still emitting bytes, none of them novel) distinguishable from one
-  that simply finished and went quiet.
+- **trace:** a two-minute terminal-activity sparkline on an agent tile, drawn as
+  one SVG path in `currentColor` at `--muted`. Never accent-coloured — it is a
+  reading, not an action. Empty buckets draw a baseline, so genuine silence
+  reads as a flat line. It measures output volume, not usefulness: an agent
+  repainting a spinner registers as active, so read it for pace, not for
+  progress.
 
 ### Active-state grammar
 

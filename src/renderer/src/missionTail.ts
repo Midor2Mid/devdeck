@@ -42,55 +42,33 @@ export function lastLines(tail: string, n: number): string {
 /** Cap on a carried segment, so a stream with no newline can't grow it unbounded. */
 export const CARRY_MAX = 4000
 
-/**
- * How much a committed line actually changed from the line it replaced.
- *
- * A TUI repaint re-emits a line that is nearly identical to its predecessor —
- * a spinner rotates one glyph, an elapsed timer moves a digit or two. Real
- * output differs wholesale. Comparing position by position captures that
- * without needing to know how the redraw was encoded, which matters because
- * Claude Code repaints with CSI cursor moves and \r\n, not carriage returns.
- *
- * Below the floor the line is treated as a redraw and scores nothing. The floor
- * is proportional so a long status bar with a ticking counter stays silent
- * while a short genuine line still registers.
- */
-export function lineNovelty(line: string, prev: string): number {
-    if (!line.trim()) return 0
-    let diff = Math.abs(line.length - prev.length)
-    const shared = Math.min(line.length, prev.length)
-    for (let i = 0; i < shared; i++) if (line[i] !== prev[i]) diff++
-    const floor = Math.max(3, Math.floor(line.length * 0.1))
-    if (diff <= floor) return 0
-    return line.replace(/\s/g, "").length
-}
-
 /** printableDelta's state, threaded by the caller between chunks of one stream. */
 export interface DeltaState {
     /** Unfinished segment from the last chunk — a line routinely spans many chunks. */
     carry: string
-    /** The last line committed, so the next one can be scored against it. */
-    prevLine: string
 }
 
-const EMPTY_STATE: DeltaState = { carry: "", prevLine: "" }
+const EMPTY_STATE: DeltaState = { carry: "" }
 
 /**
- * Novel printable characters in a raw pty chunk — the trace's unit of work.
+ * Printable characters committed in a raw pty chunk — the trace's unit of
+ * activity. Every completed line counts at its non-whitespace length, full
+ * stop: this is a measure of output volume, not of whether the line is new.
+ * A TUI that repaints a spinner or a ticking counter scores the same as one
+ * writing genuinely new lines — distinguishing those needs the rendered
+ * terminal buffer, not the pty byte stream (three attempts at deriving it from
+ * the stream all failed review; see NOTES.md).
  *
  * Deliberately NOT cleanTail: that rewrites \r to \n, which is right for a
- * readable peek and wrong here, because every spinner frame would then look like
- * a completed line. A bare \r still overwrites the pending segment in place, the
- * way a terminal cursor return does, and \r\n and \n still commit it — but a
- * commit is no longer counted at face value. It is scored with lineNovelty
- * against the previously committed line, which is what actually catches a
- * redraw: Claude Code's Ink TUI repaints with CSI cursor moves terminated by
- * ordinary \r\n, never a bare \r, so the redraw has to be caught on content, not
- * on how the line was terminated.
+ * readable peek and wrong here, because it would make a bare-\r overwrite look
+ * like a completed line. A bare \r overwrites the pending segment in place, the
+ * way a terminal cursor return does, and genuinely never reaches the screen —
+ * not counting it is correct terminal semantics, not a claim about spinners.
+ * \r\n and \n commit the pending segment as a line.
  *
- * `state` is the caller's carry and last committed line from the previous call
- * and comes back out on every call: agents stream token by token, so a line
- * routinely spans many chunks and a stateless count would drop nearly all of it.
+ * `state` is the caller's carry from the previous call and comes back out on
+ * every call: agents stream token by token, so a line routinely spans many
+ * chunks and a stateless count would drop nearly all of it.
  */
 export function printableDelta(
     chunk: string,
@@ -102,10 +80,8 @@ export function printableDelta(
     const body = heldCr ? s.slice(0, -1) : s
     let chars = 0
     let pending = ""
-    let prevLine = state.prevLine
     const commit = (line: string): void => {
-        chars += lineNovelty(line, prevLine)
-        prevLine = line
+        chars += line.replace(/\s/g, "").length
     }
     for (let i = 0; i < body.length; i++) {
         const ch = body[i]
@@ -119,8 +95,7 @@ export function printableDelta(
                 i++
             } else {
                 // A bare \r overwrites the pending segment in place — it never
-                // reaches the screen, so it neither scores nor becomes the line
-                // the next commit is compared against.
+                // reaches the screen, so it is discarded here too.
                 pending = ""
             }
         } else {
@@ -128,7 +103,7 @@ export function printableDelta(
         }
     }
     if (pending.length > CARRY_MAX) pending = pending.slice(-CARRY_MAX)
-    return { chars, state: { carry: pending + (heldCr ? "\r" : ""), prevLine } }
+    return { chars, state: { carry: pending + (heldCr ? "\r" : "") } }
 }
 
 import type { AgentStatus, AnySession } from "./store"
@@ -139,9 +114,10 @@ const lastAt = new Map<string, number>()
 const BUCKET_MS = 2000
 const BUCKETS = 60
 /**
- * The trace window and the stall threshold are the same number by construction.
- * The design claims a flat trace on a working session IS a stall; deriving one
- * from the other is what stops that claim quietly becoming false in a later edit.
+ * The trace window's width in ms, and isStalled's default silence threshold —
+ * historically the same number, but the two no longer read each other:
+ * isStalled looks only at wall-clock silence on a "working" session, the trace
+ * only at recent output volume.
  */
 export const STALL_MS = BUCKET_MS * BUCKETS
 /** Characters in one bucket that count as a full-height bar. */
@@ -152,10 +128,8 @@ interface Ring {
     buckets: number[]
     /** Start time of the newest bucket. */
     at: number
-    /** printableDelta's carry and last committed line, threaded between chunks. */
+    /** printableDelta's carry, threaded between chunks of this session. */
     state: DeltaState
-    /** When this ring was created (ms epoch) — how ringAge measures a full window. */
-    born: number
 }
 const rings = new Map<string, Ring>()
 
@@ -181,22 +155,23 @@ function scale(chars: number): number {
 }
 
 /**
- * Add a pty chunk's novel output to a session's current bucket. Called from the
- * same place as recordTail, on every pty data event — a chunk that scores zero
- * still keeps the ring current, so a spinning agent flatlines rather than
- * showing no trace at all. Never throws: this runs in the hot path of every
- * agent's raw output, so a bad chunk must not take the pty listener down with it.
+ * Add a pty chunk's output volume to a session's current bucket. Called from
+ * the same place as recordTail, on every pty data event — a chunk that scores
+ * zero still keeps the ring current, so the trace reflects recent silence
+ * accurately rather than going stale. Never throws: this runs in the hot path
+ * of every agent's raw output, so a bad chunk must not take the pty listener
+ * down with it.
  */
 export function recordRate(id: string, chunk: string, now = Date.now()): void {
     try {
         let r = rings.get(id)
         if (!r) {
-            r = { buckets: new Array<number>(BUCKETS).fill(0), at: now, state: EMPTY_STATE, born: now }
+            r = { buckets: new Array<number>(BUCKETS).fill(0), at: now, state: EMPTY_STATE }
             rings.set(id, r)
         }
         roll(r, now)
-        // The state is per session: a line split across chunks is scored once,
-        // when it completes, against the line it actually replaced on screen.
+        // The state is per session: a line split across chunks is counted once,
+        // when it completes.
         const out = printableDelta(chunk, r.state)
         r.state = out.state
         r.buckets[BUCKETS - 1] += out.chars
@@ -206,27 +181,12 @@ export function recordRate(id: string, chunk: string, now = Date.now()): void {
     }
 }
 
-/** Milliseconds since a session's ring was created; 0 if it has none yet. */
-export function ringAge(id: string, now = Date.now()): number {
-    const r = rings.get(id)
-    return r ? now - r.born : 0
-}
-
 /** A session's trace, oldest first, each sample 0..1. Always BUCKETS long. */
 export function getTrace(id: string, now = Date.now()): number[] {
     const r = rings.get(id)
     if (!r) return new Array<number>(BUCKETS).fill(0)
     roll(r, now)
     return r.buckets.map(scale)
-}
-
-/**
- * Every bucket empty. Read together with the session's status: flat + working is
- * a stall, flat + idle is just a finished agent being quiet. Exported because the
- * test suite asserts it agrees with isStalled — that agreement is the design.
- */
-export function isFlat(trace: number[]): boolean {
-    return trace.every((v) => v === 0)
 }
 
 /**

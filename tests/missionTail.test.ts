@@ -6,14 +6,11 @@ import {
     sortForFollow,
     lastLines,
     isStalled,
-    lineNovelty,
     printableDelta,
     CARRY_MAX,
     recordRate,
     getTrace,
-    isFlat,
     barsPath,
-    ringAge,
     STALL_MS
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
@@ -119,39 +116,6 @@ describe("peekLine", () => {
     })
 })
 
-describe("lineNovelty", () => {
-    it("scores identical lines as zero", () => {
-        expect(lineNovelty("hello world", "hello world")).toBe(0)
-    })
-
-    it("scores a one-glyph spinner rotation on a ~40-char line as zero", () => {
-        const prev = "⠋ Thinking… (12s) — press esc to interrupt"
-        const next = "⠙ Thinking… (12s) — press esc to interrupt"
-        expect(prev.length).toBeGreaterThan(30)
-        expect(lineNovelty(next, prev)).toBe(0)
-    })
-
-    it("scores a ticking elapsed-time counter as zero", () => {
-        const prev = "⠋ Thinking… (12s) — press esc to interrupt"
-        const next = "⠋ Thinking… (13s) — press esc to interrupt"
-        expect(lineNovelty(next, prev)).toBe(0)
-    })
-
-    it("scores a wholly different line as its non-whitespace length", () => {
-        const line = "Wrote 3 files, ran the tests"
-        expect(lineNovelty(line, "")).toBe(line.replace(/\s/g, "").length)
-    })
-
-    it("scores a blank line as zero", () => {
-        expect(lineNovelty("   ", "hello")).toBe(0)
-    })
-
-    it("scores a short real line that clears the floor", () => {
-        // Length 10 → floor 3; a wholesale change of a short line still registers.
-        expect(lineNovelty("helloworld", "")).toBe(10)
-    })
-})
-
 describe("printableDelta", () => {
     it("counts non-whitespace characters in completed lines", () => {
         expect(printableDelta("hello world\n").chars).toBe(10)
@@ -165,8 +129,10 @@ describe("printableDelta", () => {
         expect(two.chars).toBe("firstline".length + "secondone".length)
     })
 
-    it("scores a bare-carriage-return spinner frame as zero", () => {
-        // A spinner rewrites one line in place and never commits it.
+    it("never counts a segment a bare carriage return overwrote before any newline", () => {
+        // A bare \r overwrites the pending segment in place — the same as a
+        // terminal cursor return — and it never reaches the screen, so it is
+        // correct terminal semantics to not count it, not a claim about spinners.
         expect(printableDelta("\r| Thinking...").chars).toBe(0)
         expect(printableDelta("\r/ Thinking...\r- Thinking...").chars).toBe(0)
     })
@@ -242,27 +208,19 @@ describe("printableDelta", () => {
         expect(total).toBe(expected)
     })
 
-    it("scores ten CSI-positioned, \\r\\n-terminated spinner frames as zero in total", () => {
-        // The regression test for the bug that motivated this rewrite: Claude
-        // Code's Ink TUI repaints with CSI cursor moves terminated by ordinary
-        // \r\n, never a bare \r. The old bare-\r redraw rule never fired against
-        // bytes shaped like this, so every repaint committed its whole frame and
-        // a wedged agent would have drawn a saturated trace instead of a flat one.
-        const GLYPHS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        const frame = (i: number): string =>
-            `[2K[1G[36m${GLYPHS[i % GLYPHS.length]}[0m Thinking… (${12 + i}s)\r\n`
-        // Seed a baseline as if the spinner were already mid-run — the very
-        // first frame a session ever draws is new content by construction (there
-        // is nothing on screen to compare it against); the bug this guards
-        // against is REPEATED redraws scoring nonzero, not the first paint.
-        let state = printableDelta(frame(0)).state
-        let total = 0
-        for (let i = 1; i <= 10; i++) {
-            const out = printableDelta(frame(i), state)
-            state = out.state
-            total += out.chars
-        }
-        expect(total).toBe(0)
+    it("known limitation: a repeated CSI-positioned repaint terminated the ordinary way scores on every frame", () => {
+        // Not a bug -- documented so nobody re-derives the false claim from
+        // the code. Telling a TUI repaint (Claude Code's Ink UI moves the
+        // cursor with CSI sequences, never terminated by a bare carriage
+        // return) apart from genuinely new output needs the rendered
+        // terminal buffer, not this pty byte stream -- three attempts at
+        // deriving it from the stream alone all failed review (NOTES.md).
+        // The same spinner frame, repainted identically, scores every time.
+        const frame = `[2K[1G[36m⠋[0m Thinking… (12s)\r\n`
+        const first = printableDelta(frame)
+        const second = printableDelta(frame, first.state)
+        expect(first.chars).toBeGreaterThan(0)
+        expect(second.chars).toBe(first.chars)
     })
 })
 
@@ -297,8 +255,8 @@ describe("trace ring", () => {
     })
 
     it("accumulates several chunks inside one bucket", () => {
-        // Short lines like "aaa"/"bbb" wouldn't clear lineNovelty's floor against
-        // each other, so use lines long and distinct enough to both register.
+        // r4 commits two lines into the same bucket, r5 only one, so r4's total
+        // is strictly larger.
         recordRate("r4", "alpha status line\n", T0)
         recordRate("r4", "beta status line\n", T0 + 500)
         const one = getTrace("r4", T0)[59]
@@ -317,14 +275,14 @@ describe("trace ring", () => {
         expect(getTrace("r6b", T0)[59]).toBeGreaterThan(0.4)
     })
 
-    it("gives a spinner-only session a flat trace", () => {
+    it("leaves the trace flat when a chunk never completes a line", () => {
         recordRate("r8", "\r| Thinking...", T0)
-        expect(isFlat(getTrace("r8", T0))).toBe(true)
+        expect(getTrace("r8", T0).every((v) => v === 0)).toBe(true)
     })
 
     it("counts a line streamed across chunks once, when it completes", () => {
         recordRate("r9", "Now let me ", T0)
-        expect(isFlat(getTrace("r9", T0))).toBe(true)
+        expect(getTrace("r9", T0).every((v) => v === 0)).toBe(true)
         recordRate("r9", "check the tests\n", T0 + 100)
         expect(getTrace("r9", T0 + 100)[59]).toBeGreaterThan(0)
     })
@@ -339,72 +297,6 @@ describe("trace ring", () => {
 
     it("STALL_MS is the width of the whole window", () => {
         expect(STALL_MS).toBe(120000)
-    })
-})
-
-describe("ringAge", () => {
-    const T0 = 1_700_000_000_000
-
-    it("is zero for an unknown session", () => {
-        expect(ringAge("never-seen-ring", T0)).toBe(0)
-    })
-
-    it("grows with the injected clock from when the ring was created", () => {
-        recordRate("age1", "hello\n", T0)
-        expect(ringAge("age1", T0)).toBe(0)
-        expect(ringAge("age1", T0 + 5000)).toBe(5000)
-        expect(ringAge("age1", T0 + STALL_MS)).toBe(STALL_MS)
-    })
-
-    it("is stamped once — a later chunk doesn't reset it", () => {
-        recordRate("age2", "hello\n", T0)
-        recordRate("age2", "more\n", T0 + 1000)
-        expect(ringAge("age2", T0 + 1000)).toBe(1000)
-    })
-})
-
-describe("stall condition (isFlat + ringAge, as wired in Mission Control)", () => {
-    const T0 = 1_700_000_000_000
-
-    it("a session emitting spinner frames for longer than STALL_MS is flat with a full-age ring", () => {
-        recordRate("stall1", "\r| Thinking...", T0)
-        const now = T0 + STALL_MS + 1000
-        expect(isFlat(getTrace("stall1", now))).toBe(true)
-        expect(ringAge("stall1", now)).toBeGreaterThanOrEqual(STALL_MS)
-    })
-
-    it("a session that just started is flat but young, and must NOT read as stalled", () => {
-        recordRate("stall2", "\r| Thinking...", T0)
-        expect(isFlat(getTrace("stall2", T0))).toBe(true)
-        expect(ringAge("stall2", T0)).toBeLessThan(STALL_MS)
-    })
-})
-
-describe("flatline agrees with isStalled", () => {
-    const T0 = 1_700_000_000_000
-
-    it("a working session that has gone quiet past the window is both flat and stalled", () => {
-        recordRate("s1", "hello\n", T0)
-        const now = T0 + STALL_MS + 1000
-        expect(isFlat(getTrace("s1", now))).toBe(true)
-        expect(isStalled("working", T0, now)).toBe(true)
-    })
-
-    it("a working session inside the window is neither", () => {
-        recordRate("s2", "hello\n", T0)
-        const now = T0 + 30000
-        expect(isFlat(getTrace("s2", now))).toBe(false)
-        expect(isStalled("working", T0, now)).toBe(false)
-    })
-
-    it("a flat trace on a non-working session is NOT stalled", () => {
-        // The false alarm this design must never produce: a finished agent is
-        // quiet on purpose.
-        recordRate("s3", "hello\n", T0)
-        const now = T0 + STALL_MS + 1000
-        expect(isFlat(getTrace("s3", now))).toBe(true)
-        expect(isStalled("idle", T0, now)).toBe(false)
-        expect(isStalled("waiting", T0, now)).toBe(false)
     })
 })
 
