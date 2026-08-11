@@ -968,3 +968,120 @@ untouched — but Mission Control stops depending on it.
 
 Replace the trace bullet so it describes novelty rather than raw output, and so
 the stall sentence matches the code that now implements it.
+
+### Task 8: strip the claims the code cannot keep
+
+Task 7's novelty measure failed review in both directions: multi-row TUI repaints
+scored full (saturating on the one redraw shape ever captured from real Claude
+Code), while genuinely new but near-identical lines scored zero — two vitest
+result lines differing by a filename scored **0**. Three measurement designs have
+now failed. Deriving "real work" from a pty byte stream means reverse-engineering
+every TUI's redraw strategy, and the correct layer for that question is the
+rendered terminal buffer, not the stream.
+
+So the trace stops claiming it. It becomes what it can honestly be: **a trace of
+terminal activity**. It shows pace, bursts and genuine silence, and it says
+nothing about whether an agent is doing useful work. That is still worth having —
+it is the thing the tiles could not show before — and it is true.
+
+**Files:**
+- Modify: `src/renderer/src/missionTail.ts`
+- Modify: `tests/missionTail.test.ts`
+- Modify: `src/renderer/src/components/MissionControl.tsx`
+- Modify: `DESIGN.md`
+- Modify: `NOTES.md`
+
+**Interfaces after this task:**
+
+```ts
+export interface DeltaState { carry: string }
+export function printableDelta(chunk: string, state?: DeltaState): { chars: number; state: DeltaState }
+export function recordRate(id: string, chunk: string, now?: number): void
+export function getTrace(id: string, now?: number): number[]
+export function barsPath(trace: number[], height?: number): string
+```
+
+- [ ] **Step 1: Remove the heuristic**
+
+Delete `lineNovelty` entirely, and `prevLine` from `DeltaState` and `Ring`.
+`printableDelta` scores every committed line's non-whitespace length, with no
+comparison against anything.
+
+**Keep** the carry across chunks — a line split across pty reads must still be
+counted once, and that has never been in question. **Keep** the bare-`\r`
+discard: text overwritten before a newline genuinely never reached the screen, so
+not counting it is correct terminal semantics rather than a claim about spinners.
+Its docstring must stop describing it as spinner detection.
+
+Delete `isFlat` and `ringAge`, and `born` from `Ring` — nothing consumes them
+once the stall marker is reverted, and `isFlat`'s docstring asserts a design
+claim that no longer exists.
+
+- [ ] **Step 2: Revert the stall marker**
+
+In `MissionControl.tsx`, restore the pre-branch condition:
+
+```tsx
+                            const stalled = isStalled(s.status, getLastAt(s.termId), Date.now())
+```
+
+This leaves stall behaviour exactly as this branch found it. `isStalled` is dead
+in production — see Step 5 — but that is a pre-existing defect, and fixing it is
+not this branch's job. The branch's blast radius returns to "adds a trace".
+
+- [ ] **Step 3: Fix the tests**
+
+- Delete the `lineNovelty` describe block and the ten-frame spinner test: both
+  assert a property the code no longer claims. Do not weaken them into passing.
+- Delete the `ringAge` and stall-condition tests for the same reason.
+- Restore `printableDelta`'s tests to the activity model, keeping every case that
+  is still true: CRLF as terminator, cross-chunk carry, the CRLF split across
+  chunks, ANSI-only scoring zero, the carry cap, whitespace ignored.
+- **Add one test that documents the limitation honestly**, so nobody re-derives
+  the false claim from the code: a repeated CSI-positioned, `\r\n`-terminated
+  frame **does** score on every repaint, and the test's name says that is known
+  and intended.
+- **Keep** Task 7's two genuine improvements: the mid-range log-scale assertion
+  (64 chars must scale above 0.4) and the real `barsPath` baseline assertion
+  (an empty bucket's bar top is `height - 1`).
+
+- [ ] **Step 4: Rewrite the DESIGN.md trace bullet**
+
+It must describe only what the code does. No sentence about spinners, redraws,
+novelty, or stalls. Something in the shape of:
+
+```markdown
+- **trace:** a two-minute terminal-activity sparkline on an agent tile, drawn as
+  one SVG path in `currentColor` at `--muted`. Never accent-coloured — it is a
+  reading, not an action. Empty buckets draw a baseline, so genuine silence reads
+  as a flat line. It measures output volume, not usefulness: an agent repainting
+  a spinner registers as active, so read it for pace, not for progress.
+```
+
+- [ ] **Step 5: Record the two defects this work uncovered**
+
+Append to `NOTES.md`, under a dated heading, in prose:
+
+1. **`isStalled` can never fire.** It requires `status === "working"` **and** no
+   output for 120s, but `onPtyData` arms an idle timer that flips `working` off
+   after `agentIdleMs` — default **1000ms** (`settings.ts:340`, UI range
+   300–5000). The two conditions are mutually exclusive, so the
+   `.mission-tile.stalled` stripe and its tooltip have never rendered. Detecting
+   a wedged agent needs a different signal, most likely diffing the rendered
+   xterm buffer rather than the pty byte stream.
+2. **`.claude/skills/run-app/cdp.js` spawns Electron with `env: process.env`**,
+   so an agent driving DevDeck leaks `CLAUDE_CODE_CHILD_SESSION` / `CLAUDECODE`
+   into every pty DevDeck opens, and every agent session started under the
+   harness is a nested one with transcript saving off. This silently invalidated
+   one investigation run before it was spotted.
+
+- [ ] **Step 6: Verify, then commit**
+
+`npm run typecheck` at zero and `npx vitest run` green. Then `npx electron-vite
+build` and one `run-app` pass confirming the trace still renders and moves —
+this task removes code paths the tile reads, so a render error is the risk.
+
+```bash
+git add src/renderer/src/missionTail.ts tests/missionTail.test.ts src/renderer/src/components/MissionControl.tsx DESIGN.md NOTES.md
+git commit -m "refactor(mission): the trace measures activity, not usefulness"
+```
