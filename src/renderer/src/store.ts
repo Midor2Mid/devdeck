@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Project, WorkItem } from "../../preload/index"
+import type { Project, WorkItem, CheckResult } from "../../preload/index"
 import { useSettings } from "./settings"
 import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
 import {
@@ -29,6 +29,8 @@ import {
     parseShortstat,
     entrantBranch,
     raceSettled,
+    isTerminal,
+    samePath,
     type Entrant,
     type Race
 } from "./race"
@@ -338,6 +340,11 @@ const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
 // One poll interval per in-flight race, keyed by card id. Held here rather than
 // on the store: a timer handle in state would trigger a render on every tick.
 const racePolls = new Map<string, ReturnType<typeof setInterval>>()
+// Card ids with a startRace start-loop in flight but not yet written to the
+// store — races[cardId] alone can't guard a double-start, since the race
+// object isn't stored until ~3s x N (the sequential dispatch loop) after the
+// user confirms.
+const startingRaces = new Set<string>()
 // When each agent entered a wants-you state (waiting/attention), for "jump to
 // the oldest one that wants you".
 const pendingSince = new Map<string, number>()
@@ -646,34 +653,58 @@ export const useStore = create<AppState>((set, get) => {
         // ONE call for the whole race: parseWorktreeList already returns every
         // worktree with its head, so polling cost does not grow with entrant count.
         const wts = await window.api.git.worktrees(r.projectPath).catch(() => [])
-        const headOf = new Map(wts.map((w) => [w.path, w.head]))
 
         for (const e of r.entrants) {
-            if (e.status !== "working") continue
-            const head = headOf.get(e.worktree)
-            if (head && head !== e.baseHead) {
-                setEntrant(cardId, e.agentId, { status: "gating", head })
-                // The ENTRANT'S worktree, never r.projectPath. Running the gate at
-                // the project root verifies the user's tree instead of this entrant's
-                // and scores every entrant identically — the single most damaging
-                // thing to get wrong here.
-                const res = await window.api.checks.run(e.worktree, r.gateCommand)
-                setEntrant(cardId, e.agentId, {
-                    status: res.exitCode === 0 ? "passed" : "failed",
-                    gateExit: res.exitCode,
-                    gateMs: res.ms,
-                    gateOutput: (res.output || "").slice(0, 400)
-                })
-                const [usage, stat] = await Promise.all([
-                    window.api.usage.window(e.worktree, r.startedAt, Date.now()),
-                    window.api.git.shortstat(e.worktree, e.baseHead)
-                ])
-                setEntrant(cardId, e.agentId, {
-                    cost: usage.cost,
-                    costTokens: usage.tokens,
-                    ...parseShortstat(stat)
-                })
-            } else if (Date.now() - r.startedAt > RACE_TIMEOUT_MS) {
+            if (isTerminal(e.status)) continue
+            if (e.status === "working") {
+                // samePath, not ===: worktreeAdd's path.join result (backslashes on
+                // Windows) and git worktree list's own output (forward slashes)
+                // otherwise never compare equal, and no commit is ever detected.
+                const head = wts.find((w) => samePath(w.path, e.worktree))?.head
+                if (head && head !== e.baseHead) {
+                    // The loop's snapshot may be many ticks old — checks.run can
+                    // block for 120s against a 5s poll. Re-read before spending
+                    // anything, so a tick that's behind can't re-gate an entrant a
+                    // newer tick already resolved.
+                    const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
+                    if (!live || live.status !== "working") continue
+                    setEntrant(cardId, e.agentId, { status: "gating", head })
+                    // The ENTRANT'S worktree, never r.projectPath. Running the gate
+                    // at the project root verifies the user's tree instead of this
+                    // entrant's and scores every entrant identically — the single
+                    // most damaging thing to get wrong here.
+                    const res = await window.api.checks
+                        .run(e.worktree, r.gateCommand)
+                        .catch(
+                            (err): CheckResult => ({
+                                exitCode: -1,
+                                output: err instanceof Error ? err.message : String(err),
+                                timedOut: false,
+                                ms: 0
+                            })
+                        )
+                    setEntrant(cardId, e.agentId, {
+                        status: res.exitCode === 0 ? "passed" : "failed",
+                        gateExit: res.exitCode,
+                        gateMs: res.ms,
+                        gateOutput: (res.output || "").slice(0, 400)
+                    })
+                    const [usage, stat] = await Promise.all([
+                        window.api.usage.window(e.worktree, r.startedAt, Date.now()).catch(() => null),
+                        window.api.git.shortstat(e.worktree, e.baseHead).catch(() => "")
+                    ])
+                    setEntrant(cardId, e.agentId, {
+                        cost: usage?.cost,
+                        costTokens: usage?.tokens,
+                        ...parseShortstat(stat)
+                    })
+                    continue
+                }
+            }
+            // Applies to any non-terminal status still here — not just "working":
+            // an IPC rejection could otherwise strand an entrant in "gating"
+            // forever, and the timeout is the only thing that would ever move it.
+            if (Date.now() - r.startedAt > RACE_TIMEOUT_MS) {
                 setEntrant(cardId, e.agentId, { status: "nocommit" })
             }
         }
@@ -1025,12 +1056,20 @@ export const useStore = create<AppState>((set, get) => {
         closeRace: () => set({ raceCardId: null }),
 
         startRace: async (cardId, agentIds, gateCommand) => {
+            // races[cardId] alone can't guard a double-start: the race object isn't
+            // written until ~3s x N (the sequential dispatch loop) after the user
+            // confirms, so a second click in that window would see no race yet and
+            // overwrite the first one's tracking once both finish.
+            if (get().races[cardId] || startingRaces.has(cardId)) return
             const task = get().boardTasks.find((t) => t.id === cardId)
             if (!task) return
             const proj = get().projects.find((p) => p.id === task.projectId)
             if (!proj) return
 
-            const names = agentIds.map((id) => useSettings.getState().agentById(id)?.name ?? id)
+            // Dedupe: the same agent twice would double the confirm's spend count
+            // and race an entrant against itself in a shared branch/worktree.
+            const ids = Array.from(new Set(agentIds))
+            const names = ids.map((id) => useSettings.getState().agentById(id)?.name ?? id)
             // A race spends money once per entrant — several times what a normal
             // dispatch costs — so name every entrant and the gate before an
             // accidental click pays for all of them.
@@ -1039,80 +1078,119 @@ export const useStore = create<AppState>((set, get) => {
                 message:
                     `Race ${names.join(", ")} on "${task.title}" in ${proj.name}, each in its ` +
                     `own worktree, then gate each with:\n\n${gateCommand}\n\n` +
-                    `This spends money ${agentIds.length} times — once per entrant.`,
+                    `This spends money ${ids.length} times — once per entrant.`,
                 confirmLabel: "Start race",
                 danger: true
             })
             if (!ok) return
 
-            // newTab spawns into the active project. Entrants are started
-            // sequentially (never Promise.all) for exactly that reason: the active
-            // project must stay this task's project for the whole loop.
-            await get().setActiveProject(proj.id)
+            startingRaces.add(cardId)
+            try {
+                // newTab spawns into the active project. Entrants are started
+                // sequentially (never Promise.all) for exactly that reason: the
+                // active project must stay this task's project for the whole loop.
+                await get().setActiveProject(proj.id)
 
-            const startedAt = Date.now()
-            const entrants: Entrant[] = []
+                const startedAt = Date.now()
+                const entrants: Entrant[] = []
 
-            for (const agentId of agentIds) {
-                const agentName = useSettings.getState().agentById(agentId)?.name ?? agentId
-                const branch = entrantBranch(task.title, agentName, agentId)
-                const res = await window.api.git.worktreeAdd(proj.path, branch)
-                if (!res.ok || !res.path || !res.branch) {
-                    entrants.push({
-                        agentId,
-                        agentName,
-                        worktree: "",
-                        branch,
-                        baseHead: "",
-                        status: "nocommit",
-                        gateOutput: res.error ?? "worktree failed"
-                    })
-                    continue
+                for (const agentId of ids) {
+                    const agentName = useSettings.getState().agentById(agentId)?.name ?? agentId
+                    try {
+                        const branch = entrantBranch(task.title, agentName, agentId)
+                        const res = await window.api.git.worktreeAdd(proj.path, branch)
+                        if (!res.ok || !res.path || !res.branch) {
+                            entrants.push({
+                                agentId,
+                                agentName,
+                                worktree: "",
+                                branch,
+                                baseHead: "",
+                                status: "nocommit",
+                                gateOutput: res.error ?? "worktree failed"
+                            })
+                            continue
+                        }
+                        const worktreePath = res.path
+                        const wts = await window.api.git.worktrees(proj.path).catch(() => [])
+                        const baseHead = wts.find((w) => samePath(w.path, worktreePath))?.head ?? ""
+                        if (!baseHead) {
+                            // A transient read failure here must not be silently
+                            // treated as "already finished": any later head would
+                            // differ from "", gating the entrant on an empty diff
+                            // seconds after dispatch. Same treatment as a failed
+                            // worktreeAdd, but the worktree itself still exists, so
+                            // it's kept on the entrant for land/abandon to clean up.
+                            entrants.push({
+                                agentId,
+                                agentName,
+                                worktree: worktreePath,
+                                branch: res.branch,
+                                baseHead: "",
+                                status: "nocommit",
+                                gateOutput: "could not read the new worktree's head"
+                            })
+                            continue
+                        }
+                        const termId = get().newTab(agentId, undefined, "race " + agentName, worktreePath)
+                        if (!termId) {
+                            entrants.push({
+                                agentId,
+                                agentName,
+                                worktree: worktreePath,
+                                branch: res.branch,
+                                baseHead,
+                                status: "nocommit",
+                                gateOutput: "could not spawn a session for this entrant"
+                            })
+                            continue
+                        }
+                        // Let the agent CLI boot before sending the prompt.
+                        await sleep(2800)
+                        const prompt =
+                            task.title +
+                            "\n\nWhen you are finished, commit all your work in this worktree with a short message. Do not push."
+                        window.api.pty.input(termId, prompt + "\r")
+                        entrants.push({
+                            agentId,
+                            agentName,
+                            termId,
+                            worktree: worktreePath,
+                            branch: res.branch,
+                            baseHead,
+                            status: "working"
+                        })
+                    } catch (err) {
+                        // A rejection here (rather than an { ok: false }) must not
+                        // abort the loop before the race object exists — that would
+                        // orphan whatever earlier entrants already created, with
+                        // nothing left to track their worktrees or billing.
+                        entrants.push({
+                            agentId,
+                            agentName,
+                            worktree: "",
+                            branch: "",
+                            baseHead: "",
+                            status: "nocommit",
+                            gateOutput: err instanceof Error ? err.message : String(err)
+                        })
+                    }
                 }
-                const worktreePath = res.path
-                const wts = await window.api.git.worktrees(proj.path).catch(() => [])
-                const baseHead = wts.find((w) => w.path === worktreePath)?.head ?? ""
-                const termId = get().newTab(agentId, undefined, "race " + agentName, worktreePath)
-                if (!termId) {
-                    entrants.push({
-                        agentId,
-                        agentName,
-                        worktree: worktreePath,
-                        branch: res.branch,
-                        baseHead,
-                        status: "nocommit",
-                        gateOutput: "could not spawn a session for this entrant"
-                    })
-                    continue
-                }
-                // Let the agent CLI boot before sending the prompt.
-                await sleep(2800)
-                const prompt =
-                    task.title +
-                    "\n\nWhen you are finished, commit all your work in this worktree with a short message. Do not push."
-                window.api.pty.input(termId, prompt + "\r")
-                entrants.push({
-                    agentId,
-                    agentName,
-                    termId,
-                    worktree: worktreePath,
-                    branch: res.branch,
-                    baseHead,
-                    status: "working"
-                })
-            }
 
-            const race: Race = {
-                cardId,
-                projectId: proj.id,
-                projectPath: proj.path,
-                title: task.title,
-                gateCommand,
-                startedAt,
-                entrants
+                const race: Race = {
+                    cardId,
+                    projectId: proj.id,
+                    projectPath: proj.path,
+                    title: task.title,
+                    gateCommand,
+                    startedAt,
+                    entrants
+                }
+                set((s) => ({ races: { ...s.races, [cardId]: race } }))
+                startPoll(cardId)
+            } finally {
+                startingRaces.delete(cardId)
             }
-            set((s) => ({ races: { ...s.races, [cardId]: race } }))
-            startPoll(cardId)
         },
 
         landRaceWinner: async (cardId, agentId) => {
@@ -1134,6 +1212,11 @@ export const useStore = create<AppState>((set, get) => {
                 return
             }
 
+            // Stop polling before touching anything a tick reads or writes — one
+            // landing mid-teardown would run a gate command inside a worktree the
+            // removal loop below is about to delete.
+            stopPoll(cardId)
+
             const res = await window.api.git.landFrom(winner.worktree, winner.baseHead, race.projectPath)
             if (!res.ok) {
                 // Leave every worktree in place — nothing is lost, the user can
@@ -1142,11 +1225,26 @@ export const useStore = create<AppState>((set, get) => {
                 return
             }
 
+            // Close every pane BEFORE removing its worktree: a live process still
+            // cwd'd into a directory can make the removal fail on Windows, and a
+            // discarded failure there orphans the worktree, its branch, and a
+            // still-running, still-billing agent.
+            for (const e of race.entrants) {
+                if (e.termId) get().closePane(e.termId)
+            }
             for (const e of race.entrants) {
                 if (!e.worktree) continue
-                await window.api.git.worktreeRemove(race.projectPath, e.worktree, e.branch).catch(() => null)
+                const rm = await window.api.git
+                    .worktreeRemove(race.projectPath, e.worktree, e.branch)
+                    .catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }))
+                if (!rm.ok) {
+                    pushActivity(
+                        "attention",
+                        "",
+                        `Landed, but couldn't remove ${e.agentName}'s worktree: ${rm.error ?? "unknown error"}`
+                    )
+                }
             }
-            stopPoll(cardId)
             set((s) => {
                 const rest = { ...s.races }
                 delete rest[cardId]
@@ -1160,24 +1258,42 @@ export const useStore = create<AppState>((set, get) => {
         abandonRace: async (cardId) => {
             const race = get().races[cardId]
             if (!race) return
+            // Only count entrants that actually got a worktree — a failed
+            // worktreeAdd or a start-time head-read failure never leaves anything
+            // on disk to delete.
+            const started = race.entrants.filter((e) => e.worktree)
             const ok = await confirm({
                 title: "Abandon race",
                 message:
-                    `Abandon the race for "${race.title}"? This deletes ${race.entrants.length} ` +
-                    `worktree${race.entrants.length === 1 ? "" : "s"} and discards every entrant's ` +
+                    `Abandon the race for "${race.title}"? This deletes ${started.length} ` +
+                    `worktree${started.length === 1 ? "" : "s"} and discards every entrant's ` +
                     "work. This is the only exit that discards work.",
                 confirmLabel: "Abandon",
                 danger: true
             })
             if (!ok) return
 
+            // The confirm above can sit open for minutes; stop polling the instant
+            // it resolves so a tick can't land mid-teardown and run a gate command
+            // inside a worktree this action is about to delete.
+            stopPoll(cardId)
+
             for (const e of race.entrants) {
                 if (e.termId) get().closePane(e.termId)
-                if (e.worktree) {
-                    await window.api.git.worktreeRemove(race.projectPath, e.worktree, e.branch).catch(() => null)
+            }
+            for (const e of race.entrants) {
+                if (!e.worktree) continue
+                const rm = await window.api.git
+                    .worktreeRemove(race.projectPath, e.worktree, e.branch)
+                    .catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }))
+                if (!rm.ok) {
+                    pushActivity(
+                        "attention",
+                        "",
+                        `Couldn't remove ${e.agentName}'s worktree: ${rm.error ?? "unknown error"}`
+                    )
                 }
             }
-            stopPoll(cardId)
             set((s) => {
                 const rest = { ...s.races }
                 delete rest[cardId]
