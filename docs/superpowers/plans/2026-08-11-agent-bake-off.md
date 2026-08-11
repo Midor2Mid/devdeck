@@ -380,6 +380,12 @@ export function shortstat(cwd: string, fromRef: string): Promise<string> {
  * The caller is responsible for refusing to land onto a dirty tree — see the
  * store. `git apply` leaves the target untouched when it fails, so a rejected
  * patch is not a half-applied mess.
+ *
+ * `--3way` stages what it applies, so a bare `git reset` follows to put the work
+ * back in the working tree unstaged. That is the whole point of landing rather
+ * than merging: you stage and describe the change instead of inheriting an
+ * agent's commit. The reset cannot touch anything of yours, because landing
+ * already requires a clean tree.
  */
 export function landFrom(
     worktree: string,
@@ -404,12 +410,21 @@ export function landFrom(
                     "git",
                     ["apply", "--3way", "--whitespace=nowarn"],
                     { cwd: target, ...OPTS },
-                    (e2, _o, stderr) =>
-                        resolve(
-                            e2
-                                ? { ok: false, error: (stderr || "").trim().split("\n")[0] || "git apply failed" }
-                                : { ok: true }
-                        )
+                    (e2, _o, stderr) => {
+                        if (e2) {
+                            resolve({
+                                ok: false,
+                                error: (stderr || "").trim().split("\n")[0] || "git apply failed"
+                            })
+                            return
+                        }
+                        // --3way stages what it applies. The design is that the
+                        // winner's work arrives UNSTAGED, so you stage and describe
+                        // it yourself rather than inheriting an agent's framing. A
+                        // bare reset is safe here precisely because landing already
+                        // requires a clean tree — there is nothing of yours to lose.
+                        execFile("git", ["reset"], { cwd: target, ...OPTS }, () => resolve({ ok: true }))
+                    }
                 )
                 child.stdin?.end(patch)
             }
