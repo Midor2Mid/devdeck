@@ -18,7 +18,7 @@ import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } f
 import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
-import { recordTail, forgetTail } from "./missionTail"
+import { recordTail, forgetTail, recordRate } from "./missionTail"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -482,6 +482,8 @@ export const useStore = create<AppState>((set, get) => {
         if (!isAgentId(get().agentOf(id))) return
         // Keep a cleaned tail of this agent's output for the Mission Control peek.
         recordTail(id, data)
+        // …and its committed-output rate, for the tile's trace.
+        recordRate(id, data)
         const visible = isVisible(id)
         if (data.includes("\x07") && !visible) {
             const was = get().agentStatus[id]

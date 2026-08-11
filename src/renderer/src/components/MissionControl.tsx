@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { getTail, getFullTail, getLastAt, relTime, sortForFollow, isStalled } from "../missionTail"
+import { getTail, getFullTail, getLastAt, relTime, sortForFollow, isStalled, getTrace, barsPath } from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
 import type { SystemInfo } from "../../../preload/index"
 
@@ -161,6 +161,7 @@ export function MissionControl(): JSX.Element {
                             const ago = relTime(Date.now(), getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
                             const stalled = isStalled(s.status, getLastAt(s.termId), Date.now())
+                            const trace = getTrace(s.termId)
                             return (
                                 <div
                                     key={s.termId}
@@ -203,6 +204,15 @@ export function MissionControl(): JSX.Element {
                                     {stalled && (
                                         <div className="mission-tile-stalled">stalled — no output {ago}</div>
                                     )}
+                                    <svg
+                                        className="mission-trace"
+                                        viewBox={`0 0 ${trace.length} 12`}
+                                        preserveAspectRatio="none"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                    >
+                                        <path d={barsPath(trace)} />
+                                    </svg>
                                 </div>
                             )
                         })}
