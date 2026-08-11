@@ -345,6 +345,17 @@ const racePolls = new Map<string, ReturnType<typeof setInterval>>()
 // object isn't stored until ~3s x N (the sequential dispatch loop) after the
 // user confirms.
 const startingRaces = new Set<string>()
+// A tick suspended in an await cannot be cancelled — stopPoll clears the
+// interval, but checks.run can still be 120s from returning. Every write and
+// every spend inside a tick re-checks the generation it started under; bumping
+// it (stopPoll, or a fresh startPoll) makes any in-flight tick a no-op from
+// that instant on. Same device as pipelineToken above, for the same reason.
+const raceGen = new Map<string, number>()
+const bumpGen = (cardId: string): number => {
+    const next = (raceGen.get(cardId) ?? 0) + 1
+    raceGen.set(cardId, next)
+    return next
+}
 // When each agent entered a wants-you state (waiting/attention), for "jump to
 // the oldest one that wants you".
 const pendingSince = new Map<string, number>()
@@ -644,15 +655,25 @@ export const useStore = create<AppState>((set, get) => {
         const t = racePolls.get(cardId)
         if (t) clearInterval(t)
         racePolls.delete(cardId)
+        // A tick already suspended in an await cannot be cancelled — bump the
+        // generation so it reads as stale the moment it wakes up, however long
+        // that takes (checks.run alone can block for 120s).
+        bumpGen(cardId)
     }
 
-    const raceTick = async (cardId: string): Promise<void> => {
+    const raceTick = async (cardId: string, gen: number): Promise<void> => {
         if (document.hidden) return
+        // Re-checked after every await below: stopPoll can bump this while this
+        // very tick is suspended, and a stale tick must spend nothing and write
+        // nothing — not a verdict for a race being torn down, and not a fresh
+        // gate command inside a worktree that's mid-deletion.
+        const stale = (): boolean => raceGen.get(cardId) !== gen
         const r = get().races[cardId]
         if (!r) return
         // ONE call for the whole race: parseWorktreeList already returns every
         // worktree with its head, so polling cost does not grow with entrant count.
         const wts = await window.api.git.worktrees(r.projectPath).catch(() => [])
+        if (stale()) return
 
         for (const e of r.entrants) {
             if (isTerminal(e.status)) continue
@@ -668,6 +689,7 @@ export const useStore = create<AppState>((set, get) => {
                     // newer tick already resolved.
                     const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
                     if (!live || live.status !== "working") continue
+                    if (stale()) return
                     setEntrant(cardId, e.agentId, { status: "gating", head })
                     // The ENTRANT'S worktree, never r.projectPath. Running the gate
                     // at the project root verifies the user's tree instead of this
@@ -683,6 +705,7 @@ export const useStore = create<AppState>((set, get) => {
                                 ms: 0
                             })
                         )
+                    if (stale()) return
                     setEntrant(cardId, e.agentId, {
                         status: res.exitCode === 0 ? "passed" : "failed",
                         gateExit: res.exitCode,
@@ -693,6 +716,7 @@ export const useStore = create<AppState>((set, get) => {
                         window.api.usage.window(e.worktree, r.startedAt, Date.now()).catch(() => null),
                         window.api.git.shortstat(e.worktree, e.baseHead).catch(() => "")
                     ])
+                    if (stale()) return
                     setEntrant(cardId, e.agentId, {
                         cost: usage?.cost,
                         costTokens: usage?.tokens,
@@ -708,16 +732,18 @@ export const useStore = create<AppState>((set, get) => {
                 setEntrant(cardId, e.agentId, { status: "nocommit" })
             }
         }
+        if (stale()) return
         const cur = get().races[cardId]
         if (cur && raceSettled(cur)) stopPoll(cardId)
     }
 
     const startPoll = (cardId: string): void => {
         stopPoll(cardId)
+        const gen = bumpGen(cardId)
         racePolls.set(
             cardId,
             setInterval(() => {
-                void raceTick(cardId)
+                void raceTick(cardId, gen)
             }, RACE_POLL_MS)
         )
     }
@@ -1245,6 +1271,7 @@ export const useStore = create<AppState>((set, get) => {
                     )
                 }
             }
+            raceGen.delete(cardId)
             set((s) => {
                 const rest = { ...s.races }
                 delete rest[cardId]
@@ -1294,6 +1321,7 @@ export const useStore = create<AppState>((set, get) => {
                     )
                 }
             }
+            raceGen.delete(cardId)
             set((s) => {
                 const rest = { ...s.races }
                 delete rest[cardId]
