@@ -25,6 +25,7 @@ export function TaskBoard(): JSX.Element {
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const openChanges = useStore((s) => s.openChanges)
     const refreshTaskCost = useStore((s) => s.refreshTaskCost)
+    const openRace = useStore((s) => s.openRace)
 
     const [draft, setDraft] = useState("")
     const [worktree, setWorktree] = useState(true)
@@ -145,12 +146,21 @@ export function TaskBoard(): JSX.Element {
                                                 </span>
                                             )}
                                             {t.column === "todo" && (
-                                                <button
-                                                    className="board-btn accent"
-                                                    onClick={() => void dispatchBoardTask(t.id, { worktree })}
-                                                >
-                                                    Dispatch
-                                                </button>
+                                                <>
+                                                    <button
+                                                        className="board-btn accent"
+                                                        onClick={() => void dispatchBoardTask(t.id, { worktree })}
+                                                    >
+                                                        Dispatch
+                                                    </button>
+                                                    <button
+                                                        className="board-btn"
+                                                        data-tip="Race two or three agents on this card"
+                                                        onClick={() => openRace(t.id)}
+                                                    >
+                                                        Race
+                                                    </button>
+                                                </>
                                             )}
                                             {t.termId && (t.column === "doing" || t.column === "review") && (
                                                 <button className="board-btn" onClick={() => jumpToTerm(t.termId!)}>
