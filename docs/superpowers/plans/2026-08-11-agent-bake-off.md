@@ -125,8 +125,17 @@ describe("parseShortstat", () => {
 })
 
 describe("entrantBranch", () => {
-    it("combines the card title, the agent name and a slice of its id", () => {
-        expect(entrantBranch("Add pull button", "Claude", "a3f9c1d2")).toBe("Add pull button Claude a3f9c1")
+    it("combines the card title with the agent id", () => {
+        expect(entrantBranch("Add pull button", "Claude", "claude-opus")).toBe(
+            "Add pull button claude-opus"
+        )
+    })
+
+    it("separates the built-in presets that share a prefix", () => {
+        // claude / claude-opus / claude-yolo all start with "claude", so any
+        // truncation of the id collapses the most likely race there is.
+        const b = ["claude", "claude-opus", "claude-yolo"].map((id) => entrantBranch("card", "n", id))
+        expect(new Set(b).size).toBe(3)
     })
 
     it("gives two agents on one card different branches", () => {
@@ -273,12 +282,17 @@ export function parseShortstat(out: string): { added: number; removed: number } 
  * `worktrees.addWorktree` already runs `safeBranch` over whatever it is given, and
  * a second naming scheme would be one more thing to keep in sync.
  *
- * The id slice is what actually guarantees two entrants differ. The name alone is
- * not enough: AgentPreset.name is user-editable and two presets called "Claude"
- * are entirely plausible, which would put both agents in ONE worktree and silently
- * invalidate both their cost figures — cost is attributed per directory, so a
- * shared worktree destroys the property that makes this feature fair. The name is
- * carried too, because a branch called `...-a3f9c1` alone is unreadable.
+ * The agent id is what guarantees two entrants differ, and it is used WHOLE. The
+ * name alone is not enough — AgentPreset.name is user-editable and two presets
+ * called "Claude" are entirely plausible. Nor is a prefix of the id: the built-in
+ * presets are `claude`, `claude-opus` and `claude-yolo`, so any slice shorter than
+ * the full string collapses the most likely race of all — Claude against Claude
+ * Opus — into a single branch.
+ *
+ * A collision is not cosmetic. Two entrants sharing a branch share a worktree, and
+ * cost here is attributed per directory, so both their figures become meaningless
+ * while still rendering as if they were real. The ids are readable enough
+ * (`claude-opus`) to serve as the branch's human label too.
  */
 export function entrantBranch(title: string, agentName: string, agentId: string): string {
     return `${title} ${agentName}`
