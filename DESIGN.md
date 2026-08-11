@@ -202,6 +202,10 @@ component changes:
   shadow.
 - **section-label:** muted, uppercase, letter-spaced.
 - **terminal:** `surfaceDeep` ground, mono type, generous line-height.
+- **trace:** a two-minute output-rate sparkline on an agent tile, drawn as one SVG
+  path in `currentColor` at `--muted`. Never accent-coloured — it is a reading,
+  not an action. Empty buckets draw a baseline, so silence reads as a flat line;
+  read together with the tile's status, flat + working is a stall.
 
 ### Active-state grammar
 
