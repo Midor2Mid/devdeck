@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard } from "electron"
-import { join } from "path"
+import { join, resolve } from "path"
 import { mkdirSync, writeFileSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
 import * as projects from "./projects"
@@ -428,10 +428,19 @@ function registerIpc(): void {
     ipcMain.handle(
         "git:landFrom",
         (_e, { worktree, baseHead, target }: { worktree: string; baseHead: string; target: string }) => {
-            // BOTH paths are guarded. Checking only one would leave the other an
-            // unchecked path arriving from the renderer.
-            guardRepo(worktree)
-            guardRepo(target)
+            // guardRepo alone is too weak here. It is pure string containment (see
+            // files.isWithinRoots), so "both are inside some open project" would
+            // still allow landing a patch into a DIFFERENT project, or into a
+            // subdirectory — and git apply resolves patch paths relative to cwd, so
+            // a subdirectory target silently nests the whole change one level down.
+            // Require the target to BE a project root, and the worktree to belong to
+            // that same project.
+            const norm = (p: string): string => resolve(p).replace(/[\\/]+$/, "").toLowerCase()
+            const roots = projects.listProjects().projects.map((p) => p.path)
+            if (!roots.some((r) => norm(r) === norm(target)))
+                throw new Error("Land target must be an open project root.")
+            if (!files.isWithinRoots(worktree, [worktrees.worktreeBase(target)]))
+                throw new Error("That worktree does not belong to this project.")
             return landFrom(worktree, baseHead, target)
         }
     )
