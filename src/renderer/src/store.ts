@@ -23,6 +23,15 @@ import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
+import {
+    RACE_TIMEOUT_MS,
+    RACE_POLL_MS,
+    parseShortstat,
+    entrantBranch,
+    raceSettled,
+    type Entrant,
+    type Race
+} from "./race"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -138,6 +147,19 @@ interface AppState extends Persisted {
      * they have both written. Hits git per live session, so call it on demand.
      */
     holdersIn: (cwd: string) => Promise<CwdHolder[]>
+
+    // Agent bake-off: race two or three agents on one card, each in its own
+    // worktree (runtime-only — the worktrees themselves are the recovery story
+    // across a restart, so races are never persisted to workspace.json).
+    races: Record<string, Race>
+    /** Card id whose race modal is open, or null. */
+    raceCardId: string | null
+    openRace: (cardId: string) => void
+    closeRace: () => void
+    startRace: (cardId: string, agentIds: string[], gateCommand: string) => Promise<void>
+    landRaceWinner: (cardId: string, agentId: string) => Promise<void>
+    abandonRace: (cardId: string) => Promise<void>
+
     flush: () => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
@@ -313,6 +335,9 @@ function newId(): string {
 }
 
 const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+// One poll interval per in-flight race, keyed by card id. Held here rather than
+// on the store: a timer handle in state would trigger a render on every tick.
+const racePolls = new Map<string, ReturnType<typeof setInterval>>()
 // When each agent entered a wants-you state (waiting/attention), for "jump to
 // the oldest one that wants you".
 const pendingSince = new Map<string, number>()
@@ -589,6 +614,83 @@ export const useStore = create<AppState>((set, get) => {
         return out
     }
 
+    /** Rewrite one entrant immutably. Never trusts a captured race — always reads current state. */
+    const setEntrant = (cardId: string, agentId: string, patch: Partial<Entrant>): void => {
+        set((s) => {
+            const race = s.races[cardId]
+            if (!race) return {}
+            return {
+                races: {
+                    ...s.races,
+                    [cardId]: {
+                        ...race,
+                        entrants: race.entrants.map((e) =>
+                            e.agentId === agentId ? { ...e, ...patch } : e
+                        )
+                    }
+                }
+            }
+        })
+    }
+
+    const stopPoll = (cardId: string): void => {
+        const t = racePolls.get(cardId)
+        if (t) clearInterval(t)
+        racePolls.delete(cardId)
+    }
+
+    const raceTick = async (cardId: string): Promise<void> => {
+        if (document.hidden) return
+        const r = get().races[cardId]
+        if (!r) return
+        // ONE call for the whole race: parseWorktreeList already returns every
+        // worktree with its head, so polling cost does not grow with entrant count.
+        const wts = await window.api.git.worktrees(r.projectPath).catch(() => [])
+        const headOf = new Map(wts.map((w) => [w.path, w.head]))
+
+        for (const e of r.entrants) {
+            if (e.status !== "working") continue
+            const head = headOf.get(e.worktree)
+            if (head && head !== e.baseHead) {
+                setEntrant(cardId, e.agentId, { status: "gating", head })
+                // The ENTRANT'S worktree, never r.projectPath. Running the gate at
+                // the project root verifies the user's tree instead of this entrant's
+                // and scores every entrant identically — the single most damaging
+                // thing to get wrong here.
+                const res = await window.api.checks.run(e.worktree, r.gateCommand)
+                setEntrant(cardId, e.agentId, {
+                    status: res.exitCode === 0 ? "passed" : "failed",
+                    gateExit: res.exitCode,
+                    gateMs: res.ms,
+                    gateOutput: (res.output || "").slice(0, 400)
+                })
+                const [usage, stat] = await Promise.all([
+                    window.api.usage.window(e.worktree, r.startedAt, Date.now()),
+                    window.api.git.shortstat(e.worktree, e.baseHead)
+                ])
+                setEntrant(cardId, e.agentId, {
+                    cost: usage.cost,
+                    costTokens: usage.tokens,
+                    ...parseShortstat(stat)
+                })
+            } else if (Date.now() - r.startedAt > RACE_TIMEOUT_MS) {
+                setEntrant(cardId, e.agentId, { status: "nocommit" })
+            }
+        }
+        const cur = get().races[cardId]
+        if (cur && raceSettled(cur)) stopPoll(cardId)
+    }
+
+    const startPoll = (cardId: string): void => {
+        stopPoll(cardId)
+        racePolls.set(
+            cardId,
+            setInterval(() => {
+                void raceTick(cardId)
+            }, RACE_POLL_MS)
+        )
+    }
+
     return {
         projects: [],
         activeId: null,
@@ -608,6 +710,8 @@ export const useStore = create<AppState>((set, get) => {
         canvasPos: {},
         canvasLinks: [],
         boardTasks: [],
+        races: {},
+        raceCardId: null,
         activity: [],
         activityOpen: false,
         inboxOpen: false,
@@ -916,6 +1020,171 @@ export const useStore = create<AppState>((set, get) => {
             window.api.pty.input(termId, task.title + "\r")
             set({ lastAgentTermId: termId })
         },
+
+        openRace: (cardId) => set({ raceCardId: cardId }),
+        closeRace: () => set({ raceCardId: null }),
+
+        startRace: async (cardId, agentIds, gateCommand) => {
+            const task = get().boardTasks.find((t) => t.id === cardId)
+            if (!task) return
+            const proj = get().projects.find((p) => p.id === task.projectId)
+            if (!proj) return
+
+            const names = agentIds.map((id) => useSettings.getState().agentById(id)?.name ?? id)
+            // A race spends money once per entrant — several times what a normal
+            // dispatch costs — so name every entrant and the gate before an
+            // accidental click pays for all of them.
+            const ok = await confirm({
+                title: "Start a race",
+                message:
+                    `Race ${names.join(", ")} on "${task.title}" in ${proj.name}, each in its ` +
+                    `own worktree, then gate each with:\n\n${gateCommand}\n\n` +
+                    `This spends money ${agentIds.length} times — once per entrant.`,
+                confirmLabel: "Start race",
+                danger: true
+            })
+            if (!ok) return
+
+            // newTab spawns into the active project. Entrants are started
+            // sequentially (never Promise.all) for exactly that reason: the active
+            // project must stay this task's project for the whole loop.
+            await get().setActiveProject(proj.id)
+
+            const startedAt = Date.now()
+            const entrants: Entrant[] = []
+
+            for (const agentId of agentIds) {
+                const agentName = useSettings.getState().agentById(agentId)?.name ?? agentId
+                const branch = entrantBranch(task.title, agentName, agentId)
+                const res = await window.api.git.worktreeAdd(proj.path, branch)
+                if (!res.ok || !res.path || !res.branch) {
+                    entrants.push({
+                        agentId,
+                        agentName,
+                        worktree: "",
+                        branch,
+                        baseHead: "",
+                        status: "nocommit",
+                        gateOutput: res.error ?? "worktree failed"
+                    })
+                    continue
+                }
+                const worktreePath = res.path
+                const wts = await window.api.git.worktrees(proj.path).catch(() => [])
+                const baseHead = wts.find((w) => w.path === worktreePath)?.head ?? ""
+                const termId = get().newTab(agentId, undefined, "race " + agentName, worktreePath)
+                if (!termId) {
+                    entrants.push({
+                        agentId,
+                        agentName,
+                        worktree: worktreePath,
+                        branch: res.branch,
+                        baseHead,
+                        status: "nocommit",
+                        gateOutput: "could not spawn a session for this entrant"
+                    })
+                    continue
+                }
+                // Let the agent CLI boot before sending the prompt.
+                await sleep(2800)
+                const prompt =
+                    task.title +
+                    "\n\nWhen you are finished, commit all your work in this worktree with a short message. Do not push."
+                window.api.pty.input(termId, prompt + "\r")
+                entrants.push({
+                    agentId,
+                    agentName,
+                    termId,
+                    worktree: worktreePath,
+                    branch: res.branch,
+                    baseHead,
+                    status: "working"
+                })
+            }
+
+            const race: Race = {
+                cardId,
+                projectId: proj.id,
+                projectPath: proj.path,
+                title: task.title,
+                gateCommand,
+                startedAt,
+                entrants
+            }
+            set((s) => ({ races: { ...s.races, [cardId]: race } }))
+            startPoll(cardId)
+        },
+
+        landRaceWinner: async (cardId, agentId) => {
+            const race = get().races[cardId]
+            if (!race) return
+            const winner = race.entrants.find((e) => e.agentId === agentId)
+            if (!winner) return
+            if (winner.status !== "passed") {
+                pushActivity("attention", "", "Only a passed entrant can be landed")
+                return
+            }
+
+            // Belt-and-braces: landFrom enforces the clean-tree rule itself and is
+            // the authority, but checking first lets the UI disable the button with
+            // a reason instead of firing and finding out.
+            const status = await window.api.git.status(race.projectPath).catch(() => null)
+            if (!status || status.changes > 0) {
+                pushActivity("attention", "", "Can't land: the project has uncommitted changes")
+                return
+            }
+
+            const res = await window.api.git.landFrom(winner.worktree, winner.baseHead, race.projectPath)
+            if (!res.ok) {
+                // Leave every worktree in place — nothing is lost, the user can
+                // retry or land by hand.
+                pushActivity("attention", "", `Land failed: ${res.error ?? "unknown error"}`)
+                return
+            }
+
+            for (const e of race.entrants) {
+                if (!e.worktree) continue
+                await window.api.git.worktreeRemove(race.projectPath, e.worktree, e.branch).catch(() => null)
+            }
+            stopPoll(cardId)
+            set((s) => {
+                const rest = { ...s.races }
+                delete rest[cardId]
+                return { races: rest }
+            })
+            get().moveBoardTask(cardId, "review")
+            const projectName = get().projects.find((p) => p.id === race.projectId)?.name ?? race.title
+            get().openChanges(race.projectPath, projectName)
+        },
+
+        abandonRace: async (cardId) => {
+            const race = get().races[cardId]
+            if (!race) return
+            const ok = await confirm({
+                title: "Abandon race",
+                message:
+                    `Abandon the race for "${race.title}"? This deletes ${race.entrants.length} ` +
+                    `worktree${race.entrants.length === 1 ? "" : "s"} and discards every entrant's ` +
+                    "work. This is the only exit that discards work.",
+                confirmLabel: "Abandon",
+                danger: true
+            })
+            if (!ok) return
+
+            for (const e of race.entrants) {
+                if (e.termId) get().closePane(e.termId)
+                if (e.worktree) {
+                    await window.api.git.worktreeRemove(race.projectPath, e.worktree, e.branch).catch(() => null)
+                }
+            }
+            stopPoll(cardId)
+            set((s) => {
+                const rest = { ...s.races }
+                delete rest[cardId]
+                return { races: rest }
+            })
+        },
+
         flush: () => {
             if (persistTimer) {
                 clearTimeout(persistTimer)
