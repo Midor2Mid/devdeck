@@ -57,7 +57,7 @@ export interface Race { … }
 export const RACE_TIMEOUT_MS = 1_200_000
 export const RACE_POLL_MS = 5000
 export function parseShortstat(out: string): { added: number; removed: number }
-export function entrantBranch(title: string, agentName: string): string
+export function entrantBranch(title: string, agentName: string, agentId: string): string
 export function isTerminal(s: EntrantStatus): boolean
 export function survivors(race: Race): Entrant[]
 export function raceSettled(race: Race): boolean
@@ -125,14 +125,24 @@ describe("parseShortstat", () => {
 })
 
 describe("entrantBranch", () => {
-    it("combines the card title and the agent name", () => {
-        expect(entrantBranch("Add pull button", "Claude")).toBe("Add pull button Claude")
+    it("combines the card title, the agent name and a slice of its id", () => {
+        expect(entrantBranch("Add pull button", "Claude", "a3f9c1d2")).toBe("Add pull button Claude a3f9c1")
     })
 
     it("gives two agents on one card different branches", () => {
         // A collision would put two agents in one worktree and silently invalidate
         // both their cost figures — this is the test that matters most here.
-        expect(entrantBranch("same card", "Opus")).not.toBe(entrantBranch("same card", "Haiku"))
+        expect(entrantBranch("same card", "Opus", "id-1")).not.toBe(
+            entrantBranch("same card", "Haiku", "id-2")
+        )
+    })
+
+    it("separates two presets that share a name", () => {
+        // AgentPreset.name is user-editable and duplicates are entirely plausible;
+        // only the id is guaranteed unique, so the branch has to carry it.
+        expect(entrantBranch("same card", "Claude", "id-1")).not.toBe(
+            entrantBranch("same card", "Claude", "id-2")
+        )
     })
 })
 
@@ -261,11 +271,16 @@ export function parseShortstat(out: string): { added: number; removed: number } 
 /**
  * The branch argument for one entrant's worktree. Deliberately NOT slugged here:
  * `worktrees.addWorktree` already runs `safeBranch` over whatever it is given, and
- * a second naming scheme would be one more thing to keep in sync. The agent name
- * is what makes two entrants on the same card distinct — a collision would put
- * both in one worktree and silently invalidate both their cost figures.
+ * a second naming scheme would be one more thing to keep in sync.
+ *
+ * The id slice is what actually guarantees two entrants differ. The name alone is
+ * not enough: AgentPreset.name is user-editable and two presets called "Claude"
+ * are entirely plausible, which would put both agents in ONE worktree and silently
+ * invalidate both their cost figures — cost is attributed per directory, so a
+ * shared worktree destroys the property that makes this feature fair. The name is
+ * carried too, because a branch called `...-a3f9c1` alone is unreadable.
  */
-export function entrantBranch(title: string, agentName: string): string {
+export function entrantBranch(title: string, agentName: string, agentId: string): string {
     return `${title} ${agentName}`
 }
 
@@ -482,7 +497,7 @@ normal dispatch and must keep meaning exactly that.
 3. `await get().setActiveProject(proj.id)` — `newTab` spawns into the *active*
    project, and this is why entrants cannot be started in parallel.
 4. For each agent, **sequentially**:
-   - `worktreeAdd(proj.path, entrantBranch(task.title, agent.name))`; on failure
+   - `worktreeAdd(proj.path, entrantBranch(task.title, agent.name, agent.id))`; on failure
      record that entrant as `nocommit` with the error in `gateOutput` and continue
      with the others rather than aborting the whole race.
    - Read the new worktree's head via `window.api.git.worktrees(proj.path)` and
