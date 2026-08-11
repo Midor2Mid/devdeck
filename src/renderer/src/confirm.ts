@@ -27,6 +27,12 @@ export const useConfirm = create<ConfirmState>((set, get) => ({
     current: null,
     ask: (opts) =>
         new Promise<boolean>((resolve) => {
+            // A second ask displaces the first. Resolve the displaced request as
+            // cancelled rather than dropping its resolver: a promise that never
+            // settles leaves its awaiter suspended forever, so a caller that took
+            // a lock before awaiting can permanently brick whatever it guards.
+            const prev = get().current
+            if (prev) prev.resolve(false)
             set({ current: { ...opts, resolve } })
         }),
     answer: (ok) => {
