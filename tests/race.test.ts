@@ -54,14 +54,24 @@ describe("parseShortstat", () => {
 })
 
 describe("entrantBranch", () => {
-    it("combines the card title and the agent name", () => {
-        expect(entrantBranch("Add pull button", "Claude")).toBe("Add pull button Claude")
+    it("combines the card title, the agent name and a slice of its id", () => {
+        expect(entrantBranch("Add pull button", "Claude", "a3f9c1d2")).toBe("Add pull button Claude a3f9c1")
     })
 
     it("gives two agents on one card different branches", () => {
         // A collision would put two agents in one worktree and silently invalidate
         // both their cost figures — this is the test that matters most here.
-        expect(entrantBranch("same card", "Opus")).not.toBe(entrantBranch("same card", "Haiku"))
+        expect(entrantBranch("same card", "Opus", "id-1")).not.toBe(
+            entrantBranch("same card", "Haiku", "id-2")
+        )
+    })
+
+    it("separates two presets that share a name", () => {
+        // AgentPreset.name is user-editable and duplicates are entirely plausible;
+        // only the id is guaranteed unique, so the branch has to carry it.
+        expect(entrantBranch("same card", "Claude", "id-1")).not.toBe(
+            entrantBranch("same card", "Claude", "id-2")
+        )
     })
 })
 
