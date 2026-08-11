@@ -106,9 +106,12 @@ export function isFlat(trace: number[]): boolean
 
 Mechanics:
 
-- One app-wide interval advances the ring for every session — **not** a timer per
-  tile. It is started lazily on first `recordRate` and stopped when no sessions
-  remain.
+- **There is no timer at all.** The ring stores the start time of its newest
+  bucket and rolls forward on read or write, zero-filling the buckets that
+  elapsed since. An interval would need a lifecycle (start on first session, stop
+  on last, leak in tests); computing the position from the clock needs none, and
+  makes every function pure enough to test with an injected `now`. Mission
+  Control's existing 1 Hz re-render supplies the reads.
 - `recordRate(id, chunk)` is called from the same place `recordTail` already is,
   in `onPtyData` (`store.ts:481-521`). One new call, one argument, already in hand.
 - `forgetTail` (`missionTail.ts:70`) also drops the ring, so a closed session
