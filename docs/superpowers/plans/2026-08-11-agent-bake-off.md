@@ -896,6 +896,49 @@ Also fold in the three small ones: dedupe `agentIds`; count only entrants that
 actually got a worktree in the abandon confirm's message; and re-run
 `npm run typecheck` plus `npx vitest run` before committing.
 
+#### Task 3 corrections (round 2)
+
+- [ ] **A tick already in flight survives teardown**
+
+`stopPoll` clears the interval but cannot cancel a tick suspended in an `await`.
+`checks.run` blocks for up to 120s, so a tick can still be running long after the
+user clicked Land or Abandon — and because M4 now calls `stopPoll` *first*, the
+window it covers is the whole of `landFrom` plus every worktree removal. That tick
+can write a verdict for a race being torn down, or worse, re-read an entrant as
+`working` and spawn a fresh gate command inside a directory currently being
+deleted, producing a stray process and a removal failure.
+
+The store-emptiness check in `setEntrant` is not enough: the race object still
+exists throughout teardown and is only deleted at the end.
+
+Use a generation counter — the same idea as the pipeline runner's `pipelineToken`
+(`store.ts`, search `pipelineToken`), which exists for exactly this reason:
+
+```typescript
+// A tick suspended in an await cannot be cancelled, so every write and every
+// spend re-checks the generation it started under. stopPoll bumps it, which
+// makes any in-flight tick a no-op from that moment on.
+const raceGen = new Map<string, number>()
+const bumpGen = (cardId: string): number => {
+    const next = (raceGen.get(cardId) ?? 0) + 1
+    raceGen.set(cardId, next)
+    return next
+}
+```
+
+- `startPoll` captures `const gen = bumpGen(cardId)` and passes it into each tick.
+- `stopPoll` calls `bumpGen(cardId)`, so every in-flight tick is immediately stale.
+- The tick returns early if `raceGen.get(cardId) !== gen` — checked **after every
+  await**, and specifically before `checks.run`, before each `setEntrant`, and
+  before the cost/shortstat reads. A stale tick must spend nothing and write
+  nothing.
+- `abandonRace` and `landRaceWinner` delete the entry from `raceGen` alongside the
+  race, so the map does not grow.
+
+This is defence against a real sequence, not a theoretical one: click Land while a
+60-second gate is running and, without it, `npm test` starts inside a worktree
+`landFrom` is about to delete.
+
 ---
 
 ### Task 4: `RaceModal`
