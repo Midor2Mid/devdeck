@@ -360,9 +360,29 @@ bridge for no reason.
 Add after `gitStatus`:
 
 ```typescript
+/**
+ * A ref we are willing to interpolate into an argv slot git may read as an option.
+ *
+ * Both functions below build `<ref>..HEAD` as a single argument. execFile does not
+ * involve a shell, so there is no command injection — but a ref beginning with `-`
+ * is still parsed by git as a FLAG, not a revision: `--output=/tmp/x` becomes
+ * `--output=/tmp/x..HEAD`, a real `git diff` option that writes an attacker-chosen
+ * file. guardRepo constrains the directory arguments and does nothing for this one.
+ *
+ * Every ref reaching these functions is a commit sha read out of `git worktree
+ * list` (see parseWorktreeList), so requiring hex is exact rather than restrictive.
+ */
+function isCommitSha(ref: string): boolean {
+    return /^[0-9a-fA-F]{7,40}$/.test(ref)
+}
+
 /** Raw `git diff --shortstat <fromRef>..HEAD` for a worktree; "" on any failure. */
 export function shortstat(cwd: string, fromRef: string): Promise<string> {
     return new Promise((resolve) => {
+        if (!isCommitSha(fromRef)) {
+            resolve("")
+            return
+        }
         execFile("git", ["diff", "--shortstat", `${fromRef}..HEAD`], { cwd, ...OPTS }, (err, out) => {
             resolve(err ? "" : out.trim())
         })
@@ -393,6 +413,11 @@ export function landFrom(
     target: string
 ): Promise<{ ok: boolean; error?: string }> {
     return new Promise((resolve) => {
+        // See isCommitSha: a ref starting with "-" would be read by git as a flag.
+        if (!isCommitSha(baseHead)) {
+            resolve({ ok: false, error: "refusing to land from an unrecognised revision" })
+            return
+        }
         execFile(
             "git",
             ["diff", "--binary", `${baseHead}..HEAD`],
@@ -475,6 +500,28 @@ In `src/preload/index.ts`, inside the `git` object after `pull`:
 
 Run: `npm run typecheck`
 Expected: zero errors.
+
+- [ ] **Step 4b: Prove the ref guard**
+
+Add to `tests/race.test.ts` — `isCommitSha` is not exported, so assert through the
+public functions in a throwaway directory where git will fail anyway; what is being
+proven is that a hostile ref never reaches git at all:
+
+```typescript
+describe("ref guard", () => {
+    it("refuses a ref that git would read as an option", async () => {
+        // "--output=<file>" is a real git diff flag; interpolated as
+        // "--output=/tmp/x..HEAD" it writes an attacker-chosen file.
+        const r = await window_api_landFrom_shim("--output=/tmp/pwned", "/nonexistent")
+        expect(r.ok).toBe(false)
+        expect(r.error).toMatch(/unrecognised revision/)
+    })
+})
+```
+
+If wiring a shim for a main-process function proves awkward from the renderer test
+setup, export `isCommitSha` and test it directly instead — a named, tested guard is
+worth more than keeping it private. State in your report which route you took.
 
 - [ ] **Step 5: Verify the two operations against a real repo**
 
