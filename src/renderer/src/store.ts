@@ -381,6 +381,22 @@ const bumpGen = (cardId: string): number => {
 // fresh one both act on the same entrant from different snapshots (round 1's
 // M1). Keyed by cardId; holds the currently-running tick's promise, if any.
 const inFlight = new Map<string, Promise<void>>()
+// S1/S2 make a SINGLE teardown safe against the tick, but not two teardowns
+// against each other. One tick gates every entrant sequentially (S5), so
+// settlePoll can park landRaceWinner/abandonRace for up to N x checks.run's
+// cap — long enough that the button looks frozen and invites a second click.
+// Without this, Land on A and Land on B (or Abandon) can both pass their own
+// guards, both park on the SAME in-flight promise, and resume within
+// microtasks of each other into their destructive sections concurrently: two
+// landFrom calls into one project root (past the dirty-tree check, which only
+// runs once each, before either parks), or a removal racing a read. The
+// loser's `!res.ok` branch then calls startPoll, re-arming the interval behind
+// the winner's back. startingRaces guards the start of a race; this guards
+// the end. Checked at the top of both actions, added before their first
+// await, cleared in a finally — and never relied on the UI to prevent, since
+// landRaceWinner already defends itself against a bad agentId and trusting
+// Task 4 to disable the buttons would contradict that posture.
+const tearingDown = new Set<string>()
 // When each agent entered a wants-you state (waiting/attention), for "jump to
 // the oldest one that wants you".
 const pendingSince = new Map<string, number>()
@@ -1296,6 +1312,12 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         landRaceWinner: async (cardId, agentId) => {
+            // S4: a second teardown call for this card must not proceed while
+            // this one is in flight — see the comment on tearingDown's
+            // declaration for why. Checked before any lookup, not just before
+            // the first await, so a concurrent Abandon can't slip in ahead of it
+            // either.
+            if (tearingDown.has(cardId)) return
             const race = get().races[cardId]
             if (!race) return
             const winner = race.entrants.find((e) => e.agentId === agentId)
@@ -1305,126 +1327,147 @@ export const useStore = create<AppState>((set, get) => {
                 return
             }
 
-            // Belt-and-braces: landFrom enforces the clean-tree rule itself and is
-            // the authority, but checking first lets the UI disable the button with
-            // a reason instead of firing and finding out.
-            const status = await window.api.git.status(race.projectPath).catch(() => null)
-            if (!status || status.changes > 0) {
-                pushActivity("attention", "", "Can't land: the project has uncommitted changes")
-                return
-            }
-
-            // Wait for any tick in flight rather than just invalidating it (S2):
-            // a generation bump can only make a suspended tick a no-op once it
-            // wakes, up to 120s later — it can't stop it from running in the
-            // meantime. After this, provably no tick is running, so nothing can
-            // write into this race or spend inside a worktree the removal loop
-            // below is about to delete.
-            await settlePoll(cardId)
-
-            const res = await window.api.git.landFrom(winner.worktree, winner.baseHead, race.projectPath)
-            if (!res.ok) {
-                // Leave every worktree in place — nothing is lost, the user can
-                // retry or land by hand. But the race object is still here and
-                // startRace would refuse to touch it, so without restarting the
-                // poll the remaining entrants would never gate, never time out,
-                // and raceSettled would never go true — agents left running and
-                // billing with nothing watching them.
-                startPoll(cardId)
-                pushActivity("attention", "", `Land failed: ${res.error ?? "unknown error"}`)
-                return
-            }
-
-            // Close every pane BEFORE removing its worktree: a live process still
-            // cwd'd into a directory can make the removal fail on Windows, and a
-            // discarded failure there orphans the worktree, its branch, and a
-            // still-running, still-billing agent.
-            for (const e of race.entrants) {
-                if (e.termId) get().closePane(e.termId)
-            }
-            for (const e of race.entrants) {
-                if (!e.worktree) continue
-                const rm = await window.api.git
-                    .worktreeRemove(race.projectPath, e.worktree, e.branch)
-                    .catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }))
-                if (!rm.ok) {
-                    pushActivity(
-                        "attention",
-                        "",
-                        `Landed, but couldn't remove ${e.agentName}'s worktree: ${rm.error ?? "unknown error"}`
-                    )
+            tearingDown.add(cardId)
+            try {
+                // Belt-and-braces: landFrom enforces the clean-tree rule itself
+                // and is the authority, but checking first lets the UI disable
+                // the button with a reason instead of firing and finding out.
+                const status = await window.api.git.status(race.projectPath).catch(() => null)
+                if (!status || status.changes > 0) {
+                    pushActivity("attention", "", "Can't land: the project has uncommitted changes")
+                    return
                 }
+
+                // Wait for any tick in flight rather than just invalidating it
+                // (S2): a generation bump can only make a suspended tick a no-op
+                // once it wakes — it can't stop it from running in the meantime,
+                // and one tick gates every entrant sequentially, so this can be
+                // up to N x checks.run's cap, not a single gate's. After this,
+                // provably no tick is running, so nothing can write into this
+                // race or spend inside a worktree the removal loop below is
+                // about to delete.
+                await settlePoll(cardId)
+
+                const res = await window.api.git.landFrom(winner.worktree, winner.baseHead, race.projectPath)
+                if (!res.ok) {
+                    // Leave every worktree in place — nothing is lost, the user
+                    // can retry or land by hand. But the race object is still
+                    // here and startRace would refuse to touch it, so without
+                    // restarting the poll the remaining entrants would never
+                    // gate, never time out, and raceSettled would never go true
+                    // — agents left running and billing with nothing watching
+                    // them.
+                    startPoll(cardId)
+                    pushActivity("attention", "", `Land failed: ${res.error ?? "unknown error"}`)
+                    return
+                }
+
+                // Close every pane BEFORE removing its worktree: a live process
+                // still cwd'd into a directory can make the removal fail on
+                // Windows, and a discarded failure there orphans the worktree,
+                // its branch, and a still-running, still-billing agent.
+                for (const e of race.entrants) {
+                    if (e.termId) get().closePane(e.termId)
+                }
+                for (const e of race.entrants) {
+                    if (!e.worktree) continue
+                    const rm = await window.api.git
+                        .worktreeRemove(race.projectPath, e.worktree, e.branch)
+                        .catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }))
+                    if (!rm.ok) {
+                        pushActivity(
+                            "attention",
+                            "",
+                            `Landed, but couldn't remove ${e.agentName}'s worktree: ${rm.error ?? "unknown error"}`
+                        )
+                    }
+                }
+                // Deliberately not raceGen.delete(cardId): the map is one
+                // integer per card, bounded by the number of cards that have
+                // ever raced, and its whole point is to be monotonic for the
+                // app's lifetime. Deleting it lets bumpGen restart at 1 next
+                // time this card races — the same generation an old, still-
+                // suspended tick from THIS race may be carrying — which reopens
+                // exactly the spend-in-a-deleted-worktree hole the counter
+                // exists to close. Leave it be.
+                set((s) => {
+                    const rest = { ...s.races }
+                    delete rest[cardId]
+                    return { races: rest }
+                })
+                get().moveBoardTask(cardId, "review")
+                const projectName = get().projects.find((p) => p.id === race.projectId)?.name ?? race.title
+                get().openChanges(race.projectPath, projectName)
+            } finally {
+                tearingDown.delete(cardId)
             }
-            // Deliberately not raceGen.delete(cardId): the map is one integer per
-            // card, bounded by the number of cards that have ever raced, and its
-            // whole point is to be monotonic for the app's lifetime. Deleting it
-            // lets bumpGen restart at 1 next time this card races — the same
-            // generation an old, still-suspended tick from THIS race may be
-            // carrying — which reopens exactly the spend-in-a-deleted-worktree
-            // hole the counter exists to close. Leave it be.
-            set((s) => {
-                const rest = { ...s.races }
-                delete rest[cardId]
-                return { races: rest }
-            })
-            get().moveBoardTask(cardId, "review")
-            const projectName = get().projects.find((p) => p.id === race.projectId)?.name ?? race.title
-            get().openChanges(race.projectPath, projectName)
         },
 
         abandonRace: async (cardId) => {
+            // S4: same guard as landRaceWinner, and for the same reason — see
+            // tearingDown's declaration. Checked first so a concurrent Land
+            // can't slip in ahead of it either.
+            if (tearingDown.has(cardId)) return
             const race = get().races[cardId]
             if (!race) return
             // Only count entrants that actually got a worktree — a failed
             // worktreeAdd or a start-time head-read failure never leaves anything
             // on disk to delete.
             const started = race.entrants.filter((e) => e.worktree)
-            const ok = await confirm({
-                title: "Abandon race",
-                message:
-                    `Abandon the race for "${race.title}"? This deletes ${started.length} ` +
-                    `worktree${started.length === 1 ? "" : "s"} and discards every entrant's ` +
-                    "work. This is the only exit that discards work.",
-                confirmLabel: "Abandon",
-                danger: true
-            })
-            if (!ok) return
 
-            // The confirm above can sit open for minutes. Wait for any in-flight
-            // tick (S2) rather than just bumping its generation and hoping it
-            // notices before it spends anything: this can now make Abandon wait
-            // up to a gate command's own runtime before it starts tearing
-            // anything down. That is the right trade — the alternative is
-            // Abandon returning instantly and leaving a gate command running
-            // inside a worktree this action is about to delete out from under
-            // it. (If this wait proves annoying in practice, shorten the
-            // timeoutMs passed to checks.run for races — don't go back to
-            // racing teardown against the tick.)
-            await settlePoll(cardId)
+            tearingDown.add(cardId)
+            try {
+                const ok = await confirm({
+                    title: "Abandon race",
+                    message:
+                        `Abandon the race for "${race.title}"? This deletes ${started.length} ` +
+                        `worktree${started.length === 1 ? "" : "s"} and discards every entrant's ` +
+                        "work. This is the only exit that discards work.",
+                    confirmLabel: "Abandon",
+                    danger: true
+                })
+                if (!ok) return
 
-            for (const e of race.entrants) {
-                if (e.termId) get().closePane(e.termId)
-            }
-            for (const e of race.entrants) {
-                if (!e.worktree) continue
-                const rm = await window.api.git
-                    .worktreeRemove(race.projectPath, e.worktree, e.branch)
-                    .catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }))
-                if (!rm.ok) {
-                    pushActivity(
-                        "attention",
-                        "",
-                        `Couldn't remove ${e.agentName}'s worktree: ${rm.error ?? "unknown error"}`
-                    )
+                // The confirm above can sit open for minutes. Wait for any
+                // in-flight tick (S2) rather than just bumping its generation
+                // and hoping it notices before it spends anything: one tick
+                // gates every entrant sequentially, so this can make Abandon
+                // wait up to N x checks.run's cap — for a three-way race, on
+                // the order of minutes, not one gate's ~120s. That is the right
+                // trade — the alternative is Abandon returning instantly and
+                // leaving a gate command running inside a worktree this action
+                // is about to delete out from under it. (If this wait proves
+                // annoying in practice, the lever is a smaller timeoutMs passed
+                // to checks.run for races, sized against N x timeout — not a
+                // return to racing teardown against the tick.)
+                await settlePoll(cardId)
+
+                for (const e of race.entrants) {
+                    if (e.termId) get().closePane(e.termId)
                 }
+                for (const e of race.entrants) {
+                    if (!e.worktree) continue
+                    const rm = await window.api.git
+                        .worktreeRemove(race.projectPath, e.worktree, e.branch)
+                        .catch((err) => ({ ok: false, error: err instanceof Error ? err.message : String(err) }))
+                    if (!rm.ok) {
+                        pushActivity(
+                            "attention",
+                            "",
+                            `Couldn't remove ${e.agentName}'s worktree: ${rm.error ?? "unknown error"}`
+                        )
+                    }
+                }
+                // See the comment in landRaceWinner: raceGen is deliberately
+                // never deleted, only ever bumped.
+                set((s) => {
+                    const rest = { ...s.races }
+                    delete rest[cardId]
+                    return { races: rest }
+                })
+            } finally {
+                tearingDown.delete(cardId)
             }
-            // See the comment in landRaceWinner: raceGen is deliberately never
-            // deleted, only ever bumped.
-            set((s) => {
-                const rest = { ...s.races }
-                delete rest[cardId]
-                return { races: rest }
-            })
         },
 
         flush: () => {
