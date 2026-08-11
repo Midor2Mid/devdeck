@@ -939,6 +939,59 @@ This is defence against a real sequence, not a theoretical one: click Land while
 60-second gate is running and, without it, `npm test` starts inside a worktree
 `landFrom` is about to delete.
 
+#### Task 3 corrections (round 3)
+
+All three were introduced *by* the round-1 and round-2 fixes. Each is a case of a
+correction creating the problem it was meant to remove.
+
+- [ ] **N1 (Critical) — deleting the generation entry defeats the generation counter**
+
+`raceGen.delete(cardId)` on teardown means `bumpGen` starts again at 1 for that
+card. `startPoll` does a `stopPoll` bump plus a `bumpGen`, so **every race started
+on a card whose previous race was landed or abandoned gets generation 2 — the same
+number the previous race's ticks are carrying.**
+
+The sequence is an ordinary one: abandon a race, then immediately re-race the same
+card. A tick from the dead race, still suspended in `checks.run` for up to 120
+seconds, wakes up, finds its generation current, writes its verdict into the *new*
+race's entrant of the same `agentId`, and carries on to call `checks.run` inside
+the deleted worktree — exactly the spend-in-a-deleted-directory that round 2 was
+written to prevent.
+
+**Do not delete the entry.** It is one integer per card, bounded by the number of
+cards, and its whole purpose is to be monotonic across the lifetime of the app.
+Remove both `raceGen.delete(cardId)` calls and say why in a comment.
+
+- [ ] **N2 (Major) — the widened timeout can eliminate an entrant that passed**
+
+Round 1's M5 widened `RACE_TIMEOUT_MS` from `working` to any non-terminal status,
+so an entrant legitimately mid-gate is flipped to `nocommit` at the 20-minute mark;
+if that settles the race, `stopPoll` bumps the generation and the real gate result
+is then discarded as stale. Money spent, survivor silently eliminated. The write
+also uses the loop's **snapshot** status with no `live` re-read, so a lagging tick
+can overwrite a newer `passed` with `nocommit`.
+
+The widening is no longer needed anyway: M5 also wrapped `checks.run`,
+`usage.window` and `shortstat` in catches, so a rejection now always resolves the
+entrant to a terminal status rather than stranding it in `gating` — which was the
+only reason to widen. And `checks.run` caps itself at 120 s, so `gating` cannot
+legitimately last 20 minutes.
+
+Put the timeout back to `working` only, and re-read `live` before the timeout write
+exactly as the gate path does. Leave a comment recording that the catches are what
+make the narrow condition safe, so nobody re-widens it later.
+
+- [ ] **N3 (Major) — a failed land leaves the race running with nothing watching it**
+
+Round 1's M4 moved `stopPoll` before `landFrom`, but the `!res.ok` early return
+never restarts it — and `startRace` bails because `races[cardId]` still exists. So
+after a land failure (a conflicting patch, a dirty tree) the remaining entrants are
+never gated, never time out, `raceSettled` is never true, and the agents keep
+running and billing with no poll observing them. Before the M4 change the poll
+survived a failed land; the fix made it worse.
+
+Call `startPoll(cardId)` on the failure branch before returning.
+
 ---
 
 ### Task 4: `RaceModal`
