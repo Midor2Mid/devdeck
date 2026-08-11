@@ -11,6 +11,7 @@ import {
     recordRate,
     getTrace,
     isFlat,
+    barsPath,
     STALL_MS
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
@@ -275,5 +276,30 @@ describe("flatline agrees with isStalled", () => {
         expect(isFlat(getTrace("s3", now))).toBe(true)
         expect(isStalled("idle", T0, now)).toBe(false)
         expect(isStalled("waiting", T0, now)).toBe(false)
+    })
+})
+
+describe("barsPath", () => {
+    it("emits one closed sub-path per sample", () => {
+        const d = barsPath([0, 0.5, 1])
+        expect(d.split("Z").length - 1).toBe(3)
+    })
+
+    it("draws a baseline for empty buckets rather than nothing", () => {
+        const d = barsPath([0])
+        expect(d).toContain("Z")
+        expect(d.length).toBeGreaterThan(0)
+    })
+
+    it("makes a full sample taller than a quiet one", () => {
+        const tall = barsPath([1], 12)
+        const short = barsPath([0.1], 12)
+        // Bar tops are the second Y coordinate in each sub-path.
+        const topOf = (d: string): number => Number(d.split("L")[1].trim().split(" ")[1])
+        expect(topOf(tall)).toBeLessThan(topOf(short))
+    })
+
+    it("returns an empty string for an empty trace", () => {
+        expect(barsPath([])).toBe("")
     })
 })

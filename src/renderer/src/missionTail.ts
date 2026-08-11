@@ -168,6 +168,22 @@ export function isFlat(trace: number[]): boolean {
     return trace.every((v) => v === 0)
 }
 
+/**
+ * An SVG path of one bar per sample, for a `0 0 <len> <height>` viewBox drawn
+ * with preserveAspectRatio="none". Bars are 0.7 units wide on a 1-unit pitch, so
+ * the gap is part of the path rather than a separate element. Empty samples get a
+ * 1-unit stub, which is the baseline that makes silence read as a flat line.
+ */
+export function barsPath(trace: number[], height = 12): string {
+    return trace
+        .map((v, i) => {
+            const h = Math.max(1, v * height)
+            const top = height - h
+            return `M${i} ${height} L${i} ${top} L${i + 0.7} ${top} L${i + 0.7} ${height} Z`
+        })
+        .join(" ")
+}
+
 /** Record a raw pty chunk for a terminal (cheap; no React state). */
 export function recordTail(id: string, chunk: string): void {
     // Keep a larger window than the one-line peek so tiles can expand to context.
