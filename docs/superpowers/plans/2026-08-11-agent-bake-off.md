@@ -1273,6 +1273,73 @@ finishes — defeating the reason the brief gave for showing it at all. Read
 worktree on each tick, not only at gate time. The underlying scan is bounded by file
 mtime, so re-reading a live entrant each tick is cheap.
 
+#### Task 4 corrections (round 2)
+
+- [ ] **N1 — `closeRace()` can close a different card's modal**
+
+Both teardowns park for a long time *after* their confirm, with the UI fully
+interactive — `abandonRace` on `settlePoll` (minutes for a three-way race),
+`landRaceWinner` on `settlePoll` + `landFrom` + N removals. In that window the user
+can Escape out of card A's modal and open card B. When A's teardown resumes, its
+unconditional `closeRace()` shuts B's modal — discarding a half-filled setup form,
+or closing the window onto B's live race. Guard it:
+
+```typescript
+            if (get().raceCardId === cardId) get().closeRace()
+```
+
+- [ ] **N2 — the row's key handler makes its own diff button keyboard-dead**
+
+`selectable` is `status === "passed"`, and a passed row's action *is* its `diff`
+button. The row's `onKeyDown` has no target check, so a keydown on the focused diff
+button bubbles up and hits `e.preventDefault()` — which in Chromium suppresses the
+button's activation for Enter (whose keydown default dispatches the click) and for
+Space (whose keydown default marks it active). A keyboard user who tabs to "View
+Opus's diff" and presses Enter re-selects the row instead of opening the diff.
+
+Early-return when the event did not originate on the row itself:
+
+```typescript
+                        if (e.target !== e.currentTarget) return
+```
+
+Related: `aria-selected` is not valid on `role="button"` — it applies to
+option/row/tab/gridcell/treeitem — so it is dropped from the accessibility tree and
+the selected state is still unannounced. That combination came from my own brief.
+Use `aria-pressed` instead, which is the correct attribute for a toggle-ish button.
+
+- [ ] **N3 — a failed cost read now erases an accumulating total**
+
+With M7 reading cost every tick, the gate path's unconditional `cost: usage?.cost`
+write means one failed read at gate time wipes a figure that had been climbing, and
+the header total visibly drops. Only write cost when the read succeeded; otherwise
+keep the existing value.
+
+- [ ] **N4 — correct my claim about `usage.window`, and throttle it**
+
+The brief said the scan is "bounded by file mtime, so re-reading a live entrant each
+tick is cheap". That is wrong. `costInWindow` skips a file only when
+`statSync(fp).mtimeMs < fromMs`, and a *live* entrant's transcript always has a
+fresh mtime — so the skip never fires for precisely the files M7 targets. Each tick
+now synchronously re-reads and re-parses every working entrant's growing JSONL on
+the main thread, every 5 seconds.
+
+It is not a correctness problem (tens of milliseconds against a 120s gate cap) but
+it is real main-thread work on a short cadence, and the comment justifying it is
+false. Read the live cost every **fourth** tick (~20s) rather than every tick, and
+replace the comment with what the code actually does. Gate-time reads stay
+immediate — that is the number that matters.
+
+- [ ] **N5 — verify what defining `.mono` and `.section-label` did elsewhere**
+
+Those classes were app-wide no-ops until this round defined them, and five other
+components were already using them: `ContextIndex`, `MissionControl`,
+`SettingsModal`, `TaskBoard` and `UsagePanel`. The definitions look like what those
+call sites intended, but only the race modal was screenshotted. Open each of those
+surfaces in the running app and confirm nothing regressed — an unexpected uppercase
+or a font swap in a panel nobody was looking at is exactly the kind of change that
+ships unnoticed.
+
 ---
 
 ### Task 5: One real race, end to end
