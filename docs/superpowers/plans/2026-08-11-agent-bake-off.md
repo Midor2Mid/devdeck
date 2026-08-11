@@ -376,6 +376,13 @@ export function isCommitSha(ref: string): boolean {
     return /^[0-9a-fA-F]{7,40}$/.test(ref)
 }
 
+/**
+ * Diffing and applying are not status polls: on a large repo they take seconds,
+ * and `OPTS`'s 4s leash would kill them. A timeout kill mid-`git apply` is the one
+ * way that command can leave a partial tree, so the budget has to be generous.
+ */
+const SLOW_OPTS = { timeout: 60000, windowsHide: true } as const
+
 /** Raw `git diff --shortstat <fromRef>..HEAD` for a worktree; "" on any failure. */
 export function shortstat(cwd: string, fromRef: string): Promise<string> {
     return new Promise((resolve) => {
@@ -383,7 +390,7 @@ export function shortstat(cwd: string, fromRef: string): Promise<string> {
             resolve("")
             return
         }
-        execFile("git", ["diff", "--shortstat", `${fromRef}..HEAD`], { cwd, ...OPTS }, (err, out) => {
+        execFile("git", ["diff", "--shortstat", `${fromRef}..HEAD`], { ...SLOW_OPTS, cwd }, (err, out) => {
             resolve(err ? "" : out.trim())
         })
     })
@@ -394,18 +401,22 @@ export function shortstat(cwd: string, fromRef: string): Promise<string> {
  * apply it to the target tree as unstaged changes.
  *
  * Both halves run here rather than in the renderer so a large patch never crosses
- * IPC. `--binary` so image and asset changes survive; `--3way` so a patch that
- * does not apply cleanly can still be reconciled against blobs both sides share.
+ * IPC. `--binary` so image and asset changes survive.
  *
- * The caller is responsible for refusing to land onto a dirty tree — see the
- * store. `git apply` leaves the target untouched when it fails, so a rejected
- * patch is not a half-applied mess.
+ * Deliberately NOT `--3way`. Three-way apply implies `--index`, so on a conflict
+ * git writes conflict markers into the working tree AND unmerged entries into the
+ * index before exiting non-zero — leaving exactly the half-applied mess this
+ * function must never produce, and reachable in the ordinary case where the target
+ * branch moved on while the race ran. Plain `git apply` is all-or-nothing: it
+ * either applies cleanly or touches nothing, which is the behaviour worth having
+ * when the fallback is simply "the worktree is still there, look at it yourself".
+ * It also leaves the work unstaged, which is the point of landing rather than
+ * merging — you stage and describe the change instead of inheriting an agent's
+ * commit — so no follow-up reset is needed.
  *
- * `--3way` stages what it applies, so a bare `git reset` follows to put the work
- * back in the working tree unstaged. That is the whole point of landing rather
- * than merging: you stage and describe the change instead of inheriting an
- * agent's commit. The reset cannot touch anything of yours, because landing
- * already requires a clean tree.
+ * The clean-tree requirement is enforced HERE rather than trusted to the caller.
+ * A precondition documented in one module and checked in another is a precondition
+ * that eventually stops being checked.
  */
 export function landFrom(
     worktree: string,
@@ -418,42 +429,64 @@ export function landFrom(
             resolve({ ok: false, error: "refusing to land from an unrecognised revision" })
             return
         }
-        execFile(
-            "git",
-            ["diff", "--binary", `${baseHead}..HEAD`],
-            { cwd: worktree, maxBuffer: 64 * 1024 * 1024, ...OPTS },
-            (err, patch) => {
-                if (err) {
-                    resolve({ ok: false, error: "could not read the winner's diff" })
-                    return
-                }
-                if (!patch.trim()) {
-                    resolve({ ok: false, error: "the winner committed nothing to land" })
-                    return
-                }
-                const child = execFile(
-                    "git",
-                    ["apply", "--3way", "--whitespace=nowarn"],
-                    { cwd: target, ...OPTS },
-                    (e2, _o, stderr) => {
-                        if (e2) {
-                            resolve({
-                                ok: false,
-                                error: (stderr || "").trim().split("\n")[0] || "git apply failed"
-                            })
-                            return
-                        }
-                        // --3way stages what it applies. The design is that the
-                        // winner's work arrives UNSTAGED, so you stage and describe
-                        // it yourself rather than inheriting an agent's framing. A
-                        // bare reset is safe here precisely because landing already
-                        // requires a clean tree — there is nothing of yours to lose.
-                        execFile("git", ["reset"], { cwd: target, ...OPTS }, () => resolve({ ok: true }))
-                    }
-                )
-                child.stdin?.end(patch)
+        execFile("git", ["status", "--porcelain"], { ...OPTS, cwd: target }, (eDirty, dirty) => {
+            if (eDirty) {
+                resolve({ ok: false, error: "could not read the target repository" })
+                return
             }
-        )
+            if (dirty.trim()) {
+                resolve({ ok: false, error: "the target working tree has uncommitted changes" })
+                return
+            }
+            execFile(
+                "git",
+                ["diff", "--binary", `${baseHead}..HEAD`],
+                // encoding "buffer" so the patch is never decoded as UTF-8 and
+                // re-encoded on the way into stdin — a repo with cp1252 sources git
+                // does not classify as binary would round-trip through U+FFFD and
+                // land corrupted, which is precisely what --binary exists to prevent.
+                { ...SLOW_OPTS, cwd: worktree, maxBuffer: 64 * 1024 * 1024, encoding: "buffer" },
+                (err, patch) => {
+                    if (err) {
+                        const tooBig =
+                            (err as NodeJS.ErrnoException).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
+                        resolve({
+                            ok: false,
+                            error: tooBig
+                                ? "the winner's diff is too large to land"
+                                : "could not read the winner's diff"
+                        })
+                        return
+                    }
+                    if (!patch.length) {
+                        resolve({ ok: false, error: "the winner committed nothing to land" })
+                        return
+                    }
+                    const child = execFile(
+                        "git",
+                        ["apply", "--whitespace=nowarn"],
+                        { ...SLOW_OPTS, cwd: target },
+                        (e2, _o, stderr) =>
+                            resolve(
+                                e2
+                                    ? {
+                                          ok: false,
+                                          error:
+                                              String(stderr || "").trim().split("\n")[0] ||
+                                              "git apply failed"
+                                      }
+                                    : { ok: true }
+                            )
+                    )
+                    // Without this, a child that dies before draining stdin (timeout
+                    // kill, spawn failure, git missing) raises EPIPE on an unhandled
+                    // stream — an uncaught exception in the Electron main process,
+                    // which has no global handler.
+                    child.stdin?.on("error", () => undefined)
+                    child.stdin?.end(patch)
+                }
+            )
+        })
     })
 }
 ```
@@ -470,10 +503,19 @@ In `src/main/index.ts`, extend the import on line 13 with `shortstat` and `landF
     ipcMain.handle(
         "git:landFrom",
         (_e, { worktree, baseHead, target }: { worktree: string; baseHead: string; target: string }) => {
-            // BOTH paths are guarded. Checking only one would leave the other an
-            // unchecked path arriving from the renderer.
-            guardRepo(worktree)
-            guardRepo(target)
+            // guardRepo alone is too weak here. It is pure string containment (see
+            // files.isWithinRoots), so "both are inside some open project" would
+            // still allow landing a patch into a DIFFERENT project, or into a
+            // subdirectory — and git apply resolves patch paths relative to cwd, so
+            // a subdirectory target silently nests the whole change one level down.
+            // Require the target to BE a project root, and the worktree to belong to
+            // that same project.
+            const norm = (p: string): string => resolve(p).replace(/[\\/]+$/, "").toLowerCase()
+            const roots = projects.listProjects().projects.map((p) => p.path)
+            if (!roots.some((r) => norm(r) === norm(target)))
+                throw new Error("Land target must be an open project root.")
+            if (!files.isWithinRoots(worktree, [worktrees.worktreeBase(target)]))
+                throw new Error("That worktree does not belong to this project.")
             return landFrom(worktree, baseHead, target)
         }
     )
@@ -537,7 +579,24 @@ describe("isCommitSha", () => {
 })
 ```
 
+Note `resolve` must be added to the `path` import at the top of `src/main/index.ts`,
+which currently imports only `join`.
+
 - [ ] **Step 5: Verify the two operations against a real repo**
+
+Four cases, all against a scratch repo outside DevDeck, all with real output recorded:
+
+1. **Happy path** — worktree commits, land, target shows the change **unstaged**
+   (`git diff --cached` empty, `git diff` non-empty).
+2. **Conflict** — advance the target's own branch so the patch cannot apply, then
+   land. Confirm it fails AND that the target is left **completely untouched**: no
+   conflict markers in any file, `git status` clean, `git diff --cached` empty.
+   This is the case that failed under `--3way`; it is the reason for this round and
+   asserting it is not enough.
+3. **Dirty target** — an uncommitted edit in the target, then land. Confirm it
+   refuses with the uncommitted-changes error and changes nothing.
+4. **Empty diff** — a worktree with no commits past base, then land. Confirm the
+   "committed nothing to land" path.
 
 These touch git, so prove them before building UI on top. In a scratch directory
 (NOT the DevDeck repo), create a repo, make a worktree, commit a change in it, and
