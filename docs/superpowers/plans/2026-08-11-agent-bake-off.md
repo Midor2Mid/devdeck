@@ -766,6 +766,138 @@ git commit -m "feat(race): race lifecycle — start, poll, land, abandon"
 
 ---
 
+#### Task 3 corrections (round 1)
+
+Found by review. All six are defects in this plan's own code, not in the
+implementation of it. Apply every one.
+
+- [ ] **C1 — the worktree path comparison never matches on Windows**
+
+`worktreeAdd` returns a `path.join` result (`D:\repo.worktrees\br`, backslashes);
+`git worktree list --porcelain` reports forward slashes. So `headOf.get(e.worktree)`
+is always `undefined`: no commit is ever detected, the gate never runs, every
+entrant sits `working` until the 20-minute timeout, and the user has paid N agents
+for a race that cannot produce a winner. Verified empirically against a real repo.
+
+Add to `race.ts` — this is the load-bearing comparison of the entire feature, so it
+is a named, tested function rather than an inline expression:
+
+```typescript
+/**
+ * Do two paths refer to the same directory? Deliberately string-only: the two
+ * sources being compared here are `git worktree list` (forward slashes) and
+ * path.join (backslashes on Windows), and treating them as unequal silently
+ * disables the whole race — no commit is ever noticed. Case-folded because
+ * DevDeck is Windows-first.
+ */
+export function samePath(a: string, b: string): boolean {
+    const n = (p: string): string => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
+    return !!a && !!b && n(a) === n(b)
+}
+```
+
+Tests in `tests/race.test.ts`:
+
+```typescript
+describe("samePath", () => {
+    it("matches across separator styles, which is the bug it exists for", () => {
+        expect(samePath("D:\\repo.worktrees\\br", "D:/repo.worktrees/br")).toBe(true)
+    })
+    it("ignores a trailing separator and case", () => {
+        expect(samePath("D:/A/b/", "d:/a/B")).toBe(true)
+    })
+    it("does not match different directories", () => {
+        expect(samePath("D:/a/b", "D:/a/c")).toBe(false)
+    })
+    it("is false for an empty path on either side", () => {
+        expect(samePath("", "D:/a")).toBe(false)
+        expect(samePath("D:/a", "")).toBe(false)
+    })
+})
+```
+
+In `raceTick`, replace the `Map`/`headOf.get` lookup with a `samePath` search:
+
+```typescript
+const head = wts.find((w) => samePath(w.path, e.worktree))?.head
+```
+
+and use the same comparison when reading `baseHead` at start.
+
+- [ ] **M1 — a stale tick can gate the same entrant twice**
+
+The loop iterates the snapshot captured before the first `await`, and never
+re-reads `e.status`. `checks.run`'s default timeout is 120s against a 5s poll, so
+a tick can be 24 intervals behind. A newer tick gates entrant B and records its
+verdict; the older tick then reaches B with its stale `working` status and gates it
+again — two `npm test`-class processes in one worktree, and whichever finishes last
+overwrites the other's verdict. A wrong elimination, invisible afterwards.
+
+Re-read from the store immediately before gating:
+
+```typescript
+        // The loop's snapshot may be many ticks old — checks.run can block for
+        // 120s against a 5s poll. Re-read before spending anything.
+        const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
+        if (!live || live.status !== "working") continue
+```
+
+- [ ] **M2 — landing leaks every pty session and then orphans the worktrees**
+
+`landRaceWinner` never closes the entrants' sessions, but the next lines delete the
+directories those live processes are cwd'd into. On Windows that makes
+`worktreeRemove` fail, and its `{ ok: false }` is discarded, so the user is left
+with orphan worktrees, orphan branches, N agents still running and billing, and no
+message. Close every entrant's pane first, then remove, and surface a removal
+failure through `pushActivity` instead of dropping it.
+
+- [ ] **M3 — an empty `baseHead` is accepted and reads as "already finished"**
+
+The `git.worktrees` read at start is `.catch(() => [])`, so a transient failure
+yields `baseHead: ""` while the entrant is still marked `working`. Any head then
+differs from `""`, so the entrant is gated ~5s after dispatch on an empty diff.
+Treat an empty `baseHead` as a start failure — `nocommit` with the reason in
+`gateOutput`, exactly like a failed `worktreeAdd`.
+
+- [ ] **M4 — the poll runs through teardown**
+
+`stopPoll` is called *after* `landFrom` and all the worktree removals, and in
+`abandonRace` after a confirm that can sit open for minutes. A tick landing in that
+window spawns a gate command inside a directory being deleted — itself a cause of
+M2's removal failures. Call `stopPoll` **first** in both actions: before `landFrom`,
+and immediately after the abandon confirm resolves.
+
+- [ ] **M5 — an IPC rejection strands an entrant in `gating` forever**
+
+`checks.run`, `usage.window` and `git.shortstat` have no `.catch`. `git:shortstat`
+throws from `guardRepo` if the project is closed mid-race; the rejection escapes
+`raceTick` and the entrant stays `gating` — and the timeout only applies to
+`working`, so `raceSettled` is never true and the 5s poll runs for the rest of the
+session. Wrap all three, and apply `RACE_TIMEOUT_MS` to **any** non-terminal status,
+not just `working`.
+
+- [ ] **M6 — a card can be raced twice**
+
+There is no guard, and the race is not written to the store until ~3s × N after the
+confirm, so nothing records that a start is in progress. A second invocation
+overwrites the first race object while `startPoll` kills the first poll — the first
+race's worktrees, branches and live billing agents become completely untracked. Add
+at the top of `startRace`:
+
+```typescript
+            if (get().races[cardId] || startingRaces.has(cardId)) return
+```
+
+with a module-level `startingRaces = new Set<string>()` held for the duration of the
+start loop and cleared in a `finally`. Wrap the loop body so a *rejection* mid-start
+cannot abort before the race object exists, orphaning what was already created.
+
+Also fold in the three small ones: dedupe `agentIds`; count only entrants that
+actually got a worktree in the abandon confirm's message; and re-run
+`npm run typecheck` plus `npx vitest run` before committing.
+
+---
+
 ### Task 4: `RaceModal`
 
 **Files:**
