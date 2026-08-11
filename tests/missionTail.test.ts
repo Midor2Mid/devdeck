@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { cleanTail, peekLine, relTime, sortForFollow, lastLines, isStalled, printableDelta } from "../src/renderer/src/missionTail"
+import { cleanTail, peekLine, relTime, sortForFollow, lastLines, isStalled, printableDelta, CARRY_MAX } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 
 function sess(over: Partial<AnySession>): AnySession {
@@ -104,34 +104,65 @@ describe("peekLine", () => {
 
 describe("printableDelta", () => {
     it("counts non-whitespace characters in completed lines", () => {
-        expect(printableDelta("hello world\n")).toBe(10)
+        expect(printableDelta("hello world\n").chars).toBe(10)
     })
 
-    it("scores a carriage-return spinner frame as zero", () => {
+    it("treats CRLF as a line terminator, not a redraw", () => {
+        // ConPTY emits \r\n by default and DevDeck is Windows-first. Scoring this
+        // as a redraw would zero almost all genuine output.
+        expect(printableDelta("hello\r\n").chars).toBe(5)
+        expect(printableDelta("a\r\nb\r\n").chars).toBe(2)
+    })
+
+    it("scores a bare-carriage-return spinner frame as zero", () => {
         // A spinner rewrites one line in place and never commits it.
-        expect(printableDelta("\r| Thinking...")).toBe(0)
-        expect(printableDelta("\r/ Thinking...\r- Thinking...")).toBe(0)
+        expect(printableDelta("\r| Thinking...").chars).toBe(0)
+        expect(printableDelta("\r/ Thinking...\r- Thinking...").chars).toBe(0)
     })
 
     it("scores an ANSI-only chunk as zero", () => {
-        expect(printableDelta("\x1b[2K\x1b[1G")).toBe(0)
-        expect(printableDelta("\x1b[31m\x1b[0m")).toBe(0)
-    })
-
-    it("does not count a trailing unterminated segment", () => {
-        expect(printableDelta("done\nbut not this")).toBe(4)
+        expect(printableDelta("\x1b[2K\x1b[1G").chars).toBe(0)
+        expect(printableDelta("\x1b[31m\x1b[0m").chars).toBe(0)
     })
 
     it("counts a line that a carriage return revised before committing", () => {
         // The final revision is what reached the screen.
-        expect(printableDelta("draft\rfinal\n")).toBe(5)
+        expect(printableDelta("draft\rfinal\n").chars).toBe(5)
     })
 
     it("ignores whitespace and tabs in the count", () => {
-        expect(printableDelta("  a\tb  \n")).toBe(2)
+        expect(printableDelta("  a\tb  \n").chars).toBe(2)
     })
 
     it("returns zero for an empty chunk", () => {
-        expect(printableDelta("")).toBe(0)
+        expect(printableDelta("").chars).toBe(0)
+    })
+
+    it("carries an unterminated segment out instead of dropping it", () => {
+        const first = printableDelta("but not ")
+        expect(first.chars).toBe(0)
+        expect(first.carry).toBe("but not ")
+    })
+
+    it("counts a line assembled from several chunks, once", () => {
+        // Agents stream token by token; this is the common case, not an edge case.
+        const a = printableDelta("Now let me ")
+        const b = printableDelta("check the tests\n", a.carry)
+        expect(a.chars).toBe(0)
+        expect(b.chars).toBe(21)
+        expect(b.carry).toBe("")
+    })
+
+    it("handles a CRLF split across two chunks", () => {
+        const a = printableDelta("hello\r")
+        const b = printableDelta("\nworld\n", a.carry)
+        expect(a.chars).toBe(0)
+        expect(b.chars + a.chars).toBe(10)
+    })
+
+    it("caps a carry that never sees a newline", () => {
+        const out = printableDelta("x".repeat(9000))
+        expect(out.chars).toBe(0)
+        expect(out.carry).toHaveLength(CARRY_MAX)
     })
 })

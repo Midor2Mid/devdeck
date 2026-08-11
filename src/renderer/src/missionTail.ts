@@ -39,31 +39,50 @@ export function lastLines(tail: string, n: number): string {
         .join("\n")
 }
 
+/** Cap on a carried segment, so a stream with no newline can't grow it unbounded. */
+export const CARRY_MAX = 4000
+
 /**
  * Committed printable characters in a raw pty chunk — the trace's unit of work.
  *
  * Deliberately NOT cleanTail: that rewrites \r to \n, which is right for a
  * readable peek and wrong here, because every spinner frame would then look like
- * a completed line and a wedged agent would draw a healthy trace. Here \r
- * discards the pending segment, the way a carriage return overwrites a terminal
- * line, so redraw-in-place scores zero and only text that actually scrolled past
- * counts.
+ * a completed line and a wedged agent would draw a healthy trace. Here only a
+ * BARE \r discards the pending segment, the way a carriage return overwrites a
+ * terminal line — \r\n is an ordinary terminator, which matters because ConPTY
+ * emits it by default and treating it as a redraw would score real output as
+ * silence.
+ *
+ * `carry` is the caller's unfinished segment from last time and comes back out
+ * on every call: agents stream token by token, so a line routinely spans many
+ * chunks and a stateless count would drop nearly all of it.
  */
-export function printableDelta(chunk: string): number {
-    const s = chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
+export function printableDelta(chunk: string, carry = ""): { chars: number; carry: string } {
+    const s = carry + chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
+    // A chunk may end mid-CRLF; hold the \r back so the next chunk can complete it.
+    const heldCr = s.endsWith("\r")
+    const body = heldCr ? s.slice(0, -1) : s
     let committed = ""
     let pending = ""
-    for (const ch of s) {
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i]
         if (ch === "\n") {
             committed += pending
             pending = ""
         } else if (ch === "\r") {
-            pending = ""
+            if (body[i + 1] === "\n") {
+                committed += pending
+                pending = ""
+                i++
+            } else {
+                pending = ""
+            }
         } else {
             pending += ch
         }
     }
-    return committed.replace(/\s/g, "").length
+    if (pending.length > CARRY_MAX) pending = pending.slice(-CARRY_MAX)
+    return { chars: committed.replace(/\s/g, "").length, carry: pending + (heldCr ? "\r" : "") }
 }
 
 import type { AgentStatus, AnySession } from "./store"
