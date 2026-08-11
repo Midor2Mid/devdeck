@@ -168,6 +168,19 @@ export function MissionControl(): JSX.Element {
                                     className={"mission-tile status-" + s.status + (stalled ? " stalled" : "")}
                                     role="button"
                                     tabIndex={0}
+                                    // The trace shows silence as a flatline, which a screen reader
+                                    // cannot see — so the sentence it replaces lives here.
+                                    aria-label={
+                                        `${s.sessionName} · ${s.projectName} · ${s.status}` +
+                                        (stalled ? ` · stalled, no output ${ago}` : ago ? ` · last output ${ago} ago` : "")
+                                    }
+                                    data-tip={
+                                        stalled
+                                            ? `Stalled — no output ${ago}`
+                                            : ago
+                                              ? `Last output ${ago} ago`
+                                              : undefined
+                                    }
                                     onClick={() => jumpToTerm(s.termId)}
                                 >
                                     <div className="mission-tile-head">
@@ -185,10 +198,7 @@ export function MissionControl(): JSX.Element {
                                             {isExpanded ? "−" : "⋯"}
                                         </button>
                                     </div>
-                                    <div className="mission-tile-proj muted small">
-                                        {s.projectName}
-                                        {ago ? ` · ${ago}` : ""}
-                                    </div>
+                                    <div className="mission-tile-proj muted small">{s.projectName}</div>
                                     {isExpanded ? (
                                         <pre className="mission-tile-full">
                                             {getFullTail(s.termId) || "(no output yet)"}
@@ -200,9 +210,6 @@ export function MissionControl(): JSX.Element {
                                     )}
                                     {s.status === "attention" && (
                                         <div className="mission-tile-attn">needs you</div>
-                                    )}
-                                    {stalled && (
-                                        <div className="mission-tile-stalled">stalled — no output {ago}</div>
                                     )}
                                     <svg
                                         className="mission-trace"

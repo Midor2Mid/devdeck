@@ -633,10 +633,6 @@ button .ic,
 .mission-tile.stalled {
     border-left: 2px solid var(--clay);
 }
-.mission-tile-stalled {
-    font-size: 11px;
-    color: var(--clay);
-}
 .mission-tile-expand {
     margin-left: auto;
     background: transparent;
