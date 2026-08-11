@@ -1211,6 +1211,70 @@ git commit -m "feat(race): race modal, board action and styles"
 
 ---
 
+#### Task 4 corrections (round 1)
+
+- [ ] **H1 — teardown leaves an armed Start-race form on screen (money)**
+
+`landRaceWinner` and `abandonRace` delete `races[cardId]` but never clear
+`raceCardId`, so the still-mounted modal falls through to its setup branch with the
+user's previous entrant checkboxes and gate command intact and the accent button
+**enabled** — the reset effect's only dependency is `raceCardId`, which didn't
+change. After a successful Land the ChangesModal opens on top; close it and you are
+looking at a live Start-race form for the card that just finished. One click starts
+a real race and bills every entrant again, and the store's double-start guard does
+not apply because the race object is gone. Same immediately after Abandon.
+
+Call `closeRace()` at the end of both actions.
+
+- [ ] **H2 — the Land disable reason can never be seen**
+
+The reason lives in `data-tip` on a `disabled` button. Chromium does not dispatch
+mouse events for disabled form controls, so the tooltip layer's `mouseover` never
+fires, and a disabled button is not focusable so the `focusin` path is out too. The
+button simply greys out — exactly what the brief forbade. Render the reason as
+inline text beside the button, the way the all-eliminated sentence already does.
+
+- [ ] **M3 — a running race becomes unreachable if the card moves**
+
+The Race button is gated on `t.column === "todo"` and `openRace` has no other
+caller, but cards are draggable and have move arrows. Move a racing card to `doing`
+and the only door to that race closes while its agents keep running and billing.
+Show the button whenever `races[t.id]` exists regardless of column, and label it
+distinctly in that case (e.g. "Race ▸ open") so a live race is visible on the card
+rather than looking like an invitation to start one.
+
+- [ ] **M4 — a long gate command clips the spend figure out of the header**
+
+`.race-gate` is a flex item with `overflow: hidden` but no `min-width: 0`, so it
+never shrinks below max-content; `.race-spend-total` is `flex: none` and `.modal` is
+`overflow: hidden`, so past roughly sixty characters the money figure is pushed off
+and clipped entirely. `.race-detail` already gets this right. Add `min-width: 0`.
+
+- [ ] **M5 — no pending state during the 6–9s start**
+
+`startRace` writes the race only after a sequential ~2.8s-per-entrant loop. For that
+whole window the modal still shows the setup form with Start enabled; a second click
+hits the store guard and returns silently. Hold a local `starting` flag from the
+click until the race appears, disable the button, and say what is happening.
+
+- [ ] **M6 — survivor selection is mouse-only**
+
+The row is a bare `div` with `onClick`. Give it `role="button"`, `tabIndex={0}`, a
+key handler for Enter/Space and `aria-selected`, so a keyboard user can choose which
+survivor to land rather than being stuck with the default. Add an `aria-label` to the
+icon-only close button, and give the per-row `diff`/`jump`/`output` buttons accessible
+names carrying the agent's name.
+
+- [ ] **M7 — the live spend reads $0 for the whole working phase**
+
+Cost is written only on the gate path, so the header shows `$0` until an entrant
+finishes — defeating the reason the brief gave for showing it at all. Read
+`usage.window(e.worktree, race.startedAt, Date.now())` for every entrant that has a
+worktree on each tick, not only at gate time. The underlying scan is bounded by file
+mtime, so re-reading a live entrant each tick is cheap.
+
+---
+
 ### Task 5: One real race, end to end
 
 Everything before this is verified in pieces. This is the only step that proves the
