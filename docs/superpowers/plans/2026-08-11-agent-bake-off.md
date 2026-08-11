@@ -1056,6 +1056,58 @@ instantly and leaves a gate running inside a directory it is deleting. If the wa
 proves annoying in Task 5's live run, the fix is a shorter `timeoutMs` passed to
 `checks.run` for races, not a return to racing teardown against the tick.
 
+- [ ] **S4 — only one teardown at a time**
+
+S1 and S2 hold for a *single* teardown, verified against the event loop. They do
+not stop two. `landRaceWinner` and `abandonRace` have no equivalent of
+`startingRaces`, and the race is only deleted from the store at the very end of
+each — so:
+
+1. A 90-second gate is running; a tick holds the in-flight promise.
+2. Land on A passes its guards and parks on `settlePoll`. **The button now appears
+   frozen for up to two minutes**, which is what invites step 3.
+3. Land on B, or Abandon, passes its own guards — the race still exists, B is still
+   `passed`, the tree is still clean — and parks on the same promise.
+4. The tick resolves and both resume within microtasks of each other, entering
+   their destructive sections concurrently.
+
+Two concurrent `landFrom` calls into one project root is the mixed working tree the
+dirty-tree check exists to prevent, now reachable *past* that check. Worse, the
+loser's `!res.ok` branch calls `startPoll`, re-arming the interval behind the
+winner's back so a gate can spawn inside a worktree the other teardown is deleting —
+S2's hazard, resurrected through N3's restart. And `landRaceWinner` deletes
+`races[cardId]` without re-checking identity, so a late Land can delete a *newly
+started* race's tracking and leave its billing agents untracked.
+
+The window pre-existed at the `confirm` and `git.status` awaits. Round 4 widened it
+from milliseconds to a full gate runtime, added a synchronised release point that
+makes simultaneous entry the likely outcome rather than a fluke, and handed the user
+a frozen button as the reason to click again.
+
+Use the idiom already in this file:
+
+```typescript
+// Land and Abandon both park on the in-flight tick, so without this they resume
+// together and run their destructive sections concurrently — two landFrom calls
+// into one tree, or a removal racing a read. startingRaces guards the start; this
+// guards the end.
+const tearingDown = new Set<string>()
+```
+
+Checked at the top of both actions, added before the first `await`, cleared in a
+`finally`. Do not rely on Task 4 disabling the buttons: `landRaceWinner` already
+guards defensively against a bad `agentId`, and relying on the UI here would
+contradict the file's own posture.
+
+- [ ] **S5 — state the wait honestly**
+
+The round-4 comments and this plan both say teardown can wait "up to a gate
+command's runtime — up to 120s". That understates it by a factor of N: one tick
+gates **every** entrant sequentially, so a three-way race can block Abandon for
+around six minutes. Correct the comments at both call sites, and note that if the
+wait needs shortening the lever is a smaller `timeoutMs` passed to `checks.run`,
+sized against **N × timeout**, not one gate.
+
 - [ ] **S3 — give `gating` its own deadline**
 
 Even with S1 and S2, an entrant should not be able to sit in a non-terminal status
