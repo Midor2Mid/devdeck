@@ -850,3 +850,119 @@ git commit -m "docs(design): record the agent tile output trace"
 - Traces are visible, moving, and theme-coloured in both Slate and Washi, confirmed by screenshots.
 - `grep -rn "mission-tile-stalled" src/` returns nothing.
 - `DESIGN.md` describes what the code actually does.
+
+---
+
+## Addendum — Task 7: measure novelty, not commits
+
+Added after the whole-branch review and a two-run empirical investigation. Read
+`.superpowers/sdd/2026-08-11-mission-trace/spinner-investigation.md` for the
+evidence behind it.
+
+**Why.** Two independent captures of real Claude Code output contain **no bare
+`\r`**. Its Ink TUI repaints with CSI cursor positioning terminated by ordinary
+`\r\n`. `printableDelta`'s redraw rule fires only on a bare `\r`, so against the
+agent DevDeck exists to supervise it never fires: every repaint commits its whole
+frame and a wedged spinner would draw a *saturated* trace. That is the inverse of
+the design's claim.
+
+Chasing escape sequences is the wrong fix — the next TUI repaints differently
+again. Measure what actually changed on screen instead: **how much a committed
+line differs from the line it replaced.** A spinner frame differs from its
+predecessor by one glyph; a real line of output differs wholesale. This is
+independent of how the redraw was encoded.
+
+A second problem the review found, verified by hand: `isStalled` can never fire.
+It needs `status === "working"` **and** 120s of silence, but `onPtyData` flips
+`working` off after `agentIdleMs` (default **1000ms**, `settings.ts:340`). The
+stall stripe, tooltip and aria-label are all dead paths today. Novelty fixes this
+too: a wedged agent keeps emitting bytes, so it *stays* `working` while scoring
+zero — flat trace plus working status is a stall the old test could never see.
+
+### Files
+
+- Modify: `src/renderer/src/missionTail.ts` — `lineNovelty`, `printableDelta` state, `ringAge`
+- Modify: `tests/missionTail.test.ts`
+- Modify: `src/renderer/src/components/MissionControl.tsx` — stall marker
+- Modify: `DESIGN.md` — the trace bullet
+
+### Interfaces
+
+```ts
+export interface DeltaState { carry: string; prevLine: string }
+export function lineNovelty(line: string, prev: string): number
+export function printableDelta(chunk: string, state?: DeltaState): { chars: number; state: DeltaState }
+export function ringAge(id: string, now?: number): number   // ms since the ring was created; 0 if none
+```
+
+`Ring` gains `state: DeltaState` and `born: number`. `recordRate` threads the
+state through and stamps `born` on creation.
+
+### The novelty rule
+
+```ts
+/**
+ * How much a committed line actually changed from the line it replaced.
+ *
+ * A TUI repaint re-emits a line that is nearly identical to its predecessor —
+ * a spinner rotates one glyph, an elapsed timer moves a digit or two. Real
+ * output differs wholesale. Comparing position by position captures that
+ * without needing to know how the redraw was encoded, which matters because
+ * Claude Code repaints with CSI cursor moves and \r\n, not carriage returns.
+ *
+ * Below the floor the line is treated as a redraw and scores nothing. The floor
+ * is proportional so a long status bar with a ticking counter stays silent
+ * while a short genuine line still registers.
+ */
+export function lineNovelty(line: string, prev: string): number {
+    if (!line.trim()) return 0
+    let diff = Math.abs(line.length - prev.length)
+    const shared = Math.min(line.length, prev.length)
+    for (let i = 0; i < shared; i++) if (line[i] !== prev[i]) diff++
+    const floor = Math.max(3, Math.floor(line.length * 0.1))
+    if (diff <= floor) return 0
+    return line.replace(/\s/g, "").length
+}
+```
+
+A line that clears the floor scores its full non-whitespace length, not its diff:
+once we accept it as new content, its size is what it is.
+
+### Wiring the stall marker
+
+In `MissionControl.tsx`, replace the `isStalled(...)` call that computes `stalled`:
+
+```tsx
+                            const trace = getTrace(s.termId)
+                            // The picture is the test: output arriving but none of
+                            // it novel means a wedged agent. isStalled cannot see
+                            // this — it needs 120s of silence while "working", and
+                            // agentIdleMs drops the status off "working" after 1s.
+                            // Requires a full window of history, or a session that
+                            // just started would read as stalled immediately.
+                            const stalled =
+                                s.status === "working" &&
+                                isFlat(trace) &&
+                                ringAge(s.termId) >= STALL_MS
+```
+
+`isStalled` stays exported and tested — other callers and the existing tests are
+untouched — but Mission Control stops depending on it.
+
+### Tests to add
+
+- `lineNovelty`: identical lines → 0; one-glyph spinner rotation on a ~40-char line → 0; a ticking `(12s)` → `(13s)` → 0; a wholly different line → its non-whitespace length; a blank line → 0; a short real line that clears the floor → scores.
+- `printableDelta`: a sequence of ten CSI-positioned, `\r\n`-terminated spinner frames differing by one glyph scores **0** in total — this is the regression test for the bug that motivated the addendum.
+- Ten distinct real output lines score their full length.
+- `ringAge`: 0 for an unknown session; grows with the injected clock.
+- The stall condition: a session emitting spinner frames for longer than `STALL_MS` is flat with a full-age ring; a session that just started is flat but young, and must NOT read as stalled.
+
+### Also fix here (from the final review, both required before merge)
+
+- The log-scale test asserts only at and above the ceiling, so a regression to a **linear** scale would pass it. Add a mid-range assertion: 64 characters must scale above 0.4 (linear would give 0.016).
+- The `barsPath` baseline test asserts only that the string contains `"Z"`. Assert the empty bucket's bar top is `height - 1`, which is what makes silence read as a line.
+
+### DESIGN.md
+
+Replace the trace bullet so it describes novelty rather than raw output, and so
+the stall sentence matches the code that now implements it.
