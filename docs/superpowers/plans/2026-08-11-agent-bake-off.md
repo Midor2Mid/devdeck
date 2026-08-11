@@ -372,7 +372,7 @@ Add after `gitStatus`:
  * Every ref reaching these functions is a commit sha read out of `git worktree
  * list` (see parseWorktreeList), so requiring hex is exact rather than restrictive.
  */
-function isCommitSha(ref: string): boolean {
+export function isCommitSha(ref: string): boolean {
     return /^[0-9a-fA-F]{7,40}$/.test(ref)
 }
 
@@ -503,25 +503,39 @@ Expected: zero errors.
 
 - [ ] **Step 4b: Prove the ref guard**
 
-Add to `tests/race.test.ts` — `isCommitSha` is not exported, so assert through the
-public functions in a throwaway directory where git will fail anyway; what is being
-proven is that a hostile ref never reaches git at all:
+**Export `isCommitSha`** and test it directly. Tests in this repo already import
+main-process pure functions (`tests/git-parse.test.ts` imports from
+`../src/main/worktrees`), so this is the established pattern, and a named, tested
+guard is worth more than keeping it private.
+
+Add to `tests/git-parse.test.ts`:
 
 ```typescript
-describe("ref guard", () => {
-    it("refuses a ref that git would read as an option", async () => {
-        // "--output=<file>" is a real git diff flag; interpolated as
-        // "--output=/tmp/x..HEAD" it writes an attacker-chosen file.
-        const r = await window_api_landFrom_shim("--output=/tmp/pwned", "/nonexistent")
-        expect(r.ok).toBe(false)
-        expect(r.error).toMatch(/unrecognised revision/)
+describe("isCommitSha", () => {
+    it("accepts the short and full shas git actually produces", () => {
+        expect(isCommitSha("1a2b3c4")).toBe(true)
+        expect(isCommitSha("0e375ccbc867f1e52fe81d169b211d7b08ccc655")).toBe(true)
+        expect(isCommitSha("ABCDEF1")).toBe(true)
+    })
+
+    it("rejects anything git could read as an option", () => {
+        // "--output=<file>" is a real git diff flag. Interpolated into
+        // `${ref}..HEAD` it becomes "--output=/tmp/x..HEAD" and writes a file of
+        // the caller's choosing — argument injection without a shell in sight.
+        expect(isCommitSha("--output=/tmp/pwned")).toBe(false)
+        expect(isCommitSha("-n")).toBe(false)
+        expect(isCommitSha("--upload-pack=touch /tmp/x")).toBe(false)
+    })
+
+    it("rejects refs that are not shas at all", () => {
+        expect(isCommitSha("HEAD")).toBe(false)
+        expect(isCommitSha("main")).toBe(false)
+        expect(isCommitSha("")).toBe(false)
+        expect(isCommitSha("1a2b3c")).toBe(false) // too short to be a git short sha
+        expect(isCommitSha("1a2b3c4z")).toBe(false)
     })
 })
 ```
-
-If wiring a shim for a main-process function proves awkward from the renderer test
-setup, export `isCommitSha` and test it directly instead — a named, tested guard is
-worth more than keeping it private. State in your report which route you took.
 
 - [ ] **Step 5: Verify the two operations against a real repo**
 
