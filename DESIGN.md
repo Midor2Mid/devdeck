@@ -206,8 +206,9 @@ component changes:
   one SVG path in `currentColor` at `--muted`. Never accent-coloured — it is a
   reading, not an action. Empty buckets draw a baseline, so genuine silence
   reads as a flat line. It measures output volume, not usefulness: an agent
-  repainting a spinner registers as active, so read it for pace, not for
-  progress.
+  repainting a spinner with `\r\n`-terminated frames registers as active,
+  while one that repaints in place with a bare `\r` reads as silent — so read
+  it for pace, not for progress.
 
 ### Active-state grammar
 

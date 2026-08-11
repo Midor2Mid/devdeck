@@ -54,17 +54,19 @@ const EMPTY_STATE: DeltaState = { carry: "" }
  * Printable characters committed in a raw pty chunk — the trace's unit of
  * activity. Every completed line counts at its non-whitespace length, full
  * stop: this is a measure of output volume, not of whether the line is new.
- * A TUI that repaints a spinner or a ticking counter scores the same as one
- * writing genuinely new lines — distinguishing those needs the rendered
- * terminal buffer, not the pty byte stream (three attempts at deriving it from
- * the stream all failed review; see NOTES.md).
+ * A TUI that repaints a spinner or a ticking counter with `\r\n`-terminated
+ * frames scores the same as one writing genuinely new lines (a bare-`\r`
+ * repaint is the one case this module can tell apart — see below) —
+ * distinguishing the general case needs the rendered terminal buffer, not the
+ * pty byte stream (three attempts at deriving it from the stream all failed
+ * review; see NOTES.md).
  *
  * Deliberately NOT cleanTail: that rewrites \r to \n, which is right for a
  * readable peek and wrong here, because it would make a bare-\r overwrite look
  * like a completed line. A bare \r overwrites the pending segment in place, the
- * way a terminal cursor return does, and genuinely never reaches the screen —
- * not counting it is correct terminal semantics, not a claim about spinners.
- * \r\n and \n commit the pending segment as a line.
+ * way a terminal cursor return does, so the overwritten text does not survive
+ * on screen — not counting it is correct terminal semantics, not a claim about
+ * spinners. \r\n and \n commit the pending segment as a line.
  *
  * `state` is the caller's carry from the previous call and comes back out on
  * every call: agents stream token by token, so a line routinely spans many
@@ -94,8 +96,8 @@ export function printableDelta(
                 pending = ""
                 i++
             } else {
-                // A bare \r overwrites the pending segment in place — it never
-                // reaches the screen, so it is discarded here too.
+                // A bare \r overwrites the pending segment in place — it does
+                // not survive on screen, so it is discarded here too.
                 pending = ""
             }
         } else {

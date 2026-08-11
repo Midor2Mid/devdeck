@@ -121,9 +121,9 @@ describe("printableDelta", () => {
         expect(printableDelta("hello world\n").chars).toBe(10)
     })
 
-    it("treats CRLF as a line terminator, not a redraw", () => {
-        // ConPTY emits \r\n by default and DevDeck is Windows-first. Scoring this
-        // as a redraw would zero almost all genuine output.
+    it("treats CRLF as a line terminator that commits and counts", () => {
+        // ConPTY emits \r\n by default and DevDeck is Windows-first. Discarding
+        // this the way a bare \r is discarded would zero almost all genuine output.
         expect(printableDelta("hello\r\n").chars).toBe(5)
         const two = printableDelta("first line\r\nsecond one\r\n")
         expect(two.chars).toBe("firstline".length + "secondone".length)
@@ -131,8 +131,9 @@ describe("printableDelta", () => {
 
     it("never counts a segment a bare carriage return overwrote before any newline", () => {
         // A bare \r overwrites the pending segment in place — the same as a
-        // terminal cursor return — and it never reaches the screen, so it is
-        // correct terminal semantics to not count it, not a claim about spinners.
+        // terminal cursor return — so the overwritten text does not survive on
+        // screen; not counting it is correct terminal semantics, not a claim
+        // about spinners.
         expect(printableDelta("\r| Thinking...").chars).toBe(0)
         expect(printableDelta("\r/ Thinking...\r- Thinking...").chars).toBe(0)
     })
