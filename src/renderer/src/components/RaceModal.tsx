@@ -107,15 +107,26 @@ function RaceRow({
     }
 
     // A keyboard user needs the same "pick a survivor" path a mouse user has -
-    // role/tabIndex/aria-selected only apply when the row is actually
+    // role/tabIndex/aria-pressed only apply when the row is actually
     // selectable (a passed entrant); other rows stay plain, unfocusable divs.
+    // aria-selected is not valid on role="button" (it belongs to option/row/
+    // tab/gridcell/treeitem), so the selected state would be dropped from the
+    // accessibility tree entirely - aria-pressed is the correct attribute for
+    // a toggle-ish button.
     const rowProps = selectable
         ? {
               role: "button" as const,
               tabIndex: 0,
-              "aria-selected": selected,
+              "aria-pressed": selected,
               onClick: onSelect,
               onKeyDown: (e: React.KeyboardEvent) => {
+                  // A passed row's own action IS its diff button. Without this
+                  // check, a keydown on that focused button bubbles up to the
+                  // row and hits preventDefault() below, which in Chromium
+                  // suppresses the button's own Enter/Space activation - so
+                  // tabbing to "diff" and pressing Enter would re-select the
+                  // row instead of opening the diff.
+                  if (e.target !== e.currentTarget) return
                   if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault()
                       onSelect()

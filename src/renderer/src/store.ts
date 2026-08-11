@@ -397,6 +397,12 @@ const inFlight = new Map<string, Promise<void>>()
 // landRaceWinner already defends itself against a bad agentId and trusting
 // Task 4 to disable the buttons would contradict that posture.
 const tearingDown = new Set<string>()
+// How many ticks a card's race has run, so the "working"-phase live-cost read
+// (see raceTick) can throttle itself to every 4th tick instead of every one.
+// Never reset between races on the same card — like raceGen, one integer per
+// card is cheap, and an off-by-a-few-ticks cadence at the very start of a
+// fresh race is harmless.
+const raceTickCount = new Map<string, number>()
 // When each agent entered a wants-you state (waiting/attention), for "jump to
 // the oldest one that wants you".
 const pendingSince = new Map<string, number>()
@@ -715,6 +721,12 @@ export const useStore = create<AppState>((set, get) => {
         // worktree with its head, so polling cost does not grow with entrant count.
         const wts = await window.api.git.worktrees(r.projectPath).catch(() => [])
         if (stale()) return
+        // Every 4th tick (~20s at the 5s poll interval) reads a live "working"
+        // entrant's cost below — see the comment at that call site for why this
+        // is throttled rather than run on every tick.
+        const tickNum = (raceTickCount.get(cardId) ?? 0) + 1
+        raceTickCount.set(cardId, tickNum)
+        const readLiveCost = tickNum % 4 === 0
 
         for (const e of r.entrants) {
             // S3: give "gating" its own deadline, independent of the 20-minute
@@ -744,14 +756,17 @@ export const useStore = create<AppState>((set, get) => {
             // settle the race, stopPoll bumps the generation and the real
             // verdict — which is still in flight — gets discarded as stale.
             if (e.status !== "working") continue
-            // Live cost, every tick, independent of a commit: without this the
-            // header's spend total pins at $0 for the entire working phase —
-            // often most of a race's life — which defeats the reason it's
-            // shown at all (a race costs several times one card, and that
-            // should be visible while it's still running, not just at the
-            // end). Cheap even re-read every 5s: the underlying scan is
-            // bounded by file mtime, not by re-parsing everything.
-            if (e.worktree) {
+            // Live cost during the working phase, independent of a commit:
+            // without this the header's spend total pins at $0 for most of a
+            // race's life, defeating the reason it's shown at all. Throttled
+            // to every 4th tick, NOT every tick: costInWindow's mtime-based
+            // skip (statSync(fp).mtimeMs < fromMs) never fires for a live
+            // entrant, since a growing transcript always has a fresh mtime —
+            // so every tick was synchronously re-reading and re-parsing each
+            // working entrant's whole JSONL on the main thread, every 5s. This
+            // cuts that four-fold; gate-time reads below stay immediate, since
+            // that number is the one that actually matters for landing.
+            if (readLiveCost && e.worktree) {
                 const usage = await window.api.usage.window(e.worktree, r.startedAt, Date.now()).catch(() => null)
                 if (stale()) return
                 if (usage) {
@@ -804,8 +819,11 @@ export const useStore = create<AppState>((set, get) => {
                 ])
                 if (stale()) return
                 setEntrant(cardId, e.agentId, {
-                    cost: usage?.cost,
-                    costTokens: usage?.tokens,
+                    // A failed read here must not overwrite a cost the working-
+                    // phase read above already climbed to — only write cost/
+                    // costTokens when this read actually succeeded, else the
+                    // header's total would visibly drop on one flaky read.
+                    ...(usage ? { cost: usage.cost, costTokens: usage.tokens } : {}),
                     ...parseShortstat(stat)
                 })
                 continue
@@ -1420,8 +1438,13 @@ export const useStore = create<AppState>((set, get) => {
                 // setup branch with the previous checkboxes/gate command intact
                 // and Start enabled, and startRace's double-start guard doesn't
                 // apply once races[cardId] is gone. One accidental click there
-                // bills every entrant again.
-                get().closeRace()
+                // bills every entrant again. Guarded to THIS card: everything
+                // above can park for minutes (settlePoll, landFrom, N worktree
+                // removals) with the UI fully interactive, so by the time this
+                // resumes the user may have closed this modal and opened a
+                // different card's — closing unconditionally would rip that one
+                // away instead.
+                if (get().raceCardId === cardId) get().closeRace()
                 get().moveBoardTask(cardId, "review")
                 const projectName = get().projects.find((p) => p.id === race.projectId)?.name ?? race.title
                 get().openChanges(race.projectPath, projectName)
@@ -1492,10 +1515,10 @@ export const useStore = create<AppState>((set, get) => {
                     delete rest[cardId]
                     return { races: rest }
                 })
-                // Same reason as landRaceWinner: without this the modal falls
-                // through to an armed setup form for a race that no longer
-                // exists.
-                get().closeRace()
+                // Same reason as landRaceWinner, same guard: without it, this
+                // could close a DIFFERENT card's modal if the user moved on
+                // during the confirm/settlePoll/removal window above.
+                if (get().raceCardId === cardId) get().closeRace()
             } finally {
                 tearingDown.delete(cardId)
             }
