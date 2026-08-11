@@ -26,6 +26,7 @@ import { confirm } from "./confirm"
 import {
     RACE_TIMEOUT_MS,
     RACE_POLL_MS,
+    GATE_TIMEOUT_MS,
     parseShortstat,
     entrantBranch,
     raceSettled,
@@ -344,11 +345,22 @@ const racePolls = new Map<string, ReturnType<typeof setInterval>>()
 // object isn't stored until ~3s x N (the sequential dispatch loop) after the
 // user confirms.
 const startingRaces = new Set<string>()
-// A tick suspended in an await cannot be cancelled — stopPoll clears the
-// interval, but checks.run can still be 120s from returning. Every write and
-// every spend inside a tick re-checks the generation it started under; bumping
-// it (stopPoll, or a fresh startPoll) makes any in-flight tick a no-op from
-// that instant on. Same device as pipelineToken above, for the same reason.
+// Rounds 1-3 leaned on this generation counter as the ONLY defence against a
+// tick suspended in an await (checks.run can block for 120s against a 5s
+// poll): every write re-checks the generation it started under, and stopPoll
+// bumps it so an in-flight tick is stale the instant it wakes. That design
+// kept breaking itself — the timeout had to widen to save a stranded tick
+// (M5), which could then discard a real verdict as stale (N2); narrowing it
+// back plus letting the race survive a failed land (N3) reopened a path where
+// a generation bump between writing "gating" and writing the verdict left an
+// entrant stranded with nothing left able to move it. Four rounds of a fix
+// breaking the previous fix said the concurrency model was wrong, not the
+// instance: runTick/inFlight below now make ticks non-overlapping, and
+// settlePoll makes teardown wait for the current tick instead of racing it,
+// so this counter is no longer the only thing standing between a tick and a
+// race being torn down out from under it. Kept anyway, as cheap
+// belt-and-braces against a tick that somehow outlives its own await — same
+// device as pipelineToken above, for the same reason.
 //
 // Entries are NEVER deleted, including on teardown — one integer per card,
 // bounded by the number of cards that have ever raced, is a cost worth paying.
@@ -364,6 +376,11 @@ const bumpGen = (cardId: string): number => {
     raceGen.set(cardId, next)
     return next
 }
+// A tick can outlive its interval — checks.run blocks for up to 120s against a
+// 5s poll — so ticks must not overlap. Without this, a lagging tick and a
+// fresh one both act on the same entrant from different snapshots (round 1's
+// M1). Keyed by cardId; holds the currently-running tick's promise, if any.
+const inFlight = new Map<string, Promise<void>>()
 // When each agent entered a wants-you state (waiting/attention), for "jump to
 // the oldest one that wants you".
 const pendingSince = new Map<string, number>()
@@ -684,6 +701,23 @@ export const useStore = create<AppState>((set, get) => {
         if (stale()) return
 
         for (const e of r.entrants) {
+            // S3: give "gating" its own deadline, independent of the 20-minute
+            // RACE_TIMEOUT_MS below (which is deliberately "working"-only — see
+            // the comment past the gate branch). runTick/settlePoll mean a tick
+            // should never abandon an entrant mid-gate anymore, but "should
+            // never" is not "cannot": age it out anyway, well past any gate
+            // command's own cap, so a future path nobody has thought of yet
+            // still ends in "failed" rather than a permanently unlandable race.
+            if (e.status === "gating") {
+                if (e.gateStartedAt && Date.now() - e.gateStartedAt > GATE_TIMEOUT_MS) {
+                    if (stale()) return
+                    setEntrant(cardId, e.agentId, {
+                        status: "failed",
+                        gateOutput: "the gate did not return"
+                    })
+                }
+                continue
+            }
             // Narrow to "working" deliberately — do not widen this again. Every
             // one of checks.run/usage.window/git.shortstat below is wrapped in a
             // .catch, so a rejection always resolves an entrant to a terminal
@@ -706,7 +740,7 @@ export const useStore = create<AppState>((set, get) => {
                 const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
                 if (!live || live.status !== "working") continue
                 if (stale()) return
-                setEntrant(cardId, e.agentId, { status: "gating", head })
+                setEntrant(cardId, e.agentId, { status: "gating", head, gateStartedAt: Date.now() })
                 // The ENTRANT'S worktree, never r.projectPath. Running the gate
                 // at the project root verifies the user's tree instead of this
                 // entrant's and scores every entrant identically — the single
@@ -754,13 +788,38 @@ export const useStore = create<AppState>((set, get) => {
         if (cur && raceSettled(cur)) stopPoll(cardId)
     }
 
+    // S1: ticks must not overlap. checks.run blocks for up to 120s against a 5s
+    // poll, so without this a lagging tick and a fresh one could both act on the
+    // same entrant from different snapshots — that overlap is what made M1
+    // possible, and what made "is this tick current" a question worth asking at
+    // all. The interval calls this, never raceTick directly.
+    const runTick = (cardId: string, gen: number): void => {
+        if (inFlight.has(cardId)) return
+        const p = raceTick(cardId, gen).finally(() => inFlight.delete(cardId))
+        inFlight.set(cardId, p)
+    }
+
+    /**
+     * Stop polling and wait for any tick still in flight to finish. Replaces
+     * the bare stopPoll() at every teardown site (S2): the generation counter
+     * could only make a suspended tick a no-op once it woke up, never stop it
+     * from running in the first place, so a tick could still write into a race
+     * mid-teardown or spend inside a worktree being deleted. Waiting instead of
+     * racing it means teardown can proceed knowing, provably, that no tick is
+     * running — not "any tick that's running will soon find out it's stale".
+     */
+    const settlePoll = async (cardId: string): Promise<void> => {
+        stopPoll(cardId)
+        await inFlight.get(cardId)?.catch(() => undefined)
+    }
+
     const startPoll = (cardId: string): void => {
         stopPoll(cardId)
         const gen = bumpGen(cardId)
         racePolls.set(
             cardId,
             setInterval(() => {
-                void raceTick(cardId, gen)
+                runTick(cardId, gen)
             }, RACE_POLL_MS)
         )
     }
@@ -1255,10 +1314,13 @@ export const useStore = create<AppState>((set, get) => {
                 return
             }
 
-            // Stop polling before touching anything a tick reads or writes — one
-            // landing mid-teardown would run a gate command inside a worktree the
-            // removal loop below is about to delete.
-            stopPoll(cardId)
+            // Wait for any tick in flight rather than just invalidating it (S2):
+            // a generation bump can only make a suspended tick a no-op once it
+            // wakes, up to 120s later — it can't stop it from running in the
+            // meantime. After this, provably no tick is running, so nothing can
+            // write into this race or spend inside a worktree the removal loop
+            // below is about to delete.
+            await settlePoll(cardId)
 
             const res = await window.api.git.landFrom(winner.worktree, winner.baseHead, race.projectPath)
             if (!res.ok) {
@@ -1328,10 +1390,17 @@ export const useStore = create<AppState>((set, get) => {
             })
             if (!ok) return
 
-            // The confirm above can sit open for minutes; stop polling the instant
-            // it resolves so a tick can't land mid-teardown and run a gate command
-            // inside a worktree this action is about to delete.
-            stopPoll(cardId)
+            // The confirm above can sit open for minutes. Wait for any in-flight
+            // tick (S2) rather than just bumping its generation and hoping it
+            // notices before it spends anything: this can now make Abandon wait
+            // up to a gate command's own runtime before it starts tearing
+            // anything down. That is the right trade — the alternative is
+            // Abandon returning instantly and leaving a gate command running
+            // inside a worktree this action is about to delete out from under
+            // it. (If this wait proves annoying in practice, shorten the
+            // timeoutMs passed to checks.run for races — don't go back to
+            // racing teardown against the tick.)
+            await settlePoll(cardId)
 
             for (const e of race.entrants) {
                 if (e.termId) get().closePane(e.termId)
