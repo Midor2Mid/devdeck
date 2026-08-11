@@ -26,6 +26,7 @@ export function TaskBoard(): JSX.Element {
     const openChanges = useStore((s) => s.openChanges)
     const refreshTaskCost = useStore((s) => s.refreshTaskCost)
     const openRace = useStore((s) => s.openRace)
+    const races = useStore((s) => s.races)
 
     const [draft, setDraft] = useState("")
     const [worktree, setWorktree] = useState(true)
@@ -123,6 +124,10 @@ export function TaskBoard(): JSX.Element {
                         <div className="board-cards">
                             {grouped[col].map((t) => {
                                 const status = t.termId ? agentStatus[t.termId] : undefined
+                                // A race outlives the todo column — cards are draggable and have move
+                                // arrows, and a race left running in doing/review would otherwise have
+                                // no door back to it while its agents keep running and billing.
+                                const isRacing = !!races[t.id]
                                 return (
                                     <div
                                         key={t.id}
@@ -146,21 +151,25 @@ export function TaskBoard(): JSX.Element {
                                                 </span>
                                             )}
                                             {t.column === "todo" && (
-                                                <>
-                                                    <button
-                                                        className="board-btn accent"
-                                                        onClick={() => void dispatchBoardTask(t.id, { worktree })}
-                                                    >
-                                                        Dispatch
-                                                    </button>
-                                                    <button
-                                                        className="board-btn"
-                                                        data-tip="Race two or three agents on this card"
-                                                        onClick={() => openRace(t.id)}
-                                                    >
-                                                        Race
-                                                    </button>
-                                                </>
+                                                <button
+                                                    className="board-btn accent"
+                                                    onClick={() => void dispatchBoardTask(t.id, { worktree })}
+                                                >
+                                                    Dispatch
+                                                </button>
+                                            )}
+                                            {(t.column === "todo" || isRacing) && (
+                                                <button
+                                                    className="board-btn"
+                                                    data-tip={
+                                                        isRacing
+                                                            ? "Open the race running on this card"
+                                                            : "Race two or three agents on this card"
+                                                    }
+                                                    onClick={() => openRace(t.id)}
+                                                >
+                                                    {isRacing ? "Race · live" : "Race"}
+                                                </button>
                                             )}
                                             {t.termId && (t.column === "doing" || t.column === "review") && (
                                                 <button className="board-btn" onClick={() => jumpToTerm(t.termId!)}>

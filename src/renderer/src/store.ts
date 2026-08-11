@@ -744,6 +744,26 @@ export const useStore = create<AppState>((set, get) => {
             // settle the race, stopPoll bumps the generation and the real
             // verdict — which is still in flight — gets discarded as stale.
             if (e.status !== "working") continue
+            // Live cost, every tick, independent of a commit: without this the
+            // header's spend total pins at $0 for the entire working phase —
+            // often most of a race's life — which defeats the reason it's
+            // shown at all (a race costs several times one card, and that
+            // should be visible while it's still running, not just at the
+            // end). Cheap even re-read every 5s: the underlying scan is
+            // bounded by file mtime, not by re-parsing everything.
+            if (e.worktree) {
+                const usage = await window.api.usage.window(e.worktree, r.startedAt, Date.now()).catch(() => null)
+                if (stale()) return
+                if (usage) {
+                    // Re-read before writing — a lagging read must not clobber
+                    // a status a faster path (the gate branch below, or a
+                    // newer tick) already moved past "working".
+                    const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
+                    if (live && live.status === "working") {
+                        setEntrant(cardId, e.agentId, { cost: usage.cost, costTokens: usage.tokens })
+                    }
+                }
+            }
             // samePath, not ===: worktreeAdd's path.join result (backslashes on
             // Windows) and git worktree list's own output (forward slashes)
             // otherwise never compare equal, and no commit is ever detected.
@@ -1395,6 +1415,13 @@ export const useStore = create<AppState>((set, get) => {
                     delete rest[cardId]
                     return { races: rest }
                 })
+                // The race is gone but raceCardId isn't cleared by deleting it -
+                // without this the modal (still mounted) falls through to its
+                // setup branch with the previous checkboxes/gate command intact
+                // and Start enabled, and startRace's double-start guard doesn't
+                // apply once races[cardId] is gone. One accidental click there
+                // bills every entrant again.
+                get().closeRace()
                 get().moveBoardTask(cardId, "review")
                 const projectName = get().projects.find((p) => p.id === race.projectId)?.name ?? race.title
                 get().openChanges(race.projectPath, projectName)
@@ -1465,6 +1492,10 @@ export const useStore = create<AppState>((set, get) => {
                     delete rest[cardId]
                     return { races: rest }
                 })
+                // Same reason as landRaceWinner: without this the modal falls
+                // through to an armed setup form for a race that no longer
+                // exists.
+                get().closeRace()
             } finally {
                 tearingDown.delete(cardId)
             }

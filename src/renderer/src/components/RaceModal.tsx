@@ -76,30 +76,57 @@ function RaceRow({
     let action: JSX.Element | null = null
     if (entrant.status === "passed") {
         action = (
-            <button className="btn-min" onClick={(e) => { e.stopPropagation(); onDiff() }}>
+            <button
+                className="btn-min"
+                aria-label={`View ${entrant.agentName}'s diff`}
+                onClick={(e) => { e.stopPropagation(); onDiff() }}
+            >
                 diff
             </button>
         )
     } else if (inProgress) {
         action = entrant.termId ? (
-            <button className="btn-min" onClick={(e) => { e.stopPropagation(); onJump() }}>
+            <button
+                className="btn-min"
+                aria-label={`Jump to ${entrant.agentName}'s session`}
+                onClick={(e) => { e.stopPropagation(); onJump() }}
+            >
                 jump
             </button>
         ) : null
     } else if (entrant.gateOutput) {
         action = (
-            <button className="btn-min" onClick={(e) => { e.stopPropagation(); onToggleOutput() }}>
+            <button
+                className="btn-min"
+                aria-label={`${expanded ? "Hide" : "Show"} ${entrant.agentName}'s output`}
+                onClick={(e) => { e.stopPropagation(); onToggleOutput() }}
+            >
                 {expanded ? "hide" : "output"}
             </button>
         )
     }
 
+    // A keyboard user needs the same "pick a survivor" path a mouse user has -
+    // role/tabIndex/aria-selected only apply when the row is actually
+    // selectable (a passed entrant); other rows stay plain, unfocusable divs.
+    const rowProps = selectable
+        ? {
+              role: "button" as const,
+              tabIndex: 0,
+              "aria-selected": selected,
+              onClick: onSelect,
+              onKeyDown: (e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      onSelect()
+                  }
+              }
+          }
+        : {}
+
     return (
         <div className="race-row-wrap">
-            <div
-                className={"race-row" + (selectable ? " selectable" : "") + (selected ? " sel" : "")}
-                onClick={selectable ? onSelect : undefined}
-            >
+            <div className={"race-row" + (selectable ? " selectable" : "") + (selected ? " sel" : "")} {...rowProps}>
                 <span className={"race-dot " + (eliminated ? "out" : "in") + " st-" + entrant.status} />
                 <span className="race-agent-name">{entrant.agentName}</span>
                 <span className="race-status-word">{STATUS_LABEL[entrant.status]}</span>
@@ -152,12 +179,18 @@ export function RaceModal(): JSX.Element | null {
     const [selectedWinner, setSelectedWinner] = useState<string | null>(null)
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     const [dirty, setDirty] = useState(false)
+    // startRace resolves only after a sequential ~2.8s-per-entrant dispatch
+    // loop (plus a confirm dialog before that) - without this, Start race
+    // stays enabled for that whole window and a second click hits the
+    // store's silent double-start guard instead of doing anything visible.
+    const [starting, setStarting] = useState(false)
 
     // Fresh setup form each time a different card's race modal opens.
     useEffect(() => {
         if (!raceCardId) return
         setSelectedAgents([])
         setExpanded(new Set())
+        setStarting(false)
     }, [raceCardId])
 
     // Prefill the gate command from the project's first saved command. Only
@@ -211,6 +244,17 @@ export function RaceModal(): JSX.Element | null {
             return next
         })
     }
+    const handleStart = async (): Promise<void> => {
+        if (!task || starting) return
+        setStarting(true)
+        try {
+            await startRace(task.id, selectedAgents, gateCommand.trim())
+        } finally {
+            // If the race landed, this component has already switched to the
+            // running branch by the time this runs - harmless either way.
+            setStarting(false)
+        }
+    }
 
     const title = task?.title ?? race?.title ?? "Race"
     const validCount = selectedAgents.length === 2 || selectedAgents.length === 3
@@ -223,7 +267,7 @@ export function RaceModal(): JSX.Element | null {
         <Modal onClose={closeRace} className="race-modal" labelledBy="race-modal-title">
             <div className="modal-head">
                 <span id="race-modal-title">Race &middot; {title}</span>
-                <button className="btn-min" onClick={closeRace} data-tip="Close">
+                <button className="btn-min" onClick={closeRace} data-tip="Close" aria-label="Close">
                     <Icon name="close" size={14} />
                 </button>
             </div>
@@ -272,14 +316,15 @@ export function RaceModal(): JSX.Element | null {
                             <div className="muted small">Pick two or three entrants.</div>
                         )}
                     </div>
-                    <div className="modal-foot race-foot">
+                    <div className="modal-actions race-foot">
                         <span className="spacer" style={{ flex: 1 }} />
+                        {starting && <span className="race-note muted small">Starting - dispatching each entrant…</span>}
                         <button
                             className="accent"
-                            disabled={!validCount || !gateCommand.trim()}
-                            onClick={() => task && void startRace(task.id, selectedAgents, gateCommand.trim())}
+                            disabled={!validCount || !gateCommand.trim() || starting}
+                            onClick={handleStart}
                         >
-                            Start race
+                            {starting ? "Starting…" : "Start race"}
                         </button>
                     </div>
                 </>
@@ -299,7 +344,7 @@ export function RaceModal(): JSX.Element | null {
                             />
                         ))}
                     </div>
-                    <div className="modal-foot race-foot">
+                    <div className="modal-actions race-foot">
                         <button onClick={() => void abandonRace(race.cardId)}>Abandon</button>
                         <span className="spacer" style={{ flex: 1 }} />
                         {settled && survs.length === 0 ? (
@@ -308,14 +353,24 @@ export function RaceModal(): JSX.Element | null {
                             </span>
                         ) : (
                             winner && (
-                                <button
-                                    className="accent"
-                                    disabled={dirty}
-                                    data-tip={dirty ? "Can't land: the project has uncommitted changes" : undefined}
-                                    onClick={() => void landRaceWinner(race.cardId, winner.agentId)}
-                                >
-                                    Land {winner.agentName}
-                                </button>
+                                <>
+                                    {/* A disabled button never fires the tooltip layer's mouseover/focusin
+                                        (Chromium sends neither for a disabled form control), so the reason
+                                        has to be plain visible text, not a data-tip - the same way the
+                                        all-eliminated sentence above is already plain text. */}
+                                    {dirty && (
+                                        <span className="race-note muted small">
+                                            Can&apos;t land: the project has uncommitted changes
+                                        </span>
+                                    )}
+                                    <button
+                                        className="accent"
+                                        disabled={dirty}
+                                        onClick={() => void landRaceWinner(race.cardId, winner.agentId)}
+                                    >
+                                        Land {winner.agentName}
+                                    </button>
+                                </>
                             )
                         )}
                     </div>
