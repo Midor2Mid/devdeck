@@ -853,7 +853,9 @@ git commit -m "docs(design): record the agent tile output trace"
 
 ---
 
-## Addendum — Task 7: measure novelty, not commits
+## Addendum
+
+### Task 7: measure novelty, not commits
 
 Added after the whole-branch review and a two-run empirical investigation. Read
 `.superpowers/sdd/2026-08-11-mission-trace/spinner-investigation.md` for the
