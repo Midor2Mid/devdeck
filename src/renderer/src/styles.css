@@ -157,19 +157,26 @@ select:focus {
 .small {
     font-size: var(--fs-label);
 }
-/* Two small utility classes referenced across several components (e.g. the
-   task board, the race modal) but never previously defined - both were
-   silent no-ops. Defined once, generically, rather than patched per call
-   site. */
-.mono {
+/* .mono and .section-label are referenced by several OTHER components too
+   (TaskBoard, MissionControl, SettingsModal, UsagePanel, ContextIndex) that
+   predate the race modal - those call sites were always no-ops (neither class
+   was ever defined app-wide) and are left that way here. A global definition
+   was tried and reverted: .section-label's text-transform: uppercase silently
+   uppercased ContextIndex's "Context · {project.name}" - the user's own
+   project name - the moment it stopped being a no-op, and none of those nine
+   pre-existing sites had been checked against the new rule. Scoped to the
+   race modal, which is the only place that has actually been verified against
+   it; making these global again requires checking every one of those sites in
+   the running app first. */
+.race-modal .mono {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
 }
-.section-label {
+.race-modal .section-label {
     color: var(--muted);
     font-size: var(--fs-label);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--ls-label);
 }
 
 .app {
@@ -7408,7 +7415,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
        to fit rather than splitting the row with an invisible spacer. */
     min-width: 0;
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -7416,7 +7423,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 }
 .race-spend-total {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--fs-sm);
     font-variant-numeric: tabular-nums;
     color: var(--text);
     flex: none;
@@ -7437,7 +7444,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: var(--fs-body);
     cursor: pointer;
 }
 .race-agent-row input {
@@ -7455,7 +7462,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     border-radius: var(--radius, 6px);
     padding: 7px 9px;
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: var(--fs-sm);
 }
 
 /* Running state - one row per entrant */
@@ -7519,7 +7526,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     flex: none;
     width: 84px;
     font-weight: 600;
-    font-size: 12.5px;
+    font-size: var(--fs-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -7527,7 +7534,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .race-status-word {
     flex: none;
     width: 68px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--muted);
 }
 .race-detail {
@@ -7536,7 +7543,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -7551,7 +7558,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .race-diffstat {
     flex: none;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-label);
     font-variant-numeric: tabular-nums;
     color: var(--faint);
     min-width: 44px;
@@ -7567,7 +7574,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     border: 1px solid var(--border-soft);
     border-radius: var(--radius, 6px);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: var(--fs-label);
     color: var(--muted);
     white-space: pre-wrap;
     word-break: break-word;
@@ -7580,7 +7587,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
    exists only for the rule below, kept as a distinct class in case the
    footer ever needs its own tweak again. */
 .race-allfailed {
-    font-size: 12.5px;
+    font-size: var(--fs-sm);
     color: var(--muted);
 }
 /* Inline reason text next to a disabled button (Land while the tree is
