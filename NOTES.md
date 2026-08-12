@@ -202,6 +202,81 @@ an agent driving DevDeck over CDP leaks `CLAUDE_CODE_CHILD_SESSION` /
 under the harness is a nested one with transcript saving off. This silently
 invalidated one investigation run before it was spotted.
 
+### Task 5: the first real bake-off, and it didn't finish (2026-08-12)
+
+Ran the agent bake-off for real for the first time: a scratch git repo outside
+DevDeck (`scratchpad/race-repo`, a bare `package.json` with `"test": "node
+--test"`), a `todo` card, two entrants (Claude YOLO and Gemini, both edited in
+the isolated test profile to add their auto-approve flags — `--dangerously-
+skip-permissions` and `--yolo` — since neither built-in preset skips approval
+prompts on its own, and an unattended pty can never answer one), gate = `npm
+test`. This is a report of a race that did not complete, not a success story.
+
+**First attempt failed before either entrant's worktree existed, and it failed
+identically for both — which looks exactly like the worktree-cwd bug the whole
+design warns about, but isn't.** Both entrants went straight to `nocommit` in
+under a second, gate output truncated to `Preparing worktree (new branch
+'add-a-function-that-returns-the-…`. That line is normal git progress output,
+not an error — the real failure was one line further down: `fatal: '$GIT_DIR'
+too big`. `entrantBranch()` builds the branch name from the card's title
+verbatim, and `safeBranch()`'s 80-character cap only bounds the branch name
+itself, not the full path git has to build under `.git/worktrees/<branch>/` —
+combined with this machine's deeply-nested scratch/temp path, a title-length
+branch name that would be completely fine in a normal project pushed git-for-
+windows past whatever internal buffer (or MAX_PATH) produces that error, and
+`git worktree add` failed for both entrants the same way, leaving a dangling
+branch behind with no worktree directory to match. Shortening the card's title
+(and so the derived branch) made it disappear. Worth carrying forward: a
+long, descriptive card title is exactly the kind of title a real user would
+write, and this fails silently into `nocommit` with a git error fragment
+nobody would recognise as "your title was too long" — there's no cheap general
+fix (the actual limit depends on the project's own path depth), but the error
+could at least be surfaced whole instead of truncated to the first 64
+characters, so a user hitting it stands a chance of understanding why.
+
+**Second attempt got the two worktrees, distinct branches, both entrants
+`working` — then the whole harness vanished.** `git worktree list --porcelain`
+(checked directly, not through the UI) showed two linked worktrees at two
+distinct paths on two distinct branches
+(`add-a-sum-function-with-a-test-claude-yolo` /
+`add-a-sum-function-with-a-test-gemini`), each entrant's row showing
+`working` with its own pty. About 3.5 minutes in — both entrants still
+`working`, no commits, cost still reading `$0` for both — the Electron process
+and the Node/CDP script driving it both disappeared with no further log line
+written. No `"fatal"` was ever logged (the driver's own top-level catch writes
+one on any JS-level rejection, so this wasn't a caught error), no crash entry
+appeared in the Windows Application event log, memory wasn't exhausted
+(~14 GB free of 32), and no orphaned pty/`claude`/`gemini` child process was
+left running. Something killed the process tree from outside the JS layer,
+and it left no trace anywhere I could find to say what. Per the plan's "one
+race only" rule this was not retried; the two dangling worktrees/branches
+left behind by the dead process were removed by hand afterward, and no
+orphaned processes needed killing.
+
+**What that leaves confirmed, and what it doesn't.** Distinct worktrees on
+distinct branches — the thing that was a Critical bug twice before — is
+real and was checked against git directly, not the UI's word for it. Nothing
+past that: no commit ever landed, so whether a commit (rather than the
+session going idle) is what triggers `gating`, whether the gate runs inside
+the entrant's own worktree rather than the project root, real non-zero
+per-entrant cost, landing a winner unstaged, and the dirty-tree Land refusal
+were none of them exercised. This is the report the plan asked for when a
+race doesn't finish: told plainly rather than salvaged with a second race.
+
+**A second, unrelated way an entrant can lose on something other than the
+merits, found before the race even started:** the `gemini` preset's default
+model (`gemini-2.5-pro`) came back `404` — retired for this API key
+("no longer available to new users") — in a plain non-interactive smoke test
+run before wiring it into the race at all. Had that not been caught early,
+Gemini would have failed every single run through no fault of its own
+implementation, for a reason that has nothing to do with the card. Swapped in
+`-m gemini-flash-latest` to get a working entrant. Between this and the
+auto-approve flags neither built-in preset carries by default, the "known
+weakness" the plan asked about — an entrant losing on obedience or
+availability rather than merit — showed up twice over before a single agent
+wrote a line of code: once as a model a preset assumes still exists, and once
+as a permission prompt an unattended pty can never answer.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
