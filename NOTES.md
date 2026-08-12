@@ -277,6 +277,39 @@ availability rather than merit — showed up twice over before a single agent
 wrote a line of code: once as a model a preset assumes still exists, and once
 as a permission prompt an unattended pty can never answer.
 
+**Third and final attempt (authorised, not to be retried): same silent
+death, even earlier.** Dropped Gemini per instruction (its configured model
+is retired) and raced the two Claude presets instead — `claude` vs
+`claude-opus`, differing only by `ANTHROPIC_MODEL`, both with
+`--dangerously-skip-permissions` added in the isolated test profile.
+Shortened the card title to `sum function + test`. Dispatch worked cleanly:
+two worktrees, two branches (`sum-function--test-claude`,
+`sum-function--test-claude-opus`), both entrants `working`, cost `$0` on
+two consecutive ticks ~4s and ~20s after dispatch. Then, sometime between
+20 and 130 seconds after dispatch, the entire Electron process and its
+Node/CDP driver vanished again — same shape as the second attempt (no
+`"fatal"` logged, no orphaned process), but roughly ten times faster this
+time. Checked the Windows Application and System event logs for the exact
+death window this time (something not done on the second attempt): both
+empty, and no "faulting application" crash IDs (1000/1001/1002) anywhere
+in the preceding hour either. No orphaned processes — the `claude.exe` /
+`powershell.exe` triples present on the machine were pre-existing sessions
+with unchanged PIDs, not leftovers from this race. Per the "one race only"
+rule this was not retried; the two dangling worktrees/branches were removed
+by hand afterward and the scratch repo confirmed clean.
+
+Two data points on the silent death now exist at very different elapsed
+times (~3.5 minutes, then ~20–130 seconds), which argues against a fixed
+timeout or watchdog and toward something external and unpredictable —
+Defender or another endpoint agent, a power/sleep event, or a transport
+drop the harness has no error path for. Distinct worktrees on distinct
+branches held up a third time. Everything downstream of a commit — gate-
+in-the-right-tree, cost accrual, landing, the dirty-tree refusal — remains
+unverified against a real running race; the one authorised attempt is now
+used up, and the honest state of Task 5 is that the design's riskiest claim
+(the gate scoring the right tree) has never been watched happen live, only
+read correct from the source.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
