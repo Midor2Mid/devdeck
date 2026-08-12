@@ -310,6 +310,22 @@ used up, and the honest state of Task 5 is that the design's riskiest claim
 (the gate scoring the right tree) has never been watched happen live, only
 read correct from the source.
 
+**Most likely cause, identified after the third attempt: Avast.** A process
+tree that disappears with no crash record, no event-log entry and no faulting-
+application ID is a behaviour-shield *termination*, not a crash — nothing gets
+logged because nothing faults. Avast is installed here and has done exactly this
+to this project three times already: terminals dying instantly with 0xC0000409
+because it killed `powershell.exe`; `npm run package:signed` failing with
+PowerShell exiting 127; the NSIS reinstall failing with exit 2. The target this
+time is about as suspicious as software gets to a heuristic scanner — a freshly
+built, unsigned `node_modules\electron\dist\electron.exe` launched with remote
+debugging on and spawning child processes.
+
+Before spending another race, add that path to Avast's **Allowed apps** (the same
+list that fixed `powershell.exe` — not the scan-only Exceptions list). The cheap
+confirmation first: a minimal Electron + CDP script with no DevDeck logic left
+running for a few minutes. If that dies too, the blocker was never this feature.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
