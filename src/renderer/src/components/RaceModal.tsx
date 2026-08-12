@@ -328,6 +328,11 @@ export function RaceModal(): JSX.Element | null {
                                 placeholder="npm test"
                                 onChange={(e) => setGateCommand(e.target.value)}
                             />
+                            <span className="muted small">
+                                Runs in a fresh worktree checkout with no installed dependencies — a
+                                command that needs them has to install them first, e.g.{" "}
+                                <span className="mono">npm ci &amp;&amp; npm test</span>.
+                            </span>
                         </label>
                         {selectedAgents.length > 0 && !validCount && (
                             <div className="muted small">Pick two or three entrants.</div>
@@ -366,7 +371,10 @@ export function RaceModal(): JSX.Element | null {
                         <span className="spacer" style={{ flex: 1 }} />
                         {settled && survs.length === 0 ? (
                             <span className="race-allfailed">
-                                Every entrant was eliminated - the card may have been underspecified.
+                                Every entrant was eliminated. Either the work failed the gate, or the
+                                gate command isn&apos;t runnable in a fresh worktree checkout (see the
+                                output on each row below) — not necessarily that the card was
+                                underspecified.
                             </span>
                         ) : (
                             winner && (
