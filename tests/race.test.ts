@@ -83,6 +83,14 @@ describe("entrantBranch", () => {
             entrantBranch("same card", "Claude", "id-2")
         )
     })
+
+    it("truncates a long title but keeps entrants distinct", () => {
+        const long = "a really quite long card title that goes on and on"
+        const a = entrantBranch(long, "Claude", "claude")
+        const b = entrantBranch(long, "Claude Opus", "claude-opus")
+        expect(a.length).toBeLessThan(40)
+        expect(a).not.toBe(b)
+    })
 })
 
 describe("isTerminal", () => {

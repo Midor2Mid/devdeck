@@ -86,9 +86,16 @@ export function parseShortstat(out: string): { added: number; removed: number } 
  * cost here is attributed per directory, so both their figures become meaningless
  * while still rendering as if they were real. The ids are readable enough
  * (`claude-opus`) to serve as the branch's human label too.
+ *
+ * The title is truncated to 24 characters: the branch becomes a worktree directory
+ * under `<repo>.worktrees/`, and git-for-windows rejected a real path built from a
+ * full card title when the repo was nested several directories deep, failing with
+ * "'$GIT_DIR' too big" before any worktree existed. The failure surfaced identically
+ * for every entrant, which initially looked like a far more serious bug. The title
+ * is only for human readability; the agent id carries uniqueness.
  */
 export function entrantBranch(title: string, agentName: string, agentId: string): string {
-    return `${title} ${agentId}`
+    return `${title.slice(0, 24).trim()} ${agentId}`
 }
 
 /**
