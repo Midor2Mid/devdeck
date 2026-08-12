@@ -153,6 +153,14 @@ interface AppState extends Persisted {
     // worktree (runtime-only — the worktrees themselves are the recovery story
     // across a restart, so races are never persisted to workspace.json).
     races: Record<string, Race>
+    /**
+     * Reactive mirror of the module-level `startingRaces` guard, kept in sync
+     * with it at the same add/delete points — a plain module Set can't drive
+     * a re-render, and the modal needs to know a card's dispatch loop is still
+     * running so it doesn't render a settled/eliminated verdict, or offer
+     * Abandon, for a race that hasn't finished starting yet.
+     */
+    startingRaceIds: Set<string>
     /** Card id whose race modal is open, or null. */
     raceCardId: string | null
     openRace: (cardId: string) => void
@@ -856,7 +864,17 @@ export const useStore = create<AppState>((set, get) => {
         }
         if (stale()) return
         const cur = get().races[cardId]
-        if (cur && raceSettled(cur)) stopPoll(cardId)
+        // startingRaces: entrants are now appended one at a time as startRace's
+        // dispatch loop runs, so there is a real window — between one entrant
+        // landing in a terminal state (e.g. "startfailed") and the next being
+        // appended — where every entrant so far is terminal and raceSettled
+        // reads true even though the race is nowhere near done. Nothing re-arms
+        // the poll if it stops here (startPoll only runs at the top of
+        // startRace, already done, and on a failed land, which this race
+        // hasn't reached), so the remaining entrants would end up "working"
+        // with no gate, no timeout, and no settle — billing with nothing
+        // watching them.
+        if (cur && !startingRaces.has(cardId) && raceSettled(cur)) stopPoll(cardId)
     }
 
     // S1: ticks must not overlap. checks.run blocks for up to 120s against a 5s
@@ -915,6 +933,7 @@ export const useStore = create<AppState>((set, get) => {
         canvasLinks: [],
         boardTasks: [],
         races: {},
+        startingRaceIds: new Set(),
         raceCardId: null,
         activity: [],
         activityOpen: false,
@@ -1265,6 +1284,11 @@ export const useStore = create<AppState>((set, get) => {
             if (!ok) return
 
             startingRaces.add(cardId)
+            set((s) => {
+                const next = new Set(s.startingRaceIds)
+                next.add(cardId)
+                return { startingRaceIds: next }
+            })
             try {
                 // newTab spawns into the active project. Entrants are started
                 // sequentially (never Promise.all) for exactly that reason: the
@@ -1393,6 +1417,11 @@ export const useStore = create<AppState>((set, get) => {
                 }
             } finally {
                 startingRaces.delete(cardId)
+                set((s) => {
+                    const next = new Set(s.startingRaceIds)
+                    next.delete(cardId)
+                    return { startingRaceIds: next }
+                })
             }
         },
 
