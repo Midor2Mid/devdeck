@@ -1386,7 +1386,16 @@ export const useStore = create<AppState>((set, get) => {
                 // about to delete.
                 await settlePoll(cardId)
 
-                const res = await window.api.git.landFrom(winner.worktree, winner.baseHead, race.projectPath)
+                // landFrom genuinely throws from its own guards (target not an
+                // open project root; worktree not belonging to it) rather than
+                // resolving { ok: false } for those cases — an unhandled
+                // rejection here would unwind the whole try, and finally only
+                // releases tearingDown; nothing would restart the poll, so the
+                // race would sit with no gating and no timeout while every
+                // entrant keeps billing. Fold it into the existing failure path.
+                const res = await window.api.git
+                    .landFrom(winner.worktree, winner.baseHead, race.projectPath)
+                    .catch((err) => ({ ok: false, error: String(err) }))
                 if (!res.ok) {
                     // Leave every worktree in place — nothing is lost, the user
                     // can retry or land by hand. But the race object is still
