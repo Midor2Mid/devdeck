@@ -1124,6 +1124,13 @@ export const useStore = create<AppState>((set, get) => {
             persist()
         },
         removeBoardTask: (id) => {
+            // The Race button lives on the card, not the modal — deleting a
+            // racing card while the modal is closed would leave its entrants
+            // billing with no door back to Land or Abandon them.
+            if (get().races[id]) {
+                pushActivity("attention", "", "Abandon the race on this card before deleting it")
+                return
+            }
             set((s) => ({ boardTasks: s.boardTasks.filter((t) => t.id !== id) }))
             persist()
         },
