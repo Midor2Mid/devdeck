@@ -98,6 +98,7 @@ describe("isTerminal", () => {
         expect(isTerminal("passed")).toBe(true)
         expect(isTerminal("failed")).toBe(true)
         expect(isTerminal("nocommit")).toBe(true)
+        expect(isTerminal("startfailed")).toBe(true)
         expect(isTerminal("starting")).toBe(false)
         expect(isTerminal("working")).toBe(false)
         expect(isTerminal("gating")).toBe(false)

@@ -697,6 +697,25 @@ export const useStore = create<AppState>((set, get) => {
         })
     }
 
+    /**
+     * Append one entrant to a race already in the store. Used by startRace so
+     * each entrant becomes visible — and reachable via Land/Abandon — the
+     * moment its own setup succeeds, rather than only once every entrant in
+     * the card has been dispatched.
+     */
+    const addEntrant = (cardId: string, entrant: Entrant): void => {
+        set((s) => {
+            const race = s.races[cardId]
+            if (!race) return {}
+            return {
+                races: {
+                    ...s.races,
+                    [cardId]: { ...race, entrants: [...race.entrants, entrant] }
+                }
+            }
+        })
+    }
+
     const stopPoll = (cardId: string): void => {
         const t = racePolls.get(cardId)
         if (t) clearInterval(t)
@@ -1253,7 +1272,30 @@ export const useStore = create<AppState>((set, get) => {
                 await get().setActiveProject(proj.id)
 
                 const startedAt = Date.now()
-                const entrants: Entrant[] = []
+                // Written now, empty, rather than after the ~2.8s x N sequential
+                // dispatch loop below. An entrant is already prompted and billing
+                // the moment its worktree exists and its prompt is sent — if
+                // nothing is written to the store until every entrant has been
+                // through that, a crash partway through the loop (three live
+                // attempts have died before any agent even committed) leaves
+                // already-billing agents and their worktrees completely
+                // untracked: no race object, no Land, no Abandon, no gate, no
+                // timeout. Polling starts immediately too, so an entrant that
+                // reaches "working" is gated even if a later entrant in the
+                // loop never gets there. Each entrant is appended (addEntrant)
+                // or patched (setEntrant) as its own setup progresses, so a
+                // failure on entrant 2 never erases entrant 1's tracking.
+                const race: Race = {
+                    cardId,
+                    projectId: proj.id,
+                    projectPath: proj.path,
+                    title: task.title,
+                    gateCommand,
+                    startedAt,
+                    entrants: []
+                }
+                set((s) => ({ races: { ...s.races, [cardId]: race } }))
+                startPoll(cardId)
 
                 for (const agentId of ids) {
                     const agentName = useSettings.getState().agentById(agentId)?.name ?? agentId
@@ -1261,13 +1303,19 @@ export const useStore = create<AppState>((set, get) => {
                         const branch = entrantBranch(task.title, agentName, agentId)
                         const res = await window.api.git.worktreeAdd(proj.path, branch)
                         if (!res.ok || !res.path || !res.branch) {
-                            entrants.push({
+                            // "startfailed", not "nocommit": the agent was never
+                            // dispatched at all — this is an infrastructure
+                            // failure (very often a stale worktree/branch left
+                            // behind by a previous crashed race on this same
+                            // card+agent), not the agent ignoring the commit
+                            // instruction.
+                            addEntrant(cardId, {
                                 agentId,
                                 agentName,
                                 worktree: "",
                                 branch,
                                 baseHead: "",
-                                status: "nocommit",
+                                status: "startfailed",
                                 gateOutput: res.error ?? "worktree failed"
                             })
                             continue
@@ -1282,26 +1330,33 @@ export const useStore = create<AppState>((set, get) => {
                             // seconds after dispatch. Same treatment as a failed
                             // worktreeAdd, but the worktree itself still exists, so
                             // it's kept on the entrant for land/abandon to clean up.
-                            entrants.push({
+                            addEntrant(cardId, {
                                 agentId,
                                 agentName,
                                 worktree: worktreePath,
                                 branch: res.branch,
                                 baseHead: "",
-                                status: "nocommit",
+                                status: "startfailed",
                                 gateOutput: "could not read the new worktree's head"
                             })
                             continue
                         }
+                        // The worktree exists — track this entrant now, before the
+                        // tab spawn / prompt-send below, so it's visible (and its
+                        // worktree reachable via Abandon) even if something below
+                        // fails or the process dies before the prompt is sent.
+                        addEntrant(cardId, {
+                            agentId,
+                            agentName,
+                            worktree: worktreePath,
+                            branch: res.branch,
+                            baseHead,
+                            status: "starting"
+                        })
                         const termId = get().newTab(agentId, undefined, "race " + agentName, worktreePath)
                         if (!termId) {
-                            entrants.push({
-                                agentId,
-                                agentName,
-                                worktree: worktreePath,
-                                branch: res.branch,
-                                baseHead,
-                                status: "nocommit",
+                            setEntrant(cardId, agentId, {
+                                status: "startfailed",
                                 gateOutput: "could not spawn a session for this entrant"
                             })
                             continue
@@ -1312,43 +1367,30 @@ export const useStore = create<AppState>((set, get) => {
                             task.title +
                             "\n\nWhen you are finished, commit all your work in this worktree with a short message. Do not push."
                         window.api.pty.input(termId, prompt + "\r")
-                        entrants.push({
-                            agentId,
-                            agentName,
-                            termId,
-                            worktree: worktreePath,
-                            branch: res.branch,
-                            baseHead,
-                            status: "working"
-                        })
+                        setEntrant(cardId, agentId, { termId, status: "working" })
                     } catch (err) {
                         // A rejection here (rather than an { ok: false }) must not
-                        // abort the loop before the race object exists — that would
-                        // orphan whatever earlier entrants already created, with
-                        // nothing left to track their worktrees or billing.
-                        entrants.push({
-                            agentId,
-                            agentName,
-                            worktree: "",
-                            branch: "",
-                            baseHead: "",
-                            status: "nocommit",
-                            gateOutput: err instanceof Error ? err.message : String(err)
-                        })
+                        // abort the loop — that would orphan whatever later
+                        // entrants haven't started yet. This entrant may or may
+                        // not already be in the race (addEntrant above may or may
+                        // not have run yet), so patch it if present, else add it.
+                        const msg = err instanceof Error ? err.message : String(err)
+                        const already = get().races[cardId]?.entrants.some((e) => e.agentId === agentId)
+                        if (already) {
+                            setEntrant(cardId, agentId, { status: "startfailed", gateOutput: msg })
+                        } else {
+                            addEntrant(cardId, {
+                                agentId,
+                                agentName,
+                                worktree: "",
+                                branch: "",
+                                baseHead: "",
+                                status: "startfailed",
+                                gateOutput: msg
+                            })
+                        }
                     }
                 }
-
-                const race: Race = {
-                    cardId,
-                    projectId: proj.id,
-                    projectPath: proj.path,
-                    title: task.title,
-                    gateCommand,
-                    startedAt,
-                    entrants
-                }
-                set((s) => ({ races: { ...s.races, [cardId]: race } }))
-                startPoll(cardId)
             } finally {
                 startingRaces.delete(cardId)
             }

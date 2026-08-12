@@ -7504,7 +7504,8 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .race-dot.out.st-failed {
     border: 1.5px solid var(--danger);
 }
-.race-dot.out.st-nocommit {
+.race-dot.out.st-nocommit,
+.race-dot.out.st-startfailed {
     border: 1.5px solid var(--faint);
 }
 @media (prefers-reduced-motion: reduce) {

@@ -13,6 +13,15 @@ export type EntrantStatus =
     | "passed" // gate exit 0 — a survivor
     | "failed" // gate non-zero — eliminated
     | "nocommit" // never committed inside the timeout
+    // Infrastructure failed before the agent ever got a chance to work: worktree
+    // add, the post-worktree head read, spawning its session, or a thrown error
+    // during start all land here. Distinct from "nocommit" — that means the
+    // agent ignored the commit instruction, this means the agent was never
+    // actually dispatched. Conflating the two used to make a stale worktree
+    // (re-racing a card+agent whose previous worktree/branch is still on disk)
+    // render identically to an agent that silently did nothing, which is a very
+    // different thing to tell the user.
+    | "startfailed"
 
 export interface Entrant {
     agentId: string
@@ -101,7 +110,7 @@ export function samePath(a: string, b: string): boolean {
 }
 
 export function isTerminal(s: EntrantStatus): boolean {
-    return s === "passed" || s === "failed" || s === "nocommit"
+    return s === "passed" || s === "failed" || s === "nocommit" || s === "startfailed"
 }
 
 /** Entrants whose gate passed — the only ones the user may choose between. */

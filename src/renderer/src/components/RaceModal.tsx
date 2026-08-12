@@ -7,14 +7,17 @@ import { formatCost } from "../board"
 import { survivors, raceSpend, raceSettled, RACE_POLL_MS, type Entrant, type EntrantStatus } from "../race"
 
 /** Human word for the dot — never the bare enum, and never "failed" for nocommit
- *  (an agent that ignored the commit instruction did not write bad code). */
+ *  (an agent that ignored the commit instruction did not write bad code), and
+ *  never "failed" for startfailed either (that's an infrastructure problem,
+ *  not the agent's work). */
 const STATUS_LABEL: Record<EntrantStatus, string> = {
     starting: "starting",
     working: "working",
     gating: "gating",
     passed: "passed",
     failed: "failed",
-    nocommit: "no commit"
+    nocommit: "no commit",
+    startfailed: "start failed"
 }
 
 /** First non-blank line of a gate/entrant message, trimmed for the row - the
@@ -47,6 +50,8 @@ function RaceDetail({ entrant }: { entrant: Entrant }): JSX.Element {
             return <span className="race-detail muted">gate running…</span>
         case "nocommit":
             return <span className="race-detail muted">{firstLine(entrant.gateOutput) || "timed out, nothing committed"}</span>
+        case "startfailed":
+            return <span className="race-detail muted">{firstLine(entrant.gateOutput) || "could not start"}</span>
         default:
             return <span className="race-detail muted">…</span>
     }
@@ -69,7 +74,8 @@ function RaceRow({
     onDiff: () => void
     onJump: () => void
 }): JSX.Element {
-    const eliminated = entrant.status === "failed" || entrant.status === "nocommit"
+    const eliminated =
+        entrant.status === "failed" || entrant.status === "nocommit" || entrant.status === "startfailed"
     const selectable = entrant.status === "passed"
     const inProgress = entrant.status === "starting" || entrant.status === "working" || entrant.status === "gating"
 
