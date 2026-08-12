@@ -1543,6 +1543,19 @@ export const useStore = create<AppState>((set, get) => {
             // tearingDown's declaration. Checked first so a concurrent Land
             // can't slip in ahead of it either.
             if (tearingDown.has(cardId)) return
+            // The race object is now written before startRace's dispatch loop
+            // runs, so the modal already shows the running view (Abandon
+            // included) while that loop is still adding entrants. Refuse the
+            // action here, not just in the UI (see tearingDown's own comment
+            // above on why this file never relies on the UI alone to prevent
+            // this class of thing) — without it, this snapshots the partial
+            // entrant list, removes those worktrees, and deletes the race out
+            // from under the still-running loop. Every addEntrant/setEntrant
+            // the loop makes after that silently no-ops, so the remaining
+            // entrants get real worktrees, real sessions and real prompts with
+            // no race object at all: untracked, unlandable, unabandonable, and
+            // billing.
+            if (startingRaces.has(cardId)) return
             const race = get().races[cardId]
             if (!race) return
             // Only count entrants that actually got a worktree — a failed

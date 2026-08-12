@@ -7591,7 +7591,8 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     color: var(--muted);
 }
 /* Inline reason text next to a disabled button (Land while the tree is
-   dirty) or a busy state (Start race while dispatching) - a data-tip on a
+   dirty) or a busy state (a placeholder row for "dispatching entrants…"
+   while startRace's loop is still appending them) - a data-tip on a
    disabled control is invisible, since Chromium never fires mouseover/
    focusin for it. Plain text is the only thing that actually reads. */
 .race-note {

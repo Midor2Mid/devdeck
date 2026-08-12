@@ -168,6 +168,7 @@ function RaceRow({
 export function RaceModal(): JSX.Element | null {
     const raceCardId = useStore((s) => s.raceCardId)
     const races = useStore((s) => s.races)
+    const startingRaceIds = useStore((s) => s.startingRaceIds)
     const boardTasks = useStore((s) => s.boardTasks)
     const projects = useStore((s) => s.projects)
     const closeRace = useStore((s) => s.closeRace)
@@ -196,18 +197,12 @@ export function RaceModal(): JSX.Element | null {
     const [selectedWinner, setSelectedWinner] = useState<string | null>(null)
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     const [dirty, setDirty] = useState(false)
-    // startRace resolves only after a sequential ~2.8s-per-entrant dispatch
-    // loop (plus a confirm dialog before that) - without this, Start race
-    // stays enabled for that whole window and a second click hits the
-    // store's silent double-start guard instead of doing anything visible.
-    const [starting, setStarting] = useState(false)
 
     // Fresh setup form each time a different card's race modal opens.
     useEffect(() => {
         if (!raceCardId) return
         setSelectedAgents([])
         setExpanded(new Set())
-        setStarting(false)
     }, [raceCardId])
 
     // Prefill the gate command from the project's first saved command. Only
@@ -261,23 +256,27 @@ export function RaceModal(): JSX.Element | null {
             return next
         })
     }
-    const handleStart = async (): Promise<void> => {
-        if (!task || starting) return
-        setStarting(true)
-        try {
-            await startRace(task.id, selectedAgents, gateCommand.trim())
-        } finally {
-            // If the race landed, this component has already switched to the
-            // running branch by the time this runs - harmless either way.
-            setStarting(false)
-        }
+    const handleStart = (): void => {
+        if (!task) return
+        // Fire-and-forget: the store writes the race object (and switches this
+        // modal to the running branch below) almost immediately, well before
+        // this promise settles - awaiting it here would just hold a dead
+        // reference to a component that has already re-rendered past it.
+        void startRace(task.id, selectedAgents, gateCommand.trim())
     }
 
     const title = task?.title ?? race?.title ?? "Race"
     const validCount = selectedAgents.length === 2 || selectedAgents.length === 3
     const spend = race ? raceSpend(race) : 0
     const survs = race ? survivors(race) : []
-    const settled = race ? raceSettled(race) : false
+    // The race object now exists (and this modal is showing the running
+    // branch below) before startRace's dispatch loop finishes appending every
+    // entrant. In the gap between one entrant landing in a terminal state and
+    // the next being appended, raceSettled can read true for a race that is
+    // nowhere near done - guard both the settled verdict and Abandon against
+    // that with the same startingRaceIds flag the store checks internally.
+    const isStarting = raceCardId ? startingRaceIds.has(raceCardId) : false
+    const settled = race ? raceSettled(race) && !isStarting : false
     const winner = survs.find((e) => e.agentId === selectedWinner)
 
     return (
@@ -340,13 +339,8 @@ export function RaceModal(): JSX.Element | null {
                     </div>
                     <div className="modal-actions race-foot">
                         <span className="spacer" style={{ flex: 1 }} />
-                        {starting && <span className="race-note muted small">Starting - dispatching each entrant…</span>}
-                        <button
-                            className="accent"
-                            disabled={!validCount || !gateCommand.trim() || starting}
-                            onClick={handleStart}
-                        >
-                            {starting ? "Starting…" : "Start race"}
+                        <button className="accent" disabled={!validCount || !gateCommand.trim()} onClick={handleStart}>
+                            Start race
                         </button>
                     </div>
                 </>
@@ -365,9 +359,26 @@ export function RaceModal(): JSX.Element | null {
                                 onJump={() => e.termId && jumpToTerm(e.termId)}
                             />
                         ))}
+                        {/* startRace's dispatch loop appends one entrant at a time
+                            (~2.8s each) - this is the natural place to show that
+                            it's still running, rather than the setup form the
+                            user is no longer looking at. Styled as a row, like
+                            the entrants above it, so it reads as "more of these
+                            incoming" rather than an unrelated footnote. */}
+                        {isStarting && (
+                            <div className="race-row">
+                                <span className="race-note muted small">Dispatching entrants…</span>
+                            </div>
+                        )}
                     </div>
                     <div className="modal-actions race-foot">
-                        <button onClick={() => void abandonRace(race.cardId)}>Abandon</button>
+                        {/* Disabled, not hidden, while isStarting - a disabled button never
+                            fires the tooltip layer (see the comment below on the same
+                            Chromium behavior), so the reason lives in the plain-text
+                            "Dispatching entrants…" row above instead of a data-tip here. */}
+                        <button disabled={isStarting} onClick={() => void abandonRace(race.cardId)}>
+                            Abandon
+                        </button>
                         <span className="spacer" style={{ flex: 1 }} />
                         {settled && survs.length === 0 ? (
                             <span className="race-allfailed">
