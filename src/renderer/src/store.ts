@@ -26,7 +26,6 @@ import { confirm } from "./confirm"
 import {
     RACE_TIMEOUT_MS,
     RACE_POLL_MS,
-    GATE_TIMEOUT_MS,
     parseShortstat,
     entrantBranch,
     raceSettled,
@@ -729,32 +728,14 @@ export const useStore = create<AppState>((set, get) => {
         const readLiveCost = tickNum % 4 === 0
 
         for (const e of r.entrants) {
-            // S3: give "gating" its own deadline, independent of the 20-minute
-            // RACE_TIMEOUT_MS below (which is deliberately "working"-only — see
-            // the comment past the gate branch). runTick/settlePoll mean a tick
-            // should never abandon an entrant mid-gate anymore, but "should
-            // never" is not "cannot": age it out anyway, well past any gate
-            // command's own cap, so a future path nobody has thought of yet
-            // still ends in "failed" rather than a permanently unlandable race.
-            if (e.status === "gating") {
-                if (e.gateStartedAt && Date.now() - e.gateStartedAt > GATE_TIMEOUT_MS) {
-                    if (stale()) return
-                    setEntrant(cardId, e.agentId, {
-                        status: "failed",
-                        gateOutput: "the gate did not return"
-                    })
-                }
-                continue
-            }
+            // "gating" entrants are owned by the tick that put them there (the
+            // gate branch further down) — this loop has nothing left to do for
+            // one until that tick's checks.run resolves and writes a verdict.
+            if (e.status === "gating") continue
             // Narrow to "working" deliberately — do not widen this again. Every
             // one of checks.run/usage.window/git.shortstat below is wrapped in a
             // .catch, so a rejection always resolves an entrant to a terminal
-            // status instead of stranding it in "gating"; and checks.run caps
-            // itself at 120s, so "gating" cannot legitimately last the 20-minute
-            // timeout. Applying the timeout to "gating" too can flip an entrant
-            // that is genuinely mid-gate to nocommit, and if that happens to
-            // settle the race, stopPoll bumps the generation and the real
-            // verdict — which is still in flight — gets discarded as stale.
+            // status instead of stranding it in "gating".
             if (e.status !== "working") continue
             // Live cost during the working phase, independent of a commit:
             // without this the header's spend total pins at $0 for most of a
@@ -790,8 +771,11 @@ export const useStore = create<AppState>((set, get) => {
                 // newer tick already resolved.
                 const live = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
                 if (!live || live.status !== "working") continue
+                // stale() still gates STARTING a fresh gate command — a
+                // torn-down race must not spend inside a worktree that's about
+                // to be (or already being) deleted.
                 if (stale()) return
-                setEntrant(cardId, e.agentId, { status: "gating", head, gateStartedAt: Date.now() })
+                setEntrant(cardId, e.agentId, { status: "gating", head })
                 // The ENTRANT'S worktree, never r.projectPath. Running the gate
                 // at the project root verifies the user's tree instead of this
                 // entrant's and scores every entrant identically — the single
@@ -806,18 +790,32 @@ export const useStore = create<AppState>((set, get) => {
                             ms: 0
                         })
                     )
-                if (stale()) return
+                // NOT stale() from here on. checks.run can block up to 120s —
+                // long enough that settlePoll (called by a Land/Abandon that
+                // started while this was running) bumps the generation and
+                // this tick wakes up "stale" even though it just paid for a
+                // real result. A failed Land restarts the poll and leaves this
+                // race in the store, so an entrant this tick abandoned here
+                // would be stuck in "gating" forever with nothing left able to
+                // move it — there is no other mechanism to age it out anymore
+                // (see the removed GATE_TIMEOUT_MS). Write the verdict as long
+                // as the race and this entrant (still "gating" — nothing else
+                // can have moved it) still exist; setEntrant itself already
+                // no-ops if the race was torn down cleanly in the meantime.
+                const stillGating = get().races[cardId]?.entrants.find((x) => x.agentId === e.agentId)
+                if (!stillGating || stillGating.status !== "gating") continue
                 setEntrant(cardId, e.agentId, {
                     status: res.exitCode === 0 ? "passed" : "failed",
                     gateExit: res.exitCode,
                     gateMs: res.ms,
                     gateOutput: (res.output || "").slice(0, 400)
                 })
+                // Enrichment only (cost/diffstat), not the verdict — safe to
+                // skip on a torn-down race, and setEntrant no-ops if so.
                 const [usage, stat] = await Promise.all([
                     window.api.usage.window(e.worktree, r.startedAt, Date.now()).catch(() => null),
                     window.api.git.shortstat(e.worktree, e.baseHead).catch(() => "")
                 ])
-                if (stale()) return
                 setEntrant(cardId, e.agentId, {
                     // A failed read here must not overwrite a cost the working-
                     // phase read above already climbed to — only write cost/

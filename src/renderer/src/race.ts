@@ -24,8 +24,6 @@ export interface Entrant {
     baseHead: string
     head?: string
     status: EntrantStatus
-    /** When this entrant entered "gating" — GATE_TIMEOUT_MS ages it out from here. */
-    gateStartedAt?: number
     gateExit?: number
     gateMs?: number
     gateOutput?: string
@@ -50,14 +48,6 @@ export const RACE_TIMEOUT_MS = 1_200_000
 
 /** How often the poll checks worktree heads. */
 export const RACE_POLL_MS = 5000
-
-/**
- * How long an entrant may sit in "gating" before it's aged out to "failed"
- * rather than left stranded. Twice checks.run's own 120s default cap: safely
- * longer than any gate command can legitimately still be running, so this only
- * fires when something abandoned the tick mid-gate rather than a slow suite.
- */
-export const GATE_TIMEOUT_MS = 240_000
 
 /**
  * Read `git diff --shortstat`. Git writes singular forms for one line ("1
