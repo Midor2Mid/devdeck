@@ -132,24 +132,44 @@ function deviceCookieName(tls: boolean): string {
  * on one matching-named entry does not abort the whole search: `continue`s to
  * a later entry rather than returning "" outright, so a duplicate cookie name
  * (browsers allow it; a stale one from an old Path/Domain can linger) still
- * gets a chance to match. `tls` must match what the cookie was actually set
- * with - `__Host-`-prefixed under TLS, plain otherwise - or a real cookie
- * simply won't be found under the wrong name.
+ * gets a chance to match.
+ *
+ * Checks BOTH the plain and `__Host-`-prefixed names, preferring the
+ * `__Host-` one when both are present, rather than only the single name
+ * `tls` would otherwise dictate. Ticking the HTTPS setting changes which name
+ * `deviceCookie` WRITES from that point on, but does nothing to a cookie the
+ * browser is already holding under the other name - a device that paired
+ * over plain HTTP keeps sending `devdeck_device`, never
+ * `__Host-devdeck_device`, no matter what the server is now configured to
+ * look for. Reading only the tls-dictated name locked every paired device
+ * out the instant the HTTPS checkbox was toggled either way, and re-scanning
+ * the QR "fixed" it by enrolling a *duplicate* device record rather than
+ * recognising the one that already existed. `tls` still matters to
+ * *writing* (`deviceCookie`/`clearDeviceCookie` below) - only reading needs
+ * to tolerate whichever name the browser actually presents.
  */
 export function cookieToken(header: string | undefined, tls = false): string {
     if (!header) return ""
-    const name = deviceCookieName(tls)
+    const hostPrefixed = `__Host-${DEVICE_COOKIE}`
+    let plainValue = ""
+    let hostValue = ""
     for (const part of header.split(";")) {
         const eq = part.indexOf("=")
         if (eq < 0) continue
-        if (part.slice(0, eq).trim() !== name) continue
+        const name = part.slice(0, eq).trim()
+        if (name !== DEVICE_COOKIE && name !== hostPrefixed) continue
         try {
-            return decodeURIComponent(part.slice(eq + 1).trim())
+            const value = decodeURIComponent(part.slice(eq + 1).trim())
+            if (name === hostPrefixed) {
+                if (!hostValue) hostValue = value
+            } else if (!plainValue) {
+                plainValue = value
+            }
         } catch {
             continue
         }
     }
-    return ""
+    return hostValue || plainValue
 }
 
 /**

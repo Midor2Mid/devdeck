@@ -254,13 +254,45 @@ describe("cookieToken - __Host- prefix (I5)", () => {
     it("reads a __Host--prefixed cookie when tls=true", () => {
         expect(cookieToken(`__Host-${DEVICE_COOKIE}=abc123`, true)).toBe("abc123")
     })
+})
 
-    it("does not match the plain name when tls=true", () => {
-        expect(cookieToken(`${DEVICE_COOKIE}=abc123`, true)).toBe("")
+describe("cookieToken - reads both names regardless of the current TLS setting (new)", () => {
+    // Ticking the HTTPS checkbox changes which name `deviceCookie` WRITES from
+    // that point on; it does nothing to a cookie the browser is already
+    // holding under the other name. Reading only the tls-dictated name (the
+    // old behaviour) locked every paired device out the instant the setting
+    // was toggled either way - the browser keeps sending the name it was
+    // actually given, and the server started looking for the other one.
+    it("still matches the plain name when tls=true - HTTP-paired device, HTTPS just got ticked on", () => {
+        expect(cookieToken(`${DEVICE_COOKIE}=abc123`, true)).toBe("abc123")
     })
 
-    it("does not match the __Host--prefixed name when tls=false (the default)", () => {
-        expect(cookieToken(`__Host-${DEVICE_COOKIE}=abc123`)).toBe("")
+    it("still matches the __Host--prefixed name when tls=false - HTTPS-paired device, HTTPS just got ticked off", () => {
+        expect(cookieToken(`__Host-${DEVICE_COOKIE}=abc123`, false)).toBe("abc123")
+    })
+
+    it("prefers the __Host--prefixed value when both happen to be present", () => {
+        expect(
+            cookieToken(`${DEVICE_COOKIE}=old-plain; __Host-${DEVICE_COOKIE}=new-host`, true)
+        ).toBe("new-host")
+        expect(
+            cookieToken(`__Host-${DEVICE_COOKIE}=new-host; ${DEVICE_COOKIE}=old-plain`, false)
+        ).toBe("new-host")
+    })
+
+    it("a cookie set before a TLS toggle still authenticates after it", () => {
+        // Simulates: pair over plain HTTP (deviceCookie writes the plain
+        // name), then the HTTPS checkbox gets ticked on. The browser's
+        // Cookie header is unchanged - only the server's `tls` argument
+        // flips - and the device must still be found.
+        const setOverHttp = deviceCookie("device-token-abc", false, 30)
+        const cookieHeader = setOverHttp.split(";")[0] // "devdeck_device=device-token-abc"
+        expect(cookieToken(cookieHeader, true)).toBe("device-token-abc")
+
+        // And the reverse: pair over HTTPS, then tick HTTPS off.
+        const setOverHttps = deviceCookie("device-token-xyz", true, 30)
+        const cookieHeader2 = setOverHttps.split(";")[0] // "__Host-devdeck_device=device-token-xyz"
+        expect(cookieToken(cookieHeader2, false)).toBe("device-token-xyz")
     })
 })
 
