@@ -296,8 +296,16 @@ function registerIpc(): void {
     )
     // Revocation intentionally lets a write failure throw across IPC rather
     // than reporting success on a device that's still paired — see the
-    // comment on revokeDevice itself.
-    ipcMain.handle("devices:revoke", (_e, id: string) => devices.revokeDevice(id))
+    // comment on revokeDevice itself. The store write must land before the
+    // socket close: closing first and then having the write fail would leave
+    // the device still paired (able to re-pair the same cookie's dead session
+    // notwithstanding) while its live connection is already gone — the write
+    // is the actual security boundary, the socket close is what makes it take
+    // effect immediately instead of on the device's next connection attempt.
+    ipcMain.handle("devices:revoke", (_e, id: string) => {
+        devices.revokeDevice(id)
+        server.closeDeviceSockets(id)
+    })
     ipcMain.handle("devices:pairingToken", () => devices.pairingToken())
     ipcMain.handle("devices:regeneratePairingToken", () => devices.regeneratePairingToken())
     // One-way settings migration: a legacy plaintext remote.token becomes the

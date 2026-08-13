@@ -59,6 +59,17 @@ export interface ServerDeps {
 
 interface Client extends WebSocket {
     attached?: Set<string>
+    /**
+     * The device that authenticated this socket (stamped from `verifyClient`'s
+     * auth result). Auth is evaluated once, at upgrade - deleting a device's
+     * record in `devices.ts` does nothing to a socket that already passed
+     * that check, so without this a revoked device (a stolen phone, an
+     * ex-collaborator) keeps full terminal reach for as long as it holds the
+     * connection open, even though its row has vanished from the Settings
+     * panel. `closeDeviceSockets` below is what `devices:revoke` calls to
+     * actually close it.
+     */
+    deviceId?: string
 }
 
 let httpServer: Server | null = null
@@ -173,7 +184,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     ): { auth: AuthResult; token: string } => {
         const userAgent = String(req.headers["user-agent"] ?? "")
         try {
-            const cookie = cookieToken(req.headers.cookie)
+            const cookie = cookieToken(req.headers.cookie, !!config.tls)
             if (cookie) {
                 const byCookie = authenticate(cookie, userAgent, config.deviceTtlDays, allowEnroll)
                 if (byCookie.ok) return { auth: byCookie, token: cookie }
@@ -227,7 +238,8 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             // request never even carried. See the comment on
             // clearDeviceCookie in guards.ts for the legitimate case this
             // still covers: a dead cookie that WAS presented and failed.
-            if (cookieToken(req.headers.cookie)) headers["Set-Cookie"] = clearDeviceCookie(!!config.tls)
+            if (cookieToken(req.headers.cookie, !!config.tls))
+                headers["Set-Cookie"] = clearDeviceCookie(!!config.tls)
             res.writeHead(401, headers)
             res.end("Unauthorized")
             return
@@ -302,18 +314,24 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                 const headers: Record<string, string> = {}
                 // Same reasoning as the HTTP 401 path: only clear a cookie
                 // that was actually presented and failed, never unconditionally.
-                if (cookieToken(info.req.headers.cookie)) {
+                if (cookieToken(info.req.headers.cookie, !!config.tls)) {
                     headers["Set-Cookie"] = clearDeviceCookie(!!config.tls)
                 }
                 cb(false, 401, "Unauthorized", headers)
                 return
             }
+            // Tag the upgrade request with which device authenticated it, so
+            // the `connection` handler below can stamp the resulting socket -
+            // revoking a device needs to find its live socket by this id
+            // (see `closeDeviceSockets`).
+            ;(info.req as IncomingMessage & { deviceId?: string }).deviceId = auth.device.id
             cb(true)
         }
     })
 
-    wss.on("connection", (ws: Client) => {
+    wss.on("connection", (ws: Client, req: IncomingMessage & { deviceId?: string }) => {
         ws.attached = new Set()
+        ws.deviceId = req.deviceId
         clients.add(ws)
         send(ws, { t: "sessions", sessions: deps.getSessions() })
 
@@ -508,6 +526,30 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     httpServer.listen(config.port, host)
     const scheme = config.tls ? "https" : "http"
     console.log(`[server] DevDeck remote listening on ${scheme}://${host}:${config.port}`)
+}
+
+/**
+ * Close every live socket belonging to a device, right after its record is
+ * deleted (`devices:revoke` in index.ts calls this immediately after
+ * `devices.revokeDevice`). Auth for a WebSocket is checked once, at upgrade -
+ * dropping the device's record does nothing on its own to a socket that
+ * already passed that check, so without this a revoked device (a stolen
+ * phone, an ex-collaborator) keeps full terminal reach for as long as it
+ * holds the connection open, while its row has already vanished from the
+ * Settings panel. `terminate()`, not `close()`: a device just revoked has no
+ * claim on a graceful close handshake, and a hostile client could simply
+ * never acknowledge one.
+ */
+export function closeDeviceSockets(id: string): void {
+    for (const c of [...clients]) {
+        if (c.deviceId !== id) continue
+        clients.delete(c)
+        try {
+            c.terminate()
+        } catch {
+            /* ignore */
+        }
+    }
 }
 
 export function stop(): void {

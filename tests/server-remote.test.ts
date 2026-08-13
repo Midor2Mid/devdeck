@@ -49,8 +49,9 @@ vi.mock("../src/main/guards", async (importOriginal) => {
     return { ...actual, chooseBind: () => ({ ok: true, host: "127.0.0.1" }) }
 })
 
-const { start, stop } = await import("../src/main/server")
-const { pairingToken, revokeDevice, listDevices } = await import("../src/main/devices")
+const { start, stop, closeDeviceSockets } = await import("../src/main/server")
+const { pairingToken, revokeDevice, listDevices, __resetCacheForTest } =
+    await import("../src/main/devices")
 
 const PORT = 18732
 const base = `http://127.0.0.1:${PORT}`
@@ -100,6 +101,9 @@ beforeEach(async () => {
     } catch {
         /* nothing to remove yet */
     }
+    // devices.ts (I4) caches its store/decrypted tokens in memory; the file
+    // delete above does nothing to that cache on its own.
+    __resetCacheForTest()
     await start({ port: PORT, bind: "lan", deviceTtlDays: 30, tls: false }, deps)
     await waitForListen()
 })
@@ -250,5 +254,52 @@ describe("remote server - cookie auth (Task 4)", () => {
         })
         expect(ws.readyState).toBe(WebSocket.OPEN)
         ws.close()
+    })
+})
+
+describe("revoke closes the live socket (C1)", () => {
+    // The bug this closes: auth is checked once, at upgrade. Deleting the
+    // device's record on its own does nothing to a socket that already
+    // passed that check - a revoked (stolen/ex-collaborator) device kept
+    // full terminal reach for as long as it held the connection open, while
+    // its row had already vanished from the panel. `devices:revoke`'s IPC
+    // handler now calls `closeDeviceSockets` right after the store write;
+    // this exercises that pairing directly (index.ts's handler is a
+    // one-line, untested wrapper around exactly this).
+    it("closeDeviceSockets terminates a revoked device's open WebSocket", async () => {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const [paired] = listDevices(30)
+        expect(paired).toBeTruthy()
+
+        const ws = await connectWs({ Cookie: `devdeck_device=${token}` })
+        expect(ws.readyState).toBe(WebSocket.OPEN)
+
+        const closed = new Promise<void>((resolve) => ws.once("close", () => resolve()))
+        revokeDevice(paired.id)
+        closeDeviceSockets(paired.id)
+        await closed
+        expect(ws.readyState).toBe(WebSocket.CLOSED)
+    })
+
+    it("leaves other devices' live sockets alone", async () => {
+        const enrolA = await fetch(`${base}/?token=${pairingToken()}`)
+        const tokenA = deviceTokenFrom(enrolA.headers.get("set-cookie"))
+        const enrolB = await fetch(`${base}/?token=${pairingToken()}`)
+        const tokenB = deviceTokenFrom(enrolB.headers.get("set-cookie"))
+        const [a, b] = listDevices(30)
+        expect(a && b).toBeTruthy()
+
+        const wsA = await connectWs({ Cookie: `devdeck_device=${tokenA}` })
+        const wsB = await connectWs({ Cookie: `devdeck_device=${tokenB}` })
+
+        const closedA = new Promise<void>((resolve) => wsA.once("close", () => resolve()))
+        revokeDevice(a.id)
+        closeDeviceSockets(a.id)
+        await closedA
+
+        expect(wsA.readyState).toBe(WebSocket.CLOSED)
+        expect(wsB.readyState).toBe(WebSocket.OPEN)
+        wsB.close()
     })
 })
