@@ -90,16 +90,40 @@ export function chooseBind(
  *
  * NaN timestamps fail closed (expire immediately), even when ttlDays is 0,
  * because "never expire" is a policy about idle time, not a license to accept
- * corrupted data.
+ * corrupted data. `ttlDays` gets the same treatment for the same reason: the
+ * old `!ttlDays` check treated a malformed/missing value (`undefined`, `NaN`)
+ * exactly like the deliberate policy value `0` ("never expire") - both are
+ * falsy - so a bad settings payload silently granted the *most* permissive
+ * outcome instead of the least. Only a literal `0` means never now; anything
+ * else that isn't a finite, non-negative number fails closed (expires).
  */
 export function isExpired(lastSeenAt: number, ttlDays: number, now: number): boolean {
     if (!Number.isFinite(lastSeenAt)) return true
-    if (!ttlDays) return false
+    if (!Number.isFinite(ttlDays) || ttlDays < 0) return true
+    if (ttlDays === 0) return false
     return now - lastSeenAt > ttlDays * 86_400_000
 }
 
 /** Name of the cookie carrying a device's own token. Never the pairing token. */
 export const DEVICE_COOKIE = "devdeck_device"
+
+/**
+ * The actual cookie name, `__Host-`-prefixed under TLS. That prefix is a
+ * browser-enforced promise - "this cookie was set with `Secure`, no `Domain`,
+ * and `Path=/`" - which closes part of the cross-port leak plain cookies have
+ * on `localhost`/a LAN IP: cookies are scoped by host, not host+port, so
+ * `devdeck_device` set by this server on port 7420 is also sent to (and
+ * overwritable by) any other local server on 3000/8080/5173/etc. `__Host-`
+ * can't fix that by itself (the browser still sends it to same-host,
+ * different-port servers - the prefix isn't port-aware either), but it does
+ * guarantee no *other* origin/scheme quietly relaxed `Secure`/`Path` on a
+ * cookie of this exact name, so it's worth carrying whenever TLS is on to
+ * make that guarantee. Plain HTTP can't use it at all - `__Host-` requires
+ * `Secure`, which requires TLS - so the un-prefixed name stays in play there.
+ */
+function deviceCookieName(tls: boolean): string {
+    return tls ? `__Host-${DEVICE_COOKIE}` : DEVICE_COOKIE
+}
 
 /**
  * Pull the device-token cookie out of a raw `Cookie` header. A minimal parser
@@ -108,14 +132,17 @@ export const DEVICE_COOKIE = "devdeck_device"
  * on one matching-named entry does not abort the whole search: `continue`s to
  * a later entry rather than returning "" outright, so a duplicate cookie name
  * (browsers allow it; a stale one from an old Path/Domain can linger) still
- * gets a chance to match.
+ * gets a chance to match. `tls` must match what the cookie was actually set
+ * with - `__Host-`-prefixed under TLS, plain otherwise - or a real cookie
+ * simply won't be found under the wrong name.
  */
-export function cookieToken(header: string | undefined): string {
+export function cookieToken(header: string | undefined, tls = false): string {
     if (!header) return ""
+    const name = deviceCookieName(tls)
     for (const part of header.split(";")) {
         const eq = part.indexOf("=")
         if (eq < 0) continue
-        if (part.slice(0, eq).trim() !== DEVICE_COOKIE) continue
+        if (part.slice(0, eq).trim() !== name) continue
         try {
             return decodeURIComponent(part.slice(eq + 1).trim())
         } catch {
@@ -144,7 +171,7 @@ export function cookieToken(header: string | undefined): string {
 export function deviceCookie(token: string, tls: boolean, deviceTtlDays: number): string {
     const days = deviceTtlDays > 0 ? Math.min(deviceTtlDays, 400) : 400
     const attrs = [
-        `${DEVICE_COOKIE}=${encodeURIComponent(token)}`,
+        `${deviceCookieName(tls)}=${encodeURIComponent(token)}`,
         "HttpOnly",
         "SameSite=Strict",
         "Path=/",
@@ -164,7 +191,7 @@ export function deviceCookie(token: string, tls: boolean, deviceTtlDays: number)
  * clearing site data. Sent on a 401/reject so the next load starts clean.
  */
 export function clearDeviceCookie(tls: boolean): string {
-    const attrs = [`${DEVICE_COOKIE}=`, "HttpOnly", "SameSite=Strict", "Path=/", "Max-Age=0"]
+    const attrs = [`${deviceCookieName(tls)}=`, "HttpOnly", "SameSite=Strict", "Path=/", "Max-Age=0"]
     if (tls) attrs.push("Secure")
     return attrs.join("; ")
 }

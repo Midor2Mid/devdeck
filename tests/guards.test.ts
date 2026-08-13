@@ -96,6 +96,19 @@ describe("isExpired", () => {
         // since the subtraction uses plain `-` not Math.abs.
         expect(isExpired(now + 1000 * day, 30, now)).toBe(false)
     })
+
+    it("fails closed on a malformed ttlDays instead of treating it like the deliberate 0 (M10)", () => {
+        // The old `!ttlDays` check treated `undefined`/NaN exactly like the
+        // policy value 0 ("never expire") - both are falsy - so a bad
+        // settings payload silently granted the MOST permissive outcome
+        // instead of the least. Only a literal 0 may mean never now.
+        expect(isExpired(now, NaN, now)).toBe(true)
+        expect(isExpired(now, undefined as unknown as number, now)).toBe(true)
+        expect(isExpired(now, -1, now)).toBe(true)
+        // 0 itself must still mean never - this is the one falsy value that's
+        // an actual policy choice, not corruption.
+        expect(isExpired(now - 3650 * day, 0, now)).toBe(false)
+    })
 })
 
 describe("chooseBind - return-value invariant", () => {
@@ -214,6 +227,40 @@ describe("deviceCookie / clearDeviceCookie", () => {
         const c = clearDeviceCookie(false)
         expect(c).toMatch(`${DEVICE_COOKIE}=;`)
         expect(c).toMatch(/Max-Age=0/)
+    })
+
+    // I5: `__Host-` requires Secure, so it can only ever apply under TLS -
+    // cookies ignore port, and this is the closest thing to a guarantee that
+    // no other local origin quietly relaxed Secure/Path on a cookie of this
+    // exact name.
+    it("adds the __Host- prefix under TLS", () => {
+        const c = deviceCookie("tok123", true, 30)
+        expect(c).toMatch(new RegExp(`^__Host-${DEVICE_COOKIE}=tok123;`))
+    })
+
+    it("does not prefix the cookie over plain http - __Host- without Secure is invalid", () => {
+        const c = deviceCookie("tok123", false, 30)
+        expect(c).toMatch(new RegExp(`^${DEVICE_COOKIE}=tok123;`))
+        expect(c).not.toMatch("__Host-")
+    })
+
+    it("clearDeviceCookie clears the __Host--prefixed name under TLS", () => {
+        const c = clearDeviceCookie(true)
+        expect(c).toMatch(`__Host-${DEVICE_COOKIE}=;`)
+    })
+})
+
+describe("cookieToken - __Host- prefix (I5)", () => {
+    it("reads a __Host--prefixed cookie when tls=true", () => {
+        expect(cookieToken(`__Host-${DEVICE_COOKIE}=abc123`, true)).toBe("abc123")
+    })
+
+    it("does not match the plain name when tls=true", () => {
+        expect(cookieToken(`${DEVICE_COOKIE}=abc123`, true)).toBe("")
+    })
+
+    it("does not match the __Host--prefixed name when tls=false (the default)", () => {
+        expect(cookieToken(`__Host-${DEVICE_COOKIE}=abc123`)).toBe("")
     })
 })
 
