@@ -404,29 +404,62 @@ Add handlers beside the existing `server:*` ones (`index.ts:264`): `devices:list
 
 - [ ] **Step 3: Settings**
 
+Also, from Task 3's review, two things this step must not leave alone:
+
+- `applyServer()` calls `start()` with **no `.catch`**, so a bind refusal is an
+  unhandled rejection and the panel keeps showing stale state. It also no longer
+  calls `stop()` first, so a refused re-bind now leaves the *previous, wider*
+  server running. Catch it, stop the old server, and surface `reason` verbatim.
+- Migrating existing installs to `"auto"` means an install whose tailnet is down
+  binds every interface. That is the same exposure H1 described, now reached
+  through a persisted explicit choice rather than an undefined one. The UI in
+  Task 5 must say so on the `auto` option in plain words, not bury it.
+
+
 In `src/renderer/src/settings.ts`:
 - Add `remote.bind: BindMode` (default `"tailscale"` for new installs) and `remote.deviceTtlDays: number` (default `30`).
 - **Remove `remote.token`.** On load, if a legacy `raw.remote.token` exists, hand it to main once so it becomes the pairing token, then drop it from settings — a one-way migration, and the old plaintext value must not be written back.
 - Existing installs migrate `bind` to `"auto"`, not `"tailscale"`: today's behaviour keeps working and the panel invites a choice. A new install gets `"tailscale"`.
 - Delete `generateToken` and `regenerateToken` if nothing else uses them — check first; the MCP server also mints a bearer token (`settings.ts:666`).
 
-- [ ] **Step 4: The client**
+- [ ] **Step 4: The client — a cookie, not localStorage**
 
-In `CLIENT_HTML`, before opening the WebSocket:
+**This step is load-bearing, not polish.** Task 3 made the WebSocket accept device
+tokens only, so a client that still presents the pairing token on its socket is
+refused and pairing fails silently at the last step. Nothing works until this lands.
 
-```javascript
-const stored = localStorage.getItem("devdeck.deviceToken")
-const injected = window.__DEVDECK_DEVICE_TOKEN__
-if (injected) { localStorage.setItem("devdeck.deviceToken", injected) }
-const tok = injected || stored || new URL(location.href).searchParams.get("token") || ""
-if (new URL(location.href).searchParams.has("token")) {
-    // A URL carrying a working credential should not survive in the address bar,
-    // the browser history, or a screenshot shared to ask "why won't this connect".
-    history.replaceState({}, "", location.pathname)
-}
+The original design here — stash the device token in `localStorage`, strip it from
+the URL — **cannot survive a page reload**, and the flaw is structural rather than
+a detail. A reload issues an HTTP request before any script runs, so it arrives
+with no credential at all, gets a 401, and the `localStorage` branch is never
+reached. The token has to travel on the request itself.
+
+Use a cookie. On the enrolment response, alongside the injected script:
+
+```
+Set-Cookie: devdeck_device=<token>; HttpOnly; SameSite=Strict; Path=/; Max-Age=…
 ```
 
-and use `tok` for the `?token=` on the WebSocket URL.
+with `Secure` added when `config.tls` is on. The browser then presents it
+automatically on later page loads **and on the WebSocket upgrade**, which is the
+same origin — so `verifyClient` reads it from the `Cookie` header.
+
+This is better than what it replaces on three counts: a reload works; the token
+never appears in a URL, so it cannot reach the address bar, browser history, or a
+screenshot; and `HttpOnly` puts it out of reach of any script on the page, which
+`localStorage` cannot do.
+
+Auth precedence at both entry points becomes: **cookie first, then the `?token=`
+query parameter** (the pairing path). Keep the injected
+`window.__DEVDECK_DEVICE_TOKEN__` only if it earns its place after the cookie
+works — most likely it does not, and deleting it removes a credential from the
+page's script scope for nothing.
+
+The client still calls `history.replaceState` to drop `?token=` from the address
+bar after a successful pairing load, for the same reason as before.
+
+Add a test that the WebSocket accepts a device token presented **only** as a
+cookie, since that is now the sole path a returning device has.
 
 - [ ] **Step 5: Typecheck and suite**
 
