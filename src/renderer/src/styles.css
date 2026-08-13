@@ -3931,9 +3931,16 @@ button .ic,
 }
 
 /* ---------- Remote: bind chooser, expiry chooser, device list ---------- */
+/* .section-label is a deliberate app-wide no-op (scoped only to .race-modal -
+   see that rule's comment on why it isn't global), so this section needs its
+   own real label styling rather than relying on it. */
 .remote-subhead {
     margin-top: var(--sp-lg);
     margin-bottom: var(--sp-sm);
+    color: var(--faint);
+    font-size: var(--fs-label);
+    text-transform: uppercase;
+    letter-spacing: var(--ls-label);
 }
 /* Bind chooser: stacked option cards rather than a compact pill row, since
    each option's consequence must read on the option itself. */
@@ -3975,9 +3982,16 @@ button .ic,
     margin-top: 3px;
     line-height: 1.5;
 }
-/* Local network / Auto both carry the same LAN-wide exposure - keep their
-   description at full text color instead of muted, so it reads as plainly as
-   the title rather than as a footnote. */
+/* Local network / Auto both carry the same LAN-wide exposure. Two markers,
+   neither color-only: the description keeps full --text color instead of
+   muted (reads as plainly as the title, not a footnote), and a left stripe
+   in --danger - a legitimate destructive-semantic use, not a second accent -
+   gives the risk a *form* marker too, so three identically-shaped cards
+   don't leave selection tint as the only thing that stands out. */
+.bind-option.warn {
+    border-left: 3px solid var(--danger);
+    padding-left: 9px;
+}
 .bind-option.warn .bind-option-desc {
     color: var(--text);
 }

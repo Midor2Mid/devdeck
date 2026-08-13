@@ -26,6 +26,7 @@ function decodeTarget(v: string): BranchTarget | undefined {
     return undefined
 }
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
+import { deriveRemoteBindView } from "../remoteBindView"
 import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
 import { Modal } from "./Modal"
 
@@ -1394,7 +1395,9 @@ function RemoteSection(): JSX.Element {
     const [devices, setDevices] = useState<RemoteDevice[]>([])
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editingName, setEditingName] = useState("")
-    const [revokeError, setRevokeError] = useState<string | null>(null)
+    // Shared by rename and revoke: both are IPC round-trips that can reject,
+    // and both need to surface that rather than fail silently.
+    const [deviceActionError, setDeviceActionError] = useState<string | null>(null)
 
     // Derive the URL from what the server is actually bound to, not from what
     // happens to be available. 0.0.0.0 isn't dialable, so show the LAN address —
@@ -1402,12 +1405,13 @@ function RemoteSection(): JSX.Element {
     // private Tailscale address while the server is still listening on every
     // interface, which reads as "private" when it isn't.
     const bound = status?.boundHost ?? null
-    const onTailnet = !!bound && bound !== "0.0.0.0"
+    // onTailnet/staleBind/unencryptedLan are pulled out into a pure function
+    // (remoteBindView.ts) so they're unit-testable independent of the running
+    // app - see that file's comment for why that matters here.
+    const { onTailnet, staleBind, unencryptedLan } = deriveRemoteBindView(status, remote.bind, remote.tls)
     const host = onTailnet ? bound : (status?.lan[0] ?? "")
     const scheme = remote.tls ? "https" : "http"
     const url = host && pairingTok ? `${scheme}://${host}:${remote.port}/?token=${pairingTok}` : ""
-    // Tailscale appeared after the server started: it's bound wider than intended.
-    const staleBind = !!bound && !onTailnet && (status?.tailscale.length ?? 0) > 0
 
     // Routes through the store's restartServer so `remoteBindError` has
     // exactly one writer (setRemote's debounced apply is the other caller of
@@ -1479,8 +1483,17 @@ function RemoteSection(): JSX.Element {
         const name = editingName.trim()
         setEditingId(null)
         if (!name) return
-        await window.api.devices.rename(id, name)
-        await refreshDevices()
+        setDeviceActionError(null)
+        try {
+            await window.api.devices.rename(id, name)
+            await refreshDevices()
+        } catch (err) {
+            // Unlike revoke, a failed rename isn't a security problem - but
+            // swallowing it left the input silently reverting to the old
+            // name on the next 5s poll with no explanation at all, which is
+            // its own kind of confusing. Surface it the same way.
+            setDeviceActionError(`Rename failed: ${(err as Error)?.message ?? String(err)}`)
+        }
     }
 
     // Revoke is the one security promise this whole panel makes, and
@@ -1489,12 +1502,12 @@ function RemoteSection(): JSX.Element {
     // that here would be the UI half of the exact bug the throw exists to
     // prevent, so a failed revoke surfaces verbatim instead.
     const revoke = async (id: string): Promise<void> => {
-        setRevokeError(null)
+        setDeviceActionError(null)
         try {
             await window.api.devices.revoke(id)
             await refreshDevices()
         } catch (err) {
-            setRevokeError((err as Error)?.message ?? String(err))
+            setDeviceActionError(`Revoke failed: ${(err as Error)?.message ?? String(err)}`)
         }
     }
 
@@ -1515,7 +1528,7 @@ function RemoteSection(): JSX.Element {
                 interface the server binds. Rendered as full option cards
                 (not a compact pill row) so the exposure each one carries is
                 readable before it's picked, not discovered after. */}
-            <div className="section-label remote-subhead">Network</div>
+            <div className="remote-subhead">Network</div>
             <div className="bind-options">
                 {BIND_OPTIONS.map((opt) => (
                     <button
@@ -1539,10 +1552,12 @@ function RemoteSection(): JSX.Element {
                 so picking Tailscale with no tailnet up reads as a refusal
                 and not as the panel silently doing nothing. */}
             {!status?.running && remoteBindError && (
-                <div className="settings-hint warn">{remoteBindError}</div>
+                <div className="settings-hint warn" role="alert">
+                    {remoteBindError}
+                </div>
             )}
 
-            <div className="section-label remote-subhead">Device expiry</div>
+            <div className="remote-subhead">Device expiry</div>
             <div className="remote-seg">
                 {EXPIRY_OPTIONS.map((opt) => (
                     <button
@@ -1557,7 +1572,9 @@ function RemoteSection(): JSX.Element {
             </div>
             <p className="muted small">
                 How long a paired device can sit idle before it&apos;s dropped automatically -
-                using it resets the window. Revoke a device by hand any time below.
+                using it resets the window. Revoke a device by hand any time below.{" "}
+                <b>Shortening this drops any device already idle past the new window within
+                seconds</b> - re-pairing is the only way back, even while remote access is off.
             </p>
 
             <div className="setting-row">
@@ -1612,7 +1629,10 @@ function RemoteSection(): JSX.Element {
                             <div>
                                 <div className="muted small">Open on your phone:</div>
                                 <code className="token url">{url}</code>
-                                {status && status.tailscale.length === 0 && !remote.tls && (
+                                {/* unencryptedLan is keyed on what's actually BOUND
+                                    (onTailnet), not on whether Tailscale merely happens to
+                                    be installed - see remoteBindView.ts. */}
+                                {unencryptedLan && (
                                     <div className="settings-hint warn">
                                         ⚠ No Tailscale address - this is a plain-LAN <code>http://</code>{" "}
                                         link, so the token and everything you type travel{" "}
@@ -1642,8 +1662,12 @@ function RemoteSection(): JSX.Element {
                 survives regeneration. Per-device revoke is the only real
                 mitigation, which is why this list is here rather than being
                 a convenience. */}
-            <div className="section-label remote-subhead">Paired devices</div>
-            {revokeError && <div className="settings-hint warn">Revoke failed: {revokeError}</div>}
+            <div className="remote-subhead">Paired devices</div>
+            {deviceActionError && (
+                <div className="settings-hint warn" role="alert">
+                    {deviceActionError}
+                </div>
+            )}
             <div className="device-list">
                 {devices.length === 0 ? (
                     <p className="muted small">
@@ -1662,7 +1686,24 @@ function RemoteSection(): JSX.Element {
                                     onBlur={() => void commitRename(d.id)}
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter") void commitRename(d.id)
-                                        if (e.key === "Escape") setEditingId(null)
+                                    }}
+                                    // Capture, not bubble: Modal.tsx renders its children
+                                    // inline (no portal), and its own Escape handler is a
+                                    // *native* bubble-phase listener on the modal div - a
+                                    // real DOM ancestor of this input that sits between it
+                                    // and React's root-delegated dispatcher. Real bubble
+                                    // order reaches that listener before React's bubble
+                                    // dispatch ever runs, so a same-phase stopPropagation
+                                    // here (the LaunchOptions.tsx:128 pattern, which has no
+                                    // competing Modal listener to race) would never even
+                                    // fire. Capture runs first, so stopping it here is what
+                                    // actually pre-empts Modal's handler, ejecting-from-
+                                    // Settings only cancels the rename instead.
+                                    onKeyDownCapture={(e) => {
+                                        if (e.key === "Escape") {
+                                            e.stopPropagation()
+                                            setEditingId(null)
+                                        }
                                     }}
                                 />
                             ) : (
