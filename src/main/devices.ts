@@ -37,20 +37,29 @@ function load(): Store {
     try {
         const s = JSON.parse(readFileSync(storeFile(), "utf8")) as Store
         return {
-            pairing: s.pairing ?? "",
-            devices: s.devices ?? [],
-            tokens: s.tokens ?? {}
+            pairing: typeof s.pairing === "string" ? s.pairing : "",
+            // A hand-corrupted `"devices": {}` would otherwise blow up the
+            // `for...of` loops in authenticate/listDevices on every request.
+            devices: Array.isArray(s.devices) ? s.devices : [],
+            tokens: s.tokens && typeof s.tokens === "object" ? s.tokens : {}
         }
     } catch {
         return { pairing: "", devices: [], tokens: {} }
     }
 }
+function writeStore(store: Store): void {
+    atomicWrite(storeFile(), JSON.stringify(store, null, 2))
+}
 function save(store: Store): void {
     try {
-        atomicWrite(storeFile(), JSON.stringify(store, null, 2))
+        writeStore(store)
     } catch (err) {
         console.error("[devices] failed to save:", err)
     }
+}
+/** Cap attacker/user-supplied strings before they land in the store and the UI. */
+function cap(s: string, max = 200): string {
+    return typeof s === "string" ? s.slice(0, max) : ""
 }
 
 function encrypt(plain: string): string {
@@ -92,9 +101,20 @@ function ensurePairing(store: Store): string {
     return token
 }
 
-/** Return a copy of the record with no secret fields, safe to hand to the renderer. */
+/**
+ * Return a copy of the record with no secret fields, safe to hand to the
+ * renderer. Built field-by-field rather than `{ ...device }` so the
+ * guarantee is structural: a tampered store file (or a later field added to
+ * the on-disk shape) can't smuggle an extra key through this boundary.
+ */
 function toPublic(device: RemoteDevice): RemoteDevice {
-    return { ...device }
+    return {
+        id: device.id,
+        name: device.name,
+        createdAt: device.createdAt,
+        lastSeenAt: device.lastSeenAt,
+        userAgent: device.userAgent
+    }
 }
 
 /** Remove a device's record and its token together - they must never be split. */
@@ -121,15 +141,28 @@ export function regeneratePairingToken(): string {
     return token
 }
 
+// Below this idle gap, a successful reconnect doesn't bother re-stamping
+// lastSeenAt. Expiry is day-granularity, so this loses no real precision,
+// and it's what keeps a legitimate phone's every request from forcing a
+// synchronous writeFileSync+renameSync on the main process's event loop -
+// server.ts calls authenticate() per HTTP request and per WS upgrade.
+const STAMP_INTERVAL_MS = 60_000
+
 /**
  * Authenticate a request from the phone. Device tokens are checked first: a
  * match against an expired device fails *and* removes that device's record,
  * so it re-pairs cleanly instead of resurrecting. Only if no device token
  * matches do we fall through to the pairing token, which enrols a new device.
+ *
+ * Writes the store only when something actually changed (pairing minted,
+ * device enrolled, device dropped, or lastSeenAt moved materially) - this is
+ * an unauthenticated, unrate-limited, attacker-paced call path, so a save on
+ * every rejected or no-op request would be a real cost, not just disk wear.
  */
 export function authenticate(token: string, userAgent: string, ttlDays: number): AuthResult {
     const store = load()
     const now = Date.now()
+    const pairingBefore = store.pairing
 
     for (const device of store.devices) {
         const deviceToken = decrypt(store.tokens[device.id])
@@ -141,8 +174,10 @@ export function authenticate(token: string, userAgent: string, ttlDays: number):
             return { ok: false }
         }
 
-        device.lastSeenAt = now
-        save(store)
+        if (now - device.lastSeenAt > STAMP_INTERVAL_MS) {
+            device.lastSeenAt = now
+            save(store)
+        }
         return { ok: true, device: toPublic(device) }
     }
 
@@ -154,7 +189,7 @@ export function authenticate(token: string, userAgent: string, ttlDays: number):
             name: deviceName(userAgent),
             createdAt: now,
             lastSeenAt: now,
-            userAgent
+            userAgent: cap(userAgent)
         }
         store.devices.push(device)
         store.tokens[device.id] = encrypt(deviceToken)
@@ -162,9 +197,10 @@ export function authenticate(token: string, userAgent: string, ttlDays: number):
         return { ok: true, device: toPublic(device), deviceToken }
     }
 
-    // Even on outright rejection, persist a pairing token minted above so the
-    // next call doesn't mint (and thus invalidate) a different one.
-    save(store)
+    // Persist a pairing token minted above (ensurePairing) so the next call
+    // doesn't mint a different one - but only when it was actually minted,
+    // not on every ordinary rejection.
+    if (store.pairing !== pairingBefore) save(store)
     return { ok: false }
 }
 
@@ -195,14 +231,22 @@ export function renameDevice(id: string, name: string): void {
     const store = load()
     const device = store.devices.find((d) => d.id === id)
     if (!device) return
-    device.name = name
+    device.name = cap(name)
     save(store)
 }
 
+/**
+ * Revoke a device. Unlike the other writes here, a failed save must not be
+ * swallowed: revocation is the one security promise this whole feature
+ * exists to deliver, and silently logging the error (as `save` does
+ * elsewhere) would let a "revoked" device keep authenticating while the UI
+ * reports it gone. Let the write error propagate so a caller can surface a
+ * real failure instead of a false confirmation.
+ */
 export function revokeDevice(id: string): void {
     const store = load()
     drop(store, id)
-    save(store)
+    writeStore(store)
 }
 
 /** A small readable guess at the device from its user-agent. Cosmetic only. */
