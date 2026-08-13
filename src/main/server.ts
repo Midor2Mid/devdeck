@@ -9,9 +9,10 @@ import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
-import { isBlockedRemoteUrl, isReadOnlySql, tokenOk } from "./guards"
+import { isBlockedRemoteUrl, isReadOnlySql, chooseBind, type BindMode } from "./guards"
 import { readDir, readFileText, writeFileText, allFiles, isWithinRoots } from "./files"
 import { listProjects } from "./projects"
+import { authenticate, type AuthResult } from "./devices"
 import { exitNotice } from "../renderer/src/termExit"
 
 export interface RemoteSession {
@@ -27,7 +28,10 @@ export interface RemoteSession {
 
 export interface ServerConfig {
     port: number
-    token: string
+    /** Which interface to bind - see `chooseBind` in guards.ts. */
+    bind: BindMode
+    /** Idle-expiry window for paired devices, in days (0 = never). */
+    deviceTtlDays: number
     /** Serve over HTTPS/WSS with a cached self-signed cert. */
     tls?: boolean
 }
@@ -84,6 +88,22 @@ function send(ws: WebSocket, msg: unknown): void {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
 }
 
+/**
+ * A JS string literal safe to splice into a `<script>` block: JSON.stringify
+ * handles quote/backslash escaping, and the `<`/`>` swap additionally stops a
+ * token that happened to contain `</script>` from closing the tag early. The
+ * token itself is a random hex string today, but this holds regardless.
+ */
+function jsStringLiteral(value: string): string {
+    return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")
+}
+
+/** Inject the freshly-enrolled device token ahead of `<body>`, never in the URL. */
+function withDeviceToken(html: string, token: string): string {
+    const script = `<script>window.__DEVDECK_DEVICE_TOKEN__ = ${jsStringLiteral(token)};</script>\n`
+    return html.replace("<body>", script + "<body>")
+}
+
 // Filesystem access from the phone (the Files/AI mobile views) is confined to
 // within an added project — the same defense-in-depth guard the desktop editor
 // IPC uses. A remote client already has terminal (RCE) reach behind the token +
@@ -109,6 +129,30 @@ export function isRunning(): boolean {
 export async function start(config: ServerConfig, deps: ServerDeps): Promise<void> {
     stop()
 
+    // Decide the bind before touching any server resources: refusing is a
+    // valid outcome (e.g. "tailscale" requested but the tailnet is down), and
+    // when it happens the server must stay fully stopped, not fall back to a
+    // wider interface.
+    const addrs = localAddresses()
+    const bindChoice = chooseBind(config.bind, addrs)
+    if (!bindChoice.ok) throw new Error(bindChoice.reason)
+    const host = bindChoice.host
+
+    // Either a device's own token or the pairing token gets you in; only the
+    // pairing token mints a new device. Both entry points below must agree,
+    // so this is written once - an auth check that exists in two places
+    // eventually disagrees in two places, and here that means one of them
+    // lets someone in. A store write failure (disk full, permissions) fails
+    // the request rather than the whole server.
+    const authFor = (url: URL, userAgent: string): AuthResult => {
+        try {
+            return authenticate(url.searchParams.get("token") ?? "", userAgent, config.deviceTtlDays)
+        } catch (err) {
+            console.error("[server] auth store write failed:", (err as Error)?.message ?? err)
+            return { ok: false }
+        }
+    }
+
     const handleRequest = (req: IncomingMessage, res: ServerResponse): void => {
         const url = new URL(req.url ?? "/", "http://localhost")
         // Static library assets are harmless; everything else requires the token.
@@ -122,16 +166,20 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             res.end(xtermAsset("xterm.css"))
             return
         }
-        if (!tokenOk(url.searchParams.get("token"), config.token)) {
+        const auth = authFor(url, String(req.headers["user-agent"] ?? ""))
+        if (!auth.ok) {
             res.writeHead(401, { "Content-Type": "text/plain" })
             res.end("Unauthorized")
             return
         }
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
-        res.end(CLIENT_HTML)
+        // A fresh enrolment hands the client its device token inline (never in
+        // the URL - it would end up in history, screenshots, shared links).
+        // Task 4's client script reads window.__DEVDECK_DEVICE_TOKEN__ and
+        // stores it for future connections, including the WebSocket below.
+        res.end(auth.deviceToken ? withDeviceToken(CLIENT_HTML, auth.deviceToken) : CLIENT_HTML)
     }
 
-    const addrs = localAddresses()
     if (config.tls) {
         const { key, cert } = await getCert([...addrs.tailscale, ...addrs.lan])
         httpServer = createHttpsServer({ key, cert }, handleRequest)
@@ -145,7 +193,14 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         maxPayload: 25 * 1024 * 1024,
         verifyClient: (info, cb) => {
             const url = new URL(info.req.url ?? "/", "http://localhost")
-            cb(tokenOk(url.searchParams.get("token"), config.token), 1008, "Unauthorized")
+            // verifyClient can only accept/reject - it can't inject a device
+            // token back to the client. A socket that connects on the pairing
+            // token still enrols a new device, just one whose token this
+            // connection never learns. That's fine: in the real flow the HTML
+            // page always loads first, and it's the one that can hand back
+            // the token.
+            const auth = authFor(url, String(info.req.headers["user-agent"] ?? ""))
+            cb(auth.ok, 1008, "Unauthorized")
         }
     })
 
@@ -336,8 +391,6 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     ptyEvents.on("exit", onExit)
 
     httpServer.on("error", (err) => console.error("[server] error:", err.message))
-    // Prefer binding to the Tailscale interface (private) over all-interfaces (LAN).
-    const host = addrs.tailscale[0] ?? "0.0.0.0"
     boundHost = host
     httpServer.listen(config.port, host)
     const scheme = config.tls ? "https" : "http"

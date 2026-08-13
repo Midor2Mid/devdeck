@@ -193,7 +193,12 @@ export function authenticate(token: string, userAgent: string, ttlDays: number):
         }
         store.devices.push(device)
         store.tokens[device.id] = encrypt(deviceToken)
-        save(store)
+        // Unlike the re-stamp write above, a failed save here must not be
+        // swallowed: `save()` would hand the caller a deviceToken for a
+        // record that was never actually written, so the phone looks paired
+        // and then fails on every later connection. Let it throw so the
+        // caller sees a real failure instead of a phantom pairing.
+        writeStore(store)
         return { ok: true, device: toPublic(device), deviceToken }
     }
 
