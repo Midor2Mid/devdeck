@@ -44,3 +44,41 @@ export function isBlockedRemoteUrl(raw: string): boolean {
 export function isReadOnlySql(sql: string): boolean {
     return /^\s*(select|with|explain|pragma|show|desc|describe)\b/i.test(sql)
 }
+
+export type BindMode = "tailscale" | "lan" | "auto"
+export type BindChoice = { ok: true; host: string } | { ok: false; reason: string }
+
+/**
+ * Which interface the remote server binds. This used to be
+ * `tailscale[0] ?? "0.0.0.0"`, which meant asking for a private bind and getting
+ * a network-wide one whenever the tailnet was down — the request silently
+ * inverted, with full terminal access on the other side of it. Asking for
+ * tailscale and not getting it is now a refusal to start.
+ */
+export function chooseBind(
+    mode: BindMode,
+    addrs: { tailscale: string[]; lan: string[] }
+): BindChoice {
+    const tail = addrs.tailscale[0]
+    if (mode === "tailscale") {
+        return tail
+            ? { ok: true, host: tail }
+            : { ok: false, reason: "No tailnet address found. Start Tailscale, or choose Local network." }
+    }
+    if (mode === "auto" && tail) return { ok: true, host: tail }
+    if (addrs.lan.length === 0 && !tail) {
+        return { ok: false, reason: "No network interface found to bind." }
+    }
+    return { ok: true, host: "0.0.0.0" }
+}
+
+/**
+ * Has a paired device been idle longer than the policy allows? `ttlDays: 0`
+ * means never. A `lastSeenAt` in the future is treated as current rather than
+ * expired: clock skew or a restored backup should not lock someone out of their
+ * own machine.
+ */
+export function isExpired(lastSeenAt: number, ttlDays: number, now: number): boolean {
+    if (!ttlDays) return false
+    return now - lastSeenAt > ttlDays * 86_400_000
+}
