@@ -31,7 +31,7 @@ import { Modal } from "./Modal"
 
 const THEME_LIST = Object.values(THEMES)
 const STYLE_LIST = Object.values(STYLES)
-import type { ServerStatus, UpdateStatus } from "../../../preload/index"
+import type { ServerStatus, UpdateStatus, BindMode, RemoteDevice } from "../../../preload/index"
 
 type Section =
     | "appearance"
@@ -1333,23 +1333,68 @@ function NotificationsSection(): JSX.Element {
     )
 }
 
+/** Relative-time label for a device's last-seen timestamp. Devices can sit
+ *  idle for weeks (or forever, under "Never"), so this needs day granularity
+ *  beyond the minutes/hours the activity-panel's `ago()` covers. */
+function relativeTime(ts: number): string {
+    const s = Math.max(0, Math.round((Date.now() - ts) / 1000))
+    if (s < 60) return "just now"
+    const m = Math.round(s / 60)
+    if (m < 60) return `${m}m ago`
+    const h = Math.round(m / 60)
+    if (h < 24) return `${h}h ago`
+    const d = Math.round(h / 24)
+    return `${d}d ago`
+}
+
+/** Bind chooser: rendered as stacked option cards (not a compact pill row) so
+ *  each option's consequence is readable on the option itself - "Local
+ *  network"'s LAN-wide exposure has to be visible before it's picked, not
+ *  discovered after. `warn` keeps that option's description at full text
+ *  color instead of muted, since the two riskier choices shouldn't read as
+ *  calmly as the safe one. */
+const BIND_OPTIONS: { value: BindMode; title: string; desc: string; warn?: boolean }[] = [
+    {
+        value: "tailscale",
+        title: "Tailscale / VPN",
+        desc: "Reachable only over your Tailscale network, from anywhere - the safest choice."
+    },
+    {
+        value: "lan",
+        title: "Local network",
+        desc: "Every device on this Wi-Fi/LAN can reach a full terminal on this machine. Only choose this on a network you trust.",
+        warn: true
+    },
+    {
+        value: "auto",
+        title: "Auto (legacy)",
+        desc: "Uses Tailscale when it's up, otherwise falls back to the local network automatically - the same exposure as Local network, reached without asking. Existing installs were migrated to this; it is not the safe default.",
+        warn: true
+    }
+]
+
+const EXPIRY_OPTIONS: { value: number; label: string }[] = [
+    { value: 7, label: "7 days" },
+    { value: 30, label: "30 days" },
+    { value: 0, label: "Never" }
+]
+
 function RemoteSection(): JSX.Element {
     const remote = useSettings((s) => s.remote)
     const setRemote = useSettings((s) => s.setRemote)
     // The verbatim refusal reason from the last start attempt (e.g. no tailnet
-    // address found) - null once a start has succeeded. New installs default
-    // to bind: "tailscale", so without a tailnet this is the ONLY thing that
-    // tells the user why nothing came up; showing it is the minimum fix here,
-    // a real bind chooser is Task 5's.
+    // address found) - null once a start has succeeded.
     const remoteBindError = useSettings((s) => s.remoteBindError)
     const storeRestartServer = useSettings((s) => s.restartServer)
     const [status, setStatus] = useState<ServerStatus | null>(null)
     const [qr, setQr] = useState<string>("")
-    // The pairing token now lives in main's encrypted device store, not in
-    // settings — fetched over IPC rather than read off `remote`. This panel is
-    // a placeholder pending Task 5's device list / bind chooser UI; it still
-    // needs *a* way to show/regenerate the pairing link in the meantime.
+    // The pairing token lives in main's encrypted device store, not in
+    // settings — fetched over IPC rather than read off `remote`.
     const [pairingTok, setPairingTok] = useState<string>("")
+    const [devices, setDevices] = useState<RemoteDevice[]>([])
+    const [editingId, setEditingId] = useState<string | null>(null)
+    const [editingName, setEditingName] = useState("")
+    const [revokeError, setRevokeError] = useState<string | null>(null)
 
     // Derive the URL from what the server is actually bound to, not from what
     // happens to be available. 0.0.0.0 isn't dialable, so show the LAN address —
@@ -1403,6 +1448,56 @@ function RemoteSection(): JSX.Element {
         else setQr("")
     }, [url])
 
+    // The device list is the only mitigation against a leaked pairing token
+    // (it never expires and regenerating it deliberately spares already-paired
+    // devices), so it polls on its own rather than only refreshing after a
+    // rename/revoke - a device idling out under the current TTL policy, or
+    // enrolling from another window, should show up here without a reload.
+    useEffect(() => {
+        let on = true
+        const tick = (): void => {
+            window.api.devices.list(remote.deviceTtlDays).then((d) => on && setDevices(d))
+        }
+        tick()
+        const iv = setInterval(tick, 5000)
+        return () => {
+            on = false
+            clearInterval(iv)
+        }
+    }, [remote.deviceTtlDays])
+
+    const refreshDevices = async (): Promise<void> => {
+        setDevices(await window.api.devices.list(remote.deviceTtlDays))
+    }
+
+    const startRename = (d: RemoteDevice): void => {
+        setEditingId(d.id)
+        setEditingName(d.name)
+    }
+
+    const commitRename = async (id: string): Promise<void> => {
+        const name = editingName.trim()
+        setEditingId(null)
+        if (!name) return
+        await window.api.devices.rename(id, name)
+        await refreshDevices()
+    }
+
+    // Revoke is the one security promise this whole panel makes, and
+    // `devices.revoke` throws on a write failure precisely so a caller doesn't
+    // report success when the device is actually still paired - swallowing
+    // that here would be the UI half of the exact bug the throw exists to
+    // prevent, so a failed revoke surfaces verbatim instead.
+    const revoke = async (id: string): Promise<void> => {
+        setRevokeError(null)
+        try {
+            await window.api.devices.revoke(id)
+            await refreshDevices()
+        } catch (err) {
+            setRevokeError((err as Error)?.message ?? String(err))
+        }
+    }
+
     return (
         <div className="settings-section">
             <h3>Remote access (mobile)</h3>
@@ -1415,6 +1510,56 @@ function RemoteSection(): JSX.Element {
                     onChange={(e) => setRemote({ enabled: e.target.checked })}
                 />
             </div>
+
+            {/* The single most consequential choice in this panel: which
+                interface the server binds. Rendered as full option cards
+                (not a compact pill row) so the exposure each one carries is
+                readable before it's picked, not discovered after. */}
+            <div className="section-label remote-subhead">Network</div>
+            <div className="bind-options">
+                {BIND_OPTIONS.map((opt) => (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        className={
+                            "bind-option" +
+                            (remote.bind === opt.value ? " on" : "") +
+                            (opt.warn ? " warn" : "")
+                        }
+                        onClick={() => setRemote({ bind: opt.value })}
+                    >
+                        <div className="bind-option-title">{opt.title}</div>
+                        <div className="bind-option-desc">{opt.desc}</div>
+                    </button>
+                ))}
+            </div>
+            {/* Verbatim, unparaphrased — e.g. "No tailnet address found. Start
+                Tailscale, or choose Local network." Shown right under the
+                chooser that caused it, not buried in the status block below,
+                so picking Tailscale with no tailnet up reads as a refusal
+                and not as the panel silently doing nothing. */}
+            {!status?.running && remoteBindError && (
+                <div className="settings-hint warn">{remoteBindError}</div>
+            )}
+
+            <div className="section-label remote-subhead">Device expiry</div>
+            <div className="remote-seg">
+                {EXPIRY_OPTIONS.map((opt) => (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        className={remote.deviceTtlDays === opt.value ? "on" : ""}
+                        onClick={() => setRemote({ deviceTtlDays: opt.value })}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
+            </div>
+            <p className="muted small">
+                How long a paired device can sit idle before it&apos;s dropped automatically -
+                using it resets the window. Revoke a device by hand any time below.
+            </p>
+
             <div className="setting-row">
                 <label>Port</label>
                 <input
@@ -1451,13 +1596,6 @@ function RemoteSection(): JSX.Element {
                                 ? " · Tailscale only (reachable anywhere on your tailnet)"
                                 : " · this Wi-Fi only (same network required)")}
                     </div>
-                    {/* Verbatim, unparaphrased — e.g. "No tailnet address found.
-                        Start Tailscale, or choose Local network." Otherwise a
-                        refusal (the default bind is "tailscale") just reads as
-                        the panel silently doing nothing. */}
-                    {!status?.running && remoteBindError && (
-                        <div className="settings-hint warn">{remoteBindError}</div>
-                    )}
                     {staleBind && (
                         <div className="settings-hint warn">
                             ⚠ Tailscale came up after the server started, so it&apos;s still
@@ -1497,6 +1635,63 @@ function RemoteSection(): JSX.Element {
                     )}
                 </div>
             )}
+
+            {/* The pairing token never expires and enrols unlimited devices,
+                and regenerating it deliberately spares already-paired
+                devices - so anyone who ever learned it keeps a device that
+                survives regeneration. Per-device revoke is the only real
+                mitigation, which is why this list is here rather than being
+                a convenience. */}
+            <div className="section-label remote-subhead">Paired devices</div>
+            {revokeError && <div className="settings-hint warn">Revoke failed: {revokeError}</div>}
+            <div className="device-list">
+                {devices.length === 0 ? (
+                    <p className="muted small">
+                        No devices are paired yet - turn on remote access and scan the QR code
+                        above with your phone to pair one.
+                    </p>
+                ) : (
+                    devices.map((d) => (
+                        <div className="device-row" key={d.id}>
+                            {editingId === d.id ? (
+                                <input
+                                    className="device-name-input"
+                                    autoFocus
+                                    value={editingName}
+                                    onChange={(e) => setEditingName(e.target.value)}
+                                    onBlur={() => void commitRename(d.id)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") void commitRename(d.id)
+                                        if (e.key === "Escape") setEditingId(null)
+                                    }}
+                                />
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="device-name"
+                                    onClick={() => startRename(d)}
+                                    title="Click to rename"
+                                >
+                                    {d.name}
+                                </button>
+                            )}
+                            <span className="device-lastseen muted small">
+                                {relativeTime(d.lastSeenAt)}
+                            </span>
+                            {/* Neutral by design: five devices with an accent Revoke
+                                each would be five accents on screen. Only the danger
+                                semantic (on hover) marks this as destructive. */}
+                            <button
+                                type="button"
+                                className="btn-min danger device-revoke"
+                                onClick={() => void revoke(d.id)}
+                            >
+                                Revoke
+                            </button>
+                        </div>
+                    ))
+                )}
+            </div>
 
             <p className="settings-hint">
                 ⚠ A remote terminal can run commands on this machine. Keep the token private,

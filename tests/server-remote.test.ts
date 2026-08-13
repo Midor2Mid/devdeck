@@ -75,14 +75,20 @@ function deviceTokenFrom(setCookie: string | null): string {
     return m ? decodeURIComponent(m[1]) : ""
 }
 
-/** Connect a raw WebSocket, resolving on a real open and rejecting on any refusal. */
+/** Connect a raw WebSocket, resolving on a real open and rejecting on any refusal.
+ *  The rejection error carries the HTTP status of the refused upgrade so callers
+ *  can assert it's specifically a 401, not merely "some failure". */
 function connectWs(headers: Record<string, string> = {}, query = ""): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
         const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws${query}`, { headers })
         ws.once("open", () => resolve(ws))
-        ws.once("unexpected-response", () => {
+        ws.once("unexpected-response", (_req, res) => {
             ws.terminate()
-            reject(new Error("upgrade rejected"))
+            const err = new Error(`upgrade rejected: ${res.statusCode}`) as Error & {
+                statusCode?: number
+            }
+            err.statusCode = res.statusCode
+            reject(err)
         })
         ws.once("error", (err) => reject(err))
     })
@@ -125,11 +131,13 @@ describe("remote server - cookie auth (Task 4)", () => {
     })
 
     it("rejects a WebSocket with neither a cookie nor a ?token=", async () => {
-        await expect(connectWs()).rejects.toThrow()
+        await expect(connectWs()).rejects.toMatchObject({ statusCode: 401 })
     })
 
     it("allowEnroll:false - a WebSocket presenting the pairing token as ?token= is refused, not enrolled", async () => {
-        await expect(connectWs({}, `?token=${encodeURIComponent(pairingToken())}`)).rejects.toThrow()
+        await expect(
+            connectWs({}, `?token=${encodeURIComponent(pairingToken())}`)
+        ).rejects.toMatchObject({ statusCode: 401 })
     })
 
     it("a reload with a stale/unknown device cookie 401s rather than being silently accepted", async () => {
@@ -225,9 +233,12 @@ describe("remote server - cookie auth (Task 4)", () => {
     it("rejects a WebSocket upgrade whose Origin doesn't match this server's host", async () => {
         const enrol = await fetch(`${base}/?token=${pairingToken()}`)
         const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        // 403 (Forbidden), not 401: this is the Origin defense-in-depth check,
+        // a distinct rejection from the auth-failure path below - it never
+        // even reaches authFor(), so it must not be conflated with a 401.
         await expect(
             connectWs({ Cookie: `devdeck_device=${token}`, Origin: "http://evil.example" })
-        ).rejects.toThrow()
+        ).rejects.toMatchObject({ statusCode: 403 })
     })
 
     it("accepts a WebSocket upgrade whose Origin matches this server's host", async () => {

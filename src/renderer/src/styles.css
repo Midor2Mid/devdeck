@@ -3929,6 +3929,132 @@ button .ic,
     padding: 6px;
     flex: none;
 }
+
+/* ---------- Remote: bind chooser, expiry chooser, device list ---------- */
+.remote-subhead {
+    margin-top: var(--sp-lg);
+    margin-bottom: var(--sp-sm);
+}
+/* Bind chooser: stacked option cards rather than a compact pill row, since
+   each option's consequence must read on the option itself. */
+.bind-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-sm);
+    margin-bottom: var(--sp-sm);
+}
+.bind-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 8px);
+    padding: 9px 12px;
+    cursor: pointer;
+}
+.bind-option:hover {
+    border-color: var(--muted);
+}
+/* Segment idiom: tint fill + weight 600 on the title - the tint alone doesn't
+   clear the contrast floor on Washi (18% accent over its ground is 1.2:1), so
+   the weight is what actually carries the selected state. */
+.bind-option.on {
+    background: var(--seg-tint);
+}
+.bind-option-title {
+    font-size: 13px;
+    color: var(--text);
+}
+.bind-option.on .bind-option-title {
+    font-weight: 600;
+}
+.bind-option-desc {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.5;
+}
+/* Local network / Auto both carry the same LAN-wide exposure - keep their
+   description at full text color instead of muted, so it reads as plainly as
+   the title rather than as a footnote. */
+.bind-option.warn .bind-option-desc {
+    color: var(--text);
+}
+
+/* Expiry chooser: the compact pill idiom (same tint + weight grammar) since
+   it needs only one shared description line below it, not a per-option one. */
+.remote-seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 7px);
+    overflow: hidden;
+    margin-bottom: var(--sp-xs);
+}
+.remote-seg button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 4px 14px;
+    cursor: pointer;
+}
+.remote-seg button.on {
+    background: var(--seg-tint);
+    color: var(--text);
+    font-weight: 600;
+}
+.remote-seg button:not(.on):hover {
+    color: var(--text);
+    background: var(--bg-2);
+}
+
+.device-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-xs);
+    margin-bottom: var(--sp-md);
+}
+.device-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    padding: 8px 10px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius, 7px);
+    background: var(--bg-2);
+}
+.device-name {
+    flex: 1;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 12.5px;
+    padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 5px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.device-name:hover {
+    background: var(--bg-3);
+}
+.device-name-input {
+    flex: 1;
+    font-size: 12.5px;
+    padding: 3px 6px;
+    min-width: 0;
+}
+.device-lastseen {
+    flex: none;
+    white-space: nowrap;
+}
+.device-revoke {
+    flex: none;
+}
 .shortcuts-table kbd {
     background: var(--bg-3);
     border: 1px solid var(--border);

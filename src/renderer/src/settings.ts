@@ -510,7 +510,15 @@ export const useSettings = create<SettingsState>((set, get) => {
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
-        if (!loaded) return
+        if (!loaded) {
+            // Should only ever fire for the in-flight window between mount
+            // and load() resolving - a save request that lands there is
+            // silently dropped rather than wiping settings.json (see the
+            // comment above `loaded`), but "silently" made it undiagnosable
+            // if that window is ever wider than expected.
+            console.warn("[settings] save requested before load() completed - dropped")
+            return
+        }
         const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
         window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
     }
@@ -620,6 +628,19 @@ export const useSettings = create<SettingsState>((set, get) => {
                 if (legacyRemote?.token) {
                     try {
                         legacyMigrated = await window.api.devices.migrateLegacyToken(legacyRemote.token)
+                        if (!legacyMigrated) {
+                            // Resolved false, not thrown: a *different* pairing
+                            // token already exists (e.g. a Settings visit
+                            // minted one after an earlier write failure), so
+                            // this legacy token is now PERMANENTLY declined -
+                            // it will never adopt on a later load either, and
+                            // a phone that bookmarked the old URL is locked
+                            // out with no signal today. Surfacing it here at
+                            // least makes the lockout diagnosable.
+                            console.warn(
+                                "[settings] legacy remote.token was not migrated - a different pairing token already exists, so this device is permanently declined and any bookmarked phone using the old token will need to re-pair"
+                            )
+                        }
                     } catch (err) {
                         console.error(
                             "[settings] failed to migrate legacy remote.token - leaving it in settings.json until this succeeds:",
