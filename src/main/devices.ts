@@ -17,9 +17,20 @@ export interface RemoteDevice {
     lastSeenAt: number
     userAgent: string
 }
+
+/**
+ * The shape safe to hand to the renderer: `RemoteDevice` minus `userAgent`.
+ * Nothing in the UI displays it (it exists only to compute the cosmetic
+ * `name` guess at enrolment time), and the CHANGELOG already documents the
+ * wire payload as `{ id, name, createdAt, lastSeenAt }` - this is what makes
+ * that literally true instead of describing a field the payload still
+ * carried.
+ */
+export type PublicRemoteDevice = Omit<RemoteDevice, "userAgent">
+
 export type AuthResult =
     | { ok: false }
-    | { ok: true; device: RemoteDevice; deviceToken?: string }
+    | { ok: true; device: PublicRemoteDevice; deviceToken?: string }
 
 interface Store {
     /** Pairing token, encrypted. Minted on first read. */
@@ -33,22 +44,68 @@ interface Store {
 function storeFile(): string {
     return join(app.getPath("userData"), "remote-devices.json")
 }
+
+// Every unauthenticated HTTP request and WS upgrade calls authenticate(),
+// which used to mean a synchronous readFileSync + JSON.parse (load()) AND a
+// DPAPI decrypt of every paired device's token (in authenticate's loop) on
+// EVERY single call - unrate-limited, attacker-paced, on the same thread that
+// drives the UI and relays every PTY. Before per-device tokens existed,
+// rejecting a bad token was one in-memory hash compare; this is meant to get
+// back close to that cost on the common path.
+//
+// `cachedRaw` holds the parsed (still-encrypted) store; `decryptedCache` holds
+// already-decrypted token/pairing values keyed by device id (or the
+// `PAIRING_KEY` sentinel for the pairing token). Both are invalidated by
+// `writeStore` - devices.ts is the sole writer of remote-devices.json, so
+// nothing else can make either cache stale.
+//
+// IMPORTANT: `load`/`writeStore` are deliberately *synchronous*. That is what
+// makes two near-simultaneous enrolments safe - each call fully reads,
+// mutates, and writes before another can start, so there is no interleaving
+// window for two writes to race and one to clobber the other. Anyone
+// converting either to async must add real locking, or a concurrent pairing-
+// token use can drop a device's write.
+let cachedRaw: Store | null = null
+const decryptedCache = new Map<string, string>()
+const PAIRING_KEY = "__pairing__"
+
 function load(): Store {
-    try {
-        const s = JSON.parse(readFileSync(storeFile(), "utf8")) as Store
-        return {
-            pairing: typeof s.pairing === "string" ? s.pairing : "",
-            // A hand-corrupted `"devices": {}` would otherwise blow up the
-            // `for...of` loops in authenticate/listDevices on every request.
-            devices: Array.isArray(s.devices) ? s.devices : [],
-            tokens: s.tokens && typeof s.tokens === "object" ? s.tokens : {}
+    if (!cachedRaw) {
+        try {
+            const s = JSON.parse(readFileSync(storeFile(), "utf8")) as Store
+            cachedRaw = {
+                pairing: typeof s.pairing === "string" ? s.pairing : "",
+                // A hand-corrupted `"devices": {}` would otherwise blow up the
+                // `for...of` loops in authenticate/listDevices on every request.
+                devices: Array.isArray(s.devices) ? s.devices : [],
+                tokens: s.tokens && typeof s.tokens === "object" ? s.tokens : {}
+            }
+        } catch {
+            cachedRaw = { pairing: "", devices: [], tokens: {} }
         }
-    } catch {
-        return { pairing: "", devices: [], tokens: {} }
+    }
+    // A fresh shallow copy per call, not the cached reference itself: callers
+    // mutate whatever `load()` returns in place (push a device, delete one,
+    // reassign `pairing`) before persisting it via `writeStore`/`save`. If a
+    // write then fails (disk full, permissions), the mutation must not have
+    // already corrupted the shared cache - the next `load()` would hand out
+    // the same half-applied state, and the next SUCCESSFUL write of anything
+    // else would carry it to disk for real, even though the operation that
+    // produced it never actually persisted.
+    return {
+        pairing: cachedRaw.pairing,
+        devices: cachedRaw.devices.map((d) => ({ ...d })),
+        tokens: { ...cachedRaw.tokens }
     }
 }
 function writeStore(store: Store): void {
     atomicWrite(storeFile(), JSON.stringify(store, null, 2))
+    // Only once the write actually lands: this call's (mutated, now-persisted)
+    // store becomes the shared cache, and every decrypted value cached against
+    // the PREVIOUS store is potentially stale (a token may have been added,
+    // rotated, or dropped) and must be re-derived on next use.
+    cachedRaw = store
+    decryptedCache.clear()
 }
 function save(store: Store): void {
     try {
@@ -61,6 +118,16 @@ function save(store: Store): void {
 function cap(s: string, max = 200): string {
     return typeof s === "string" ? s.slice(0, max) : ""
 }
+
+/**
+ * Anyone holding the pairing token can otherwise enrol devices with no limit,
+ * and every additional device permanently raises the per-request cost of the
+ * very authentication path this guards - one more decrypt in `authenticate`'s
+ * loop, forever. A generous cap for a personal-use feature; revoking old
+ * devices (or regenerating the pairing token) is the way past it, not raising
+ * the number.
+ */
+const MAX_DEVICES = 20
 
 function encrypt(plain: string): string {
     if (!plain) return ""
@@ -87,14 +154,46 @@ function decrypt(enc?: string): string {
     }
     return ""
 }
+/** `decrypt`, cached by key (a device id, or `PAIRING_KEY`) until the next write. */
+function decryptCached(key: string, enc: string | undefined): string {
+    const cached = decryptedCache.get(key)
+    if (cached !== undefined) return cached
+    const value = decrypt(enc)
+    decryptedCache.set(key, value)
+    return value
+}
+
+/**
+ * TEST-ONLY: drop the in-memory store/decrypt cache so the next `load()`
+ * re-reads from disk. Tests reset state between cases by deleting
+ * remote-devices.json directly; without this the cache would keep serving a
+ * previous case's in-memory store even after the file backing it is gone.
+ * Not used by the app - nothing outside tests has a reason to force a re-read
+ * given devices.ts is the sole writer of the file it caches.
+ */
+export function __resetCacheForTest(): void {
+    cachedRaw = null
+    decryptedCache.clear()
+}
 
 function newToken(): string {
     return randomBytes(32).toString("hex")
 }
 
-/** Mint the pairing token into `store` if it isn't set yet. Mutates `store.pairing`. */
+/**
+ * Mint the pairing token into `store` if it isn't set yet. Mutates
+ * `store.pairing` so callers can tell (`store.pairing !== before`) that a
+ * mint happened and needs persisting. Deliberately does NOT cache the freshly
+ * minted plaintext in `decryptedCache`: the caller may still fail to persist
+ * it (`authenticate`'s fallthrough uses the swallowing `save`), and caching
+ * an optimistic value here would have the next call's `decryptCached` return
+ * a token that was never actually written, while the store rebuilt from disk
+ * disagrees. Leaving the mint uncached means a failed persist is simply
+ * retried next time, instead of poisoning future reads with a value nothing
+ * durable backs.
+ */
 function ensurePairing(store: Store): string {
-    const existing = decrypt(store.pairing)
+    const existing = decryptCached(PAIRING_KEY, store.pairing)
     if (existing) return existing
     const token = newToken()
     store.pairing = encrypt(token)
@@ -105,15 +204,16 @@ function ensurePairing(store: Store): string {
  * Return a copy of the record with no secret fields, safe to hand to the
  * renderer. Built field-by-field rather than `{ ...device }` so the
  * guarantee is structural: a tampered store file (or a later field added to
- * the on-disk shape) can't smuggle an extra key through this boundary.
+ * the on-disk shape) can't smuggle an extra key through this boundary -
+ * `userAgent` included: it's cosmetic input already folded into `name` at
+ * enrolment time, and nothing downstream needs it a second time.
  */
-function toPublic(device: RemoteDevice): RemoteDevice {
+function toPublic(device: RemoteDevice): PublicRemoteDevice {
     return {
         id: device.id,
         name: device.name,
         createdAt: device.createdAt,
-        lastSeenAt: device.lastSeenAt,
-        userAgent: device.userAgent
+        lastSeenAt: device.lastSeenAt
     }
 }
 
@@ -123,21 +223,35 @@ function drop(store: Store, id: string): void {
     delete store.tokens[id]
 }
 
-/** Current pairing token, minting one on first use. */
+/**
+ * Current pairing token, minting one on first use. Uses the throwing
+ * `writeStore`, not `save`: this is what the Settings panel displays AND
+ * QR-encodes as the way to pair a new device, so a swallowed write failure
+ * here would show (and offer to scan) a token that isn't actually the one
+ * live in the store - the same class of false confirmation `revokeDevice`
+ * and `setPairingToken` already avoid, for the same reason.
+ */
 export function pairingToken(): string {
     const store = load()
     const before = store.pairing
     const token = ensurePairing(store)
-    if (store.pairing !== before) save(store)
+    if (store.pairing !== before) writeStore(store)
     return token
 }
 
-/** Invalidate the current pairing token and mint a fresh one. Already-paired devices are unaffected. */
+/**
+ * Invalidate the current pairing token and mint a fresh one. Already-paired
+ * devices are unaffected. Uses the throwing `writeStore`, not `save`: a
+ * caller regenerating the token is explicitly trying to invalidate a leaked
+ * one, so a swallowed write failure here would tell the user it worked while
+ * the leaked token stayed live - the exact false confirmation this whole
+ * action exists to prevent.
+ */
 export function regeneratePairingToken(): string {
     const store = load()
     const token = newToken()
     store.pairing = encrypt(token)
-    save(store)
+    writeStore(store)
     return token
 }
 
@@ -207,7 +321,7 @@ export function authenticate(
     const pairingBefore = store.pairing
 
     for (const device of store.devices) {
-        const deviceToken = decrypt(store.tokens[device.id])
+        const deviceToken = decryptCached(device.id, store.tokens[device.id])
         if (!deviceToken || !tokenOk(token, deviceToken)) continue
 
         if (isExpired(device.lastSeenAt, ttlDays, now)) {
@@ -226,7 +340,12 @@ export function authenticate(
     if (!allowEnroll) return { ok: false }
 
     const pairing = ensurePairing(store)
-    if (tokenOk(token, pairing)) {
+    // `store.devices.length < MAX_DEVICES` (not a separate early return):
+    // hitting the cap must still fall through to the persistence check below,
+    // so a pairing token minted just above by `ensurePairing` on a fresh
+    // install still gets saved even when the very first enrolment attempt
+    // happens to be over some pre-existing cap.
+    if (tokenOk(token, pairing) && store.devices.length < MAX_DEVICES) {
         const deviceToken = newToken()
         const device: RemoteDevice = {
             id: randomBytes(16).toString("hex"),
@@ -254,7 +373,7 @@ export function authenticate(
 }
 
 /** Paired, non-expired devices - prunes expired records (and their tokens) as it reads. */
-export function listDevices(ttlDays: number): RemoteDevice[] {
+export function listDevices(ttlDays: number): PublicRemoteDevice[] {
     const store = load()
     const now = Date.now()
     const kept: RemoteDevice[] = []
@@ -333,9 +452,13 @@ export function deviceName(userAgent: string): string {
 /**
  * TEST-ONLY: force a device's lastSeenAt through the store, to simulate idle
  * time without faking the clock across a module that also writes files. Not
- * used by the app.
+ * wired to any IPC handler, but that was only ever enforced by nobody adding
+ * one - a guard makes the restriction structural instead of a promise a future
+ * edit could quietly break: outside a test run this is a no-op regardless of
+ * who calls it.
  */
 export function expireForTest(id: string, at: number): void {
+    if (process.env.NODE_ENV !== "test") return
     const store = load()
     const device = store.devices.find((d) => d.id === id)
     if (!device) return

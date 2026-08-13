@@ -7,10 +7,14 @@ import { contextBridge, ipcRenderer } from "electron"
 // this boundary, instead of `ipcRenderer.invoke`'s untyped channel quietly
 // letting the two sides drift (the exact gap that hid Task 3's regression).
 import type { BindMode } from "../main/guards"
-import type { RemoteDevice } from "../main/devices"
+import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 
-export type { BindMode, RemoteDevice }
+// Re-exported as `RemoteDevice`: the renderer never sees (and never needs to
+// know about) the internal `RemoteDevice` shape that also carries
+// `userAgent` - `PublicRemoteDevice` (what every IPC call below actually
+// returns) is the only shape that should exist on this side of the bridge.
+export type { BindMode, PublicRemoteDevice as RemoteDevice }
 
 // Each terminal pane registers its own pty:data/pty:exit listener; raise the
 // cap so many open terminals don't trip Node's MaxListenersExceededWarning.
@@ -440,12 +444,15 @@ const api = {
     },
     /** Paired-device management for the remote server (see main/devices.ts). */
     devices: {
-        list: (ttlDays: number): Promise<RemoteDevice[]> => ipcRenderer.invoke("devices:list", ttlDays),
+        list: (ttlDays: number): Promise<PublicRemoteDevice[]> =>
+            ipcRenderer.invoke("devices:list", ttlDays),
         rename: (id: string, name: string): Promise<void> =>
             ipcRenderer.invoke("devices:rename", { id, name }),
         /** Throws if the write fails — a revoked device must never look successfully gone when it isn't. */
         revoke: (id: string): Promise<void> => ipcRenderer.invoke("devices:revoke", id),
+        /** Throws if the write fails — the panel must never display (or QR-encode) a token that isn't actually the one live in the store. */
         pairingToken: (): Promise<string> => ipcRenderer.invoke("devices:pairingToken"),
+        /** Throws if the write fails — regenerating is meant to invalidate a leaked token, and a swallowed failure would report success while the leaked one stayed live. */
         regeneratePairingToken: (): Promise<string> =>
             ipcRenderer.invoke("devices:regeneratePairingToken"),
         /**
