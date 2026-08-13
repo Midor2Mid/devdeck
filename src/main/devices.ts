@@ -141,6 +141,24 @@ export function regeneratePairingToken(): string {
     return token
 }
 
+/**
+ * One-way settings migration: adopt a legacy `remote.token` (the single
+ * plaintext, non-expiring token this feature replaces) as the pairing token,
+ * so a phone that already has the old URL bookmarked keeps working - it
+ * re-pairs as a device on its next load instead of being locked out. Only
+ * takes effect while no pairing token has been minted yet: once a real one
+ * exists (freshly minted, or already migrated), a stale `remote.token` still
+ * lingering in settings.json (e.g. a write that raced the migration) must
+ * not stomp a token the user may since have regenerated.
+ */
+export function setPairingToken(token: string): void {
+    if (!token) return
+    const store = load()
+    if (decrypt(store.pairing)) return
+    store.pairing = encrypt(token)
+    save(store)
+}
+
 // Below this idle gap, a successful reconnect doesn't bother re-stamping
 // lastSeenAt. Expiry is day-granularity, so this loses no real precision,
 // and it's what keeps a legitimate phone's every request from forcing a

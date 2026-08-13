@@ -164,6 +164,21 @@ export interface ServerStatus {
     tailscale: string[]
     lan: string[]
 }
+/** Which interface the remote server binds — mirrors `BindMode` in main/guards.ts. */
+export type BindMode = "tailscale" | "lan" | "auto"
+export interface ServerStartResult {
+    ok: boolean
+    /** Present when `ok` is false — the refusal reason, verbatim (e.g. no tailnet address). */
+    reason?: string
+}
+/** A paired remote device — never carries a token; see main/devices.ts's toPublic(). */
+export interface RemoteDevice {
+    id: string
+    name: string
+    createdAt: number
+    lastSeenAt: number
+    userAgent: string
+}
 export interface UpdateStatus {
     state: "checking" | "available" | "current" | "downloading" | "ready" | "error"
     version?: string
@@ -422,10 +437,29 @@ const api = {
         save: (data: unknown): void => ipcRenderer.send("settings:save", data)
     },
     server: {
-        start: (cfg: { port: number; token: string; tls?: boolean }): Promise<boolean> =>
-            ipcRenderer.invoke("server:start", cfg),
+        start: (cfg: {
+            port: number
+            bind: BindMode
+            /** Idle-expiry window for paired devices, in days (0 = never). */
+            deviceTtlDays: number
+            tls?: boolean
+        }): Promise<ServerStartResult> => ipcRenderer.invoke("server:start", cfg),
         stop: (): Promise<boolean> => ipcRenderer.invoke("server:stop"),
         status: (): Promise<ServerStatus> => ipcRenderer.invoke("server:status")
+    },
+    /** Paired-device management for the remote server (see main/devices.ts). */
+    devices: {
+        list: (ttlDays: number): Promise<RemoteDevice[]> => ipcRenderer.invoke("devices:list", ttlDays),
+        rename: (id: string, name: string): Promise<void> =>
+            ipcRenderer.invoke("devices:rename", { id, name }),
+        /** Throws if the write fails — a revoked device must never look successfully gone when it isn't. */
+        revoke: (id: string): Promise<void> => ipcRenderer.invoke("devices:revoke", id),
+        pairingToken: (): Promise<string> => ipcRenderer.invoke("devices:pairingToken"),
+        regeneratePairingToken: (): Promise<string> =>
+            ipcRenderer.invoke("devices:regeneratePairingToken"),
+        /** One-way: adopts a legacy plaintext remote.token as the pairing token, once. */
+        migrateLegacyToken: (token: string): Promise<void> =>
+            ipcRenderer.invoke("devices:migrateLegacyToken", token)
     },
     /**
      * DevDeck's own MCP server — exposes DevDeck's panels as tools so an agent CLI

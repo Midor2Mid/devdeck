@@ -21,6 +21,7 @@ vi.mock("electron", () => ({
 import {
     pairingToken,
     regeneratePairingToken,
+    setPairingToken,
     authenticate,
     listDevices,
     revokeDevice,
@@ -61,6 +62,23 @@ describe("authenticate", () => {
 
     it("rejects an unknown token", () => {
         expect(authenticate("not-a-real-token", "x", 30).ok).toBe(false)
+    })
+
+    it("allowEnroll: false rejects a pairing token instead of enrolling a device", () => {
+        // The WebSocket path's whole reason to exist: it has no way to hand a
+        // fresh device token back to the client, so a socket presenting the
+        // pairing token must be refused, not silently enrolled.
+        const pt = pairingToken()
+        const r = authenticate(pt, "phone", 30, false)
+        expect(r.ok).toBe(false)
+        expect(listDevices(30)).toHaveLength(0)
+    })
+
+    it("allowEnroll: false still accepts an already-paired device's own token", () => {
+        const enrolled = authenticate(pairingToken(), "phone", 30)
+        const token = enrolled.ok ? enrolled.deviceToken! : ""
+        const r = authenticate(token, "phone", 30, false)
+        expect(r.ok).toBe(true)
     })
 
     it("rejects a revoked device and leaves the others working", () => {
@@ -132,6 +150,25 @@ describe("regeneratePairingToken", () => {
         regeneratePairingToken()
         expect(authenticate(old, "another phone", 30).ok).toBe(false)
         expect(authenticate(token, "phone", 30).ok).toBe(true)
+    })
+})
+
+describe("setPairingToken (legacy settings.json migration)", () => {
+    it("adopts a legacy token as the pairing token when none exists yet", () => {
+        setPairingToken("legacy-plaintext-token")
+        expect(authenticate("legacy-plaintext-token", "phone", 30).ok).toBe(true)
+    })
+
+    it("is a one-way migration: does not clobber a pairing token that already exists", () => {
+        const minted = pairingToken()
+        setPairingToken("legacy-plaintext-token")
+        expect(authenticate(minted, "phone", 30).ok).toBe(true)
+        expect(authenticate("legacy-plaintext-token", "another phone", 30).ok).toBe(false)
+    })
+
+    it("ignores an empty token", () => {
+        setPairingToken("")
+        expect(authenticate("", "phone", 30).ok).toBe(false)
     })
 })
 

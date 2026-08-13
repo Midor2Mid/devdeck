@@ -88,29 +88,55 @@ function send(ws: WebSocket, msg: unknown): void {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
 }
 
+/** Name of the cookie that carries a device's own token. Never the pairing token. */
+const DEVICE_COOKIE = "devdeck_device"
+
 /**
- * A JS string literal safe to splice into a `<script>` block: JSON.stringify
- * handles quote/backslash escaping, and the `<`/`>` swap additionally stops a
- * token that happened to contain `</script>` from closing the tag early. The
- * token itself is a random hex string today, but this holds regardless.
+ * Pull the device-token cookie out of a raw `Cookie` header. A minimal parser
+ * on purpose - DevDeck only ever sets the one cookie below, so there is no
+ * need for a general RFC 6265 implementation here.
  */
-function jsStringLiteral(value: string): string {
-    return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e")
+function cookieToken(header: string | undefined): string {
+    if (!header) return ""
+    for (const part of header.split(";")) {
+        const eq = part.indexOf("=")
+        if (eq < 0) continue
+        if (part.slice(0, eq).trim() !== DEVICE_COOKIE) continue
+        try {
+            return decodeURIComponent(part.slice(eq + 1).trim())
+        } catch {
+            return ""
+        }
+    }
+    return ""
 }
 
-/** Inject the freshly-enrolled device token ahead of `<body>`, never in the URL. */
-function withDeviceToken(html: string, token: string): string {
-    const script = `<script>window.__DEVDECK_DEVICE_TOKEN__ = ${jsStringLiteral(token)};</script>\n`
-    // A literal `.replace("<body>", …)` would silently no-op (and hand the
-    // client no token, with no error anywhere) the day this markup gains a
-    // `<body class="…">` attribute. Match the tag loosely, and if it's ever
-    // not found at all, say so loudly instead of failing silent.
-    const bodyTag = /<body[^>]*>/i
-    if (!bodyTag.test(html)) {
-        console.error("[server] withDeviceToken: no <body> tag found - device token was not delivered")
-        return html
-    }
-    return html.replace(bodyTag, (tag) => script + tag)
+/**
+ * The `Set-Cookie` value for a freshly-enrolled device. `HttpOnly` keeps the
+ * token out of reach of any script running on the page (unlike the
+ * `localStorage` design this replaces); `SameSite=Strict` keeps it off any
+ * cross-site request; `Secure` is added under TLS. The browser then presents
+ * it automatically on every later page load *and* on the WebSocket upgrade
+ * (same origin), which is what makes cookie-only auth work for a returning
+ * device - see `authFor` below.
+ *
+ * Browsers cap `Max-Age` around 400 days regardless of what's asked for, so
+ * `deviceTtlDays: 0` ("never" idle-expire) asks for that ceiling rather than
+ * an unbounded value nothing will honour. The real access control is
+ * server-side - `authenticate()`'s idle check runs on every request - this
+ * only governs how long the browser keeps offering the cookie back.
+ */
+function deviceCookie(token: string, tls: boolean, deviceTtlDays: number): string {
+    const days = deviceTtlDays > 0 ? Math.min(deviceTtlDays, 400) : 400
+    const attrs = [
+        `${DEVICE_COOKIE}=${encodeURIComponent(token)}`,
+        "HttpOnly",
+        "SameSite=Strict",
+        "Path=/",
+        `Max-Age=${days * 86_400}`
+    ]
+    if (tls) attrs.push("Secure")
+    return attrs.join("; ")
 }
 
 // Filesystem access from the phone (the Files/AI mobile views) is confined to
@@ -165,11 +191,19 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     // the pairing token in its URL - an unbounded loop of disk writes on the
     // main process's event loop, not the one orphan device the design
     // accepted.
-    const authFor = (url: URL, userAgent: string, allowEnroll: boolean): AuthResult => {
+    // Cookie first, then the `?token=` query param. The cookie is how every
+    // returning device authenticates - including a page reload, which fires
+    // its HTTP request before any script runs, so a token that only ever
+    // lived in the page's own JS (the `localStorage` design this replaces)
+    // would arrive here with nothing to present and 401. `?token=` is the
+    // pairing path: the one-time link from the QR code, before any cookie
+    // has been set.
+    const authFor = (req: IncomingMessage, url: URL, allowEnroll: boolean): AuthResult => {
         try {
+            const token = cookieToken(req.headers.cookie) || url.searchParams.get("token") || ""
             return authenticate(
-                url.searchParams.get("token") ?? "",
-                userAgent,
+                token,
+                String(req.headers["user-agent"] ?? ""),
                 config.deviceTtlDays,
                 allowEnroll
             )
@@ -203,27 +237,29 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             res.end(xtermAsset("xterm.css"))
             return
         }
-        const auth = authFor(url, String(req.headers["user-agent"] ?? ""), true)
+        const auth = authFor(req, url, true)
         if (!auth.ok) {
             res.writeHead(401, { "Content-Type": "text/plain" })
             res.end("Unauthorized")
             return
         }
-        // no-store: this response can carry a freshly-minted, long-lived
-        // device token (see withDeviceToken below). Before device auth
-        // existed the page held no secret, so caching was harmless; now it
-        // sometimes isn't, and this is served over plain http on the LAN path
-        // this feature supports.
-        res.writeHead(200, {
+        // no-store: before device auth existed the page held no secret, so
+        // caching was harmless; now a fresh enrolment's response carries a
+        // Set-Cookie with a long-lived device token, and this is sometimes
+        // served over plain http on the LAN path this feature supports.
+        const headers: Record<string, string> = {
             "Content-Type": "text/html; charset=utf-8",
             "Cache-Control": "no-store",
             Pragma: "no-cache"
-        })
-        // A fresh enrolment hands the client its device token inline (never in
-        // the URL - it would end up in history, screenshots, shared links).
-        // Task 4's client script reads window.__DEVDECK_DEVICE_TOKEN__ and
-        // stores it for future connections, including the WebSocket below.
-        res.end(auth.deviceToken ? withDeviceToken(CLIENT_HTML, auth.deviceToken) : CLIENT_HTML)
+        }
+        // A fresh enrolment hands the client its device token as an HttpOnly
+        // cookie - never in the URL (history, screenshots, shared links) and
+        // never in page-script scope (unlike the localStorage design this
+        // replaces). The browser then presents it automatically on every
+        // later load and on the WebSocket upgrade below.
+        if (auth.deviceToken) headers["Set-Cookie"] = deviceCookie(auth.deviceToken, !!config.tls, config.deviceTtlDays)
+        res.writeHead(200, headers)
+        res.end(CLIENT_HTML)
     }
 
     if (config.tls) {
@@ -246,8 +282,10 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                 return
             }
             // Device tokens only - no enrolment here (allowEnroll: false). See
-            // the comment on authFor above for why.
-            const auth = authFor(url, String(info.req.headers["user-agent"] ?? ""), false)
+            // the comment on authFor above for why. The cookie set on
+            // enrolment is the sole path in: this upgrade request carries it
+            // automatically since it's the same origin as the HTML page.
+            const auth = authFor(info.req, url, false)
             cb(auth.ok, 1008, "Unauthorized")
         }
     })
@@ -621,7 +659,11 @@ const CLIENT_HTML = `<!doctype html>
 </div>
 <script src="/xterm.js"></script>
 <script>
-  var token = new URLSearchParams(location.search).get('token') || '';
+  // The device token now travels as an HttpOnly cookie, set on enrolment and
+  // sent automatically on every request - this page never sees it. All that's
+  // left to do here is drop a first-time pairing '?token=' from the address
+  // bar so it doesn't linger in history or a screenshot.
+  if (location.search) history.replaceState(null, '', location.pathname);
   var statusEl = document.getElementById('status');
   var listEl = document.getElementById('list');
   var termView = document.getElementById('term-view');
@@ -670,7 +712,9 @@ const CLIENT_HTML = `<!doctype html>
 
   function connect(){
     var proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(proto + '://' + location.host + '/ws?token=' + encodeURIComponent(token));
+    // No token on the URL - the device cookie rides along automatically on
+    // this same-origin upgrade request.
+    ws = new WebSocket(proto + '://' + location.host + '/ws');
     ws.onopen = function(){ statusEl.textContent = 'connected'; };
     ws.onclose = function(){ statusEl.textContent = 'disconnected - retrying'; setTimeout(connect, 1500); };
     ws.onmessage = function(e){

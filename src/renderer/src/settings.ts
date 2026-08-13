@@ -5,6 +5,7 @@ import type { KvRow } from "./components/KeyValueEditor"
 import type { SplitDir } from "./layout"
 import type { ApiTest } from "./apiTests"
 import type { Extractor } from "./apiChain"
+import type { BindMode } from "../../preload/index"
 
 // A saved project layout. Leaves store the agent + its launch command (not a live
 // terminal id) so a preset can be re-opened with fresh sessions.
@@ -268,7 +269,10 @@ export interface AppSettings {
     remote: {
         enabled: boolean
         port: number
-        token: string
+        /** Which interface to bind — see `chooseBind` in main/guards.ts. */
+        bind: BindMode
+        /** Idle-expiry window for paired devices, in days (0 = never). */
+        deviceTtlDays: number
         /** Serve over HTTPS/WSS with a self-signed cert. */
         tls: boolean
     }
@@ -400,7 +404,11 @@ const DEFAULTS: AppSettings = {
     remote: {
         enabled: false,
         port: 7420,
-        token: "",
+        // A brand-new install has no tailnet-down legacy behaviour to preserve,
+        // so it gets the private option outright. An existing install migrates
+        // to "auto" instead — see the one-way migration in load() below.
+        bind: "tailscale",
+        deviceTtlDays: 30,
         tls: false
     },
     mcpServer: {
@@ -432,6 +440,13 @@ interface SettingsState extends AppSettings {
     settingsOpen: boolean
     /** Section to land on when opening Settings (null = keep the last one). */
     settingsSection: string | null
+    /**
+     * The verbatim refusal reason from the last `server:start` attempt (e.g.
+     * "No tailnet address found…"), or null when the last attempt succeeded /
+     * none has run yet. Not persisted — this is transient UI state, not a
+     * setting. Task 5's panel shows this string as-is, unparaphrased.
+     */
+    remoteBindError: string | null
     flush: () => void
     load: () => Promise<void>
     setTerminal: (patch: Partial<AppSettings["terminal"]>) => void
@@ -466,7 +481,6 @@ interface SettingsState extends AppSettings {
     clearDbHistory: (connId: string) => void
     /** Replace a project's saved commands. */
     setProjectCommands: (projectId: string, commands: SavedCommand[]) => void
-    regenerateToken: () => void
     resetAll: () => void
     openSettings: (section?: string) => void
     closeSettings: () => void
@@ -494,10 +508,30 @@ export const useSettings = create<SettingsState>((set, get) => {
     }
 
     // Reflect the remote config into the actual server (start/stop).
+    //
+    // Stops the old server before attempting the new config, rather than
+    // relying solely on server.ts's own internal stop-then-start: that
+    // internal stop only runs once the new bind has been validated, so if the
+    // new config is refused (e.g. "tailscale" requested, tailnet down), a
+    // caller that skipped this explicit stop would leave whatever was already
+    // running - potentially a wider bind from before this was an explicit
+    // choice - listening while the UI shows the (rejected) new config. Stopping
+    // first means a refusal leaves nothing running: fail closed, not stale-open.
     const applyServer = (): void => {
-        const { enabled, port, token, tls } = get().remote
-        if (enabled && token) window.api.server.start({ port, token, tls })
-        else window.api.server.stop()
+        const { enabled, port, bind, deviceTtlDays, tls } = get().remote
+        void window.api.server.stop()
+        if (!enabled) {
+            set({ remoteBindError: null })
+            return
+        }
+        window.api.server
+            .start({ port, bind, deviceTtlDays, tls })
+            .then((result) => {
+                set({ remoteBindError: result.ok ? null : (result.reason ?? "Failed to start.") })
+            })
+            .catch((err) => {
+                set({ remoteBindError: (err as Error)?.message ?? String(err) })
+            })
     }
 
     const applyMcpServer = (): void => {
@@ -521,11 +555,24 @@ export const useSettings = create<SettingsState>((set, get) => {
         ...DEFAULTS,
         settingsOpen: false,
         settingsSection: null,
+        remoteBindError: null,
         flush,
 
         load: async () => {
             const raw = (await window.api.settings.load()) as Partial<AppSettings> | null
             if (raw) {
+                // Pre-Task-4 settings.json shapes carry a plaintext remote.token
+                // that no longer exists on AppSettings["remote"] - read it off the
+                // raw payload directly. One-way migration: hand it to main once so
+                // it becomes the pairing token, then let the write below drop it
+                // from settings.json (the new `remote` object below has no token
+                // field at all, so the next save can no longer carry it forward).
+                const legacyRemote = raw.remote as
+                    | (Partial<AppSettings["remote"]> & { token?: string })
+                    | undefined
+                if (legacyRemote?.token) {
+                    void window.api.devices.migrateLegacyToken(legacyRemote.token)
+                }
                 set({
                     terminal: { ...DEFAULTS.terminal, ...raw.terminal },
                     editor: { ...DEFAULTS.editor, ...raw.editor },
@@ -549,7 +596,17 @@ export const useSettings = create<SettingsState>((set, get) => {
                     activeEnvId: raw.activeEnvId ?? DEFAULTS.activeEnvId,
                     collections: raw.collections ?? DEFAULTS.collections,
                     appearance: { ...DEFAULTS.appearance, ...raw.appearance },
-                    remote: { ...DEFAULTS.remote, ...raw.remote },
+                    remote: {
+                        enabled: legacyRemote?.enabled ?? DEFAULTS.remote.enabled,
+                        port: legacyRemote?.port ?? DEFAULTS.remote.port,
+                        // An existing install (raw present here) migrates to "auto":
+                        // today's behaviour keeps working, and the panel invites an
+                        // explicit choice. A brand-new install never reaches this
+                        // branch and keeps DEFAULTS.remote.bind ("tailscale").
+                        bind: legacyRemote?.bind ?? "auto",
+                        deviceTtlDays: legacyRemote?.deviceTtlDays ?? DEFAULTS.remote.deviceTtlDays,
+                        tls: legacyRemote?.tls ?? DEFAULTS.remote.tls
+                    },
                     mcpServer: { ...DEFAULTS.mcpServer, ...raw.mcpServer },
                     network: { ...DEFAULTS.network, ...raw.network },
                     proxy: { ...DEFAULTS.proxy, ...raw.proxy },
@@ -564,6 +621,11 @@ export const useSettings = create<SettingsState>((set, get) => {
                     dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory,
                     projectCommands: raw.projectCommands ?? DEFAULTS.projectCommands
                 })
+                // Scrub the plaintext token from settings.json now rather than
+                // waiting on some unrelated future edit to trigger a save — the
+                // in-memory `remote` above already has no token field to write
+                // back, so this flush is what actually removes it from disk.
+                if (legacyRemote?.token) flush()
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
             applyStyle(get().appearance.style)
@@ -651,12 +713,9 @@ export const useSettings = create<SettingsState>((set, get) => {
             persist()
         },
         setRemote: (patch) => {
-            set((s) => {
-                const remote = { ...s.remote, ...patch }
-                // Auto-generate a token the first time remote access is enabled.
-                if (remote.enabled && !remote.token) remote.token = generateToken()
-                return { remote }
-            })
+            // No token to mint here anymore: auth is per-device now, minted by
+            // main (devices.ts) on enrolment, never held in settings.json.
+            set((s) => ({ remote: { ...s.remote, ...patch } }))
             applyServer()
             persist()
         },
@@ -730,11 +789,6 @@ export const useSettings = create<SettingsState>((set, get) => {
                 else delete next[projectId]
                 return { projectCommands: next }
             })
-            persist()
-        },
-        regenerateToken: () => {
-            set((s) => ({ remote: { ...s.remote, token: generateToken() } }))
-            applyServer()
             persist()
         },
         resetAll: () => {

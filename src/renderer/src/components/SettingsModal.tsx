@@ -1336,9 +1336,13 @@ function NotificationsSection(): JSX.Element {
 function RemoteSection(): JSX.Element {
     const remote = useSettings((s) => s.remote)
     const setRemote = useSettings((s) => s.setRemote)
-    const regenerateToken = useSettings((s) => s.regenerateToken)
     const [status, setStatus] = useState<ServerStatus | null>(null)
     const [qr, setQr] = useState<string>("")
+    // The pairing token now lives in main's encrypted device store, not in
+    // settings — fetched over IPC rather than read off `remote`. This panel is
+    // a placeholder pending Task 5's device list / bind chooser UI; it still
+    // needs *a* way to show/regenerate the pairing link in the meantime.
+    const [pairingTok, setPairingTok] = useState<string>("")
 
     // Derive the URL from what the server is actually bound to, not from what
     // happens to be available. 0.0.0.0 isn't dialable, so show the LAN address —
@@ -1349,15 +1353,32 @@ function RemoteSection(): JSX.Element {
     const onTailnet = !!bound && bound !== "0.0.0.0"
     const host = onTailnet ? bound : (status?.lan[0] ?? "")
     const scheme = remote.tls ? "https" : "http"
-    const url = host ? `${scheme}://${host}:${remote.port}/?token=${remote.token}` : ""
+    const url = host && pairingTok ? `${scheme}://${host}:${remote.port}/?token=${pairingTok}` : ""
     // Tailscale appeared after the server started: it's bound wider than intended.
     const staleBind = !!bound && !onTailnet && (status?.tailscale.length ?? 0) > 0
 
     const restartServer = async (): Promise<void> => {
         await window.api.server.stop()
-        await window.api.server.start({ port: remote.port, token: remote.token, tls: remote.tls })
+        await window.api.server.start({
+            port: remote.port,
+            bind: remote.bind,
+            deviceTtlDays: remote.deviceTtlDays,
+            tls: remote.tls
+        })
         setStatus(await window.api.server.status())
     }
+
+    const regenerateToken = async (): Promise<void> => {
+        setPairingTok(await window.api.devices.regeneratePairingToken())
+    }
+
+    useEffect(() => {
+        let on = true
+        window.api.devices.pairingToken().then((t) => on && setPairingTok(t))
+        return () => {
+            on = false
+        }
+    }, [])
 
     useEffect(() => {
         let on = true
@@ -1398,10 +1419,10 @@ function RemoteSection(): JSX.Element {
                 />
             </div>
             <div className="setting-row">
-                <label>Access token</label>
+                <label>Pairing token</label>
                 <div className="accent-controls">
-                    <code className="token">{remote.token || "(generated when enabled)"}</code>
-                    <button onClick={regenerateToken}>Regenerate</button>
+                    <code className="token">{pairingTok || "(loading…)"}</code>
+                    <button onClick={() => void regenerateToken()}>Regenerate</button>
                 </div>
             </div>
             <div className="setting-row">

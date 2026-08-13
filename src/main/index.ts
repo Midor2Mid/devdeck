@@ -9,7 +9,8 @@ import { loadWorkspace, saveWorkspace } from "./workspace"
 import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 import * as server from "./server"
-import type { RemoteSession, ServerDeps } from "./server"
+import type { RemoteSession, ServerConfig, ServerDeps } from "./server"
+import * as devices from "./devices"
 import {
     gitStatus,
     getIdentity,
@@ -261,9 +262,17 @@ function registerIpc(): void {
         latestSessions = sessions
         if (server.isRunning()) server.broadcastSessions(serverDeps)
     })
-    ipcMain.handle("server:start", async (_e, cfg) => {
-        await server.start(cfg, serverDeps)
-        return server.isRunning()
+    ipcMain.handle("server:start", async (_e, cfg: ServerConfig) => {
+        try {
+            await server.start(cfg, serverDeps)
+            return { ok: server.isRunning() }
+        } catch (err) {
+            // chooseBind's refusal (e.g. "tailscale" requested, no tailnet) lands
+            // here as a rejected promise from server.start() — surface the reason
+            // verbatim rather than letting it become an unhandled rejection the
+            // panel can't show.
+            return { ok: false, reason: (err as Error)?.message ?? String(err) }
+        }
     })
     ipcMain.handle("server:stop", () => {
         server.stop()
@@ -274,6 +283,26 @@ function registerIpc(): void {
         boundHost: server.boundAddress(),
         ...server.localAddresses()
     }))
+
+    // --- Paired remote devices ---
+    // `devices:list` returns RemoteDevice[] only — devices.ts's toPublic()
+    // builds each record field-by-field so a device token can never ride
+    // along, and `expireForTest` (a test-only escape hatch that could keep a
+    // device alive past its idle window) is deliberately not wired to any
+    // handler here.
+    ipcMain.handle("devices:list", (_e, ttlDays: number) => devices.listDevices(ttlDays))
+    ipcMain.handle("devices:rename", (_e, { id, name }: { id: string; name: string }) =>
+        devices.renameDevice(id, name)
+    )
+    // Revocation intentionally lets a write failure throw across IPC rather
+    // than reporting success on a device that's still paired — see the
+    // comment on revokeDevice itself.
+    ipcMain.handle("devices:revoke", (_e, id: string) => devices.revokeDevice(id))
+    ipcMain.handle("devices:pairingToken", () => devices.pairingToken())
+    ipcMain.handle("devices:regeneratePairingToken", () => devices.regeneratePairingToken())
+    // One-way settings migration: a legacy plaintext remote.token becomes the
+    // pairing token once, then the renderer drops it from settings.json.
+    ipcMain.handle("devices:migrateLegacyToken", (_e, token: string) => devices.setPairingToken(token))
 
     // --- MCP server (DevDeck's own tools, exposed to agent CLIs) ---
     // Every dep reads fresh on each tool call so an agent always sees the current
