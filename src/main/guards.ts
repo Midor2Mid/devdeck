@@ -54,11 +54,21 @@ export type BindChoice = { ok: true; host: string } | { ok: false; reason: strin
  * a network-wide one whenever the tailnet was down — the request silently
  * inverted, with full terminal access on the other side of it. Asking for
  * tailscale and not getting it is now a refusal to start.
+ *
+ * `mode` is typed as `BindMode`, but callers upstream of the type checker
+ * (an untyped IPC payload, a stale/undefined config field) can hand this an
+ * arbitrary value at runtime. An unrecognised mode refuses rather than
+ * falling through to the widest bind ("0.0.0.0") - the whole point of this
+ * function is that the widest exposure is never the answer to an input the
+ * code doesn't understand.
  */
 export function chooseBind(
     mode: BindMode,
     addrs: { tailscale: string[]; lan: string[] }
 ): BindChoice {
+    if (mode !== "tailscale" && mode !== "lan" && mode !== "auto") {
+        return { ok: false, reason: `Unrecognised bind mode: ${String(mode)}.` }
+    }
     const tail = addrs.tailscale[0]
     if (mode === "tailscale") {
         return tail

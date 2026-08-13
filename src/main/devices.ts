@@ -152,14 +152,26 @@ const STAMP_INTERVAL_MS = 60_000
  * Authenticate a request from the phone. Device tokens are checked first: a
  * match against an expired device fails *and* removes that device's record,
  * so it re-pairs cleanly instead of resurrecting. Only if no device token
- * matches do we fall through to the pairing token, which enrols a new device.
+ * matches do we fall through to the pairing token, which enrols a new device
+ * - unless `allowEnroll` is false, in which case a pairing-token match is
+ * simply rejected. `server.ts`'s WebSocket upgrade path passes `false`: it
+ * has no way to hand a freshly-minted device token back to the client (unlike
+ * the HTTP path, which can inject one into the page), and the client's own
+ * reconnect-on-close loop would otherwise re-present the pairing token on
+ * every dropped socket, enrolling - and synchronously writing - a fresh
+ * device each time.
  *
  * Writes the store only when something actually changed (pairing minted,
  * device enrolled, device dropped, or lastSeenAt moved materially) - this is
  * an unauthenticated, unrate-limited, attacker-paced call path, so a save on
  * every rejected or no-op request would be a real cost, not just disk wear.
  */
-export function authenticate(token: string, userAgent: string, ttlDays: number): AuthResult {
+export function authenticate(
+    token: string,
+    userAgent: string,
+    ttlDays: number,
+    allowEnroll = true
+): AuthResult {
     const store = load()
     const now = Date.now()
     const pairingBefore = store.pairing
@@ -180,6 +192,8 @@ export function authenticate(token: string, userAgent: string, ttlDays: number):
         }
         return { ok: true, device: toPublic(device) }
     }
+
+    if (!allowEnroll) return { ok: false }
 
     const pairing = ensurePairing(store)
     if (tokenOk(token, pairing)) {

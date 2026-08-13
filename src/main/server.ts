@@ -101,7 +101,16 @@ function jsStringLiteral(value: string): string {
 /** Inject the freshly-enrolled device token ahead of `<body>`, never in the URL. */
 function withDeviceToken(html: string, token: string): string {
     const script = `<script>window.__DEVDECK_DEVICE_TOKEN__ = ${jsStringLiteral(token)};</script>\n`
-    return html.replace("<body>", script + "<body>")
+    // A literal `.replace("<body>", …)` would silently no-op (and hand the
+    // client no token, with no error anywhere) the day this markup gains a
+    // `<body class="…">` attribute. Match the tag loosely, and if it's ever
+    // not found at all, say so loudly instead of failing silent.
+    const bodyTag = /<body[^>]*>/i
+    if (!bodyTag.test(html)) {
+        console.error("[server] withDeviceToken: no <body> tag found - device token was not delivered")
+        return html
+    }
+    return html.replace(bodyTag, (tag) => script + tag)
 }
 
 // Filesystem access from the phone (the Files/AI mobile views) is confined to
@@ -127,16 +136,18 @@ export function isRunning(): boolean {
 }
 
 export async function start(config: ServerConfig, deps: ServerDeps): Promise<void> {
-    stop()
-
-    // Decide the bind before touching any server resources: refusing is a
-    // valid outcome (e.g. "tailscale" requested but the tailnet is down), and
-    // when it happens the server must stay fully stopped, not fall back to a
-    // wider interface.
+    // Decide the bind - and validate it - before touching any server
+    // resources, and before calling stop(). Refusing is a valid outcome (e.g.
+    // "tailscale" requested but the tailnet is down, or an unrecognised mode
+    // from a stale/untyped config), and a refused restart must leave whatever
+    // was already running alone rather than tearing down a healthy server
+    // and starting nothing.
     const addrs = localAddresses()
     const bindChoice = chooseBind(config.bind, addrs)
     if (!bindChoice.ok) throw new Error(bindChoice.reason)
     const host = bindChoice.host
+
+    stop()
 
     // Either a device's own token or the pairing token gets you in; only the
     // pairing token mints a new device. Both entry points below must agree,
@@ -144,9 +155,24 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     // eventually disagrees in two places, and here that means one of them
     // lets someone in. A store write failure (disk full, permissions) fails
     // the request rather than the whole server.
-    const authFor = (url: URL, userAgent: string): AuthResult => {
+    //
+    // `allowEnroll` lets the WebSocket path (see verifyClient below) accept
+    // device tokens only, never mint a new one: verifyClient can't hand a
+    // fresh device token back to the client, so the HTML page is the only
+    // place enrolment should happen. Without this, the client's own
+    // reconnect-every-1.5s-on-close loop would mint a brand-new device (a
+    // synchronous store write) on every dropped WebSocket that still carries
+    // the pairing token in its URL - an unbounded loop of disk writes on the
+    // main process's event loop, not the one orphan device the design
+    // accepted.
+    const authFor = (url: URL, userAgent: string, allowEnroll: boolean): AuthResult => {
         try {
-            return authenticate(url.searchParams.get("token") ?? "", userAgent, config.deviceTtlDays)
+            return authenticate(
+                url.searchParams.get("token") ?? "",
+                userAgent,
+                config.deviceTtlDays,
+                allowEnroll
+            )
         } catch (err) {
             console.error("[server] auth store write failed:", (err as Error)?.message ?? err)
             return { ok: false }
@@ -154,7 +180,18 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     }
 
     const handleRequest = (req: IncomingMessage, res: ServerResponse): void => {
-        const url = new URL(req.url ?? "/", "http://localhost")
+        let url: URL
+        try {
+            url = new URL(req.url ?? "/", "http://localhost")
+        } catch {
+            // A request target like "//" or "///" fails URL parsing; letting
+            // that throw here would be an uncaught exception in the request
+            // listener, i.e. an unauthenticated remote client crashing the
+            // Electron main process.
+            res.writeHead(400, { "Content-Type": "text/plain" })
+            res.end("Bad Request")
+            return
+        }
         // Static library assets are harmless; everything else requires the token.
         if (url.pathname === "/xterm.js") {
             res.writeHead(200, { "Content-Type": "text/javascript" })
@@ -166,13 +203,22 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             res.end(xtermAsset("xterm.css"))
             return
         }
-        const auth = authFor(url, String(req.headers["user-agent"] ?? ""))
+        const auth = authFor(url, String(req.headers["user-agent"] ?? ""), true)
         if (!auth.ok) {
             res.writeHead(401, { "Content-Type": "text/plain" })
             res.end("Unauthorized")
             return
         }
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
+        // no-store: this response can carry a freshly-minted, long-lived
+        // device token (see withDeviceToken below). Before device auth
+        // existed the page held no secret, so caching was harmless; now it
+        // sometimes isn't, and this is served over plain http on the LAN path
+        // this feature supports.
+        res.writeHead(200, {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
+            Pragma: "no-cache"
+        })
         // A fresh enrolment hands the client its device token inline (never in
         // the URL - it would end up in history, screenshots, shared links).
         // Task 4's client script reads window.__DEVDECK_DEVICE_TOKEN__ and
@@ -192,14 +238,16 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         path: "/ws",
         maxPayload: 25 * 1024 * 1024,
         verifyClient: (info, cb) => {
-            const url = new URL(info.req.url ?? "/", "http://localhost")
-            // verifyClient can only accept/reject - it can't inject a device
-            // token back to the client. A socket that connects on the pairing
-            // token still enrols a new device, just one whose token this
-            // connection never learns. That's fine: in the real flow the HTML
-            // page always loads first, and it's the one that can hand back
-            // the token.
-            const auth = authFor(url, String(info.req.headers["user-agent"] ?? ""))
+            let url: URL
+            try {
+                url = new URL(info.req.url ?? "/", "http://localhost")
+            } catch {
+                cb(false, 400, "Bad Request")
+                return
+            }
+            // Device tokens only - no enrolment here (allowEnroll: false). See
+            // the comment on authFor above for why.
+            const auth = authFor(url, String(info.req.headers["user-agent"] ?? ""), false)
             cb(auth.ok, 1008, "Unauthorized")
         }
     })
@@ -390,7 +438,12 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     ptyEvents.on("data", onData)
     ptyEvents.on("exit", onExit)
 
-    httpServer.on("error", (err) => console.error("[server] error:", err.message))
+    httpServer.on("error", (err) => {
+        console.error("[server] error:", err.message)
+        // A failed listen (e.g. EADDRINUSE) must not leave isRunning()
+        // reporting true for a socket that never actually bound.
+        stop()
+    })
     boundHost = host
     httpServer.listen(config.port, host)
     const scheme = config.tls ? "https" : "http"

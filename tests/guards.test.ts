@@ -31,6 +31,17 @@ describe("chooseBind", () => {
         expect(chooseBind("lan", none).ok).toBe(false)
         expect(chooseBind("auto", none).ok).toBe(false)
     })
+
+    it("refuses an unrecognised bind mode rather than defaulting to 0.0.0.0", () => {
+        // A stale/undefined config field (or an untyped IPC payload) must not
+        // fall through to the widest bind - that's the exact regression this
+        // function exists to close.
+        expect(chooseBind(undefined as never, both)).toEqual({
+            ok: false,
+            reason: expect.stringMatching(/unrecognised|bind mode/i)
+        })
+        expect(chooseBind("nonsense" as never, both).ok).toBe(false)
+    })
 })
 
 describe("isExpired", () => {
