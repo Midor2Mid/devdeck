@@ -347,12 +347,14 @@ message handler in `server.ts`, which is a materially larger change than
 authentication.
 
 **The pairing token is still the soft spot, on purpose.** It never expires and
-enrols unlimited devices, and `regeneratePairingToken` deliberately spares
-devices already paired — rotating it locks out no one who already got in. That
-means the paired-device list and per-device revoke in Settings are not a
-convenience feature; they are the *only* mitigation once a pairing token has
-leaked (a screenshot, a shared link, a note). If someone ever learns the
-pairing token, revoking devices by hand is the only way back to a known state.
+enrols up to a generous cap (20 devices — see the next entry) rather than
+truly unlimited, and `regeneratePairingToken` deliberately spares devices
+already paired — rotating it locks out no one who already got in. That means
+the paired-device list and per-device revoke in Settings are not a convenience
+feature; they are the *only* mitigation once a pairing token has leaked (a
+screenshot, a shared link, a note). Revoking devices by hand is the way back to
+a known state if that ever happens — see the correction directly below about
+what "revoking" actually does now.
 
 **`remoteBindView.ts` leans on an invariant it does not itself enforce.** It
 derives the panel's "reachable on Tailscale only" vs "every interface" copy
@@ -362,6 +364,73 @@ LAN IP. That invariant is now pinned directly by a test in
 `tests/guards.test.ts`. If anyone changes `chooseBind` to return a specific
 LAN address for some mode, that test is what should fail and stop them; nothing
 else in the codebase would notice.
+
+### Whole-branch review, round twelve: revoke didn't actually disconnect (2026-08-14)
+
+The paragraph above used to claim "revoking devices by hand is the only way
+back to a known state" as settled fact. It wasn't: `revokeDevice` deleted the
+device's record and token, but nothing closed that device's **existing**
+WebSocket. Auth for a socket is checked exactly once, at upgrade time — there
+was no re-check, no heartbeat, no reap. So a revoked phone's already-open
+connection kept receiving terminal output and kept accepting keystrokes for as
+long as it stayed open, while its row had already vanished from the Settings
+panel and the person revoking it believed it gone. This is precisely the
+stolen-phone and ex-collaborator scenario revoke exists for, and it was
+exactly the scenario that failed.
+
+Fixed: `verifyClient` (server.ts) now tags the upgrade request with which
+device authenticated it, the `connection` handler stamps that onto the socket,
+and `devices:revoke`'s IPC handler (index.ts) calls a new
+`closeDeviceSockets(id)` immediately after the store write succeeds, closing
+every live socket for that device via `terminate()` (not a graceful `close()`
+— a device just revoked has no claim on completing a handshake it could also
+simply choose never to acknowledge). Covered directly in
+`tests/server-remote.test.ts`. The claim above is now actually true instead of
+aspirational.
+
+Also found and fixed in the same review pass, all in the areas this file
+already documents:
+- **Regenerating the pairing token could report success on a failed write.**
+  `pairingToken`/`regeneratePairingToken` used the swallowing `save` where
+  `revokeDevice`/`setPairingToken` already used the throwing `writeStore` for
+  exactly this reason — a user responding to a leaked pairing link deserves a
+  thrown error, not a panel that shows a "new" token while the leaked one
+  stays live. Both now use `writeStore`; the Settings panel surfaces a failure
+  through the same `deviceActionError` channel rename/revoke already use.
+- **A failed legacy-token migration could still lose the token one save
+  later.** `writeNow` (settings.ts) serializes `remote` from in-memory state,
+  and that shape has no `token` field once constructed — so the very next
+  unrelated settings change rewrote settings.json without it, and the file's
+  own comment claiming migration "just retries on the next load either way"
+  was wrong: there was nothing left on disk to retry with. A module-local now
+  holds the un-migrated token and `writeNow` re-attaches it until a later
+  load's migration actually confirms.
+- **Every unauthenticated request cost a synchronous disk read plus one DPAPI
+  decrypt per paired device**, unrate-limited, on the same thread that drives
+  the UI and relays every PTY. `devices.ts` now caches the parsed store and
+  each decrypted token in memory, invalidated on its own writes (it is the
+  sole writer of `remote-devices.json`), and caps enrolment at 20 devices so
+  a leaked pairing token can't grow that per-request cost without bound.
+
+**Accepted risk: the device cookie ignores port, and nothing can fully fix
+that.** `devdeck_device` is a cookie, and cookies are scoped by host, not
+host+port — a phone that pairs with `http://192.168.1.5:7777` sends that same
+cookie to *every* other HTTP service on that host it happens to visit:
+`:3000`, `:8080`, `:5173`, i.e. any dev server running on the same machine,
+which on a developer's machine is close to a certainty. Any of those can also
+overwrite it. `HttpOnly` does nothing here — it only keeps page script from
+reading the cookie, not other origins on the same host from receiving or
+setting it. This is a real cost the cookie design buys in exchange for
+surviving a reload and keeping the token out of the URL/history, and it is
+still worth keeping the cookie for that. The one mitigation that's actually
+possible: under TLS, the cookie is now set with the `__Host-` prefix
+(`guards.ts`'s `deviceCookieName`), which guarantees no other origin on this
+host quietly relaxed `Secure`/`Path` on a cookie of this exact name — it does
+**not** make the cookie port-aware, since the prefix isn't port-scoped either,
+and it can't apply at all over plain HTTP (`__Host-` requires `Secure`, which
+requires TLS). The residual — plain-HTTP cross-port sharing/overwrite — is
+accepted, not fixed, and is recorded here so nobody rediscovers it as a new
+finding.
 
 ## Ideas
 
