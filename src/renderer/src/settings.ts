@@ -644,22 +644,34 @@ export const useSettings = create<SettingsState>((set, get) => {
                 // `migrateLegacyToken` can resolve `false` (declined - a
                 // *different* pairing token already exists) without throwing
                 // at all. Treating "didn't throw" as "migrated" would flush a
-                // legacy token that was never actually adopted. A thrown error
-                // (an unrecoverable write failure) is caught and also leaves
-                // `legacyMigrated` false.
+                // legacy token that was never actually adopted.
                 //
-                // Either way, `unmigratedLegacyToken` (I3) is what actually
-                // makes a retry possible: the in-memory `remote` object built
-                // below has no `token` field once migration doesn't succeed
-                // here, and `writeNow` re-attaches this value to every save
-                // until a later load's migration finally confirms. Without
-                // it, the NEXT unrelated settings change (not even a retried
-                // migration - any save at all) would persist the no-token
-                // shape to disk, and a later load would find no token left to
-                // retry with at all - "retries on the next load either way"
-                // was true only for the read; nothing was actually left on
-                // disk to read.
+                // The resolved-`false` and thrown cases are NOT the same
+                // outcome, and must not be retained alike. A thrown error is a
+                // transient, unrecoverable *write* failure - the token is
+                // still the live one, worth retrying on the next load, so
+                // `unmigratedLegacyToken` (I3) holds onto it: the in-memory
+                // `remote` object built below has no `token` field once
+                // migration doesn't succeed here, and `writeNow` re-attaches
+                // this value to every save until a later load's migration
+                // finally confirms. Without it, the NEXT unrelated settings
+                // change (not even a retried migration - any save at all)
+                // would persist the no-token shape to disk, and a later load
+                // would find no token left to retry with at all.
+                //
+                // A resolved `false`, in contrast, means a *different* pairing
+                // token already exists - this legacy token is PERMANENTLY
+                // declined and will never adopt on a later load either (see
+                // the comment in the `if (!legacyMigrated)` branch below).
+                // Retaining it in that case, as a single `legacyMigrated ?
+                // null : legacyRemote.token` once did, meant a dead plaintext
+                // legacy token got rewritten into settings.json on every save,
+                // forever, with no path to removal - and if `remote-devices.json`
+                // were ever lost or corrupted, the next launch would find an
+                // empty pairing token and silently adopt that stale,
+                // possibly-leaked value as the live one again.
                 let legacyMigrated = false
+                let migrationThrew = false
                 if (legacyRemote?.token) {
                     try {
                         legacyMigrated = await window.api.devices.migrateLegacyToken(legacyRemote.token)
@@ -677,12 +689,15 @@ export const useSettings = create<SettingsState>((set, get) => {
                             )
                         }
                     } catch (err) {
+                        migrationThrew = true
                         console.error(
                             "[settings] failed to migrate legacy remote.token - leaving it in settings.json until this succeeds:",
                             err
                         )
                     }
-                    unmigratedLegacyToken = legacyMigrated ? null : legacyRemote.token
+                    // Retain the token ONLY on the throw path - a resolved
+                    // `false` is a permanent decline, not a retry candidate.
+                    unmigratedLegacyToken = migrationThrew ? legacyRemote.token : null
                 } else {
                     unmigratedLegacyToken = null
                 }
