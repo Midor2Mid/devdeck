@@ -53,4 +53,39 @@ describe("isExpired", () => {
         // Clock skew or a restored backup must not lock someone out.
         expect(isExpired(now + day, 30, now)).toBe(false)
     })
+
+    it("does not expire at the exact boundary", () => {
+        // The check is `>`, not `>=`, so at exactly ttlDays it's still current.
+        const boundary = now - 30 * day
+        expect(isExpired(boundary, 30, now)).toBe(false)
+    })
+
+    it("expires one millisecond past the boundary", () => {
+        // One millisecond over the limit should expire.
+        const past = now - 30 * day - 1
+        expect(isExpired(past, 30, now)).toBe(true)
+    })
+
+    it("fails closed on NaN, even with ttlDays: 0", () => {
+        // Corrupted or malformed timestamps must not create permanent credentials.
+        expect(isExpired(NaN, 30, now)).toBe(true)
+        expect(isExpired(NaN, 0, now)).toBe(true)
+    })
+
+    it("treats large future skew as current", () => {
+        // A thousand days in the future should still be considered current,
+        // since the subtraction uses plain `-` not Math.abs.
+        expect(isExpired(now + 1000 * day, 30, now)).toBe(false)
+    })
+})
+
+describe("chooseBind security", () => {
+    it("refuses CGNAT addresses even when filed under lan", () => {
+        // CGNAT (100.64.0.0/10) should never bind, even if incorrectly
+        // listed as a LAN address. This test ensures that a future
+        // simplification doesn't merge the arrays and reopen the hole.
+        const r = chooseBind("tailscale", { tailscale: [], lan: ["100.64.0.1"] })
+        expect(r.ok).toBe(false)
+        if (!r.ok) expect(r.reason).toMatch(/tailnet|tailscale/i)
+    })
 })

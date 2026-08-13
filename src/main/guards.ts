@@ -77,8 +77,13 @@ export function chooseBind(
  * means never. A `lastSeenAt` in the future is treated as current rather than
  * expired: clock skew or a restored backup should not lock someone out of their
  * own machine.
+ *
+ * NaN timestamps fail closed (expire immediately), even when ttlDays is 0,
+ * because "never expire" is a policy about idle time, not a license to accept
+ * corrupted data.
  */
 export function isExpired(lastSeenAt: number, ttlDays: number, now: number): boolean {
+    if (!Number.isFinite(lastSeenAt)) return true
     if (!ttlDays) return false
     return now - lastSeenAt > ttlDays * 86_400_000
 }
