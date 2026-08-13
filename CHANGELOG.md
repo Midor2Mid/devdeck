@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.7.13 - 2026-08-13
+
+Two features. One is finished; the other is built, reviewed hard, and has never
+successfully run — and this note says which is which.
+
+- **Agent tiles show what each session is actually doing.** Every Mission Control
+  tile now carries a two-minute sparkline of its agent's terminal activity, so a
+  session that has gone quiet looks different from one that is still producing.
+  It replaces the stalled ribbon and the relative-time text, which said the same
+  things in words, so the tile carries no extra chrome. It measures output volume,
+  not usefulness: an agent repainting a spinner with ordinary line endings reads as
+  active, and one repainting in place with a bare carriage return reads as silent.
+  Read it for pace, not for progress — three attempts to make it distinguish real
+  work from repaint noise all failed, and pretending otherwise was the worse option.
+- **Race two or three agents on one card (new, and unproven).** Give a task-board
+  card to several agents at once and each gets its own git worktree. Each is told
+  to commit when it finishes; the same gate command then runs **inside that agent's
+  worktree**, and anything whose gate fails is eliminated on the exit code — a fact,
+  not a judgement. You read the survivors' diffs and land one, which arrives in your
+  working tree unstaged so you write the commit message rather than inheriting an
+  agent's. Cost is attributed per entrant, which works because each worktree is its
+  own directory and therefore its own transcript.
+
+  **It has never completed a race.** Three live attempts died before any agent
+  committed — almost certainly an antivirus behaviour shield killing the Electron
+  process tree, with the path and the confirmation test recorded in `NOTES.md`.
+  What is proven is that dispatch creates distinct worktrees on distinct branches.
+  Everything after an agent commits is verified by reading the code and by unit
+  tests, not by watching it happen. Note also that a gate runs in a fresh checkout
+  with no dependencies installed, so `npm test` alone will fail — use
+  `npm ci && npm test` or something that needs nothing.
+- **Fix: a confirmation dialog could hang forever.** Opening any second confirm
+  while one was showing dropped the first one's promise, so whatever was waiting on
+  it waited permanently. Harmless in most of the app's ten confirm sites and not in
+  all of them — a caller that took a lock before asking would never release it. All
+  of them now resolve as cancelled instead.
+
 ## 0.7.12 - 2026-08-11
 
 Two things that were a trip to the terminal, and one design rule the app wasn't
