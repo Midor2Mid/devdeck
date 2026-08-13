@@ -1419,11 +1419,13 @@ function RemoteSection(): JSX.Element {
     const bound = status?.boundHost ?? null
     // onTailnet/staleBind/unencryptedLan are pulled out into a pure function
     // (remoteBindView.ts) so they're unit-testable independent of the running
-    // app - see that file's comment for why that matters here. `boundWide`
-    // itself isn't needed here: `chooseBind` (guards.ts) only ever returns a
-    // tailnet address or 0.0.0.0 (pinned by a test in tests/guards.test.ts),
-    // so whenever the server is running and NOT on the tailnet, it is wide by
-    // construction - there is no third "just this Wi-Fi" case to branch on.
+    // app - see that file's comment for why that matters here. A `boundWide`
+    // field used to live on this view too, but nothing here ever consumed it
+    // - `chooseBind` (guards.ts) only ever returns a tailnet address or
+    // 0.0.0.0 (pinned by a test in tests/guards.test.ts), so whenever the
+    // server is running and NOT on the tailnet, it is wide by construction;
+    // there is no third "just this Wi-Fi" case to branch on, so it was
+    // removed rather than left as a tested export nothing called.
     const { onTailnet, staleBind, unencryptedLan } = deriveRemoteBindView(status, remote.bind, remote.tls)
     const host = onTailnet ? bound : (status?.lan[0] ?? "")
     const scheme = remote.tls ? "https" : "http"

@@ -432,6 +432,65 @@ requires TLS). The residual — plain-HTTP cross-port sharing/overwrite — is
 accepted, not fixed, and is recorded here so nobody rediscovers it as a new
 finding.
 
+### Scoped re-review after round twelve (2026-08-14)
+
+A follow-up pass over the round-twelve fixes found one new defect the fixes
+themselves introduced, plus two regressions in tests that stopped actually
+exercising what they claimed to:
+
+- **Toggling HTTPS silently unpaired every device.** The `__Host-` cookie
+  prefix (I5, above) meant the cookie is named `devdeck_device` over plain
+  HTTP and `__Host-devdeck_device` over HTTPS, but `cookieToken` looked for
+  exactly one name, picked from the *current* TLS setting. Pair over HTTP,
+  then tick the HTTPS checkbox in Settings, and the browser keeps sending
+  `devdeck_device` while the server now looks only for the `__Host-`
+  version — every paired device locked out, in either toggle direction.
+  Fixed: `cookieToken` (`guards.ts`) now checks both names on read, preferring
+  the `__Host-` one when both are present; writing (`deviceCookie` /
+  `clearDeviceCookie`) is unchanged and still uses whichever name the current
+  TLS setting dictates. Covered in `tests/guards.test.ts`, including a test
+  that a cookie set before a TLS toggle still authenticates after it.
+- **The "corrupted store" test in `devices.test.ts` had gone vacuous.** It
+  corrupts `tokens[id]` with a direct `writeFileSync`, but I4's in-memory
+  cache (round twelve, above) meant `authenticate` never actually read those
+  bytes again — both assertions kept passing for a reason unrelated to what
+  they were meant to prove. Fixed by calling `__resetCacheForTest()` right
+  after the corruption write.
+- **The unmigrated legacy token was being retained too broadly.**
+  `settings.ts`'s migration handling had collapsed two different outcomes
+  into one: a thrown error (a transient write failure, worth retrying) and a
+  resolved `false` (a *different* pairing token already exists — permanently
+  declined, by the code's own neighbouring comment) were both treated as
+  "keep the token for next time". That meant a dead plaintext legacy token
+  got rewritten into settings.json on every save, forever, with no path to
+  removal — and if `remote-devices.json` were ever lost or corrupted, the
+  next launch would find an empty pairing token and adopt that stale,
+  possibly-leaked value as the live one again. Fixed: the token is now
+  retained only on the throw path; a resolved `false` drops it for good.
+
+**Accepted risk: the pairing-token TLS-toggle fix only ever needed to cover
+one of the two toggle directions.** Reading both cookie names fixes HTTP →
+HTTPS cleanly, because a plain (non-`Secure`) cookie is sent on both HTTP and
+HTTPS requests to the same host. The reverse direction — pair over HTTPS,
+then untick HTTPS — cannot be fixed the same way: the `__Host-`-prefixed
+cookie carries `Secure`, so the browser simply never sends it once the page
+is loaded over plain HTTP again, regardless of what the server now looks
+for. That case still fails closed (the device has to re-pair), same as
+before this fix; it just isn't reachable by improving `cookieToken`, since
+nothing arrives in the `Cookie` header for it to find.
+
+**Accepted risk: the 20-device enrolment cap is opaque.** The 21st enrolment
+attempt returns a plain `401` — indistinguishable from a wrong/expired token,
+with no signal anywhere in the desktop Settings panel that the cap, not a bad
+token, is why. Expired devices still count toward the cap until something
+reads `listDevices` (which prunes them on read), and under the "Never"
+(`deviceTtlDays: 0`) expiry policy nothing ever prunes at all, so a
+long-lived install can genuinely hit a hard wall of 20 with the only visible
+symptom being a generic 401. Revoking old devices, or lowering the expiry
+policy, is the way past it today; no UI surfaces "you're at the cap"
+specifically. Recorded here rather than built, since it needs Settings-panel
+work (surfacing cap/count) that's out of scope for this fix pass.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).

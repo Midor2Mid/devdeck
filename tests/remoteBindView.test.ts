@@ -79,24 +79,3 @@ describe("deriveRemoteBindView - onTailnet", () => {
         expect(deriveRemoteBindView(null, "lan", false).onTailnet).toBe(false)
     })
 })
-
-describe("deriveRemoteBindView - boundWide (NEW-1)", () => {
-    it("true when bound to 0.0.0.0 - every interface, not just this Wi-Fi", () => {
-        expect(deriveRemoteBindView({ boundHost: "0.0.0.0", tailscale: [] }, "lan", false).boundWide).toBe(true)
-    })
-
-    it("stays true even with Tailscale up - 0.0.0.0 includes the tailnet interface too", () => {
-        const status = { boundHost: "0.0.0.0", tailscale: ["100.64.1.5"] }
-        expect(deriveRemoteBindView(status, "auto", false).boundWide).toBe(true)
-    })
-
-    it("false when bound to a specific Tailscale address", () => {
-        expect(deriveRemoteBindView({ boundHost: "100.64.1.5", tailscale: [] }, "tailscale", false).boundWide).toBe(
-            false
-        )
-    })
-
-    it("false before anything is bound (status not loaded)", () => {
-        expect(deriveRemoteBindView(null, "lan", false).boundWide).toBe(false)
-    })
-})
