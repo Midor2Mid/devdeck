@@ -246,6 +246,13 @@ describe("corrupted store", () => {
         const store = JSON.parse(readFileSync(file, "utf8"))
         store.tokens[id] = "not-a-valid-ciphertext-blob"
         writeFileSync(file, JSON.stringify(store), "utf8")
+        // The in-memory store/decrypt cache (I4) means `authenticate` would
+        // otherwise never re-read these bytes at all - it would keep serving
+        // the pre-corruption cached store, and both assertions below would
+        // pass for a reason that has nothing to do with decrypting a
+        // corrupted entry. Drop the cache so this exercises the real
+        // decryption-failure path again.
+        __resetCacheForTest()
 
         expect(authenticate("", "phone", 30).ok).toBe(false)
         expect(authenticate("garbage", "phone", 30).ok).toBe(false)
