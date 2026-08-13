@@ -268,6 +268,21 @@ Attention/urgency is **not** a badge tier — it is form plus the accent: a flag
 icon beside the count in the status region (`.sb-attn`), and a bare `!` glyph on a
 deck key. There is no filled count badge in the app.
 
+### Risk marker
+
+Some choices aren't destructive actions but are still the riskier of several
+options sitting side by side — a launch preset running with permissions
+bypassed, a network bind that exposes the machine wider than the alternatives.
+These carry a **2–3px `--danger` left stripe** (border or inset box-shadow) plus
+full-`--text` description color where the option would otherwise be muted, so
+the risk reads in form as well as color rather than depending on someone
+noticing which one they picked. This is not the ok/danger *semantic* pairing
+above — nothing failed and no button destroys anything — it's a distinct axis:
+"of these options, this one is the one to think twice about." Used on
+`.launch-card-unsafe` / `.agent-menu-unsafe` (a preset launched with
+`--dangerously-skip-permissions`) and `.bind-option.warn` (the "Local network"
+and "Auto (legacy)" remote-bind choices, next to the safe "Tailscale" option).
+
 ## Do's and Don'ts
 
 **Do**

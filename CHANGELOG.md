@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+Remote access is still full remote code execution for any device that gets in —
+this round changes *who gets in*, not what they can do once there. Five tasks,
+eleven fix rounds; several of the defects it caught were in the plan itself, not
+just the code.
+
+- **Paired devices, not one shared token.** Enabling remote used to mint a single
+  token that worked forever for anyone who ever saw it. Now a device pairs once
+  with that token and gets its own, and Settings lists every paired device by
+  name (a readable guess from its user-agent, e.g. "iPhone · Safari", editable)
+  with when it was last seen and a Revoke button. Revoking one device stops it on
+  its next connection and touches nothing else — the capability the old design
+  had no way to express. The pairing token itself still never expires and can
+  enrol unlimited devices, and regenerating it deliberately leaves already-paired
+  devices working, so the device list and per-device revoke are the real
+  mitigation for a leaked pairing link, not a nicety layered on top.
+- **Devices go idle, not just revoked.** A new setting — 7 days, 30 days, or
+  never — drops a device's record once it has sat unused past the window,
+  checked at connection time rather than by a background sweep. **Shortening the
+  window acts immediately**: any device already idle past the new setting is
+  dropped within seconds of the change, even while remote access itself is off,
+  and re-pairing is the only way back in.
+- **The network the server binds to is now a choice, not a guess.** Three options
+  — Tailscale/VPN, Local network, or the legacy Auto — replace the old silent
+  fallback that quietly bound every interface whenever no tailnet address was
+  found. Choosing **Local network means every device on that Wi-Fi or LAN can
+  reach a full terminal on this machine**; the panel says so before you pick it,
+  not after. Choosing Tailscale with no tailnet address now **refuses to start
+  and says why**, instead of substituting the wide-open bind — a feature that
+  can't honour the safe option should stop, not fall back to the unsafe one.
+  Existing installs were migrated to **Auto**, the legacy behaviour, so nothing
+  that worked yesterday silently breaks — but Auto can still bind everything
+  when the tailnet happens to be down, and the panel marks it as the choice to
+  move off, not the safe default.
+- **Tokens are encrypted at rest.** Device tokens and the pairing token now live
+  in the same `safeStorage`-encrypted store already used for git PATs and agent
+  API keys, instead of in plaintext in `settings.json`. The renderer never sees
+  a device token, only `{ id, name, createdAt, lastSeenAt }` for display. A
+  legacy install's plaintext token is migrated into the encrypted store and
+  removed from settings on first run.
+- **Fix: closing the window mid-boot could wipe settings.json.** Settings load
+  from disk asynchronously; the quit-time flush was wired to run regardless of
+  whether that load had finished. Closing the app in the gap between launch and
+  load meant the flush wrote the in-memory defaults over the real file, losing
+  every setting, not only the ones this feature touches. The flush now waits for
+  load to actually apply before it's allowed to write.
+
 ## 0.7.13 - 2026-08-13
 
 Two features. One is finished; the other is built, reviewed hard, and has never

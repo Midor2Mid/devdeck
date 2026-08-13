@@ -326,6 +326,43 @@ list that fixed `powershell.exe` — not the scan-only Exceptions list). The che
 confirmation first: a minimal Electron + CDP script with no DevDeck logic left
 running for a few minutes. If that dies too, the blocker was never this feature.
 
+### Remote hardening: what changed, and what deliberately didn't (2026-08-14)
+
+Five tasks, eleven fix rounds, shipped on `feat/remote-hardening`. Per-device
+tokens, an idle expiry, an encrypted store, and a bind the app refuses to widen
+silently, replacing one shared plaintext token that never expired and a bind
+choice the app made by guessing. The full ledger of what each round found is
+`.superpowers/sdd/2026-08-13-remote-hardening/progress.md` — several of the
+defects it caught were in the plan itself, not just the implementation, and
+that file says so plainly rather than reading like a success story.
+
+**What this did not change: remote is still full RCE for a paired device.**
+Once a phone is in, it can attach to any terminal and type into it, write files
+anywhere inside an open project, and run read-only SQL against saved database
+connections — exactly as much as before. This work changes *who gets in*, not
+*what they can do once in*. Per-device capability scoping — a phone that can
+only watch a terminal, not type into one — is the obvious next step and is
+deliberately not here: it needs a permission check threaded through every
+message handler in `server.ts`, which is a materially larger change than
+authentication.
+
+**The pairing token is still the soft spot, on purpose.** It never expires and
+enrols unlimited devices, and `regeneratePairingToken` deliberately spares
+devices already paired — rotating it locks out no one who already got in. That
+means the paired-device list and per-device revoke in Settings are not a
+convenience feature; they are the *only* mitigation once a pairing token has
+leaked (a screenshot, a shared link, a note). If someone ever learns the
+pairing token, revoking devices by hand is the only way back to a known state.
+
+**`remoteBindView.ts` leans on an invariant it does not itself enforce.** It
+derives the panel's "reachable on Tailscale only" vs "every interface" copy
+from whatever `chooseBind` returns, and only makes sense if that return value
+is always either a tailnet address or `0.0.0.0` — never some other specific
+LAN IP. That invariant is now pinned directly by a test in
+`tests/guards.test.ts`. If anyone changes `chooseBind` to return a specific
+LAN address for some mode, that test is what should fail and stop them; nothing
+else in the codebase would notice.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
