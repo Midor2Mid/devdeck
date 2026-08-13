@@ -43,6 +43,17 @@ describe("deriveRemoteBindView - unencryptedLan (H2)", () => {
         expect(deriveRemoteBindView(status, "lan", false).unencryptedLan).toBe(true)
     })
 
+    // The missing row flagged in review round 2: every migrated legacy
+    // install is on bind="auto", and it's the mode that falls back to a wide
+    // bind without asking - the highest-population case that was untested.
+    // The implementation is bind-independent (unencryptedLan never reads
+    // `bind` at all), but that's exactly why it needs its own assertion
+    // rather than resting on the "lan" case above standing in for it.
+    it("warns for bind=auto too, in the same bound-wide-with-Tailscale-installed situation", () => {
+        const status = { boundHost: "0.0.0.0", tailscale: ["100.64.1.5"] }
+        expect(deriveRemoteBindView(status, "auto", false).unencryptedLan).toBe(true)
+    })
+
     it("does not warn once actually bound to a Tailscale address", () => {
         const status = { boundHost: "100.64.1.5", tailscale: ["100.64.1.5"] }
         expect(deriveRemoteBindView(status, "tailscale", false).unencryptedLan).toBe(false)
@@ -66,5 +77,26 @@ describe("deriveRemoteBindView - onTailnet", () => {
         )
         expect(deriveRemoteBindView({ boundHost: "0.0.0.0", tailscale: [] }, "lan", false).onTailnet).toBe(false)
         expect(deriveRemoteBindView(null, "lan", false).onTailnet).toBe(false)
+    })
+})
+
+describe("deriveRemoteBindView - boundWide (NEW-1)", () => {
+    it("true when bound to 0.0.0.0 - every interface, not just this Wi-Fi", () => {
+        expect(deriveRemoteBindView({ boundHost: "0.0.0.0", tailscale: [] }, "lan", false).boundWide).toBe(true)
+    })
+
+    it("stays true even with Tailscale up - 0.0.0.0 includes the tailnet interface too", () => {
+        const status = { boundHost: "0.0.0.0", tailscale: ["100.64.1.5"] }
+        expect(deriveRemoteBindView(status, "auto", false).boundWide).toBe(true)
+    })
+
+    it("false when bound to a specific Tailscale address", () => {
+        expect(deriveRemoteBindView({ boundHost: "100.64.1.5", tailscale: [] }, "tailscale", false).boundWide).toBe(
+            false
+        )
+    })
+
+    it("false before anything is bound (status not loaded)", () => {
+        expect(deriveRemoteBindView(null, "lan", false).boundWide).toBe(false)
     })
 })

@@ -1405,10 +1405,14 @@ function RemoteSection(): JSX.Element {
     // private Tailscale address while the server is still listening on every
     // interface, which reads as "private" when it isn't.
     const bound = status?.boundHost ?? null
-    // onTailnet/staleBind/unencryptedLan are pulled out into a pure function
-    // (remoteBindView.ts) so they're unit-testable independent of the running
-    // app - see that file's comment for why that matters here.
-    const { onTailnet, staleBind, unencryptedLan } = deriveRemoteBindView(status, remote.bind, remote.tls)
+    // onTailnet/boundWide/staleBind/unencryptedLan are pulled out into a pure
+    // function (remoteBindView.ts) so they're unit-testable independent of
+    // the running app - see that file's comment for why that matters here.
+    const { onTailnet, boundWide, staleBind, unencryptedLan } = deriveRemoteBindView(
+        status,
+        remote.bind,
+        remote.tls
+    )
     const host = onTailnet ? bound : (status?.lan[0] ?? "")
     const scheme = remote.tls ? "https" : "http"
     const url = host && pairingTok ? `${scheme}://${host}:${remote.port}/?token=${pairingTok}` : ""
@@ -1482,8 +1486,11 @@ function RemoteSection(): JSX.Element {
     const commitRename = async (id: string): Promise<void> => {
         const name = editingName.trim()
         setEditingId(null)
-        if (!name) return
+        // Clear any stale error BEFORE the empty-name early return - otherwise
+        // cancelling a rename by blanking the field leaves a stale "Rename
+        // failed…" from a previous attempt on screen with nothing to clear it.
         setDeviceActionError(null)
+        if (!name) return
         try {
             await window.api.devices.rename(id, name)
             await refreshDevices()
@@ -1606,15 +1613,21 @@ function RemoteSection(): JSX.Element {
                 <div className="remote-connect">
                     <div className="remote-status">
                         Server: {status?.running ? "running" : "stopped"}
-                        {/* Say what it's reachable on, not just that it's up — the
-                            difference decides whether this works off your Wi-Fi. */}
+                        {/* Say what it's reachable on, not just that it's up. When
+                            bound wide (boundWide), that's every interface on this
+                            machine INCLUDING Tailscale if it's up - not "just this
+                            Wi-Fi": with bind=lan/auto and a tailnet present, any
+                            tailnet peer can reach it too, so "this Wi-Fi only" would
+                            be false there. */}
                         {status?.running &&
                             (onTailnet
                                 ? " · Tailscale only (reachable anywhere on your tailnet)"
-                                : " · this Wi-Fi only (same network required)")}
+                                : boundWide
+                                  ? " · every interface on this machine (this Wi-Fi, and any tailnet peer if Tailscale is up)"
+                                  : " · this Wi-Fi only (same network required)")}
                     </div>
                     {staleBind && (
-                        <div className="settings-hint warn">
+                        <div className="settings-hint warn" role="alert">
                             ⚠ Tailscale came up after the server started, so it&apos;s still
                             listening on <b>every interface</b>, including this Wi-Fi — not just
                             your tailnet. Restart it to bind privately.
@@ -1631,14 +1644,18 @@ function RemoteSection(): JSX.Element {
                                 <code className="token url">{url}</code>
                                 {/* unencryptedLan is keyed on what's actually BOUND
                                     (onTailnet), not on whether Tailscale merely happens to
-                                    be installed - see remoteBindView.ts. */}
+                                    be installed - see remoteBindView.ts. The copy has to
+                                    match: it fires just as correctly for someone who HAS
+                                    Tailscale but chose Local network, so it must not claim
+                                    no Tailscale address exists or tell them to install
+                                    something they already have - the fix is to use it, via
+                                    the chooser above, not install it again. */}
                                 {unencryptedLan && (
-                                    <div className="settings-hint warn">
-                                        ⚠ No Tailscale address - this is a plain-LAN <code>http://</code>{" "}
-                                        link, so the token and everything you type travel{" "}
-                                        <b>unencrypted</b> over Wi-Fi. Use it only on a network you
-                                        trust; turn on <b>HTTPS</b> above, or install Tailscale for an
-                                        encrypted link (and to reach it from anywhere).
+                                    <div className="settings-hint warn" role="alert">
+                                        ⚠ This link is not going over Tailscale - it&apos;s a plain-LAN{" "}
+                                        <code>http://</code> link, so the token and everything you type
+                                        travel <b>unencrypted</b> over Wi-Fi. Switch <b>Network</b> to{" "}
+                                        <b>Tailscale / VPN</b> above, or turn on <b>HTTPS</b>.
                                     </div>
                                 )}
                                 {remote.tls && (

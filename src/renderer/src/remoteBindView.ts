@@ -20,6 +20,15 @@ export interface RemoteBindView {
     /** The server is actually reachable on a Tailscale address, not 0.0.0.0. */
     onTailnet: boolean
     /**
+     * Bound to 0.0.0.0 - every interface on this machine, not just this
+     * Wi-Fi. If Tailscale is up, that INCLUDES the tailnet interface: a
+     * status line that says "this Wi-Fi only" in this state is false, since
+     * any tailnet peer can reach it too. Drives the running-status line so
+     * it states reach correctly instead of assuming "not on Tailscale" means
+     * "just this Wi-Fi".
+     */
+    boundWide: boolean
+    /**
      * Tailscale came up after a bind that would now prefer it. Only "auto" is
      * defined to re-pick Tailscale when it appears, so that is the only mode
      * a "stale" bind means anything for - "lan" always resolves to 0.0.0.0 by
@@ -51,8 +60,9 @@ export function deriveRemoteBindView(
 ): RemoteBindView {
     const bound = status?.boundHost ?? null
     const onTailnet = !!bound && bound !== "0.0.0.0"
+    const boundWide = bound === "0.0.0.0"
     const staleBind =
         bind === "auto" && !!bound && !onTailnet && (status?.tailscale.length ?? 0) > 0
     const unencryptedLan = !onTailnet && !tls
-    return { onTailnet, staleBind, unencryptedLan }
+    return { onTailnet, boundWide, staleBind, unencryptedLan }
 }

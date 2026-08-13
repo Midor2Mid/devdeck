@@ -98,6 +98,36 @@ describe("isExpired", () => {
     })
 })
 
+describe("chooseBind - return-value invariant", () => {
+    // The renderer's remoteBindView.ts derives `onTailnet` as
+    // `bound !== "0.0.0.0"` - i.e. it assumes any non-wide bind IS a tailnet
+    // address, without re-checking membership. That assumption only holds
+    // because chooseBind never returns anything else: not a raw LAN address,
+    // not some other host. If a future change ever made it return a specific
+    // LAN IP, `onTailnet` would silently read true, the unencrypted-LAN
+    // warning would disappear for a real LAN exposure, and H2 would return
+    // with no failing test anywhere near remoteBindView.ts. Pinning the
+    // invariant here, where chooseBind actually decides it, is what would
+    // catch that.
+    const cases: { tailscale: string[]; lan: string[] }[] = [
+        { tailscale: ["100.64.0.1"], lan: ["192.168.1.5"] },
+        { tailscale: ["100.64.0.1"], lan: [] },
+        { tailscale: [], lan: ["192.168.1.5"] },
+        { tailscale: [], lan: [] },
+        { tailscale: ["100.64.0.1", "100.64.0.2"], lan: ["192.168.1.5", "10.0.0.9"] }
+    ]
+
+    for (const bind of ["tailscale", "lan", "auto"] as const) {
+        for (const addrs of cases) {
+            it(`${bind} over ${JSON.stringify(addrs)} returns only a tailnet address or 0.0.0.0`, () => {
+                const r = chooseBind(bind, addrs)
+                if (!r.ok) return
+                expect(r.host === "0.0.0.0" || addrs.tailscale.includes(r.host)).toBe(true)
+            })
+        }
+    }
+})
+
 describe("chooseBind security", () => {
     it("refuses CGNAT addresses even when filed under lan", () => {
         // CGNAT (100.64.0.0/10) should never bind, even if incorrectly
