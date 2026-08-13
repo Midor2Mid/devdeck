@@ -498,9 +498,19 @@ interface SettingsState extends AppSettings {
 }
 
 export const useSettings = create<SettingsState>((set, get) => {
+    // `load()` is fire-and-forget from App.tsx's mount effect, which also
+    // wires `beforeunload -> flush()`. Without this flag, closing the window
+    // while that IPC round-trip is still in flight would flush() the
+    // still-DEFAULTS in-memory state (load()'s `set()` hasn't run yet) over
+    // settings.json, wiping every real setting on disk - not just the legacy
+    // remote.token this task was migrating. No save may run until `load()`
+    // has actually applied whatever settings.json holds (or confirmed there
+    // is none, for a genuinely fresh install).
+    let loaded = false
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
+        if (!loaded) return
         const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
         window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
     }
@@ -595,20 +605,21 @@ export const useSettings = create<SettingsState>((set, get) => {
                 const legacyRemote = raw.remote as
                     | (Partial<AppSettings["remote"]> & { token?: string })
                     | undefined
-                // Awaited (not fire-and-forget) and gated by success: the flush
-                // below is what actually erases the plaintext token from disk,
-                // on a separate IPC channel from this invoke. If this call
-                // raced ahead of - or simply failed independently of - that
-                // flush, a failure here could still be followed by the flush
-                // erasing the only copy of the token before it ever became the
-                // pairing token, locking out every bookmarked phone with no way
-                // to recover it. Left in settings.json on failure; migration
-                // just retries on the next load.
+                // Awaited (not fire-and-forget) and gated on the RETURN VALUE,
+                // not merely on the promise resolving without throwing: the
+                // flush below is what actually erases the plaintext token from
+                // disk, on a separate IPC channel from this invoke, and
+                // `migrateLegacyToken` can resolve `false` (declined - a
+                // *different* pairing token already exists) without throwing
+                // at all. Treating "didn't throw" as "migrated" would flush a
+                // legacy token that was never actually adopted. A thrown error
+                // (an unrecoverable write failure) is caught and also leaves
+                // `legacyMigrated` false, so migration just retries on the
+                // next load either way.
                 let legacyMigrated = false
                 if (legacyRemote?.token) {
                     try {
-                        await window.api.devices.migrateLegacyToken(legacyRemote.token)
-                        legacyMigrated = true
+                        legacyMigrated = await window.api.devices.migrateLegacyToken(legacyRemote.token)
                     } catch (err) {
                         console.error(
                             "[settings] failed to migrate legacy remote.token - leaving it in settings.json until this succeeds:",
@@ -664,12 +675,23 @@ export const useSettings = create<SettingsState>((set, get) => {
                     dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory,
                     projectCommands: raw.projectCommands ?? DEFAULTS.projectCommands
                 })
+                // Only from here on does the in-memory state actually reflect
+                // settings.json, so only from here on may a save run at all -
+                // see `loaded`'s comment above `writeNow`. Set BEFORE the
+                // flush() below (not after), since that flush is itself a
+                // save and must not be silently dropped by the same guard.
+                loaded = true
                 // Scrub the plaintext token from settings.json now rather than
                 // waiting on some unrelated future edit to trigger a save — the
                 // in-memory `remote` above already has no token field to write
                 // back, so this flush is what actually removes it from disk.
                 // Only once migration actually succeeded (see above).
                 if (legacyMigrated) flush()
+            } else {
+                // No settings.json at all - a genuinely fresh install. The
+                // in-memory DEFAULTS the store already started with ARE the
+                // correct "loaded" content, so saves may proceed immediately.
+                loaded = true
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
             applyStyle(get().appearance.style)

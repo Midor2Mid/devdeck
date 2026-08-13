@@ -146,17 +146,29 @@ export function regeneratePairingToken(): string {
  * plaintext, non-expiring token this feature replaces) as the pairing token,
  * so a phone that already has the old URL bookmarked keeps working - it
  * re-pairs as a device on its next load instead of being locked out. Only
- * takes effect while no pairing token has been minted yet: once a real one
- * exists (freshly minted, or already migrated), a stale `remote.token` still
- * lingering in settings.json (e.g. a write that raced the migration) must
+ * takes effect while no *different* pairing token has been minted yet: once
+ * one exists, a stale `remote.token` still lingering in settings.json must
  * not stomp a token the user may since have regenerated.
+ *
+ * Returns whether it is now safe for the caller to erase the legacy value
+ * from settings.json - true when this call actually seeded the store, or
+ * when the existing pairing token already IS this exact value (an earlier
+ * call already migrated it); false when a *different* token already exists,
+ * or the input was empty. The caller (`settings.ts`'s `load()`) treats this
+ * as the only signal that migration truly happened - resolving without a
+ * thrown error is not enough, since a no-op decline must not be mistaken for
+ * success. Uses the throwing `writeStore`, not `save`, because this is the
+ * one path where a swallowed write failure would report success while
+ * silently losing the only copy of the credential once the caller erases it.
  */
-export function setPairingToken(token: string): void {
-    if (!token) return
+export function setPairingToken(token: string): boolean {
+    if (!token) return false
     const store = load()
-    if (decrypt(store.pairing)) return
+    const existing = decrypt(store.pairing)
+    if (existing) return existing === token
     store.pairing = encrypt(token)
-    save(store)
+    writeStore(store)
+    return true
 }
 
 // Below this idle gap, a successful reconnect doesn't bother re-stamping

@@ -154,21 +154,40 @@ describe("regeneratePairingToken", () => {
 })
 
 describe("setPairingToken (legacy settings.json migration)", () => {
-    it("adopts a legacy token as the pairing token when none exists yet", () => {
-        setPairingToken("legacy-plaintext-token")
+    it("adopts a legacy token as the pairing token when none exists yet, and reports true", () => {
+        expect(setPairingToken("legacy-plaintext-token")).toBe(true)
         expect(authenticate("legacy-plaintext-token", "phone", 30).ok).toBe(true)
     })
 
-    it("is a one-way migration: does not clobber a pairing token that already exists", () => {
+    it("is a one-way migration: does not clobber a DIFFERENT pairing token that already exists, and reports false", () => {
         const minted = pairingToken()
-        setPairingToken("legacy-plaintext-token")
+        expect(setPairingToken("legacy-plaintext-token")).toBe(false)
         expect(authenticate(minted, "phone", 30).ok).toBe(true)
         expect(authenticate("legacy-plaintext-token", "another phone", 30).ok).toBe(false)
     })
 
-    it("ignores an empty token", () => {
-        setPairingToken("")
+    it("reports true (safe to erase the legacy value) when it's already been migrated to this exact token", () => {
+        // The caller retries every load; a second call carrying the SAME
+        // legacy value after an earlier call already adopted it must not be
+        // mistaken for "declined" - the migration already happened, so it
+        // remains safe for settings.ts to scrub the plaintext from disk.
+        setPairingToken("legacy-plaintext-token")
+        expect(setPairingToken("legacy-plaintext-token")).toBe(true)
+    })
+
+    it("ignores an empty token and reports false", () => {
+        expect(setPairingToken("")).toBe(false)
         expect(authenticate("", "phone", 30).ok).toBe(false)
+    })
+
+    it("a true result means the value was actually persisted, encrypted, never in plaintext", () => {
+        // The whole point of using writeStore over save(): a write failure
+        // must throw, not silently report success while nothing persisted.
+        expect(setPairingToken("legacy-plaintext-token")).toBe(true)
+        const raw = readFileSync(join(h.dir, "remote-devices.json"), "utf8")
+        expect(raw).not.toContain("legacy-plaintext-token")
+        const parsed = JSON.parse(raw) as { pairing: string }
+        expect(parsed.pairing).toMatch(/^(enc:|b64:)/)
     })
 })
 

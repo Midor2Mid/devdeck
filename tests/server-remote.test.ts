@@ -149,6 +149,34 @@ describe("remote server - cookie auth (Task 4)", () => {
         expect(res.status).toBe(200)
     })
 
+    // B-1 full matrix: a VALID cookie alongside a VALID pairing token must
+    // still return early on the cookie and never touch the pairing branch -
+    // the previous "cookie wins" test used a garbage query token, which would
+    // still pass even if the code fell through and minted a duplicate device
+    // on every single page load.
+    it("a valid cookie short-circuits even a valid pairing token - no duplicate device is minted", async () => {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        expect(listDevices(30)).toHaveLength(1)
+
+        const res = await fetch(`${base}/?token=${pairingToken()}`, {
+            headers: { Cookie: `devdeck_device=${token}` }
+        })
+        expect(res.status).toBe(200)
+        expect(deviceTokenFrom(res.headers.get("set-cookie"))).toBe(token)
+        expect(listDevices(30)).toHaveLength(1)
+    })
+
+    // Low: an unauthenticated cross-site request (no cookie at all - e.g. an
+    // <img src=...> from a malicious page, which SameSite=Strict already
+    // keeps the real cookie off) must not be able to force-clear a victim's
+    // valid device cookie just by getting a 401 back.
+    it("a 401 with no cookie presented does not emit a cookie-clearing Set-Cookie", async () => {
+        const res = await fetch(`${base}/`)
+        expect(res.status).toBe(401)
+        expect(res.headers.get("set-cookie")).toBeNull()
+    })
+
     // B-1: precedence must be decided on auth OUTCOME, not merely on the
     // cookie having a value - a dead cookie (idle-expired or revoked) must
     // not shadow a fresh pairing token, or a re-scanned QR code 401s forever.

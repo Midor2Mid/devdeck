@@ -126,12 +126,16 @@ describe("cookieToken", () => {
         expect(cookieToken(`a=1;${DEVICE_COOKIE}=abc123;b=2`)).toBe("abc123")
     })
 
-    it("decodes a percent-encoded value, including one containing '='", () => {
-        // encodeURIComponent turns "=" into "%3D" - only the FIRST "=" in the
-        // cookie-pair splits name from value, so an "=" inside the value must
-        // survive rather than truncating it.
-        const raw = "abc=123=="
+    it("decodes a percent-encoded value", () => {
+        const raw = "a b/c?d"
         expect(cookieToken(`${DEVICE_COOKIE}=${encodeURIComponent(raw)}`)).toBe(raw)
+    })
+
+    it("only the FIRST '=' splits name from value - a literal '=' in the value survives", () => {
+        // Written directly, not via encodeURIComponent - that would escape
+        // this "=" too (to "%3D") and never actually exercise the
+        // indexOf("=") split this test is for.
+        expect(cookieToken(`${DEVICE_COOKIE}=abc=123==`)).toBe("abc=123==")
     })
 
     it("ignores cookies that aren't the device cookie", () => {

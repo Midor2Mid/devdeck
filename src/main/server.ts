@@ -216,13 +216,19 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         }
         const { auth, token } = authFor(req, url, true)
         if (!auth.ok) {
-            // Clear whatever device cookie was just presented (if any) so a
-            // dead one doesn't keep shadowing a fresh pairing attempt on the
-            // next load - see the comment on clearDeviceCookie in guards.ts.
-            res.writeHead(401, {
-                "Content-Type": "text/plain",
-                "Set-Cookie": clearDeviceCookie(!!config.tls)
-            })
+            const headers: Record<string, string> = { "Content-Type": "text/plain" }
+            // Only clear the cookie when one was actually presented (and
+            // failed) - never unconditionally. SameSite=Strict already keeps
+            // the real cookie off a cross-site request, but sending this
+            // unconditionally would let an attacker force-log-out a victim's
+            // valid device merely by getting their browser to load this URL
+            // with NO credentials at all (e.g. an <img src=...> on another
+            // tab) - the 401 they'd get anyway would clear a cookie the
+            // request never even carried. See the comment on
+            // clearDeviceCookie in guards.ts for the legitimate case this
+            // still covers: a dead cookie that WAS presented and failed.
+            if (cookieToken(req.headers.cookie)) headers["Set-Cookie"] = clearDeviceCookie(!!config.tls)
+            res.writeHead(401, headers)
             res.end("Unauthorized")
             return
         }
@@ -288,7 +294,18 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             // automatically since it's the same origin as the HTML page.
             const { auth } = authFor(info.req, url, false)
             if (!auth.ok) {
-                cb(false, 1008, "Unauthorized", { "Set-Cookie": clearDeviceCookie(!!config.tls) })
+                // 401, not 1008 (a WebSocket *close* code, not a valid HTTP
+                // status): `ws` writes whatever's passed here straight onto
+                // the raw HTTP response line for a rejected upgrade, so 1008
+                // there produces an unparseable status line that no client -
+                // including a Set-Cookie header alongside it - ever applies.
+                const headers: Record<string, string> = {}
+                // Same reasoning as the HTTP 401 path: only clear a cookie
+                // that was actually presented and failed, never unconditionally.
+                if (cookieToken(info.req.headers.cookie)) {
+                    headers["Set-Cookie"] = clearDeviceCookie(!!config.tls)
+                }
+                cb(false, 401, "Unauthorized", headers)
                 return
             }
             cb(true)

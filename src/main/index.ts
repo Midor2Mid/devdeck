@@ -301,7 +301,9 @@ function registerIpc(): void {
     ipcMain.handle("devices:pairingToken", () => devices.pairingToken())
     ipcMain.handle("devices:regeneratePairingToken", () => devices.regeneratePairingToken())
     // One-way settings migration: a legacy plaintext remote.token becomes the
-    // pairing token once, then the renderer drops it from settings.json.
+    // pairing token once, then the renderer drops it from settings.json - but
+    // only once devices.setPairingToken's return value confirms that actually
+    // happened (see its own comment): a resolved promise alone isn't proof.
     ipcMain.handle("devices:migrateLegacyToken", (_e, token: string) => devices.setPairingToken(token))
 
     // --- MCP server (DevDeck's own tools, exposed to agent CLIs) ---

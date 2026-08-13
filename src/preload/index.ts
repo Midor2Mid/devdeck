@@ -448,8 +448,15 @@ const api = {
         pairingToken: (): Promise<string> => ipcRenderer.invoke("devices:pairingToken"),
         regeneratePairingToken: (): Promise<string> =>
             ipcRenderer.invoke("devices:regeneratePairingToken"),
-        /** One-way: adopts a legacy plaintext remote.token as the pairing token, once. */
-        migrateLegacyToken: (token: string): Promise<void> =>
+        /**
+         * One-way: adopts a legacy plaintext remote.token as the pairing token.
+         * Resolves `true` only when this call actually seeded it (or it was
+         * already migrated to this exact value) — `false` (a *different*
+         * pairing token already exists, or an empty token was passed) is not
+         * an error, but it means the caller must NOT erase the legacy value
+         * from settings.json, since nothing was actually migrated.
+         */
+        migrateLegacyToken: (token: string): Promise<boolean> =>
             ipcRenderer.invoke("devices:migrateLegacyToken", token)
     },
     /**
