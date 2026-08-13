@@ -7,6 +7,15 @@ import type { ApiTest } from "./apiTests"
 import type { Extractor } from "./apiChain"
 import type { BindMode } from "../../preload/index"
 
+/**
+ * How long a paired device may idle before it's dropped - 0 means never.
+ * Typed as the exact policy values (not `number`) so a malformed value can't
+ * reach `isExpired` at all from this boundary; `isExpired` itself (guards.ts)
+ * also fails closed on a malformed ttlDays at runtime, since a settings.json
+ * hand-edited or migrated from an older shape isn't type-checked either.
+ */
+export type DeviceTtlDays = 7 | 30 | 0
+
 // A saved project layout. Leaves store the agent + its launch command (not a live
 // terminal id) so a preset can be re-opened with fresh sessions.
 export type PresetNode =
@@ -272,7 +281,7 @@ export interface AppSettings {
         /** Which interface to bind — see `chooseBind` in main/guards.ts. */
         bind: BindMode
         /** Idle-expiry window for paired devices, in days (0 = never). */
-        deviceTtlDays: number
+        deviceTtlDays: DeviceTtlDays
         /** Serve over HTTPS/WSS with a self-signed cert. */
         tls: boolean
     }
@@ -507,6 +516,14 @@ export const useSettings = create<SettingsState>((set, get) => {
     // has actually applied whatever settings.json holds (or confirmed there
     // is none, for a genuinely fresh install).
     let loaded = false
+    // I3: a legacy `remote.token` that has NOT yet been confirmed migrated
+    // (migrateLegacyToken returned false, or threw) - held here so `writeNow`
+    // can re-attach it below. The in-memory `remote` object has no `token`
+    // field once constructed (see `load()`), so without this, the very next
+    // persist() from ANY unrelated settings change - not just a retried
+    // migration - would rewrite settings.json with no token to retry from.
+    // Set in `load()`; cleared once migration is confirmed.
+    let unmigratedLegacyToken: string | null = null
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
@@ -520,7 +537,14 @@ export const useSettings = create<SettingsState>((set, get) => {
             return
         }
         const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
+        // Re-attach an unconfirmed legacy token so it survives THIS write too
+        // - not just the one migration flush() was supposed to make happen.
+        // Any other setting changing (a theme tweak, a new snippet) calls
+        // persist(), and without this, that unrelated save would carry the
+        // no-token `remote` shape to disk and the legacy value would be gone
+        // for good on the next launch, with nothing left to retry.
+        const remoteOut = unmigratedLegacyToken ? { ...remote, token: unmigratedLegacyToken } : remote
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote: remoteOut, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -622,8 +646,19 @@ export const useSettings = create<SettingsState>((set, get) => {
                 // at all. Treating "didn't throw" as "migrated" would flush a
                 // legacy token that was never actually adopted. A thrown error
                 // (an unrecoverable write failure) is caught and also leaves
-                // `legacyMigrated` false, so migration just retries on the
-                // next load either way.
+                // `legacyMigrated` false.
+                //
+                // Either way, `unmigratedLegacyToken` (I3) is what actually
+                // makes a retry possible: the in-memory `remote` object built
+                // below has no `token` field once migration doesn't succeed
+                // here, and `writeNow` re-attaches this value to every save
+                // until a later load's migration finally confirms. Without
+                // it, the NEXT unrelated settings change (not even a retried
+                // migration - any save at all) would persist the no-token
+                // shape to disk, and a later load would find no token left to
+                // retry with at all - "retries on the next load either way"
+                // was true only for the read; nothing was actually left on
+                // disk to read.
                 let legacyMigrated = false
                 if (legacyRemote?.token) {
                     try {
@@ -647,6 +682,9 @@ export const useSettings = create<SettingsState>((set, get) => {
                             err
                         )
                     }
+                    unmigratedLegacyToken = legacyMigrated ? null : legacyRemote.token
+                } else {
+                    unmigratedLegacyToken = null
                 }
                 set({
                     terminal: { ...DEFAULTS.terminal, ...raw.terminal },
@@ -674,11 +712,19 @@ export const useSettings = create<SettingsState>((set, get) => {
                     remote: {
                         enabled: legacyRemote?.enabled ?? DEFAULTS.remote.enabled,
                         port: legacyRemote?.port ?? DEFAULTS.remote.port,
-                        // An existing install (raw present here) migrates to "auto":
-                        // today's behaviour keeps working, and the panel invites an
-                        // explicit choice. A brand-new install never reaches this
-                        // branch and keeps DEFAULTS.remote.bind ("tailscale").
-                        bind: legacyRemote?.bind ?? "auto",
+                        // An existing install that had actually turned remote
+                        // ON migrates to "auto": today's behaviour (bind
+                        // wherever it lands) keeps working, and the panel
+                        // invites an explicit choice away from it. An install
+                        // that has `raw.remote` (so it isn't brand-new) but
+                        // never enabled remote has no bind behaviour to
+                        // preserve at all - there is nothing "today's
+                        // behaviour" even means for it - so it gets the safe
+                        // default outright, same as a fresh install. A
+                        // genuinely brand-new install (no `raw.remote`,
+                        // `legacyRemote` itself undefined) never reaches this
+                        // branch either way and keeps DEFAULTS.remote.bind.
+                        bind: legacyRemote?.bind ?? (legacyRemote?.enabled ? "auto" : "tailscale"),
                         deviceTtlDays: legacyRemote?.deviceTtlDays ?? DEFAULTS.remote.deviceTtlDays,
                         tls: legacyRemote?.tls ?? DEFAULTS.remote.tls
                     },
