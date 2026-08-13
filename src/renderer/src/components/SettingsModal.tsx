@@ -6,7 +6,8 @@ import {
     type ShellKind,
     type GitAccount,
     type AgentPreset,
-    type RunMode
+    type RunMode,
+    type DeviceTtlDays
 } from "../settings"
 import { useStore } from "../store"
 import { THEMES, STYLES } from "../themes"
@@ -1363,18 +1364,29 @@ const BIND_OPTIONS: { value: BindMode; title: string; desc: string; warn?: boole
     {
         value: "lan",
         title: "Local network",
-        desc: "Every device on this Wi-Fi/LAN can reach a full terminal on this machine. Only choose this on a network you trust.",
+        // I6: this used to undersell the exposure as "this Wi-Fi/LAN" - the
+        // actual bind is 0.0.0.0, every IPv4 interface on the machine, not
+        // only the Wi-Fi adapter: any Tailscale/VPN peer if one is up, plus a
+        // second NIC, a phone hotspot, a corporate VPN adapter, or a
+        // WSL/Hyper-V virtual switch. Reuses the running-status line's wording
+        // (below) rather than re-describing the same fact differently in two
+        // places - this card is read BEFORE the exposure is accepted, so it's
+        // the more important of the two to get right.
+        desc: "Binds every network interface on this machine, not just this Wi-Fi - any Tailscale/VPN peer if one is up, plus a second NIC, a hotspot, or a WSL/Hyper-V virtual adapter. Any device reachable on any of those can reach a full terminal here. Only choose this on a network you trust.",
         warn: true
     },
     {
         value: "auto",
         title: "Auto (legacy)",
-        desc: "Uses Tailscale when it's up, otherwise falls back to the local network automatically - the same exposure as Local network, reached without asking. Existing installs were migrated to this; it is not the safe default.",
+        // Inherits "lan"'s exposure by reference (see chooseBind in
+        // guards.ts) whenever Tailscale isn't up, so it inherited the same
+        // understatement - fixed the same way, for the same reason.
+        desc: "Uses Tailscale when it's up, otherwise falls back to binding every interface on this machine automatically - the same exposure as Local network, reached without asking. Existing installs were migrated to this; it is not the safe default.",
         warn: true
     }
 ]
 
-const EXPIRY_OPTIONS: { value: number; label: string }[] = [
+const EXPIRY_OPTIONS: { value: DeviceTtlDays; label: string }[] = [
     { value: 7, label: "7 days" },
     { value: 30, label: "30 days" },
     { value: 0, label: "Never" }
@@ -1405,14 +1417,14 @@ function RemoteSection(): JSX.Element {
     // private Tailscale address while the server is still listening on every
     // interface, which reads as "private" when it isn't.
     const bound = status?.boundHost ?? null
-    // onTailnet/boundWide/staleBind/unencryptedLan are pulled out into a pure
-    // function (remoteBindView.ts) so they're unit-testable independent of
-    // the running app - see that file's comment for why that matters here.
-    const { onTailnet, boundWide, staleBind, unencryptedLan } = deriveRemoteBindView(
-        status,
-        remote.bind,
-        remote.tls
-    )
+    // onTailnet/staleBind/unencryptedLan are pulled out into a pure function
+    // (remoteBindView.ts) so they're unit-testable independent of the running
+    // app - see that file's comment for why that matters here. `boundWide`
+    // itself isn't needed here: `chooseBind` (guards.ts) only ever returns a
+    // tailnet address or 0.0.0.0 (pinned by a test in tests/guards.test.ts),
+    // so whenever the server is running and NOT on the tailnet, it is wide by
+    // construction - there is no third "just this Wi-Fi" case to branch on.
+    const { onTailnet, staleBind, unencryptedLan } = deriveRemoteBindView(status, remote.bind, remote.tls)
     const host = onTailnet ? bound : (status?.lan[0] ?? "")
     const scheme = remote.tls ? "https" : "http"
     const url = host && pairingTok ? `${scheme}://${host}:${remote.port}/?token=${pairingTok}` : ""
@@ -1426,13 +1438,31 @@ function RemoteSection(): JSX.Element {
         setStatus(await window.api.server.status())
     }
 
+    // I2: `regeneratePairingToken` now uses the throwing `writeStore`, not the
+    // swallowing `save`, precisely so a failed write surfaces here instead of
+    // the panel displaying (and QR-encoding) a "new" token while the store
+    // still holds the old, possibly-leaked one live.
     const regenerateToken = async (): Promise<void> => {
-        setPairingTok(await window.api.devices.regeneratePairingToken())
+        setDeviceActionError(null)
+        try {
+            setPairingTok(await window.api.devices.regeneratePairingToken())
+        } catch (err) {
+            setDeviceActionError(`Regenerate failed: ${(err as Error)?.message ?? String(err)}`)
+        }
     }
 
     useEffect(() => {
         let on = true
-        window.api.devices.pairingToken().then((t) => on && setPairingTok(t))
+        window.api.devices
+            .pairingToken()
+            .then((t) => on && setPairingTok(t))
+            .catch(
+                (err) =>
+                    on &&
+                    setDeviceActionError(
+                        `Pairing token failed: ${(err as Error)?.message ?? String(err)}`
+                    )
+            )
         return () => {
             on = false
         }
@@ -1613,18 +1643,20 @@ function RemoteSection(): JSX.Element {
                 <div className="remote-connect">
                     <div className="remote-status">
                         Server: {status?.running ? "running" : "stopped"}
-                        {/* Say what it's reachable on, not just that it's up. When
-                            bound wide (boundWide), that's every interface on this
-                            machine INCLUDING Tailscale if it's up - not "just this
-                            Wi-Fi": with bind=lan/auto and a tailnet present, any
-                            tailnet peer can reach it too, so "this Wi-Fi only" would
-                            be false there. */}
+                        {/* Say what it's reachable on, not just that it's up.
+                            Not on the tailnet means wide (0.0.0.0) - every
+                            interface on this machine INCLUDING Tailscale if
+                            it's up, not "just this Wi-Fi": with bind=lan/auto
+                            and a tailnet present, any tailnet peer can reach
+                            it too. There is no third, narrower case to state
+                            here - chooseBind (guards.ts) never returns
+                            anything but a tailnet address or 0.0.0.0 (pinned
+                            by a test in tests/guards.test.ts), so "running and
+                            not on the tailnet" only ever means wide. */}
                         {status?.running &&
                             (onTailnet
                                 ? " · Tailscale only (reachable anywhere on your tailnet)"
-                                : boundWide
-                                  ? " · every interface on this machine (this Wi-Fi, and any tailnet peer if Tailscale is up)"
-                                  : " · this Wi-Fi only (same network required)")}
+                                : " · every interface on this machine (this Wi-Fi, and any tailnet peer if Tailscale is up)")}
                     </div>
                     {staleBind && (
                         <div className="settings-hint warn" role="alert">
@@ -1636,7 +1668,14 @@ function RemoteSection(): JSX.Element {
                             </div>
                         </div>
                     )}
-                    {url ? (
+                    {/* M8: gated on status?.running, not just `url` being
+                        computable. `host` falls back to `status.lan[0]` -
+                        physically-detected LAN addresses, which exist whether
+                        or not anything is actually listening - so picking
+                        Tailscale with the tailnet down used to show a red
+                        refusal, "stopped", AND a scannable QR to an address
+                        nothing was listening on. */}
+                    {status?.running && url ? (
                         <div className="remote-url-block">
                             {qr && <img className="qr" src={qr} alt="connect QR" />}
                             <div>
@@ -1667,9 +1706,9 @@ function RemoteSection(): JSX.Element {
                                 )}
                             </div>
                         </div>
-                    ) : (
+                    ) : status?.running ? (
                         <div className="muted small">Detecting network address…</div>
-                    )}
+                    ) : null}
                 </div>
             )}
 
