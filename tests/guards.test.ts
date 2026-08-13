@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest"
-import { chooseBind, isExpired } from "../src/main/guards"
+import {
+    chooseBind,
+    isExpired,
+    cookieToken,
+    deviceCookie,
+    clearDeviceCookie,
+    originOk,
+    DEVICE_COOKIE
+} from "../src/main/guards"
 
 describe("chooseBind", () => {
     const both = { tailscale: ["100.64.0.1"], lan: ["192.168.1.5"] }
@@ -98,5 +106,99 @@ describe("chooseBind security", () => {
         const r = chooseBind("tailscale", { tailscale: [], lan: ["100.64.0.1"] })
         expect(r.ok).toBe(false)
         if (!r.ok) expect(r.reason).toMatch(/tailnet|tailscale/i)
+    })
+})
+
+describe("cookieToken", () => {
+    it("returns empty for a missing header", () => {
+        expect(cookieToken(undefined)).toBe("")
+    })
+
+    it("reads the value out of a single cookie", () => {
+        expect(cookieToken(`${DEVICE_COOKIE}=abc123`)).toBe("abc123")
+    })
+
+    it("finds it among multiple cookies, with the usual '; ' whitespace", () => {
+        expect(cookieToken(`theme=dark; ${DEVICE_COOKIE}=abc123; other=xyz`)).toBe("abc123")
+    })
+
+    it("tolerates no space after ';' and extra spaces around '='", () => {
+        expect(cookieToken(`a=1;${DEVICE_COOKIE}=abc123;b=2`)).toBe("abc123")
+    })
+
+    it("decodes a percent-encoded value, including one containing '='", () => {
+        // encodeURIComponent turns "=" into "%3D" - only the FIRST "=" in the
+        // cookie-pair splits name from value, so an "=" inside the value must
+        // survive rather than truncating it.
+        const raw = "abc=123=="
+        expect(cookieToken(`${DEVICE_COOKIE}=${encodeURIComponent(raw)}`)).toBe(raw)
+    })
+
+    it("ignores cookies that aren't the device cookie", () => {
+        expect(cookieToken("a=1; b=2; c=3")).toBe("")
+    })
+
+    it("a malformed percent-escape on one entry does not abort the search for a later duplicate", () => {
+        // Browsers permit duplicate cookie names (e.g. a stale Path/Domain
+        // scoping an old one); a decode failure on the first must not make
+        // the whole lookup give up before trying the second.
+        expect(cookieToken(`${DEVICE_COOKIE}=%E0%A4%A; ${DEVICE_COOKIE}=good-token`)).toBe(
+            "good-token"
+        )
+    })
+
+    it("returns empty when every matching entry is malformed", () => {
+        expect(cookieToken(`${DEVICE_COOKIE}=%E0%A4%A`)).toBe("")
+    })
+})
+
+describe("deviceCookie / clearDeviceCookie", () => {
+    it("builds an HttpOnly, SameSite=Strict, Path=/ cookie without Secure over plain http", () => {
+        const c = deviceCookie("tok123", false, 30)
+        expect(c).toMatch(new RegExp(`^${DEVICE_COOKIE}=tok123;`))
+        expect(c).toMatch(/HttpOnly/)
+        expect(c).toMatch(/SameSite=Strict/)
+        expect(c).toMatch(/Path=\//)
+        expect(c).not.toMatch(/Secure/)
+        expect(c).toMatch(`Max-Age=${30 * 86_400}`)
+    })
+
+    it("adds Secure under TLS", () => {
+        expect(deviceCookie("tok123", true, 30)).toMatch(/Secure/)
+    })
+
+    it("caps Max-Age at 400 days, including when deviceTtlDays is 0 (never)", () => {
+        expect(deviceCookie("t", false, 0)).toMatch(`Max-Age=${400 * 86_400}`)
+        expect(deviceCookie("t", false, 10_000)).toMatch(`Max-Age=${400 * 86_400}`)
+    })
+
+    it("URL-encodes the token", () => {
+        expect(deviceCookie("a b", false, 30)).toContain(`${DEVICE_COOKIE}=a%20b`)
+    })
+
+    it("clearDeviceCookie expires immediately and carries no token value", () => {
+        const c = clearDeviceCookie(false)
+        expect(c).toMatch(`${DEVICE_COOKIE}=;`)
+        expect(c).toMatch(/Max-Age=0/)
+    })
+})
+
+describe("originOk", () => {
+    it("allows a missing Origin (non-browser client, not a CSRF actor)", () => {
+        expect(originOk(undefined, "127.0.0.1:7420")).toBe(true)
+    })
+
+    it("allows a same-origin Origin", () => {
+        expect(originOk("http://127.0.0.1:7420", "127.0.0.1:7420")).toBe(true)
+        expect(originOk("https://100.64.0.1:7420", "100.64.0.1:7420")).toBe(true)
+    })
+
+    it("rejects a cross-origin Origin", () => {
+        expect(originOk("http://evil.example:1234", "127.0.0.1:7420")).toBe(false)
+        expect(originOk("http://127.0.0.1:9999", "127.0.0.1:7420")).toBe(false)
+    })
+
+    it("rejects a garbage Origin rather than throwing", () => {
+        expect(originOk("not a url", "127.0.0.1:7420")).toBe(false)
     })
 })

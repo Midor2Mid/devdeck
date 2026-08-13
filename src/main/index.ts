@@ -9,7 +9,7 @@ import { loadWorkspace, saveWorkspace } from "./workspace"
 import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
 import * as server from "./server"
-import type { RemoteSession, ServerConfig, ServerDeps } from "./server"
+import type { RemoteSession, ServerConfig, ServerDeps, ServerStartResult } from "./server"
 import * as devices from "./devices"
 import {
     gitStatus,
@@ -262,7 +262,7 @@ function registerIpc(): void {
         latestSessions = sessions
         if (server.isRunning()) server.broadcastSessions(serverDeps)
     })
-    ipcMain.handle("server:start", async (_e, cfg: ServerConfig) => {
+    ipcMain.handle("server:start", async (_e, cfg: ServerConfig): Promise<ServerStartResult> => {
         try {
             await server.start(cfg, serverDeps)
             return { ok: server.isRunning() }

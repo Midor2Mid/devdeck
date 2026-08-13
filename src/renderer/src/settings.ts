@@ -467,6 +467,15 @@ interface SettingsState extends AppSettings {
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
+    /**
+     * Apply the current remote config immediately (bypassing the debounce
+     * `setRemote` uses so a burst of edits — e.g. typing in the Port field —
+     * doesn't fire a stop/start pair per keystroke) and update
+     * `remoteBindError` from the outcome. The single path both the settings
+     * store and an explicit "Restart remote" button use, so there is exactly
+     * one place that can leave `remoteBindError` stale or out of order.
+     */
+    restartServer: () => Promise<void>
     setMcpServer: (patch: Partial<AppSettings["mcpServer"]>) => void
     setNetwork: (patch: Partial<AppSettings["network"]>) => void
     setProxy: (patch: Partial<AppSettings["proxy"]>) => void
@@ -517,21 +526,37 @@ export const useSettings = create<SettingsState>((set, get) => {
     // running - potentially a wider bind from before this was an explicit
     // choice - listening while the UI shows the (rejected) new config. Stopping
     // first means a refusal leaves nothing running: fail closed, not stale-open.
-    const applyServer = (): void => {
+    //
+    // `applySeq` guards against out-of-order completions: two overlapping
+    // stop/start pairs (e.g. two edits close together) can resolve in either
+    // order, and only the result belonging to the MOST RECENT attempt should
+    // ever land in `remoteBindError` - an older attempt's late-arriving result
+    // must not overwrite a newer one's.
+    let applySeq = 0
+    const doApplyServer = async (): Promise<void> => {
+        const mySeq = ++applySeq
         const { enabled, port, bind, deviceTtlDays, tls } = get().remote
-        void window.api.server.stop()
+        await window.api.server.stop()
         if (!enabled) {
-            set({ remoteBindError: null })
+            if (mySeq === applySeq) set({ remoteBindError: null })
             return
         }
-        window.api.server
-            .start({ port, bind, deviceTtlDays, tls })
-            .then((result) => {
+        try {
+            const result = await window.api.server.start({ port, bind, deviceTtlDays, tls })
+            if (mySeq === applySeq) {
                 set({ remoteBindError: result.ok ? null : (result.reason ?? "Failed to start.") })
-            })
-            .catch((err) => {
-                set({ remoteBindError: (err as Error)?.message ?? String(err) })
-            })
+            }
+        } catch (err) {
+            if (mySeq === applySeq) set({ remoteBindError: (err as Error)?.message ?? String(err) })
+        }
+    }
+    // Debounced: `setRemote` fires on every keystroke in fields like Port, and
+    // without this each one would fire its own stop/start pair against the
+    // real server. Collapses a burst into the one attempt after edits settle.
+    let applyServerTimer: ReturnType<typeof setTimeout> | null = null
+    const applyServer = (): void => {
+        if (applyServerTimer) clearTimeout(applyServerTimer)
+        applyServerTimer = setTimeout(() => void doApplyServer(), 300)
     }
 
     const applyMcpServer = (): void => {
@@ -570,8 +595,26 @@ export const useSettings = create<SettingsState>((set, get) => {
                 const legacyRemote = raw.remote as
                     | (Partial<AppSettings["remote"]> & { token?: string })
                     | undefined
+                // Awaited (not fire-and-forget) and gated by success: the flush
+                // below is what actually erases the plaintext token from disk,
+                // on a separate IPC channel from this invoke. If this call
+                // raced ahead of - or simply failed independently of - that
+                // flush, a failure here could still be followed by the flush
+                // erasing the only copy of the token before it ever became the
+                // pairing token, locking out every bookmarked phone with no way
+                // to recover it. Left in settings.json on failure; migration
+                // just retries on the next load.
+                let legacyMigrated = false
                 if (legacyRemote?.token) {
-                    void window.api.devices.migrateLegacyToken(legacyRemote.token)
+                    try {
+                        await window.api.devices.migrateLegacyToken(legacyRemote.token)
+                        legacyMigrated = true
+                    } catch (err) {
+                        console.error(
+                            "[settings] failed to migrate legacy remote.token - leaving it in settings.json until this succeeds:",
+                            err
+                        )
+                    }
                 }
                 set({
                     terminal: { ...DEFAULTS.terminal, ...raw.terminal },
@@ -625,7 +668,8 @@ export const useSettings = create<SettingsState>((set, get) => {
                 // waiting on some unrelated future edit to trigger a save — the
                 // in-memory `remote` above already has no token field to write
                 // back, so this flush is what actually removes it from disk.
-                if (legacyRemote?.token) flush()
+                // Only once migration actually succeeded (see above).
+                if (legacyMigrated) flush()
             }
             applyTheme(get().appearance.theme, get().appearance.accent)
             applyStyle(get().appearance.style)
@@ -718,6 +762,17 @@ export const useSettings = create<SettingsState>((set, get) => {
             set((s) => ({ remote: { ...s.remote, ...patch } }))
             applyServer()
             persist()
+        },
+        restartServer: async () => {
+            // Cancel any pending debounced apply so an explicit restart isn't
+            // immediately followed - or preceded - by a stale queued one; then
+            // run (and await) the real thing through the same path `applyServer`
+            // uses, so `remoteBindError` only ever has one writer.
+            if (applyServerTimer) {
+                clearTimeout(applyServerTimer)
+                applyServerTimer = null
+            }
+            await doApplyServer()
         },
         setMcpServer: (patch) => {
             set((s) => {

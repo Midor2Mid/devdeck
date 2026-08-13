@@ -9,7 +9,16 @@ import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
-import { isBlockedRemoteUrl, isReadOnlySql, chooseBind, type BindMode } from "./guards"
+import {
+    isBlockedRemoteUrl,
+    isReadOnlySql,
+    chooseBind,
+    cookieToken,
+    deviceCookie,
+    clearDeviceCookie,
+    originOk,
+    type BindMode
+} from "./guards"
 import { readDir, readFileText, writeFileText, allFiles, isWithinRoots } from "./files"
 import { listProjects } from "./projects"
 import { authenticate, type AuthResult } from "./devices"
@@ -34,6 +43,13 @@ export interface ServerConfig {
     deviceTtlDays: number
     /** Serve over HTTPS/WSS with a cached self-signed cert. */
     tls?: boolean
+}
+
+/** Result of an IPC `server:start` attempt - see `index.ts`'s handler. */
+export interface ServerStartResult {
+    ok: boolean
+    /** Present when `ok` is false - the refusal reason, verbatim (e.g. no tailnet address). */
+    reason?: string
 }
 
 export interface ServerDeps {
@@ -88,57 +104,6 @@ function send(ws: WebSocket, msg: unknown): void {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
 }
 
-/** Name of the cookie that carries a device's own token. Never the pairing token. */
-const DEVICE_COOKIE = "devdeck_device"
-
-/**
- * Pull the device-token cookie out of a raw `Cookie` header. A minimal parser
- * on purpose - DevDeck only ever sets the one cookie below, so there is no
- * need for a general RFC 6265 implementation here.
- */
-function cookieToken(header: string | undefined): string {
-    if (!header) return ""
-    for (const part of header.split(";")) {
-        const eq = part.indexOf("=")
-        if (eq < 0) continue
-        if (part.slice(0, eq).trim() !== DEVICE_COOKIE) continue
-        try {
-            return decodeURIComponent(part.slice(eq + 1).trim())
-        } catch {
-            return ""
-        }
-    }
-    return ""
-}
-
-/**
- * The `Set-Cookie` value for a freshly-enrolled device. `HttpOnly` keeps the
- * token out of reach of any script running on the page (unlike the
- * `localStorage` design this replaces); `SameSite=Strict` keeps it off any
- * cross-site request; `Secure` is added under TLS. The browser then presents
- * it automatically on every later page load *and* on the WebSocket upgrade
- * (same origin), which is what makes cookie-only auth work for a returning
- * device - see `authFor` below.
- *
- * Browsers cap `Max-Age` around 400 days regardless of what's asked for, so
- * `deviceTtlDays: 0` ("never" idle-expire) asks for that ceiling rather than
- * an unbounded value nothing will honour. The real access control is
- * server-side - `authenticate()`'s idle check runs on every request - this
- * only governs how long the browser keeps offering the cookie back.
- */
-function deviceCookie(token: string, tls: boolean, deviceTtlDays: number): string {
-    const days = deviceTtlDays > 0 ? Math.min(deviceTtlDays, 400) : 400
-    const attrs = [
-        `${DEVICE_COOKIE}=${encodeURIComponent(token)}`,
-        "HttpOnly",
-        "SameSite=Strict",
-        "Path=/",
-        `Max-Age=${days * 86_400}`
-    ]
-    if (tls) attrs.push("Secure")
-    return attrs.join("; ")
-}
-
 // Filesystem access from the phone (the Files/AI mobile views) is confined to
 // within an added project — the same defense-in-depth guard the desktop editor
 // IPC uses. A remote client already has terminal (RCE) reach behind the token +
@@ -191,25 +156,37 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
     // the pairing token in its URL - an unbounded loop of disk writes on the
     // main process's event loop, not the one orphan device the design
     // accepted.
-    // Cookie first, then the `?token=` query param. The cookie is how every
-    // returning device authenticates - including a page reload, which fires
-    // its HTTP request before any script runs, so a token that only ever
-    // lived in the page's own JS (the `localStorage` design this replaces)
-    // would arrive here with nothing to present and 401. `?token=` is the
-    // pairing path: the one-time link from the QR code, before any cookie
-    // has been set.
-    const authFor = (req: IncomingMessage, url: URL, allowEnroll: boolean): AuthResult => {
+    // Cookie first, then the `?token=` query param - but on *outcome*, not on
+    // the cookie merely being present. A device that idles past deviceTtlDays
+    // (or gets revoked) has its record dropped; if a stale cookie alone gated
+    // the fallback, a fresh QR scan's `?token=` would never even be tried -
+    // the request 401s, no page JS ever runs to clear anything, and the dead
+    // cookie can strand the browser for up to Max-Age. So: try the cookie: if
+    // it authenticates, done. Otherwise fall through and try `?token=` too
+    // (the pairing path, or a device's own token in exceptional cases) -
+    // whose success re-pairs cleanly and, via the caller's Set-Cookie, writes
+    // over the dead cookie.
+    const authFor = (
+        req: IncomingMessage,
+        url: URL,
+        allowEnroll: boolean
+    ): { auth: AuthResult; token: string } => {
+        const userAgent = String(req.headers["user-agent"] ?? "")
         try {
-            const token = cookieToken(req.headers.cookie) || url.searchParams.get("token") || ""
-            return authenticate(
-                token,
-                String(req.headers["user-agent"] ?? ""),
-                config.deviceTtlDays,
-                allowEnroll
-            )
+            const cookie = cookieToken(req.headers.cookie)
+            if (cookie) {
+                const byCookie = authenticate(cookie, userAgent, config.deviceTtlDays, allowEnroll)
+                if (byCookie.ok) return { auth: byCookie, token: cookie }
+            }
+            const queryToken = url.searchParams.get("token") ?? ""
+            if (!queryToken) return { auth: { ok: false }, token: "" }
+            return {
+                auth: authenticate(queryToken, userAgent, config.deviceTtlDays, allowEnroll),
+                token: queryToken
+            }
         } catch (err) {
             console.error("[server] auth store write failed:", (err as Error)?.message ?? err)
-            return { ok: false }
+            return { auth: { ok: false }, token: "" }
         }
     }
 
@@ -237,14 +214,20 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             res.end(xtermAsset("xterm.css"))
             return
         }
-        const auth = authFor(req, url, true)
+        const { auth, token } = authFor(req, url, true)
         if (!auth.ok) {
-            res.writeHead(401, { "Content-Type": "text/plain" })
+            // Clear whatever device cookie was just presented (if any) so a
+            // dead one doesn't keep shadowing a fresh pairing attempt on the
+            // next load - see the comment on clearDeviceCookie in guards.ts.
+            res.writeHead(401, {
+                "Content-Type": "text/plain",
+                "Set-Cookie": clearDeviceCookie(!!config.tls)
+            })
             res.end("Unauthorized")
             return
         }
         // no-store: before device auth existed the page held no secret, so
-        // caching was harmless; now a fresh enrolment's response carries a
+        // caching was harmless; now every authenticated response carries a
         // Set-Cookie with a long-lived device token, and this is sometimes
         // served over plain http on the LAN path this feature supports.
         const headers: Record<string, string> = {
@@ -252,12 +235,21 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             "Cache-Control": "no-store",
             Pragma: "no-cache"
         }
-        // A fresh enrolment hands the client its device token as an HttpOnly
-        // cookie - never in the URL (history, screenshots, shared links) and
-        // never in page-script scope (unlike the localStorage design this
-        // replaces). The browser then presents it automatically on every
-        // later load and on the WebSocket upgrade below.
-        if (auth.deviceToken) headers["Set-Cookie"] = deviceCookie(auth.deviceToken, !!config.tls, config.deviceTtlDays)
+        // Re-issue the cookie on *every* authenticated load, not only a fresh
+        // enrolment: `auth.deviceToken` is only set when a new device was
+        // just minted, but the token that actually authenticated this request
+        // (the cookie itself, or a query token on the re-pair path) is always
+        // in `token`. Refreshing Max-Age here is what makes the cookie's own
+        // lifetime slide forward with real use instead of expiring on a fixed
+        // schedule from first enrolment while the server-side idle check
+        // (which does slide) would have kept the device alive - see B-2.
+        // Never in the URL (history, screenshots, shared links) and never in
+        // page-script scope (unlike the localStorage design this replaces).
+        headers["Set-Cookie"] = deviceCookie(
+            auth.deviceToken ?? token,
+            !!config.tls,
+            config.deviceTtlDays
+        )
         res.writeHead(200, headers)
         res.end(CLIENT_HTML)
     }
@@ -281,12 +273,25 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                 cb(false, 400, "Bad Request")
                 return
             }
+            // Defense in depth now that auth can ride along as an ambient
+            // cookie: SameSite=Strict already keeps it off a cross-site
+            // request in current browsers, but enforcement for non-HTTP(S)
+            // schemes (ws:/wss:) hasn't always been consistent - see
+            // originOk's comment in guards.ts.
+            if (!originOk(info.req.headers.origin, info.req.headers.host)) {
+                cb(false, 403, "Forbidden")
+                return
+            }
             // Device tokens only - no enrolment here (allowEnroll: false). See
             // the comment on authFor above for why. The cookie set on
             // enrolment is the sole path in: this upgrade request carries it
             // automatically since it's the same origin as the HTML page.
-            const auth = authFor(info.req, url, false)
-            cb(auth.ok, 1008, "Unauthorized")
+            const { auth } = authFor(info.req, url, false)
+            if (!auth.ok) {
+                cb(false, 1008, "Unauthorized", { "Set-Cookie": clearDeviceCookie(!!config.tls) })
+                return
+            }
+            cb(true)
         }
     })
 

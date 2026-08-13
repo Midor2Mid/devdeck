@@ -97,3 +97,95 @@ export function isExpired(lastSeenAt: number, ttlDays: number, now: number): boo
     if (!ttlDays) return false
     return now - lastSeenAt > ttlDays * 86_400_000
 }
+
+/** Name of the cookie carrying a device's own token. Never the pairing token. */
+export const DEVICE_COOKIE = "devdeck_device"
+
+/**
+ * Pull the device-token cookie out of a raw `Cookie` header. A minimal parser
+ * on purpose - DevDeck only ever sets the one cookie below, so there is no
+ * need for a general RFC 6265 implementation here. A malformed percent-escape
+ * on one matching-named entry does not abort the whole search: `continue`s to
+ * a later entry rather than returning "" outright, so a duplicate cookie name
+ * (browsers allow it; a stale one from an old Path/Domain can linger) still
+ * gets a chance to match.
+ */
+export function cookieToken(header: string | undefined): string {
+    if (!header) return ""
+    for (const part of header.split(";")) {
+        const eq = part.indexOf("=")
+        if (eq < 0) continue
+        if (part.slice(0, eq).trim() !== DEVICE_COOKIE) continue
+        try {
+            return decodeURIComponent(part.slice(eq + 1).trim())
+        } catch {
+            continue
+        }
+    }
+    return ""
+}
+
+/**
+ * The `Set-Cookie` value for a device's token, issued on enrolment and
+ * re-issued on every later authenticated response. `HttpOnly` keeps the token
+ * out of reach of any script running on the page (unlike the `localStorage`
+ * design this replaces); `SameSite=Strict` keeps it off any cross-site
+ * request; `Secure` is added under TLS.
+ *
+ * Browsers cap `Max-Age` around 400 days regardless of what's asked for, so
+ * `deviceTtlDays: 0` ("never" idle-expire) asks for that ceiling rather than
+ * an unbounded value nothing would honour. The real access control stays
+ * server-side - `authenticate()`'s idle check runs on every request, sliding
+ * forward on each use - which is exactly why the caller must re-issue this
+ * cookie on every authenticated response, not only a fresh enrolment: set
+ * once, the cookie's own fixed Max-Age would otherwise expire a
+ * daily-used device on a schedule the server-side check never agreed to.
+ */
+export function deviceCookie(token: string, tls: boolean, deviceTtlDays: number): string {
+    const days = deviceTtlDays > 0 ? Math.min(deviceTtlDays, 400) : 400
+    const attrs = [
+        `${DEVICE_COOKIE}=${encodeURIComponent(token)}`,
+        "HttpOnly",
+        "SameSite=Strict",
+        "Path=/",
+        `Max-Age=${days * 86_400}`
+    ]
+    if (tls) attrs.push("Secure")
+    return attrs.join("; ")
+}
+
+/**
+ * Clears a device cookie that just failed to authenticate. Without this, a
+ * dropped/expired/revoked device's browser keeps re-presenting the same dead
+ * cookie on every load - and since the cookie wins over `?token=` when it
+ * successfully authenticates, but a *stale* cookie previously short-circuited
+ * the fallback to a fresh pairing token too, a user who re-scans the QR code
+ * would still 401 forever with no way to clear it themselves short of
+ * clearing site data. Sent on a 401/reject so the next load starts clean.
+ */
+export function clearDeviceCookie(tls: boolean): string {
+    const attrs = [`${DEVICE_COOKIE}=`, "HttpOnly", "SameSite=Strict", "Path=/", "Max-Age=0"]
+    if (tls) attrs.push("Secure")
+    return attrs.join("; ")
+}
+
+/**
+ * Defense in depth for the WebSocket upgrade now that auth can ride along as
+ * an ambient cookie instead of only an unguessable URL token: `SameSite=Strict`
+ * already keeps the cookie off a cross-site request in current browsers, but
+ * enforcement of `SameSite` for non-HTTP(S) schemes (`ws:`/`wss:`) has not
+ * always been consistent across engines, so this checks it again explicitly.
+ *
+ * A missing `Origin` is not rejected: a real browser always sends `Origin` on
+ * a WebSocket handshake, so its absence means a non-browser client (a direct
+ * `?token=` connection, a test) - not a cross-site page, which is the only
+ * thing this guards against.
+ */
+export function originOk(origin: string | undefined, host: string | undefined): boolean {
+    if (!origin) return true
+    try {
+        return new URL(origin).host === (host ?? "")
+    } catch {
+        return false
+    }
+}

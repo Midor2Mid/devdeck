@@ -1,4 +1,16 @@
 import { contextBridge, ipcRenderer } from "electron"
+// Type-only imports from main: erased at bundle time (isolatedModules + no
+// runtime value pulled in), so this doesn't drag main's Electron/native-module
+// side effects into the preload bundle. Importing the canonical shapes here -
+// rather than restating them by hand - is what makes a field rename in
+// ServerConfig/BindMode/RemoteDevice actually surface as a typecheck error at
+// this boundary, instead of `ipcRenderer.invoke`'s untyped channel quietly
+// letting the two sides drift (the exact gap that hid Task 3's regression).
+import type { BindMode } from "../main/guards"
+import type { RemoteDevice } from "../main/devices"
+import type { ServerConfig, ServerStartResult } from "../main/server"
+
+export type { BindMode, RemoteDevice }
 
 // Each terminal pane registers its own pty:data/pty:exit listener; raise the
 // cap so many open terminals don't trip Node's MaxListenersExceededWarning.
@@ -163,21 +175,6 @@ export interface ServerStatus {
     boundHost: string | null
     tailscale: string[]
     lan: string[]
-}
-/** Which interface the remote server binds — mirrors `BindMode` in main/guards.ts. */
-export type BindMode = "tailscale" | "lan" | "auto"
-export interface ServerStartResult {
-    ok: boolean
-    /** Present when `ok` is false — the refusal reason, verbatim (e.g. no tailnet address). */
-    reason?: string
-}
-/** A paired remote device — never carries a token; see main/devices.ts's toPublic(). */
-export interface RemoteDevice {
-    id: string
-    name: string
-    createdAt: number
-    lastSeenAt: number
-    userAgent: string
 }
 export interface UpdateStatus {
     state: "checking" | "available" | "current" | "downloading" | "ready" | "error"
@@ -437,13 +434,7 @@ const api = {
         save: (data: unknown): void => ipcRenderer.send("settings:save", data)
     },
     server: {
-        start: (cfg: {
-            port: number
-            bind: BindMode
-            /** Idle-expiry window for paired devices, in days (0 = never). */
-            deviceTtlDays: number
-            tls?: boolean
-        }): Promise<ServerStartResult> => ipcRenderer.invoke("server:start", cfg),
+        start: (cfg: ServerConfig): Promise<ServerStartResult> => ipcRenderer.invoke("server:start", cfg),
         stop: (): Promise<boolean> => ipcRenderer.invoke("server:stop"),
         status: (): Promise<ServerStatus> => ipcRenderer.invoke("server:status")
     },

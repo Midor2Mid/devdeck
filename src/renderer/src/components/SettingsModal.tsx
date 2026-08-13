@@ -1336,6 +1336,13 @@ function NotificationsSection(): JSX.Element {
 function RemoteSection(): JSX.Element {
     const remote = useSettings((s) => s.remote)
     const setRemote = useSettings((s) => s.setRemote)
+    // The verbatim refusal reason from the last start attempt (e.g. no tailnet
+    // address found) - null once a start has succeeded. New installs default
+    // to bind: "tailscale", so without a tailnet this is the ONLY thing that
+    // tells the user why nothing came up; showing it is the minimum fix here,
+    // a real bind chooser is Task 5's.
+    const remoteBindError = useSettings((s) => s.remoteBindError)
+    const storeRestartServer = useSettings((s) => s.restartServer)
     const [status, setStatus] = useState<ServerStatus | null>(null)
     const [qr, setQr] = useState<string>("")
     // The pairing token now lives in main's encrypted device store, not in
@@ -1357,14 +1364,12 @@ function RemoteSection(): JSX.Element {
     // Tailscale appeared after the server started: it's bound wider than intended.
     const staleBind = !!bound && !onTailnet && (status?.tailscale.length ?? 0) > 0
 
+    // Routes through the store's restartServer so `remoteBindError` has
+    // exactly one writer (setRemote's debounced apply is the other caller of
+    // the same underlying function) rather than this button bypassing it with
+    // its own separate stop/start that could leave the reason stale either way.
     const restartServer = async (): Promise<void> => {
-        await window.api.server.stop()
-        await window.api.server.start({
-            port: remote.port,
-            bind: remote.bind,
-            deviceTtlDays: remote.deviceTtlDays,
-            tls: remote.tls
-        })
+        await storeRestartServer()
         setStatus(await window.api.server.status())
     }
 
@@ -1446,6 +1451,13 @@ function RemoteSection(): JSX.Element {
                                 ? " · Tailscale only (reachable anywhere on your tailnet)"
                                 : " · this Wi-Fi only (same network required)")}
                     </div>
+                    {/* Verbatim, unparaphrased — e.g. "No tailnet address found.
+                        Start Tailscale, or choose Local network." Otherwise a
+                        refusal (the default bind is "tailscale") just reads as
+                        the panel silently doing nothing. */}
+                    {!status?.running && remoteBindError && (
+                        <div className="settings-hint warn">{remoteBindError}</div>
+                    )}
                     {staleBind && (
                         <div className="settings-hint warn">
                             ⚠ Tailscale came up after the server started, so it&apos;s still

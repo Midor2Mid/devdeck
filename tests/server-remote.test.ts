@@ -50,7 +50,7 @@ vi.mock("../src/main/guards", async (importOriginal) => {
 })
 
 const { start, stop } = await import("../src/main/server")
-const { pairingToken } = await import("../src/main/devices")
+const { pairingToken, revokeDevice, listDevices } = await import("../src/main/devices")
 
 const PORT = 18732
 const base = `http://127.0.0.1:${PORT}`
@@ -147,5 +147,69 @@ describe("remote server - cookie auth (Task 4)", () => {
             headers: { Cookie: `devdeck_device=${token}` }
         })
         expect(res.status).toBe(200)
+    })
+
+    // B-1: precedence must be decided on auth OUTCOME, not merely on the
+    // cookie having a value - a dead cookie (idle-expired or revoked) must
+    // not shadow a fresh pairing token, or a re-scanned QR code 401s forever.
+    it("a revoked (dead) cookie does not shadow a fresh pairing ?token= - the request still re-pairs", async () => {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const deadToken = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const paired = listDevices(30)
+        expect(paired).toHaveLength(1)
+        revokeDevice(paired[0].id)
+
+        const res = await fetch(`${base}/?token=${pairingToken()}`, {
+            headers: { Cookie: `devdeck_device=${deadToken}` }
+        })
+        expect(res.status).toBe(200)
+        const newToken = deviceTokenFrom(res.headers.get("set-cookie"))
+        expect(newToken).toBeTruthy()
+        expect(newToken).not.toBe(deadToken)
+    })
+
+    // B-1: the 401 itself must clear whatever dead cookie was just presented,
+    // since the page's JS never runs on a 401 to clear it any other way.
+    it("a 401 clears the presented device cookie (Max-Age=0)", async () => {
+        const res = await fetch(`${base}/`, { headers: { Cookie: "devdeck_device=not-a-real-token" } })
+        expect(res.status).toBe(401)
+        const setCookie = res.headers.get("set-cookie")
+        expect(setCookie).toMatch(/devdeck_device=;/)
+        expect(setCookie).toMatch(/Max-Age=0/)
+    })
+
+    // B-2: the cookie's own lifetime must slide forward with real use, not
+    // expire on a fixed schedule from first enrolment while the server-side
+    // idle check (which does slide) would have kept the device alive.
+    it("re-issues the cookie on every authenticated load, not only a fresh enrolment", async () => {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+
+        const again = await fetch(`${base}/`, { headers: { Cookie: `devdeck_device=${token}` } })
+        expect(again.status).toBe(200)
+        const setCookie = again.headers.get("set-cookie")
+        expect(setCookie).toBeTruthy()
+        expect(deviceTokenFrom(setCookie)).toBe(token)
+    })
+
+    // Defense in depth: the credential is ambient now, so a cross-site Origin
+    // on the WS upgrade must be refused even with a valid cookie attached.
+    it("rejects a WebSocket upgrade whose Origin doesn't match this server's host", async () => {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        await expect(
+            connectWs({ Cookie: `devdeck_device=${token}`, Origin: "http://evil.example" })
+        ).rejects.toThrow()
+    })
+
+    it("accepts a WebSocket upgrade whose Origin matches this server's host", async () => {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const ws = await connectWs({
+            Cookie: `devdeck_device=${token}`,
+            Origin: `http://127.0.0.1:${PORT}`
+        })
+        expect(ws.readyState).toBe(WebSocket.OPEN)
+        ws.close()
     })
 })
