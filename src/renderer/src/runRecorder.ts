@@ -140,23 +140,26 @@ export function createRunRecorder(
      * spend, both marked as receipts.
      *
      * The durable answer is `useSettings.usageLog`, which is persisted and has
-     * its stale open events closed on load, so it is a complete list of every
-     * agent session's [startedAt, endedAt]. Two additive tests, because neither
-     * alone sees everything and both fail closed:
+     * its stale open events closed on load, so it holds a [startedAt, endedAt]
+     * for every agent session that has ever actually run — including a pane
+     * restored from a previous launch, which opens its event when the user
+     * resumes it (the only way such a pane ever starts). Two additive tests,
+     * because neither alone sees everything and both fail closed:
      *
      *  1. The log — every session started in this or any previous launch.
-     *  2. Live panes — a pane restored from a previous launch never called
-     *     logUsageStart, so it appears in no event at all, and only the live
-     *     store knows it is sitting in this directory spending money.
+     *  2. Live panes — belt and braces for anything the log has not been told
+     *     about, since a session missing from the log is invisible here and
+     *     would silently let this run be written as a receipt.
      *
      * `ownTermIds` are the run's own sessions — a pipeline has one per step, so
      * this takes a list rather than the single id a card or a session has.
      *
-     * An event written before `cwd` existed names no directory, so it cannot be
-     * ruled out of this one: it counts as sharing. That is the fail-closed
-     * choice, and it costs almost nothing in practice — adding the field needs a
-     * restart, and a restart closes every open event, so a legacy event's window
-     * lies entirely before any window recorded afterwards.
+     * An event written before `cwd` existed names no directory, so it can be
+     * neither ruled out of this one nor placed in it: it excludes the run, as
+     * "unknown" rather than "shared". Fail-closed on the exclusion, honest about
+     * what is actually known — and it costs almost nothing in practice, since
+     * adding the field needed a restart and a restart closes every open event,
+     * so a legacy event's window lies entirely before any recorded afterwards.
      *
      * With no directory to reason about there is nothing to be exclusive of, so
      * the answer is no: an unattributable cost must never enter a total.
