@@ -558,17 +558,50 @@ read: a torn final line from a crash mid-append fails `JSON.parse` or the
 shape check, and `readRuns` skips it rather than throwing — the crash costs
 one record, not the file.
 
-**Exclusivity is a snapshot at the run's end, not an integral over its
-window.** `wasExclusive` is only ever asked once, at the moment a run
-finishes, against whichever agent sessions happen to be live right then — not
-against everything that was true at any point during the run. A session that
-shared the project directory for part of the run but had already closed
-before the run's own end leaves nothing to see at checkpoint time, so that run
-reads as exclusive when a full accounting of the window would say otherwise.
-The error only runs one direction — it can call a run exclusive that briefly
-wasn't, never the reverse — which is the direction that never drops a real
-cost out of a total, but it does mean "exclusive" here reads as "nothing else
-was here at the very end," not a guarantee for the whole window.
+**The one predicate the whole feature rests on asked the wrong question, and
+the comment defending it had the reasoning backwards.** Exclusivity started as
+a snapshot: at the moment a run finished, are any other agent panes open in
+this directory? The note that used to sit here called that a safe
+approximation because "it can only call something exclusive that was briefly
+shared, never the reverse". That is the *dangerous* direction, not the safe
+one. Calling a shared run exclusive is what puts a doubled attribution into a
+total; calling an exclusive run shared only under-reports, out loud, next to a
+stated count. Fail-open reasoning wearing a fail-closed sentence.
+
+And the snapshot was not even a near-miss, because for a card the snapshot is
+taken whenever it is dragged to *done* — which can be hours after the money
+was spent, by which time every pane involved has closed. Dispatch two cards
+into one project, let both agents finish, tidy both cards into *done*: two
+rows, each silently claiming the other's spend, both marked as receipts, "0
+excluded from the total". No unusual steps, and roughly twice the real number.
+
+It is now an overlap test over `usageLog`, which is persisted and has its
+stale open events closed on load, so it is a complete `[startedAt, endedAt]`
+list of every agent session DevDeck has ever started: **non-exclusive iff some
+other session, in the same directory, overlapped this run's window.** That
+needed a directory on the event — `projectId` alone would have demoted every
+worktree-isolated card and every race entrant, since a worktree is a different
+absolute path and therefore a different transcript folder — so `UsageEvent`
+gained `cwd`. The live-pane snapshot survives as a *second, additive* test,
+because a pane restored from a previous launch never calls `logUsageStart` and
+so appears in no event at all. Both tests fail closed, and so does an event
+written before `cwd` existed: it names no directory, so it cannot be ruled out
+of this one.
+
+The general lesson, worth more than the fix: **when a question is about a
+window, do not answer it with a snapshot, and be suspicious of any comment
+that argues an approximation is safe without saying which direction the error
+runs in the total.**
+
+**`exclusive: false` used to mean four different things, and the UI asserted
+one of them.** A genuinely shared directory, a card the board never priced, a
+price read that failed, and a run with no directory left to price over all
+collapsed into the same flag — and the panel told the user "shared a project
+with another session" in every case. A pipeline whose `usage:window` IPC
+rejected was reported as having shared a project with a session that did not
+exist: a fabricated fact, in the one panel whose whole purpose is honesty
+about attribution. Records now carry a `reason` (`"shared"` | `"unpriced"`)
+and each gets its own clause and tooltip.
 
 **A session record is written only for a genuinely ad-hoc pane.** A pane
 owned by a race entrant, a pipeline step, or a dispatched card writes nothing
@@ -580,16 +613,30 @@ subsumption: the same spend described twice. Landing a three-way race, for
 instance, would otherwise write one race record plus three ad-hoc-looking
 session records for money the race record already accounts for in full.
 
+**A guard has to be exactly as durable as the thing it guards.** The
+once-only guard for a card record was a renderer-module `Set`, which a quit
+empties — while `workspace.json` restores the card with `dispatchedAt` and
+`termId` intact. Drag that card out of *done* and back and it re-priced over
+`[dispatchedAt, now]` and wrote a second record whose window strictly contains
+the first's, both summable. The guard now rides on the card itself
+(`recordedFor`), where it is persisted alongside the fields it guards. Same
+question worth asking of any in-memory de-dupe key: what restores the *thing*,
+and does anything restore the *key*?
+
 **Known limits, and all of them fail closed.** A pane restored from a
 previous launch never called `logUsageStart`, so it has no start instant to
 price a window from and records nothing rather than inventing one. A
 dispatched card deleted before it ever reaches done records nothing — the
 record is written on the done transition, and a deleted card never makes
-that transition. A pipeline run replaced by a new run before the first one
-finishes is never recorded either — `recordPipelineRun` only fires from a
-terminal status, and a stomped run never reaches one. In every case the cost
-of the bug is a missing figure, not a doubled one, which is the direction
-this feature is willing to be wrong in.
+that transition. A card record is written from the cost cached on the card,
+while the re-price that same move triggers resolves later, so it can be a
+little stale — fixing that would mean awaiting inside a write site, and no
+write site may block or throw on the path it sits in. `claimedTerms` (which
+stops a pipeline step's pane double-counting its run) is still module state, so
+a renderer reload between a run ending and its step panes closing drops it;
+bounded and rare, where the card guard above was neither. In every case the
+cost of the bug is a missing or slightly stale figure, not a doubled one, which
+is the direction this feature is willing to be wrong in.
 
 **Cost-aware routing is now possible, and still deliberately not built.** The
 "Agent routing" note above (2026-08-14) named exactly this gap: no rule can
