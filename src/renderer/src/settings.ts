@@ -255,6 +255,16 @@ export interface UsageEvent {
     id: string
     agentId: string
     projectId: string
+    /**
+     * The directory the session actually ran in — the project's path, or its own
+     * worktree if it was started isolated. `projectId` cannot stand in for this:
+     * a worktree is a different absolute path and therefore a different Claude
+     * Code transcript folder, so two sessions on the same project but in
+     * different worktrees never share a cost. Optional because events written
+     * before this field existed do not have it; see `runRecorder.wasExclusive`
+     * for how those are read (fail closed).
+     */
+    cwd?: string
     startedAt: number
     endedAt?: number
 }
@@ -512,7 +522,7 @@ interface SettingsState extends AppSettings {
     setNotifications: (patch: Partial<AppSettings["notifications"]>) => void
     setWorkspacePresets: (presets: WorkspacePreset[]) => void
     /** Record the start of an agent session (id = the pty/term id). */
-    logUsageStart: (id: string, agentId: string, projectId: string) => void
+    logUsageStart: (id: string, agentId: string, projectId: string, cwd?: string) => void
     /** Stamp an agent session as ended. No-op if unknown/already ended. */
     logUsageEnd: (id: string) => void
     /** Record a successfully-run query for a connection (deduped, capped). */
@@ -930,11 +940,11 @@ export const useSettings = create<SettingsState>((set, get) => {
             set({ workspacePresets })
             persist()
         },
-        logUsageStart: (id, agentId, projectId) => {
+        logUsageStart: (id, agentId, projectId, cwd) => {
             set((s) => ({
                 usageLog: [
                     ...s.usageLog.slice(-(USAGE_LOG_CAP - 1)),
-                    { id, agentId, projectId, startedAt: Date.now() }
+                    { id, agentId, projectId, cwd, startedAt: Date.now() }
                 ]
             }))
             persist()

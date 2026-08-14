@@ -86,19 +86,59 @@ export function createRunRecorder(
         get().projects.find((p) => p.id === projectId)
 
     /**
-     * Was this run's cost a receipt or an attribution? costInWindow sums every
-     * transcript in a project directory over a window, so a second agent working
-     * in the same directory is counted too. A worktree is its own directory, so a
-     * run confined to one is exclusive by construction. Otherwise it is only
-     * exclusive if nothing else was running in that directory.
+     * Do two half-open intervals share any instant? An event still open has no
+     * end, so it runs to now — and every window this is asked about ends at now
+     * or earlier, so `Infinity` is the same answer with no clock read.
+     *
+     * Half-open on purpose: a session that ended at exactly the instant the next
+     * one began did not share a moment with it, and costInWindow would not put
+     * its spend in the second window either.
+     */
+    const overlaps = (event: UsageEvent, from: number, to: number): boolean =>
+        event.startedAt < to && (event.endedAt ?? Infinity) > from
+
+    /**
+     * Was this run's cost a receipt or an attribution?
+     *
+     * costInWindow sums every agent transcript in a project's transcript folder
+     * inside a window, because Claude Code names transcripts by directory rather
+     * than by pty. So two agents that shared a directory during a run each report
+     * the combined spend, and adding those two figures adds the same money twice.
+     * That is the whole reason this predicate exists.
+     *
+     * The question is therefore about the run's WINDOW, not about now:
+     *
+     *     non-exclusive iff some other agent session, in the same directory,
+     *     overlapped [startedAt, endedAt].
+     *
+     * This used to be a snapshot of currently-open panes, justified by an
+     * argument that is exactly inverted: it claimed the error could "only call
+     * something exclusive that was briefly shared, never the reverse", as though
+     * that were the safe direction. It is the dangerous one — calling a shared
+     * run exclusive is what puts a doubled attribution into a total. And for a
+     * card the snapshot was taken whenever it was dragged to *done*, which can be
+     * hours after the money was spent and after every pane involved has closed:
+     * two cards dispatched into one project would then each claim the other's
+     * spend, both marked as receipts.
+     *
+     * The durable answer is `useSettings.usageLog`, which is persisted and has
+     * its stale open events closed on load, so it is a complete list of every
+     * agent session's [startedAt, endedAt]. Two additive tests, because neither
+     * alone sees everything and both fail closed:
+     *
+     *  1. The log — every session started in this or any previous launch.
+     *  2. Live panes — a pane restored from a previous launch never called
+     *     logUsageStart, so it appears in no event at all, and only the live
+     *     store knows it is sitting in this directory spending money.
      *
      * `ownTermIds` are the run's own sessions — a pipeline has one per step, so
      * this takes a list rather than the single id a card or a session has.
      *
-     * This is a SNAPSHOT at the end of the run, which is an approximation: a
-     * session that overlapped and closed before the end is missed. That is the
-     * honest side of the error — it can only call something exclusive that was
-     * briefly shared, never the reverse — and it is far better than not asking.
+     * An event written before `cwd` existed names no directory, so it cannot be
+     * ruled out of this one: it counts as sharing. That is the fail-closed
+     * choice, and it costs almost nothing in practice — adding the field needs a
+     * restart, and a restart closes every open event, so a legacy event's window
+     * lies entirely before any window recorded afterwards.
      *
      * With no directory to reason about there is nothing to be exclusive of, so
      * the answer is no: an unattributable cost must never enter a total.
@@ -111,9 +151,24 @@ export function createRunRecorder(
      * — both sides of this comparison are `join`ed paths, not `git worktree list`
      * output — but it costs nothing and the day one side changes it is right.)
      */
-    const wasExclusive = (cwd: string, ownTermIds: string[]): boolean => {
+    const wasExclusive = (
+        cwd: string,
+        ownTermIds: string[],
+        startedAt: number,
+        endedAt: number
+    ): boolean => {
         if (!cwd) return false
         const own = new Set(ownTermIds.filter(Boolean))
+        const shared = useSettings
+            .getState()
+            .usageLog.some(
+                (e) =>
+                    !own.has(e.id) &&
+                    // No recorded directory: cannot be ruled out, so it counts.
+                    (!e.cwd || samePath(e.cwd, cwd)) &&
+                    overlaps(e, startedAt, endedAt)
+            )
+        if (shared) return false
         const st = get()
         return st
             .agentSessions()
@@ -147,18 +202,19 @@ export function createRunRecorder(
             const cwd = task.worktree || project?.path || ""
             const agentId = task.termId ? get().termAgents[task.termId] : undefined
             const priced = task.cost !== undefined
+            const startedAt = task.dispatchedAt ?? endedAt
             writeRun({
                 id: newId(),
                 kind: "card",
                 projectId: task.projectId,
                 projectName: project?.name ?? "",
                 label: task.title,
-                startedAt: task.dispatchedAt ?? endedAt,
+                startedAt,
                 endedAt,
                 agentIds: agentId && isAgentId(agentId) ? [agentId] : [],
                 cost: task.cost ?? 0,
                 tokens: task.costTokens ?? 0,
-                exclusive: priced && wasExclusive(cwd, [task.termId ?? ""]),
+                exclusive: priced && wasExclusive(cwd, [task.termId ?? ""], startedAt, endedAt),
                 outcome: "done"
             })
         } catch (err) {
@@ -243,7 +299,7 @@ export function createRunRecorder(
             const cwd = run.projectPath ?? ""
             const project = get().projects.find((p) => samePath(p.path, cwd))
             const termIds = run.steps.map((s) => s.termId ?? "")
-            const exclusive = wasExclusive(cwd, termIds)
+            const exclusive = wasExclusive(cwd, termIds, startedAt, endedAt)
             // This record claims those sessions' spend. Claimed synchronously,
             // before the pricing await: a step's pane can be closed at any point
             // after the run ends, including while this is still in flight.
@@ -356,7 +412,7 @@ export function createRunRecorder(
             const startedAt = event.startedAt
             const endedAt = Date.now()
             const cwd = st.termCwd[termId] ?? session?.projectPath ?? ""
-            const exclusive = wasExclusive(cwd, [termId])
+            const exclusive = wasExclusive(cwd, [termId], startedAt, endedAt)
             const projectId = session?.projectId ?? event.projectId
             const project = projectById(projectId)
             const label =

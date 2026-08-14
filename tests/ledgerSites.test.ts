@@ -191,29 +191,121 @@ describe("card records", () => {
     })
 
     it("marks the cost as an attribution when another session shared the directory", () => {
-        // The card ran in the project's own tree, and a second agent session is
-        // live in that same directory - costInWindow cannot tell them apart.
-        useStore.setState({
-            boardTasks: [{ ...dispatched, id: "t-shared" }],
-            termAgents: { "term-1": "claude", "term-2": "claude" },
-            tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-2") }] }
+        // The card ran in the project's own tree, and a second agent session
+        // occupied that same directory during the card's window - costInWindow
+        // cannot tell them apart. The second session has since CLOSED: what
+        // makes the cost an attribution is that it overlapped the window, not
+        // that it happens to still be on screen when the card is filed.
+        useSettings.setState({
+            usageLog: [
+                { id: "term-1", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1000, endedAt: 1500 },
+                { id: "term-2", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1100, endedAt: 1400 }
+            ]
         })
+        useStore.setState({ boardTasks: [{ ...dispatched, id: "t-shared" }] })
 
         useStore.getState().moveBoardTask("t-shared", "done")
 
         expect(appended[0].exclusive).toBe(false)
     })
 
-    it("is exclusive in its own worktree even with another session in the project", () => {
+    // The ordinary two-card case, with no unusual steps: dispatch A into a
+    // project, dispatch B into the same project, let both agents finish and both
+    // panes close, then tidy both cards into done. A snapshot of live panes sees
+    // nothing in the directory either time and calls BOTH exclusive - so the
+    // total shows roughly twice the money that was actually spent, presented as
+    // two receipts with "0 excluded".
+    it("marks both cards as attributions when they shared a directory and both panes have closed", () => {
+        useSettings.setState({
+            usageLog: [
+                { id: "term-a", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1000, endedAt: 3000 },
+                { id: "term-b", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1500, endedAt: 3500 }
+            ]
+        })
         useStore.setState({
-            boardTasks: [{ ...dispatched, id: "t-wt", worktree: "D:/p1.worktrees/t1" }],
-            termAgents: { "term-1": "claude", "term-2": "claude" },
-            tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-2") }] }
+            boardTasks: [
+                { ...dispatched, id: "t-a", termId: "term-a", dispatchedAt: 1000 },
+                { ...dispatched, id: "t-b", termId: "term-b", dispatchedAt: 1500 }
+            ],
+            // Both agents finished and both panes are gone, which is the normal
+            // state of the board by the time cards get dragged to done.
+            termAgents: {},
+            tabsByProject: {}
+        })
+
+        useStore.getState().moveBoardTask("t-a", "done")
+        useStore.getState().moveBoardTask("t-b", "done")
+
+        expect(appended.map((r) => r.exclusive)).toEqual([false, false])
+    })
+
+    // Two cards in one project that never actually overlapped are two separate
+    // receipts. The rule is overlap, not "this project has had two agents in it".
+    it("stays exclusive when another session in the directory did not overlap the window", () => {
+        useSettings.setState({
+            usageLog: [
+                { id: "term-1", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1000, endedAt: 2000 },
+                { id: "term-old", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 10, endedAt: 900 }
+            ]
+        })
+        useStore.setState({
+            boardTasks: [{ ...dispatched, id: "t-solo", endedAt: undefined }]
+        })
+
+        useStore.getState().moveBoardTask("t-solo", "done")
+
+        expect(appended[0].exclusive).toBe(true)
+    })
+
+    it("is exclusive in its own worktree even with another session in the project", () => {
+        useSettings.setState({
+            usageLog: [
+                {
+                    id: "term-1",
+                    agentId: "claude",
+                    projectId: "p1",
+                    cwd: "D:/p1.worktrees/t1",
+                    startedAt: 1000
+                },
+                { id: "term-2", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1000 }
+            ]
+        })
+        useStore.setState({
+            boardTasks: [{ ...dispatched, id: "t-wt", worktree: "D:/p1.worktrees/t1" }]
         })
 
         useStore.getState().moveBoardTask("t-wt", "done")
 
         expect(appended[0].exclusive).toBe(true)
+    })
+
+    // usageLog cannot see a pane restored from a previous launch: the restore
+    // path never calls logUsageStart, so there is no event for it at all. A live
+    // agent pane in the directory therefore still has to demote the record on
+    // its own, as a second, additive test.
+    it("marks the cost as an attribution for a live pane that never logged a start", () => {
+        useStore.setState({
+            boardTasks: [{ ...dispatched, id: "t-restored" }],
+            termAgents: { "term-1": "claude", "term-2": "claude" },
+            tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-2") }] }
+        })
+
+        useStore.getState().moveBoardTask("t-restored", "done")
+
+        expect(appended[0].exclusive).toBe(false)
+    })
+
+    // An event written before `cwd` existed names no directory, so it cannot be
+    // ruled out of this one. Fail closed: it demotes the record.
+    it("treats a usage event with no recorded directory as possibly sharing", () => {
+        useSettings.setState({
+            usageLog: [{ id: "term-legacy", agentId: "claude", projectId: "p1", startedAt: 1000 }]
+        })
+        useStore.setState({ boardTasks: [{ ...dispatched, id: "t-legacy" }] })
+
+        useStore.getState().moveBoardTask("t-legacy", "done")
+
+        expect(appended[0].exclusive).toBe(false)
     })
 
     it("never presents an unpriced card as a summable zero", () => {

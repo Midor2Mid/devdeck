@@ -2328,7 +2328,16 @@ export const useStore = create<AppState>((set, get) => {
             }))
             if (isAgentId(agentId)) {
                 pushActivity("start", termId, `${tab.name} · started`)
-                useSettings.getState().logUsageStart(termId, agentId, projectId)
+                // The directory, not just the project: an isolated session runs in
+                // `cwd` (a worktree), which is its own transcript folder.
+                useSettings
+                    .getState()
+                    .logUsageStart(
+                        termId,
+                        agentId,
+                        projectId,
+                        cwd || get().projects.find((p) => p.id === projectId)?.path
+                    )
             }
             persist()
             return termId
@@ -2386,7 +2395,15 @@ export const useStore = create<AppState>((set, get) => {
                 lastAgentTermId: isAgentId(agentId) ? newTermId : s.lastAgentTermId
             })
             if (isAgentId(agentId))
-                useSettings.getState().logUsageStart(newTermId, agentId, projectId)
+                // A split inherits the project's own tree — splitActive takes no cwd.
+                useSettings
+                    .getState()
+                    .logUsageStart(
+                        newTermId,
+                        agentId,
+                        projectId,
+                        s.projects.find((p) => p.id === projectId)?.path
+                    )
             persist()
         },
 
@@ -2535,7 +2552,14 @@ export const useStore = create<AppState>((set, get) => {
             }))
             window.api.projects.setActive(pid)
             for (const termId of startedAgents)
-                useSettings.getState().logUsageStart(termId, termAgents[termId], pid)
+                useSettings
+                    .getState()
+                    .logUsageStart(
+                        termId,
+                        termAgents[termId],
+                        pid,
+                        get().projects.find((p) => p.id === pid)?.path
+                    )
             persist()
         },
 
