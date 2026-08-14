@@ -46,7 +46,12 @@ export function storePath(): string {
     return storeFile()
 }
 
-function isValidRunRecord(value: unknown): value is RunRecord {
+/**
+ * Exported so the IPC boundary can apply the same shape check on the way IN that
+ * readRuns applies on the way out. Without it the handler's cast is the only
+ * check, and `undefined` from a renderer bug appends the literal line "undefined".
+ */
+export function isValidRunRecord(value: unknown): value is RunRecord {
     if (!value || typeof value !== "object") return false
     const r = value as Record<string, unknown>
     return (

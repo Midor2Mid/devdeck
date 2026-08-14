@@ -37,7 +37,6 @@ import * as dotnet from "./dotnet"
 import * as system from "./system"
 import * as usage from "./usage"
 import * as ledger from "./ledger"
-import type { RunRecord } from "./ledger"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -445,8 +444,22 @@ function registerIpc(): void {
     // race lands or a pipeline finishes, and must not have to await - or handle
     // a rejection from - the thing that only records what already happened.
     // appendRun swallows and logs its own failures.
-    ipcMain.on("ledger:append", (_e, rec: RunRecord) => ledger.appendRun(rec))
-    ipcMain.handle("ledger:read", (_e, limit?: number) => ledger.readRuns(limit))
+    // Validated on the way in with the same predicate readRuns applies on the way
+    // out: this store is append-only, so a malformed line is permanent, and a
+    // renderer bug handing over `undefined` would write the literal "undefined".
+    ipcMain.on("ledger:append", (_e, rec: unknown) => {
+        if (ledger.isValidRunRecord(rec)) ledger.appendRun(rec)
+        else console.error("[ledger] refused a record that is not a RunRecord")
+    })
+    ipcMain.handle("ledger:read", (_e, limit?: unknown) => {
+        // Clamped: readRuns slices from the newest end, so a negative limit would
+        // quietly return the OLDEST rows instead of the requested newest ones.
+        const n =
+            typeof limit === "number" && Number.isFinite(limit)
+                ? Math.max(0, Math.floor(limit))
+                : undefined
+        return ledger.readRuns(n)
+    })
     ipcMain.handle("ledger:clear", () => ledger.clearRuns())
 
     // --- Git ---

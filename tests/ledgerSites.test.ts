@@ -36,9 +36,11 @@ function stubApi(over: Record<string, unknown> = {}): void {
             },
             workspace: { save: (): void => undefined },
             settings: { save: (): void => undefined },
-            pty: { kill: (): void => undefined },
+            projects: { setActive: async (): Promise<void> => undefined },
+            pty: { kill: (): void => undefined, input: (): void => undefined },
             git: {
                 status: async (): Promise<{ changes: number }> => ({ changes: 0 }),
+                changes: async (): Promise<{ path: string }[]> => [],
                 landFrom: async (): Promise<{ ok: boolean }> => ({ ok: true }),
                 worktreeRemove: async (): Promise<{ ok: boolean }> => ({ ok: true })
             },
@@ -151,39 +153,76 @@ describe("card records", () => {
         expect(appended).toEqual([])
     })
 
+    // Moving out of done clears endedAt and cost and lets the card accrue again,
+    // so a second record would cover [dispatchedAt, laterEnd] - a window that
+    // CONTAINS the first one's, not a delta from it. Two summable rows, one spend,
+    // reachable by an ordinary drag.
+    it("records once when a card is reopened and finished again", () => {
+        useStore.setState({
+            boardTasks: [{ ...dispatched, id: "t-reopen" }],
+            termAgents: { "term-1": "claude" }
+        })
+
+        useStore.getState().moveBoardTask("t-reopen", "done")
+        useStore.getState().moveBoardTask("t-reopen", "doing")
+        useStore.setState({
+            boardTasks: [{ ...useStore.getState().boardTasks[0], cost: 0.9, costTokens: 2000 }]
+        })
+        useStore.getState().moveBoardTask("t-reopen", "done")
+
+        expect(appended).toHaveLength(1)
+        expect(appended[0].cost).toBe(0.42)
+    })
+
+    it("records again when the card is genuinely re-dispatched", () => {
+        useStore.setState({ boardTasks: [{ ...dispatched, id: "t-redis" }] })
+        useStore.getState().moveBoardTask("t-redis", "done")
+
+        // A re-dispatch stamps a fresh dispatchedAt: a new run, a new window.
+        useStore.setState({
+            boardTasks: [
+                { ...dispatched, id: "t-redis", column: "doing", dispatchedAt: 9000, endedAt: undefined, cost: 0.2 }
+            ]
+        })
+        useStore.getState().moveBoardTask("t-redis", "done")
+
+        expect(appended).toHaveLength(2)
+        expect(appended.map((r) => r.startedAt)).toEqual([1000, 9000])
+    })
+
     it("marks the cost as an attribution when another session shared the directory", () => {
         // The card ran in the project's own tree, and a second agent session is
         // live in that same directory - costInWindow cannot tell them apart.
         useStore.setState({
-            boardTasks: [dispatched],
+            boardTasks: [{ ...dispatched, id: "t-shared" }],
             termAgents: { "term-1": "claude", "term-2": "claude" },
             tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-2") }] }
         })
 
-        useStore.getState().moveBoardTask("t1", "done")
+        useStore.getState().moveBoardTask("t-shared", "done")
 
         expect(appended[0].exclusive).toBe(false)
     })
 
     it("is exclusive in its own worktree even with another session in the project", () => {
         useStore.setState({
-            boardTasks: [{ ...dispatched, worktree: "D:/p1.worktrees/t1" }],
+            boardTasks: [{ ...dispatched, id: "t-wt", worktree: "D:/p1.worktrees/t1" }],
             termAgents: { "term-1": "claude", "term-2": "claude" },
             tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-2") }] }
         })
 
-        useStore.getState().moveBoardTask("t1", "done")
+        useStore.getState().moveBoardTask("t-wt", "done")
 
         expect(appended[0].exclusive).toBe(true)
     })
 
     it("never presents an unpriced card as a summable zero", () => {
         useStore.setState({
-            boardTasks: [{ ...dispatched, cost: undefined, costTokens: undefined }],
+            boardTasks: [{ ...dispatched, id: "t-unpriced", cost: undefined, costTokens: undefined }],
             termAgents: { "term-1": "claude" }
         })
 
-        useStore.getState().moveBoardTask("t1", "done")
+        useStore.getState().moveBoardTask("t-unpriced", "done")
 
         expect(appended[0]).toMatchObject({ cost: 0, tokens: 0, exclusive: false })
     })
@@ -280,6 +319,27 @@ describe("race records", () => {
 
         expect(appended.map((r) => r.kind)).toEqual(["race"])
         expect(appended[0].cost).toBe(1.5)
+    })
+
+    // The same ordering as landing, asserted separately because it is a different
+    // teardown path: abandon also closes every entrant's pane before deleting the
+    // race, which is what lets the session site see those panes as owned.
+    it("writes one record when abandoning a race with live entrant panes", async () => {
+        useSettings.setState({
+            usageLog: [{ id: "a-claude", agentId: "claude", projectId: "p1", startedAt: 1000 }]
+        })
+        useStore.setState({
+            races: { c1: race({ entrants: [entrant({ termId: "a-claude", cost: 1, costTokens: 10 })] }) }
+        })
+
+        const done = useStore.getState().abandonRace("c1")
+        await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
+        useConfirm.getState().answer(true)
+        await done
+        await new Promise((r) => setTimeout(r, 20))
+
+        expect(appended.map((r) => r.kind)).toEqual(["race"])
+        expect(appended[0]).toMatchObject({ outcome: "abandoned", cost: 1 })
     })
 
     it("does not break landing when the ledger throws", async () => {
@@ -478,6 +538,62 @@ describe("session records", () => {
         await new Promise((r) => setTimeout(r, 20))
         expect(appended).toHaveLength(1)
         expect(appended[0].kind).toBe("pipeline")
+    })
+
+    // Re-dispatching a card overwrites its termId, so the previous pane ends up
+    // owned by no card at all - and its window overlaps the record the earlier
+    // dispatch already produced.
+    it("records nothing for the pane a re-dispatch displaced", async () => {
+        useSettings.setState({
+            agents: [
+                {
+                    id: "claude-ai",
+                    name: "Claude",
+                    command: "claude",
+                    runMode: "agent",
+                    resumeArgs: "",
+                    badge: "",
+                    apiKeyEnv: "",
+                    model: "",
+                    modelEnv: "",
+                    icon: "",
+                    category: ""
+                }
+            ],
+            routingRules: [],
+            defaultAgentId: "claude-ai",
+            usageLog: [{ id: "old-term", agentId: "claude-ai", projectId: "p1", startedAt: 4000 }]
+        })
+        useStore.setState({
+            tabsByProject: { p1: [{ id: "tab-old", name: "old", root: leaf("old-term") }] },
+            activeTabByProject: { p1: "tab-old" },
+            termAgents: { "old-term": "claude-ai" },
+            boardTasks: [
+                {
+                    id: "t1",
+                    projectId: "p1",
+                    title: "Fix the login redirect",
+                    column: "doing",
+                    createdAt: 1,
+                    dispatchedAt: 1000,
+                    termId: "old-term"
+                }
+            ]
+        })
+
+        // Deliberately not awaited: dispatch ends with a 2.8s wait for the agent
+        // CLI to boot, long after the termId this test is about has been swapped.
+        void useStore.getState().dispatchBoardTask("t1", { worktree: false })
+        await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
+        useConfirm.getState().answer(true)
+        await vi.waitFor(() =>
+            expect(useStore.getState().boardTasks[0].termId).not.toBe("old-term")
+        )
+
+        useStore.getState().closePane("old-term")
+
+        await new Promise((r) => setTimeout(r, 20))
+        expect(appended).toEqual([])
     })
 
     it("records nothing for a plain shell pane", async () => {

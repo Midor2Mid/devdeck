@@ -731,6 +731,14 @@ export const useStore = create<AppState>((set, get) => {
      *
      * With no directory to reason about there is nothing to be exclusive of, so
      * the answer is no: an unattributable cost must never enter a total.
+     *
+     * Paths are compared with `samePath` rather than `!==` for its case-folding,
+     * which is live on Windows: two spellings of one directory that differ only in
+     * case are the same directory, and costInWindow cannot tell them apart either.
+     * Folding can only find MORE matches, i.e. mark more runs non-exclusive, which
+     * is the fail-closed direction. (Its slash-normalising does no work here today
+     * — both sides of this comparison are `join`ed paths, not `git worktree list`
+     * output — but it costs nothing and the day one side changes it is right.)
      */
     const wasExclusive = (cwd: string, ownTermIds: string[]): boolean => {
         if (!cwd) return false
@@ -741,6 +749,16 @@ export const useStore = create<AppState>((set, get) => {
             .every((s) => own.has(s.termId) || !samePath(st.termCwd[s.termId] ?? s.projectPath, cwd))
     }
 
+    // Cards already recorded, keyed by card id + the dispatch that paid for it.
+    // Moving a card out of done clears its endedAt and cost and lets it accrue
+    // again, so done -> doing -> done would otherwise write a SECOND record over
+    // [dispatchedAt, laterEnd] - a window that contains the first one's, not a
+    // delta from it - and both would be summable. One ordinary drag, no race
+    // needed. A genuine re-dispatch stamps a fresh dispatchedAt and so is a new
+    // key, and does record again. One string per finished card, on the same
+    // reasoning as raceGen: cheap, and bounded by cards that have ever run.
+    const recordedCards = new Set<string>()
+
     /**
      * A card reached done. Its cost is the figure already cached on the card (the
      * board prices it as the agent works) — deliberately not re-read here, so the
@@ -749,6 +767,9 @@ export const useStore = create<AppState>((set, get) => {
      */
     const recordCardRun = (task: BoardTask, endedAt: number): void => {
         try {
+            const key = `${task.id}:${task.dispatchedAt ?? 0}`
+            if (recordedCards.has(key)) return
+            recordedCards.add(key)
             const project = projectById(task.projectId)
             // Dispatched isolated? Then it was priced from its worktree, and
             // that is the directory whose exclusivity matters.
@@ -855,7 +876,14 @@ export const useStore = create<AppState>((set, get) => {
             // This record claims those sessions' spend. Claimed synchronously,
             // before the pricing await: a step's pane can be closed at any point
             // after the run ends, including while this is still in flight.
-            for (const id of termIds) if (id) claimedTerms.add(id)
+            //
+            // Only panes that still exist. A step's pane closed BEFORE the run
+            // ended was already recognised as owned by the live run and needs no
+            // claim; adding its id here would put an entry in the set that
+            // nothing can ever remove, since the close that removes it has been
+            // and gone.
+            const live = get().termAgents
+            for (const id of termIds) if (id && live[id]) claimedTerms.add(id)
             const agentIds = Array.from(new Set(run.steps.map((s) => s.agentId).filter(Boolean)))
             void (async () => {
                 try {
@@ -1569,6 +1597,16 @@ export const useStore = create<AppState>((set, get) => {
             const label = "task " + task.title.slice(0, 24)
             const termId = get().newTab(agentId, undefined, label, worktreePath)
             if (!termId) return
+            // Re-dispatching displaces the previous pane: the card stops naming it
+            // below, so nothing would recognise it as owned when it eventually
+            // closes, and it would write a session record over a window the
+            // earlier dispatch's card record already covers. Keep it suppressed.
+            // Only if it is still open — a pane already closed was recognised as
+            // owned while the card still named it, and claiming it now would leave
+            // an entry nothing can remove.
+            const displaced = get().boardTasks.find((t) => t.id === id)?.termId
+            if (displaced && displaced !== termId && get().termAgents[displaced])
+                claimedTerms.add(displaced)
             set((s) => ({
                 boardTasks: s.boardTasks.map((t) =>
                     t.id === id
