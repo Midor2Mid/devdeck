@@ -6859,6 +6859,125 @@ kbd {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Runs — the ledger of finished agent work. A row's cost is only a receipt when
+   the run had the project directory to itself; otherwise it is an attribution
+   over that directory and time window, covering whatever else was running there.
+   Those rows are marked in FORM (a `~` on the figure plus a dashed rule under
+   it) rather than colour, because colour alone doesn't survive 84 skins — and
+   they are left out of the total, with the count of them stated in words next to
+   it. Nothing here spends the accent: a ledger is a reading, not an action. */
+.usage-runs-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    margin-bottom: var(--sp-sm);
+}
+.usage-runs-head .usage-section-title {
+    margin-bottom: 0;
+}
+.usage-run-filters {
+    margin-left: auto;
+    display: flex;
+    gap: var(--sp-xs);
+}
+.usage-run-filters select {
+    font-size: var(--fs-label);
+    padding: 2px 5px;
+    max-width: 130px;
+}
+.usage-runs-total {
+    font-size: var(--fs-sm);
+    line-height: var(--lh-body);
+    margin-bottom: var(--sp-sm);
+}
+.usage-runs-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+.usage-runs-why {
+    color: var(--muted);
+}
+.usage-runs {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+.usage-run-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-xs);
+    padding: 7px 9px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius, 8px);
+    background: var(--bg);
+}
+.usage-run-main {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-sm);
+}
+.usage-run-kind {
+    flex: none;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--faint);
+}
+.usage-run-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+}
+.usage-run-cost {
+    flex: none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+}
+.usage-run-cost.approx {
+    color: var(--muted);
+    border-bottom: 1px dashed var(--border-strong);
+}
+.usage-run-meta {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-sm);
+    min-width: 0;
+    font-size: var(--fs-label);
+    color: var(--faint);
+}
+.usage-run-when,
+.usage-run-proj,
+.usage-run-dur {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+.usage-run-when {
+    flex: none;
+}
+.usage-run-proj,
+.usage-run-agents {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.usage-run-agents {
+    color: var(--muted);
+}
+.usage-run-dur {
+    flex: none;
+    margin-left: auto;
+    padding-left: var(--sp-sm);
+}
 .usage-note {
     border-top: 1px solid var(--border-soft);
     padding-top: 12px;

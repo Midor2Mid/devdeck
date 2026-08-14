@@ -283,6 +283,18 @@ above — nothing failed and no button destroys anything — it's a distinct axi
 `--dangerously-skip-permissions`) and `.bind-option.warn` (the "Local network"
 and "Auto (legacy)" remote-bind choices, next to the safe "Tailscale" option).
 
+### Attribution marker
+
+A number that looks like money must say whether it is a **receipt** or an
+**attribution**. DevDeck prices a run by summing the agent transcripts under a
+project's directory inside the run's time window, so when a second session shared
+that directory the figure covers both runs and belongs to neither. Such a figure
+carries a `~` prefix plus a **dashed rule** under it (`.usage-run-cost.approx` in
+the usage panel's Runs section) and is set in `--muted` — the `~` and the rule are
+the form, the color is only reinforcement, so it survives a theme that flattens
+muted toward text. Attributed figures are never summed into a total; the total
+states how many rows it left out, in words, beside itself.
+
 ## Do's and Don'ts
 
 **Do**
