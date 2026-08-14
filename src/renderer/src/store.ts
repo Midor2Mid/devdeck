@@ -30,10 +30,14 @@ import {
     parseShortstat,
     entrantBranch,
     raceSettled,
+    raceSpend,
     samePath,
     type Entrant,
     type Race
 } from "./race"
+// The record shape is main's, imported (never restated) so a renamed field is
+// an error here rather than a silently missing column in the ledger.
+import type { RunRecord } from "../../main/ledger"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -626,7 +630,12 @@ export const useStore = create<AppState>((set, get) => {
         idleTimers.delete(termId)
         pendingSince.delete(termId)
         forgetTail(termId)
-        if (isAgentId(get().termAgents[termId] ?? SHELL)) useSettings.getState().logUsageEnd(termId)
+        const closingAgent = get().termAgents[termId] ?? SHELL
+        if (isAgentId(closingAgent)) {
+            // Before logUsageEnd, which stamps the event this reads its start from.
+            recordSessionRun(termId, closingAgent)
+            useSettings.getState().logUsageEnd(termId)
+        }
         set((s) => {
             const agentStatus = { ...s.agentStatus }
             delete agentStatus[termId]
@@ -685,6 +694,250 @@ export const useStore = create<AppState>((set, get) => {
             }
         }
         return out
+    }
+
+    // ---- Run ledger -------------------------------------------------------
+    // A record is written once, when a run ends, and never updated. Every
+    // builder below is wrapped: recording that a race landed must never be
+    // what stops it landing.
+
+    /** Append one record. Swallows everything — main's appendRun logs its own failures. */
+    const writeRun = (rec: RunRecord): void => {
+        try {
+            window.api.ledger.append(rec)
+        } catch (err) {
+            console.error("[ledger] failed to record a run:", err)
+        }
+    }
+
+    /** The project a record should name, by id — projects can be removed later. */
+    const projectById = (projectId: string): Project | undefined =>
+        get().projects.find((p) => p.id === projectId)
+
+    /**
+     * Was this run's cost a receipt or an attribution? costInWindow sums every
+     * transcript in a project directory over a window, so a second agent working
+     * in the same directory is counted too. A worktree is its own directory, so a
+     * run confined to one is exclusive by construction. Otherwise it is only
+     * exclusive if nothing else was running in that directory.
+     *
+     * `ownTermIds` are the run's own sessions — a pipeline has one per step, so
+     * this takes a list rather than the single id a card or a session has.
+     *
+     * This is a SNAPSHOT at the end of the run, which is an approximation: a
+     * session that overlapped and closed before the end is missed. That is the
+     * honest side of the error — it can only call something exclusive that was
+     * briefly shared, never the reverse — and it is far better than not asking.
+     *
+     * With no directory to reason about there is nothing to be exclusive of, so
+     * the answer is no: an unattributable cost must never enter a total.
+     */
+    const wasExclusive = (cwd: string, ownTermIds: string[]): boolean => {
+        if (!cwd) return false
+        const own = new Set(ownTermIds.filter(Boolean))
+        const st = get()
+        return st
+            .agentSessions()
+            .every((s) => own.has(s.termId) || !samePath(st.termCwd[s.termId] ?? s.projectPath, cwd))
+    }
+
+    /**
+     * A card reached done. Its cost is the figure already cached on the card (the
+     * board prices it as the agent works) — deliberately not re-read here, so the
+     * record says what the card said. A card that was never priced records zero,
+     * and marks it as not-a-receipt rather than as a summable $0.
+     */
+    const recordCardRun = (task: BoardTask, endedAt: number): void => {
+        try {
+            const project = projectById(task.projectId)
+            // Dispatched isolated? Then it was priced from its worktree, and
+            // that is the directory whose exclusivity matters.
+            const cwd = task.worktree || project?.path || ""
+            const agentId = task.termId ? get().termAgents[task.termId] : undefined
+            const priced = task.cost !== undefined
+            writeRun({
+                id: newId(),
+                kind: "card",
+                projectId: task.projectId,
+                projectName: project?.name ?? "",
+                label: task.title,
+                startedAt: task.dispatchedAt ?? endedAt,
+                endedAt,
+                agentIds: agentId && isAgentId(agentId) ? [agentId] : [],
+                cost: task.cost ?? 0,
+                tokens: task.costTokens ?? 0,
+                exclusive: priced && wasExclusive(cwd, [task.termId ?? ""]),
+                outcome: "done"
+            })
+        } catch (err) {
+            console.error("[ledger] failed to build a card record:", err)
+        }
+    }
+
+    /**
+     * A race ended. One record for the whole race, written before the race object
+     * is deleted — it is the only place the entrant costs still exist.
+     *
+     * `exclusive: true` is asserted, not computed: every entrant works in its own
+     * git worktree, which is its own directory, so each entrant's figure is a real
+     * receipt and their sum is too. No entrant is ever dispatched into the shared
+     * project tree — a worktree that fails to be created means that entrant is
+     * never dispatched at all (status "startfailed"), so it spends nothing.
+     */
+    const recordRaceRun = (
+        cardId: string,
+        fallback: Race,
+        outcome: "landed" | "abandoned",
+        winnerId?: string
+    ): void => {
+        try {
+            // Read the race back out of state rather than trusting the snapshot
+            // the caller took: teardown parks on a confirm, on settlePoll and on
+            // landFrom, and the poll writes entrant costs and diffstats into the
+            // store throughout. The snapshot is minutes stale by the time this runs.
+            const r = get().races[cardId] ?? fallback
+            const winner = winnerId ? r.entrants.find((e) => e.agentId === winnerId) : undefined
+            const project = projectById(r.projectId)
+            writeRun({
+                id: newId(),
+                kind: "race",
+                projectId: r.projectId,
+                projectName: project?.name ?? "",
+                label: r.title,
+                startedAt: r.startedAt,
+                endedAt: Date.now(),
+                agentIds: r.entrants.map((e) => e.agentId),
+                cost: raceSpend(r),
+                tokens: r.entrants.reduce((sum, e) => sum + (e.costTokens ?? 0), 0),
+                exclusive: true,
+                outcome,
+                // Abandoning eliminates every entrant; landing eliminates the rest.
+                eliminated: outcome === "landed" ? r.entrants.length - 1 : r.entrants.length,
+                // The agent id, not the name: names are user-editable and two
+                // presets called "Claude" are entirely plausible.
+                winner: winner?.agentId,
+                added: winner?.added,
+                removed: winner?.removed
+            })
+        } catch (err) {
+            console.error("[ledger] failed to build a race record:", err)
+        }
+    }
+
+    // A pipeline run can reach a terminal status more than once (an errored run
+    // is left on screen and can still be Stopped), and it must be recorded once.
+    // Keyed by pipeline + start instant rather than by the run token, which
+    // stopPipeline bumps as it goes.
+    let lastPipelineRunKey = ""
+
+    /**
+     * A pipeline run reached a terminal status. The bar's live spend figure is
+     * discarded when the run ends, so it is read once more here and recorded.
+     * Fire-and-forget: the run is already over, and nothing waits on this.
+     */
+    const recordPipelineRun = (
+        run: PipelineRun | null,
+        outcome: "done" | "failed" | "stopped"
+    ): void => {
+        try {
+            if (!run) return
+            const startedAt = run.startedAt
+            if (!startedAt) return
+            const key = `${run.pipelineId}:${startedAt}`
+            if (key === lastPipelineRunKey) return
+            lastPipelineRunKey = key
+
+            const endedAt = Date.now()
+            const cwd = run.projectPath ?? ""
+            const project = get().projects.find((p) => samePath(p.path, cwd))
+            const termIds = run.steps.map((s) => s.termId ?? "")
+            const exclusive = wasExclusive(cwd, termIds)
+            const agentIds = Array.from(new Set(run.steps.map((s) => s.agentId).filter(Boolean)))
+            void (async () => {
+                try {
+                    const bucket = cwd
+                        ? await window.api.usage.window(cwd, startedAt, endedAt).catch(() => null)
+                        : null
+                    writeRun({
+                        id: newId(),
+                        kind: "pipeline",
+                        projectId: project?.id ?? "",
+                        projectName: project?.name ?? "",
+                        label: run.name,
+                        startedAt,
+                        endedAt,
+                        agentIds,
+                        cost: bucket?.cost ?? 0,
+                        tokens: bucket?.tokens ?? 0,
+                        // A price that couldn't be read is not a $0 receipt. Keep
+                        // the row - it still says what ran, and for how long - but
+                        // never let that zero into a total.
+                        exclusive: !!bucket && exclusive,
+                        outcome
+                    })
+                } catch (err) {
+                    console.error("[ledger] failed to price a pipeline run:", err)
+                }
+            })()
+        } catch (err) {
+            console.error("[ledger] failed to build a pipeline record:", err)
+        }
+    }
+
+    /**
+     * An agent pane closed. Pairs with the usageLog event `logUsageEnd` closes,
+     * carrying the cost that log deliberately omits. Priced over the session's own
+     * window in its own directory — which is an attribution, not a receipt,
+     * whenever another session shared that directory.
+     *
+     * A session with no open usage event (a pane restored from a previous launch,
+     * which never called logUsageStart) has no start instant, so there is no
+     * window to price and no record: a run with invented bounds is worse than a
+     * missing one.
+     */
+    const recordSessionRun = (termId: string, agentId: string): void => {
+        try {
+            const st = get()
+            const session = st.agentSessions().find((s) => s.termId === termId)
+            const event = useSettings
+                .getState()
+                .usageLog.filter((e) => e.id === termId && !e.endedAt)
+                .pop()
+            if (!event) return
+            const startedAt = event.startedAt
+            const endedAt = Date.now()
+            const cwd = st.termCwd[termId] ?? session?.projectPath ?? ""
+            const exclusive = wasExclusive(cwd, [termId])
+            const projectId = session?.projectId ?? event.projectId
+            const project = projectById(projectId)
+            const label =
+                session?.sessionName || useSettings.getState().agentById(agentId)?.name || agentId
+            void (async () => {
+                try {
+                    const bucket = cwd
+                        ? await window.api.usage.window(cwd, startedAt, endedAt).catch(() => null)
+                        : null
+                    writeRun({
+                        id: newId(),
+                        kind: "session",
+                        projectId,
+                        projectName: session?.projectName ?? project?.name ?? "",
+                        label,
+                        startedAt,
+                        endedAt,
+                        agentIds: [agentId],
+                        cost: bucket?.cost ?? 0,
+                        tokens: bucket?.tokens ?? 0,
+                        // Same rule as a pipeline: an unread price is not a receipt.
+                        exclusive: !!bucket && exclusive
+                    })
+                } catch (err) {
+                    console.error("[ledger] failed to price a session:", err)
+                }
+            })()
+        } catch (err) {
+            console.error("[ledger] failed to build a session record:", err)
+        }
     }
 
     /** Rewrite one entrant immutably. Never trusts a captured race — always reads current state. */
@@ -1124,13 +1377,19 @@ export const useStore = create<AppState>((set, get) => {
             persist()
         },
         moveBoardTask: (id, column) => {
+            // Read the card before the move: reaching done is what ends the run,
+            // and the record describes the card as it was at that moment. One
+            // `endedAt` is shared by the card and the record so the two agree.
+            const before = get().boardTasks.find((t) => t.id === id)
+            const endedAt = Date.now()
+            const ending = !!before?.dispatchedAt && !before.endedAt && column === "done"
             set((s) => ({
                 boardTasks: s.boardTasks.map((t) => {
                     if (t.id !== id) return t
                     // Reaching done closes the cost window; moving back out of done
                     // reopens it, so a reopened card keeps accruing.
                     if (column === "done" && t.dispatchedAt && !t.endedAt) {
-                        return { ...t, column, endedAt: Date.now() }
+                        return { ...t, column, endedAt }
                     }
                     if (column !== "done" && t.endedAt) {
                         return { ...t, column, endedAt: undefined, cost: undefined, costTokens: undefined }
@@ -1139,6 +1398,9 @@ export const useStore = create<AppState>((set, get) => {
                 })
             }))
             persist()
+            // Written after the move, so a card that fails to record still moves.
+            // Moving back out of done does not retract it: it was true when written.
+            if (ending && before) recordCardRun(before, endedAt)
         },
         refreshTaskCost: async (id) => {
             const st = get()
@@ -1543,6 +1805,11 @@ export const useStore = create<AppState>((set, get) => {
                 // suspended tick from THIS race may be carrying — which reopens
                 // exactly the spend-in-a-deleted-worktree hole the counter
                 // exists to close. Leave it be.
+                //
+                // The record goes in BEFORE the delete below: entrant costs,
+                // diffstats and the gate outcome exist nowhere else, and the next
+                // line is where they stop existing.
+                recordRaceRun(cardId, race, "landed", winner.agentId)
                 set((s) => {
                     const rest = { ...s.races }
                     delete rest[cardId]
@@ -1636,6 +1903,10 @@ export const useStore = create<AppState>((set, get) => {
                         )
                     }
                 }
+                // See the comment in landRaceWinner: the record goes in before the
+                // delete, because the entrant costs live nowhere else. Abandoning
+                // discards the work, not the fact that it was paid for.
+                recordRaceRun(cardId, race, "abandoned")
                 // See the comment in landRaceWinner: raceGen is deliberately
                 // never deleted, only ever bumped.
                 set((s) => {
@@ -1828,6 +2099,10 @@ export const useStore = create<AppState>((set, get) => {
 
         stopPipeline: () => {
             pipelineToken += 1
+            // Recorded here as well as in the runner: bumping the token makes the
+            // runner return without ever setting a terminal status, so this is the
+            // only place a stopped run is observed ending.
+            recordPipelineRun(get().pipelineRun, "stopped")
             set((s) => (s.pipelineRun ? { pipelineRun: { ...s.pipelineRun, status: "stopped" } } : {}))
             setTimeout(() => {
                 if (get().pipelineRun?.status === "stopped") set({ pipelineRun: null })
@@ -1862,8 +2137,17 @@ export const useStore = create<AppState>((set, get) => {
             const token = pipelineToken
             const stale = (): boolean => token !== pipelineToken
 
-            const setRun = (patch: Partial<PipelineRun>): void =>
+            // Every terminal transition records the run, and it does so here
+            // rather than at the five places that make one: the runner exits on
+            // a step cap, a missing session, a dangling goto, a failed gate and
+            // completion, and a sixth exit added later would otherwise be one
+            // more run whose spend is silently discarded. recordPipelineRun
+            // ignores repeats of the same run.
+            const setRun = (patch: Partial<PipelineRun>): void => {
                 set((s) => ({ pipelineRun: s.pipelineRun ? { ...s.pipelineRun, ...patch } : s.pipelineRun }))
+                if (patch.status === "done" || patch.status === "error")
+                    recordPipelineRun(get().pipelineRun, patch.status === "done" ? "done" : "failed")
+            }
 
             // Patch one step's state in the run timeline.
             const setStep = (i: number, patch: Partial<PipelineStepState>): void =>

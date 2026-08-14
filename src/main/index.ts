@@ -36,6 +36,8 @@ import * as search from "./search"
 import * as dotnet from "./dotnet"
 import * as system from "./system"
 import * as usage from "./usage"
+import * as ledger from "./ledger"
+import type { RunRecord } from "./ledger"
 import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
@@ -437,6 +439,15 @@ function registerIpc(): void {
         (_e, { projectPath, from, to }: { projectPath: string; from: number; to: number }) =>
             usage.costInWindow(projectPath, from, to)
     )
+
+    // --- Run ledger (durable record of what each run cost) ---
+    // Append is `on`, not `handle`: the renderer writes a record at the moment a
+    // race lands or a pipeline finishes, and must not have to await - or handle
+    // a rejection from - the thing that only records what already happened.
+    // appendRun swallows and logs its own failures.
+    ipcMain.on("ledger:append", (_e, rec: RunRecord) => ledger.appendRun(rec))
+    ipcMain.handle("ledger:read", (_e, limit?: number) => ledger.readRuns(limit))
+    ipcMain.handle("ledger:clear", () => ledger.clearRuns())
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))

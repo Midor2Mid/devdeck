@@ -7,6 +7,7 @@ import { contextBridge, ipcRenderer } from "electron"
 // this boundary, instead of `ipcRenderer.invoke`'s untyped channel quietly
 // letting the two sides drift (the exact gap that hid Task 3's regression).
 import type { BindMode } from "../main/guards"
+import type { RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 
@@ -15,6 +16,10 @@ import type { ServerConfig, ServerStartResult } from "../main/server"
 // `userAgent` - `PublicRemoteDevice` (what every IPC call below actually
 // returns) is the only shape that should exist on this side of the bridge.
 export type { BindMode, PublicRemoteDevice as RemoteDevice }
+// The ledger's record shape is defined once, in main, and travels across the
+// bridge unchanged - restating it here is exactly how a renamed field stops
+// being an error anywhere.
+export type { RunKind, RunRecord }
 
 // Each terminal pane registers its own pty:data/pty:exit listener; raise the
 // cap so many open terminals don't trip Node's MaxListenersExceededWarning.
@@ -574,6 +579,17 @@ const api = {
         /** What a project's agent work cost between two epoch-ms instants. */
         window: (projectPath: string, from: number, to: number): Promise<UsageBucket> =>
             ipcRenderer.invoke("usage:window", { projectPath, from, to })
+    },
+    ledger: {
+        /**
+         * Record one finished run. Deliberately fire-and-forget: this is called
+         * from inside landRaceWinner and friends, where an awaited (and therefore
+         * rejectable) call would put the ledger between the user and their work.
+         */
+        append: (rec: RunRecord): void => ipcRenderer.send("ledger:append", rec),
+        /** Stored runs, newest first. */
+        read: (limit?: number): Promise<RunRecord[]> => ipcRenderer.invoke("ledger:read", limit),
+        clear: (): Promise<void> => ipcRenderer.invoke("ledger:clear")
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),
