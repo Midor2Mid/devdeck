@@ -65,9 +65,16 @@ const UNPRICED_TIP =
     "could not be read, or there is no project directory left to price it over. It is " +
     "left out of the total."
 
-// A record written before runs carried a reason. It says only that its cost is
-// not a receipt, and that is all this says back.
-const UNKNOWN_TIP = "This run's cost is not a receipt, so it is left out of the total."
+// Two cases that say the same thing: an agent session overlapped this run but
+// predates DevDeck recording which directory a session ran in, so it can be
+// neither ruled out of this one nor placed in it; or the record itself predates
+// reasons being recorded at all. Either way the honest answer is that the cost
+// cannot be vouched for, NOT that some particular session shared the project -
+// which is the fabricated fact this tooltip set exists to stop.
+const UNKNOWN_TIP =
+    "DevDeck cannot tell whether another agent session shared this project during " +
+    "the run, so this figure cannot be vouched for. It is left out of the total " +
+    "rather than guessed at."
 
 function exclusionTip(reason?: RunExclusionReason): string {
     if (reason === "shared") return SHARED_TIP

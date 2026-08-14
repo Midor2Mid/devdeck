@@ -24,8 +24,13 @@ export type RunKind = "card" | "race" | "pipeline" | "session"
  *   window, so this figure covers both. Real money, wrong owner.
  * - "unpriced": there is no figure DevDeck can vouch for - never priced, the
  *   price could not be read, or no directory left to price it over.
+ * - "unknown": a session overlapped the window but predates DevDeck recording
+ *   which directory a session ran in, so it can be neither ruled out of this
+ *   run's directory nor placed in it. Excluded, but NOT reported as shared -
+ *   naming a sharer we have no record of is the same invented fact this whole
+ *   field exists to stop, one level down.
  */
-export type RunExclusionReason = "shared" | "unpriced"
+export type RunExclusionReason = "shared" | "unpriced" | "unknown"
 
 export interface RunRecord {
     id: string

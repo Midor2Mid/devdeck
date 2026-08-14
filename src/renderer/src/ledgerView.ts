@@ -53,9 +53,12 @@ export interface RunTotals {
 
 /**
  * `excluded` is the total; the two sub-counts explain it and need not add up to
- * it. A record written before `reason` existed says only that it isn't a
- * receipt, and guessing a reason for it would be exactly the invented fact the
- * reason field was added to stop.
+ * it. The remainder is everything DevDeck cannot honestly attribute a reason to
+ * — a record written before `reason` existed, and a record whose reason is
+ * literally `"unknown"` (a session overlapped, but from before directories were
+ * recorded, so it can be neither ruled out nor placed). Both say the same thing,
+ * so they share one clause; guessing anything sharper for either would be
+ * exactly the invented fact the reason field was added to stop.
  */
 export function runTotals(runs: RunRecord[]): RunTotals {
     const totals: RunTotals = {
@@ -136,6 +139,8 @@ export function runsSentence(
             parts.push(clause(totals.excludedShared, "shared a project with another session"))
         if (totals.excludedUnpriced > 0)
             parts.push(clause(totals.excludedUnpriced, "had no cost to vouch for"))
+        // Everything with no reason DevDeck can stand behind: "unknown", and
+        // records from before reasons were recorded at all.
         const unexplained = totals.excluded - totals.excludedShared - totals.excludedUnpriced
         if (unexplained > 0) parts.push(clause(unexplained, "not receipts"))
         why = `${totals.excluded} excluded from the total (${parts.join(", ")})`

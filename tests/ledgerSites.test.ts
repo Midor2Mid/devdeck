@@ -328,6 +328,24 @@ describe("card records", () => {
         expect(appended.map((r) => r.reason)).toEqual(["shared", "shared"])
     })
 
+    // costInWindow keeps a transcript record when `t >= from && t <= until`, so a
+    // record written at the exact instant one session ended and the next began
+    // lands in BOTH windows and is counted twice. The overlap test is closed at
+    // both ends to match: those two windows really do share money.
+    it("treats windows that touch at a single instant as sharing, as costInWindow does", () => {
+        useSettings.setState({
+            usageLog: [
+                { id: "term-1", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1000 },
+                { id: "term-before", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 10, endedAt: 1000 }
+            ]
+        })
+        useStore.setState({ boardTasks: [{ ...dispatched, id: "t-touch" }] })
+
+        useStore.getState().moveBoardTask("t-touch", "done")
+
+        expect(appended[0]).toMatchObject({ exclusive: false, reason: "shared" })
+    })
+
     // Two cards in one project that never actually overlapped are two separate
     // receipts. The rule is overlap, not "this project has had two agents in it".
     it("stays exclusive when another session in the directory did not overlap the window", () => {
@@ -434,8 +452,10 @@ describe("card records", () => {
     })
 
     // An event written before `cwd` existed names no directory, so it cannot be
-    // ruled out of this one. Fail closed: it demotes the record.
-    it("treats a usage event with no recorded directory as possibly sharing", () => {
+    // ruled out of this one. Fail closed: it demotes the record - but as
+    // "unknown", not "shared". Reporting a sharer we have no record of is the
+    // same invented fact the reason field was added to stop.
+    it("excludes on a directory-less usage event without claiming it shared", () => {
         useSettings.setState({
             usageLog: [{ id: "term-legacy", agentId: "claude", projectId: "p1", startedAt: 1000 }]
         })
@@ -443,7 +463,21 @@ describe("card records", () => {
 
         useStore.getState().moveBoardTask("t-legacy", "done")
 
-        expect(appended[0].exclusive).toBe(false)
+        expect(appended[0]).toMatchObject({ exclusive: false, reason: "unknown" })
+    })
+
+    it("prefers a directory it knows was shared over one it merely cannot clear", () => {
+        useSettings.setState({
+            usageLog: [
+                { id: "term-legacy", agentId: "claude", projectId: "p1", startedAt: 1000 },
+                { id: "term-2", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1000 }
+            ]
+        })
+        useStore.setState({ boardTasks: [{ ...dispatched, id: "t-both" }] })
+
+        useStore.getState().moveBoardTask("t-both", "done")
+
+        expect(appended[0].reason).toBe("shared")
     })
 
     it("never presents an unpriced card as a summable zero", () => {

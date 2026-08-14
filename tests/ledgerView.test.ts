@@ -57,6 +57,14 @@ describe("runTotals", () => {
         expect(t).toMatchObject({ excluded: 1, excludedShared: 0, excludedUnpriced: 0 })
     })
 
+    // "unknown" says the same thing a reasonless record says - DevDeck cannot
+    // vouch for this figure - so it lands in the same remainder rather than
+    // getting a clause that would imply more than is known.
+    it("counts an explicit unknown alongside the reasonless ones", () => {
+        const t = runTotals([rec({ exclusive: false, reason: "unknown" })])
+        expect(t).toMatchObject({ excluded: 1, excludedShared: 0, excludedUnpriced: 0 })
+    })
+
     it("is zero for no runs at all", () => {
         expect(runTotals([])).toEqual({
             cost: 0, counted: 0, excluded: 0, excludedShared: 0, excludedUnpriced: 0

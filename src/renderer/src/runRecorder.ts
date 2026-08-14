@@ -100,16 +100,20 @@ export function createRunRecorder(
         get().projects.find((p) => p.id === projectId)
 
     /**
-     * Do two half-open intervals share any instant? An event still open has no
-     * end, so it runs to now — and every window this is asked about ends at now
-     * or earlier, so `Infinity` is the same answer with no clock read.
+     * Do two intervals share any instant? An event still open has no end, so it
+     * runs to now — and every window this is asked about ends at now or earlier,
+     * so `Infinity` is the same answer with no clock read.
      *
-     * Half-open on purpose: a session that ended at exactly the instant the next
-     * one began did not share a moment with it, and costInWindow would not put
-     * its spend in the second window either.
+     * Closed at both ends, to match `costInWindow` (`main/usage.ts`), which keeps
+     * a transcript record when `t >= from && t <= until`. A record written at
+     * exactly the instant one session ended and another began therefore lands in
+     * BOTH windows and is counted twice — so those two windows really do share
+     * money, and a half-open test here would call them disjoint. Sub-millisecond
+     * exposure either way; this is the direction that fails closed, and it has
+     * the merit of agreeing with the function whose behaviour it is modelling.
      */
     const overlaps = (event: UsageEvent, from: number, to: number): boolean =>
-        event.startedAt < to && (event.endedAt ?? Infinity) > from
+        event.startedAt <= to && (event.endedAt ?? Infinity) >= from
 
     /**
      * Was this run's cost a receipt or an attribution?
@@ -182,21 +186,25 @@ export function createRunRecorder(
         // would be inventing a fact.
         if (!cwd) return "unpriced"
         const own = new Set(ownTermIds.filter(Boolean))
-        const shared = useSettings
-            .getState()
-            .usageLog.some(
-                (e) =>
-                    !own.has(e.id) &&
-                    // No recorded directory: cannot be ruled out, so it counts.
-                    (!e.cwd || samePath(e.cwd, cwd)) &&
-                    overlaps(e, startedAt, endedAt)
-            )
-        if (shared) return "shared"
+        // An event that overlapped but names no directory (written before `cwd`
+        // existed) cannot be ruled out of this one - and cannot be asserted into
+        // it either. It excludes the run, but as "unknown", not as "shared":
+        // claiming a specific sharer we have no record of is the same invented
+        // fact I1 was about, one level down.
+        let unknown = false
+        for (const e of useSettings.getState().usageLog) {
+            if (own.has(e.id)) continue
+            if (!overlaps(e, startedAt, endedAt)) continue
+            if (!e.cwd) unknown = true
+            else if (samePath(e.cwd, cwd)) return "shared"
+        }
         const st = get()
         const live = st
             .agentSessions()
             .some((s) => !own.has(s.termId) && samePath(st.termCwd[s.termId] ?? s.projectPath, cwd))
-        return live ? "shared" : undefined
+        // A directory we know was shared outranks one we merely cannot clear.
+        if (live) return "shared"
+        return unknown ? "unknown" : undefined
     }
 
     /**
