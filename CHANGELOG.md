@@ -22,7 +22,11 @@ can reach the app remotely.
   AI-mode presets** — a rule pointing at a shell preset (e.g. a dev-server or
   build command) is skipped, the same as a rule naming a deleted preset,
   because dispatch pastes the card title in as a prompt and a fixed-command
-  preset has no use for one.
+  preset has no use for one. The **fallback changed too, not just rule
+  targets**: with no matching rule and no default agent configured, dispatch
+  now falls back to the first *AI-mode* preset rather than the first preset of
+  any kind — a normal-mode preset sitting above your AI agents in Startup
+  commands is never silently picked.
 - **Fix: dispatching with no AI-mode preset configured used to proceed
   anyway.** With nothing to route to, the confirm dialog read "Start  on
   ..." with a blank agent name, and confirming it opened a bare shell tab,

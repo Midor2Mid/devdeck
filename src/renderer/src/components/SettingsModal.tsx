@@ -1118,16 +1118,19 @@ function AgentsSection(): JSX.Element {
 }
 
 /**
- * Labels for the rule-kind picker. Kept short (the dropdown shares a row with
- * the pattern field and target agent), so the full "title matches" phrasing
- * lives in each row's own preview/note caption below - matched deliberately
- * to the verbs `describeRule` (TaskBoard.tsx) uses for the same kinds
- * ("contains" / "matches" / "is" / "always"), so the rule reads the same way
- * whether you're editing it here or hovering its Dispatch button on the board.
+ * Labels for the rule-kind picker. Matched, word for word, to the verbs
+ * `describeRule` (TaskBoard.tsx) and `preview()` below use for the same kinds
+ * ("contains" / "matches" / "is" / "always") and to the hint paragraph above
+ * the rule list, which names "Title matches (glob)" explicitly - so the rule
+ * reads the same way whether you're editing it here, reading the hint above,
+ * or hovering its Dispatch button on the board. A dropdown option that used a
+ * different word ("Title glob") than everywhere else describing the exact
+ * same kind was the gap: the hint told you to look for a label that did not
+ * exist anywhere in this dropdown.
  */
 const RULE_KIND_LABEL: Record<RuleKind, string> = {
     title: "Title contains",
-    titleGlob: "Title glob",
+    titleGlob: "Title matches (glob)",
     project: "Project is",
     always: "Always"
 }
@@ -1162,11 +1165,23 @@ function RoutingSection(): JSX.Element {
     const addRule = (): void => setRoutingRules([...routingRules, newRoutingRule(aiAgents[0]?.id ?? "")])
 
     // Changing kind changes what the pattern field even means (free text vs.
-    // a project id) - carrying the old value across would leave, say, a
-    // project id sitting in a "title" rule's pattern, matching nothing
-    // forever with no sign why. Reset it instead of pretending it carries over.
-    const changeKind = (i: number, kind: RuleKind): void =>
-        updateRule(i, { kind, pattern: kind === "project" ? (projects[0]?.id ?? "") : "" })
+    // a project id) - carrying the old value across the text/project boundary
+    // would leave, say, a project id sitting in a "title" rule's pattern,
+    // matching nothing forever with no sign why. Reset it there. But `title`
+    // and `titleGlob` are BOTH free text over the same title - someone
+    // converting `login` to `*login*` is mid-keystroke on that boundary, not
+    // crossing it, and wiping the field back to "" there destroys exactly the
+    // typing they're in the middle of doing. Only reset when the pattern's
+    // *meaning* actually changes.
+    const isFreeText = (kind: RuleKind): boolean => kind === "title" || kind === "titleGlob"
+    const changeKind = (i: number, kind: RuleKind): void => {
+        const cur = routingRules[i]
+        const carriesOver = isFreeText(kind) && isFreeText(cur.kind)
+        updateRule(i, {
+            kind,
+            pattern: carriesOver ? cur.pattern : kind === "project" ? (projects[0]?.id ?? "") : ""
+        })
+    }
 
     // The same sentence describeRule (TaskBoard.tsx) builds for the dispatch
     // tooltip, minus its "Routed by rule:" prefix - so the row's own caption
@@ -1237,6 +1252,18 @@ function RoutingSection(): JSX.Element {
                                 : "no project assigned - this rule never matches"
                         )
                     if (patternInert) notes.push("empty pattern - this rule never matches")
+                    // A glob with no `*` or `?` compiles and "works", but a glob is
+                    // ANCHORED - it only fires on a card titled exactly this pattern,
+                    // which reads as healthy in the editor while being dead in practice
+                    // for almost every real title. "Title matches" scans as "contains"
+                    // to most people, so the row needs to say otherwise rather than
+                    // let this look identical to a working substring rule.
+                    const globNeedsWildcard =
+                        r.kind === "titleGlob" && !!r.pattern.trim() && !/[*?]/.test(r.pattern)
+                    if (globNeedsWildcard)
+                        notes.push(
+                            `anchored - matches only a title that is exactly "${r.pattern.trim()}"; use "*${r.pattern.trim()}*" to match anywhere`
+                        )
 
                     return (
                         <div
@@ -1363,7 +1390,7 @@ function RoutingSection(): JSX.Element {
             <div className="setting-row" style={{ marginTop: 18 }}>
                 <label>Default agent</label>
                 <select value={defaultAgentId} onChange={(e) => setDefaultAgentId(e.target.value)}>
-                    <option value="">First configured agent</option>
+                    <option value="">First AI agent preset</option>
                     {defaultAgentId && !aiAgentIds.has(defaultAgentId) && (
                         <option value={defaultAgentId} disabled>
                             {agents.find((a) => a.id === defaultAgentId)?.name ?? "(deleted agent)"}
@@ -1379,13 +1406,15 @@ function RoutingSection(): JSX.Element {
             {defaultAgentId && !aiAgentIds.has(defaultAgentId) && (
                 <div className="rule-note">
                     {agents.some((a) => a.id === defaultAgentId)
-                        ? "Default agent is normal-mode (not AI) - falling back to the first configured agent."
-                        : "Default agent was deleted - falling back to the first configured agent."}
+                        ? "Default agent is normal-mode (not AI) - falling back to the first AI agent preset."
+                        : "Default agent was deleted - falling back to the first AI agent preset."}
                 </div>
             )}
             <p className="settings-hint">
-                Used when no rule matches (or none is configured). "First configured agent" is
-                today's original behavior - whichever agent is first in Startup commands above.
+                Used when no rule matches (or none is configured). "First AI agent preset" is
+                today's original behavior - whichever AI-mode preset is first among the AI agents
+                in Startup commands above (a normal-mode preset there, like a dev server or build,
+                is never a candidate - routing only ever targets an AI-mode preset).
             </p>
         </div>
     )
