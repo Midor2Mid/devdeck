@@ -1,12 +1,34 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
+import { useSettings } from "../settings"
 import { tasksByColumn, COLUMNS, formatCost, type BoardColumn } from "../board"
+import { routeAgent, type RoutingRule } from "../routing"
+import { Icon } from "./Icon"
 
 const COL_LABEL: Record<BoardColumn, string> = {
     todo: "Todo",
     doing: "Doing",
     review: "Review",
     done: "Done"
+}
+
+/**
+ * Human-readable reason a rule matched, for the dispatch control's `data-tip`.
+ * An automatic choice you cannot trace is what makes routing feel unpredictable.
+ */
+function describeRule(rule: RoutingRule, projectName: string): string {
+    switch (rule.kind) {
+        case "always":
+            return "Routed by rule: always"
+        case "title":
+            return `Routed by rule: title contains "${rule.pattern}"`
+        case "titleGlob":
+            return `Routed by rule: title matches "${rule.pattern}"`
+        case "project":
+            return `Routed by rule: project is ${projectName}`
+        default:
+            return "Routed by rule"
+    }
 }
 
 /**
@@ -28,8 +50,20 @@ export function TaskBoard(): JSX.Element {
     const openRace = useStore((s) => s.openRace)
     const races = useStore((s) => s.races)
 
+    // Select the stable slices and derive in the render body — filtering or
+    // routing *inside* a useSettings/useStore selector returns a fresh array or
+    // object every render, which zustand reads as a new value and spins into an
+    // infinite update loop (React #185). See TaskBoard.tsx's costKey comment
+    // above and ChangesModal.tsx:49-51 for two real instances of this bug.
+    const agents = useSettings((s) => s.agents)
+    const routingRules = useSettings((s) => s.routingRules)
+    const defaultAgentId = useSettings((s) => s.defaultAgentId)
+    // Only AI-mode presets can run a task; normal-mode ones are plain commands.
+    const aiAgents = useMemo(() => agents.filter((a) => a.runMode !== "normal"), [agents])
+
     const [draft, setDraft] = useState("")
     const [worktree, setWorktree] = useState(true)
+    const [overrideOpen, setOverrideOpen] = useState<string | null>(null)
 
     // Price dispatched cards when the board opens, when one is dispatched, and
     // when its agent settles or it finishes.
@@ -150,14 +184,77 @@ export function TaskBoard(): JSX.Element {
                                                     {formatCost(t.cost)}
                                                 </span>
                                             )}
-                                            {t.column === "todo" && (
-                                                <button
-                                                    className="board-btn accent"
-                                                    onClick={() => void dispatchBoardTask(t.id, { worktree })}
-                                                >
-                                                    Dispatch
-                                                </button>
-                                            )}
+                                            {t.column === "todo" &&
+                                                (() => {
+                                                    // Computed here, in the render body, not inside a
+                                                    // useSettings selector — routeAgent builds a fresh
+                                                    // object every call, which would spin the same
+                                                    // infinite-loop bug the comment above describes.
+                                                    const routed = routeAgent(
+                                                        routingRules,
+                                                        { title: t.title, projectId: activeProject.id },
+                                                        agents,
+                                                        defaultAgentId
+                                                    )
+                                                    const resolvedAgent = agents.find((a) => a.id === routed.agentId)
+                                                    const rule = routed.ruleId
+                                                        ? routingRules.find((r) => r.id === routed.ruleId)
+                                                        : undefined
+                                                    return (
+                                                        <span className="board-dispatch">
+                                                            <button
+                                                                className="board-btn accent board-dispatch-btn"
+                                                                data-tip={
+                                                                    rule
+                                                                        ? describeRule(rule, activeProject.name)
+                                                                        : undefined
+                                                                }
+                                                                onClick={() =>
+                                                                    void dispatchBoardTask(t.id, { worktree })
+                                                                }
+                                                            >
+                                                                Dispatch{resolvedAgent ? ` · ${resolvedAgent.name}` : ""}
+                                                            </button>
+                                                            <button
+                                                                className="board-btn accent board-dispatch-caret"
+                                                                aria-label="Choose an agent"
+                                                                data-tip="Override the agent for this dispatch"
+                                                                onClick={() =>
+                                                                    setOverrideOpen((v) => (v === t.id ? null : t.id))
+                                                                }
+                                                            >
+                                                                <Icon name="chevronDown" size={11} />
+                                                            </button>
+                                                            {overrideOpen === t.id && (
+                                                                <>
+                                                                    <div
+                                                                        className="menu-backdrop"
+                                                                        onClick={() => setOverrideOpen(null)}
+                                                                    />
+                                                                    <div className="agent-menu board-dispatch-menu">
+                                                                        {aiAgents.map((a) => (
+                                                                            <button
+                                                                                key={a.id}
+                                                                                type="button"
+                                                                                role="menuitem"
+                                                                                className="agent-menu-name"
+                                                                                onClick={() => {
+                                                                                    setOverrideOpen(null)
+                                                                                    void dispatchBoardTask(t.id, {
+                                                                                        worktree,
+                                                                                        agentId: a.id
+                                                                                    })
+                                                                                }}
+                                                                            >
+                                                                                {a.name}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    )
+                                                })()}
                                             {(t.column === "todo" || isRacing) && (
                                                 <button
                                                     className="board-btn"

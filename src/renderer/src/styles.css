@@ -7527,6 +7527,24 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .board-del {
     margin-left: auto;
 }
+/* Split dispatch control: the button names the resolved agent, the chevron
+   opens the AI-mode presets to override it. One accent carries both — the
+   chevron is part of the same control, not a second accent beside it. */
+.board-dispatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    position: relative;
+}
+.board-dispatch-caret {
+    padding: 1px 5px;
+    display: inline-flex;
+    align-items: center;
+}
+.board-dispatch-menu {
+    top: 100%;
+    margin-top: 3px;
+}
 
 /* ---------- Agent bake-off (race modal) ---------- */
 .race-modal {
