@@ -156,9 +156,21 @@ describe("runsSentence", () => {
         )
     })
 
-    it("says only that a reasonless exclusion is not a receipt", () => {
+    it("says only that a reasonless exclusion cannot be vouched for", () => {
         expect(runsSentence(totals({ excluded: 2 }), 2, true).why).toBe(
-            "2 excluded from the total (not receipts)"
+            "2 excluded from the total (could not be vouched for)"
+        )
+    })
+
+    it("stays grammatical in the singular when all three reasons are present", () => {
+        const s = runsSentence(
+            totals({ excluded: 3, excludedShared: 1, excludedUnpriced: 1 }),
+            4,
+            true
+        )
+        expect(s.why).toBe(
+            "3 excluded from the total (1 shared a project with another session, " +
+                "1 had no cost to vouch for, 1 could not be vouched for)"
         )
     })
 

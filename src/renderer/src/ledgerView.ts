@@ -131,7 +131,7 @@ export function runsSentence(
         // One reason covering every excluded row needs no count of its own -
         // "3 excluded from the total (3 shared ...)" says three twice. A mix
         // does, and so does the remainder from records written before reasons
-        // were recorded, which can only be described as "not receipts".
+        // were recorded, which can only be described as unvouched-for.
         const clause = (n: number, phrase: string): string =>
             n === totals.excluded ? phrase : `${n} ${phrase}`
         const parts: string[] = []
@@ -142,7 +142,9 @@ export function runsSentence(
         // Everything with no reason DevDeck can stand behind: "unknown", and
         // records from before reasons were recorded at all.
         const unexplained = totals.excluded - totals.excludedShared - totals.excludedUnpriced
-        if (unexplained > 0) parts.push(clause(unexplained, "not receipts"))
+        // Reads as a verb phrase like the other two, so a mixed sentence stays
+        // grammatical in the singular: "1 shared ..., 1 had ..., 1 could not ...".
+        if (unexplained > 0) parts.push(clause(unexplained, "could not be vouched for"))
         why = `${totals.excluded} excluded from the total (${parts.join(", ")})`
     } else if (shown === 0) {
         why = hasHistory ? "no runs match this filter" : "nothing recorded yet"
