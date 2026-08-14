@@ -187,6 +187,68 @@ git add src/renderer/src/routing.ts tests/routing.test.ts
 git commit -m "feat(routing): rule matching and the agent fallback chain"
 ```
 
+#### Task 1 corrections (round 2) — replace the regex kind with a glob
+
+Round 1's mitigation does not work, and the arithmetic says so plainly. Catastrophic
+backtracking grows roughly 2x per input character, so the 200-character cap is on
+the order of 10^52 seconds — and the reported repro was a **31-character** title,
+already under the slice, so the slice was a no-op for the very case it was added
+for. A 7-character pattern like `(a+)+$` against an ordinary title still hangs the
+renderer indefinitely, on the screen the user is looking at, with no error.
+
+Bounding the input was the wrong instinct. `RegExp.test` cannot be interrupted from
+inside a plain call, so the only real options are a Worker with a timeout, a
+linear-time engine, or **not handing the user a construct that can blow up**. The
+last one is right for this feature: routing needs "does the title look like this",
+not a full regex engine.
+
+- [ ] **R1 — replace `titleRegex` with `titleGlob`**
+
+`RuleKind` becomes `"title" | "titleGlob" | "project" | "always"`. A glob supports
+`*` (any run of characters) and `?` (one character), and nothing else.
+
+Compile it by **escaping every regex metacharacter first**, then translating only
+`*` and `?`:
+
+```typescript
+/**
+ * Compile a glob to a regex. Every metacharacter is escaped before `*` and `?`
+ * are translated, so the user cannot express a nested quantifier — which is what
+ * makes catastrophic backtracking possible. This is a structural fix, not a
+ * bound: a glob compiles to alternating literals and `.*`, whose backtracking is
+ * polynomial rather than exponential.
+ *
+ * The previous `titleRegex` kind was removed rather than mitigated. Capping the
+ * input length does not help: blowup is ~2x per character, so any cap large
+ * enough to be useful is still astronomically slow, and the case that prompted
+ * the fix was a 31-character title.
+ */
+function globToRegExp(glob: string): RegExp {
+    const escaped = glob.replace(/[.*+?^${}()|[\]\]/g, "\$&")
+    return new RegExp("^" + escaped.replace(/\\*/g, ".*").replace(/\\?/g, ".") + "$", "i")
+}
+```
+
+Note the ordering: escaping turns `*` into `\*`, so the translation step matches the
+**escaped** forms. Anchored and case-insensitive, matching the `title` kind.
+
+Keep the trimming and the empty-pattern guard from round 1 — both were correct.
+Drop the 200-character caps and the title slice; they bought nothing and their
+presence implies a protection that does not exist.
+
+- [ ] **R2 — replace the non-discriminating tests**
+
+Three of round 1's four new tests pass identically with the fix deleted, so they
+provide no regression cover. Verify each new test fails against the unfixed code
+before committing. Cover:
+
+- `*login*` matches "Fix the login redirect"; `login*` does not.
+- `?ix*` matches; `??ix*` does not.
+- Metacharacters are literal: a pattern of `a.c` does **not** match "abc", and
+  `(a+)+$` matches only a title containing that exact text.
+- A pattern of `*` matches anything, and the empty and whitespace-only guards from
+  round 1 still hold.
+
 ---
 
 ### Task 2: Settings + an explicit agent on dispatch
