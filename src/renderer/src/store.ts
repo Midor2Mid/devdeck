@@ -23,6 +23,7 @@ import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
+import { routeAgent } from "./routing"
 import {
     RACE_TIMEOUT_MS,
     RACE_POLL_MS,
@@ -141,7 +142,7 @@ interface AppState extends Persisted {
      * than during render.
      */
     refreshTaskCost: (id: string) => Promise<void>
-    dispatchBoardTask: (id: string, opts: { worktree: boolean }) => Promise<void>
+    dispatchBoardTask: (id: string, opts: { worktree: boolean; agentId?: string }) => Promise<void>
     /**
      * Agents already holding uncommitted changes in `cwd` — the "who is in here
      * already" question, asked before a second agent joins them rather than after
@@ -1190,8 +1191,21 @@ export const useStore = create<AppState>((set, get) => {
             if (!task) return
             const proj = get().projects.find((p) => p.id === task.projectId)
             if (!proj) return
-            const agent = useSettings.getState().agents[0]
-            const agentId = agent?.id ?? "claude"
+            const settingsState = useSettings.getState()
+            // Trust the caller's agentId only if it still names a real preset — a
+            // stale or deleted id (e.g. a card queued before a preset was removed)
+            // must fall through to the router rather than dispatching to nothing.
+            const requestedAgentId = opts.agentId
+            const agentId =
+                requestedAgentId && settingsState.agents.some((a) => a.id === requestedAgentId)
+                    ? requestedAgentId
+                    : routeAgent(
+                          settingsState.routingRules,
+                          { title: task.title, projectId: task.projectId },
+                          settingsState.agents,
+                          settingsState.defaultAgentId
+                      ).agentId
+            const agent = settingsState.agents.find((a) => a.id === agentId)
             // One beat before spending real tokens: dispatch silently picked the
             // first agent preset, created a worktree, and pasted the card title
             // into the CLI — an accidental click cost money and left a worktree

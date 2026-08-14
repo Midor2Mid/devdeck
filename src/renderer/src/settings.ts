@@ -6,6 +6,7 @@ import type { SplitDir } from "./layout"
 import type { ApiTest } from "./apiTests"
 import type { Extractor } from "./apiChain"
 import type { BindMode } from "../../preload/index"
+import type { RoutingRule } from "./routing"
 
 /**
  * How long a paired device may idle before it's dropped - 0 means never.
@@ -323,6 +324,10 @@ export interface AppSettings {
     dbQueryHistory: Record<string, string[]>
     /** User-defined launchable shell commands, per project id. */
     projectCommands: Record<string, SavedCommand[]>
+    /** Rules that pick which agent preset dispatches a task-board card. */
+    routingRules: RoutingRule[]
+    /** Agent used when no routing rule matches. "" = fall back to agents[0]. */
+    defaultAgentId: string
 }
 
 /** Cap recent queries kept per connection. */
@@ -442,7 +447,9 @@ const DEFAULTS: AppSettings = {
     workspacePresets: [],
     usageLog: [],
     dbQueryHistory: {},
-    projectCommands: {}
+    projectCommands: {},
+    routingRules: [],
+    defaultAgentId: ""
 }
 
 interface SettingsState extends AppSettings {
@@ -499,6 +506,8 @@ interface SettingsState extends AppSettings {
     clearDbHistory: (connId: string) => void
     /** Replace a project's saved commands. */
     setProjectCommands: (projectId: string, commands: SavedCommand[]) => void
+    setRoutingRules: (rules: RoutingRule[]) => void
+    setDefaultAgentId: (id: string) => void
     resetAll: () => void
     openSettings: (section?: string) => void
     closeSettings: () => void
@@ -536,7 +545,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             console.warn("[settings] save requested before load() completed - dropped")
             return
         }
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands } = get()
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId } = get()
         // Re-attach an unconfirmed legacy token so it survives THIS write too
         // - not just the one migration flush() was supposed to make happen.
         // Any other setting changing (a theme tweak, a new snippet) calls
@@ -544,7 +553,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         // no-token `remote` shape to disk and the legacy value would be gone
         // for good on the next launch, with nothing left to retry.
         const remoteOut = unmigratedLegacyToken ? { ...remote, token: unmigratedLegacyToken } : remote
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote: remoteOut, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands })
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote: remoteOut, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -755,7 +764,9 @@ export const useSettings = create<SettingsState>((set, get) => {
                         e.endedAt ? e : { ...e, endedAt: e.startedAt }
                     ),
                     dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory,
-                    projectCommands: raw.projectCommands ?? DEFAULTS.projectCommands
+                    projectCommands: raw.projectCommands ?? DEFAULTS.projectCommands,
+                    routingRules: raw.routingRules ?? DEFAULTS.routingRules,
+                    defaultAgentId: raw.defaultAgentId ?? DEFAULTS.defaultAgentId
                 })
                 // Only from here on does the in-memory state actually reflect
                 // settings.json, so only from here on may a save run at all -
@@ -948,6 +959,14 @@ export const useSettings = create<SettingsState>((set, get) => {
                 else delete next[projectId]
                 return { projectCommands: next }
             })
+            persist()
+        },
+        setRoutingRules: (routingRules) => {
+            set({ routingRules })
+            persist()
+        },
+        setDefaultAgentId: (defaultAgentId) => {
+            set({ defaultAgentId })
             persist()
         },
         resetAll: () => {
