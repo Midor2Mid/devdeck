@@ -224,8 +224,11 @@ Compile it by **escaping every regex metacharacter first**, then translating onl
  * the fix was a 31-character title.
  */
 function globToRegExp(glob: string): RegExp {
-    const escaped = glob.replace(/[.*+?^${}()|[\]\]/g, "\$&")
-    return new RegExp("^" + escaped.replace(/\\*/g, ".*").replace(/\\?/g, ".") + "$", "i")
+    // Escape every metacharacter, including the backslash itself.
+    const escaped = glob.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    // Then translate only the two glob tokens, matching their ESCAPED forms.
+    const body = escaped.replace(/\\\*/g, ".*").replace(/\\\?/g, ".")
+    return new RegExp("^" + body + "$", "i")
 }
 ```
 
