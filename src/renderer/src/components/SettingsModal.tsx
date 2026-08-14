@@ -1210,12 +1210,33 @@ function RoutingSection(): JSX.Element {
                         (r.kind === "title" || r.kind === "titleGlob") && !r.pattern.trim()
                     const projectMissing =
                         r.kind === "project" && !projects.some((p) => p.id === r.pattern)
-                    const agentMissing = !agents.some((a) => a.id === r.agentId)
+                    // Checked against the AI-mode subset, same as the <select> below decides
+                    // whether to render a disabled ghost option: routing only ever targets an
+                    // AI-mode preset (see dispatchBoardTask), so a rule naming a "normal"
+                    // (fixed-command) preset is exactly as dead as one naming a deleted agent -
+                    // routeAgent skips both. Checking the full `agents` list here would let this
+                    // marker disagree with the select right next to it the moment an existing
+                    // rule's target agent is flipped to "normal" in the Agents section above.
+                    const agentMissing = !aiAgentIds.has(r.agentId)
+                    // Same distinction as the project note below: "deleted" is only true
+                    // when the id no longer names any agent at all. A preset that still
+                    // exists but was flipped to "normal" (fixed-command) mode wasn't
+                    // deleted - it just can't run a routed dispatch anymore.
+                    const agentGone = agentMissing && !agents.some((a) => a.id === r.agentId)
                     const broken = agentMissing || projectMissing
                     const notes: string[] = []
-                    if (agentMissing) notes.push("its agent was deleted - this rule is skipped")
+                    if (agentMissing)
+                        notes.push(
+                            agentGone
+                                ? "its agent was deleted - this rule is skipped"
+                                : "its agent is normal-mode (not AI) - this rule is skipped"
+                        )
                     if (projectMissing)
-                        notes.push("its project was deleted - this rule never matches")
+                        notes.push(
+                            r.pattern
+                                ? "its project was deleted - this rule never matches"
+                                : "no project assigned - this rule never matches"
+                        )
                     if (patternInert) notes.push("empty pattern - this rule never matches")
 
                     return (
@@ -1356,9 +1377,11 @@ function RoutingSection(): JSX.Element {
                     ))}
                 </select>
             </div>
-            {defaultAgentId && !agents.some((a) => a.id === defaultAgentId) && (
+            {defaultAgentId && !aiAgentIds.has(defaultAgentId) && (
                 <div className="rule-note">
-                    Default agent was deleted - falling back to the first configured agent.
+                    {agents.some((a) => a.id === defaultAgentId)
+                        ? "Default agent is normal-mode (not AI) - falling back to the first configured agent."
+                        : "Default agent was deleted - falling back to the first configured agent."}
                 </div>
             )}
             <p className="settings-hint">

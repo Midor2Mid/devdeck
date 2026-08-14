@@ -1192,6 +1192,12 @@ export const useStore = create<AppState>((set, get) => {
             const proj = get().projects.find((p) => p.id === task.projectId)
             if (!proj) return
             const settingsState = useSettings.getState()
+            // Routing only ever targets an AI-mode preset: dispatch pastes the card's
+            // title into the spawned session as its first prompt, which does nothing
+            // useful in a "normal" (fixed-command) preset. A rule naming a shell preset
+            // is treated exactly like a rule naming a deleted agent — skipped, falling
+            // through the same way a dangling reference already does.
+            const aiAgents = settingsState.agents.filter((a) => a.runMode !== "normal")
             // Trust the caller's agentId only if it still names a real preset — a
             // stale or deleted id (e.g. a card queued before a preset was removed)
             // must fall through to the router rather than dispatching to nothing.
@@ -1202,7 +1208,7 @@ export const useStore = create<AppState>((set, get) => {
                     : routeAgent(
                           settingsState.routingRules,
                           { title: task.title, projectId: task.projectId },
-                          settingsState.agents,
+                          aiAgents,
                           settingsState.defaultAgentId
                       ).agentId
             const agent = settingsState.agents.find((a) => a.id === agentId)

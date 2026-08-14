@@ -193,7 +193,7 @@ export function TaskBoard(): JSX.Element {
                                                     const routed = routeAgent(
                                                         routingRules,
                                                         { title: t.title, projectId: activeProject.id },
-                                                        agents,
+                                                        aiAgents,
                                                         defaultAgentId
                                                     )
                                                     const resolvedAgent = agents.find((a) => a.id === routed.agentId)

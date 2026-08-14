@@ -1854,9 +1854,11 @@ button .ic,
 }
 /* An inert (empty pattern) or broken (deleted agent/project) rule needs a
    marker in its FORM, not only a color shift: the reserved gutter above
-   turns into a stripe - the same idiom as .bind-option.warn - and the text
-   note below restates it in words, so the state still reads in a theme or
-   style where --danger sits close to --border. */
+   turns into a stripe - the same 3px border-left + reserved-padding idiom as
+   .bind-option.warn - and the text note below restates it in words. Unlike
+   .bind-option.warn's note (plain --text), .rule-note's own color mixes in
+   --danger, so the note reads as a warning on its own even where the stripe
+   above it sits close to --border. */
 .rule-row.rule-inert,
 .rule-row.rule-broken {
     border-left-color: var(--danger);
