@@ -1,5 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { appendFileSync, rmSync } from "fs"
+import { appendFileSync, readFileSync, rmSync } from "fs"
+
+// Wrap readFileSync in a call-tracked passthrough so tests can assert whether
+// ledger.ts read the file, without changing its behavior. This has to go
+// through vi.mock (not vi.spyOn on a required "fs" object) because the
+// mocked module is what every importer - including ledger.ts - resolves "fs"
+// to; a spy attached to a separately-obtained reference after the fact does
+// not intercept calls other modules already bound at their own import time.
+vi.mock("fs", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("fs")>()
+    return { ...actual, readFileSync: vi.fn(actual.readFileSync) }
+})
 
 // Mock Electron: a temp userData dir, so the ledger never touches the real store.
 const h = vi.hoisted(() => {
@@ -28,7 +39,12 @@ function rec(over: Partial<RunRecord> = {}): RunRecord {
 describe("appendRun / readRuns", () => {
     // Each test starts with no store file at all - not just an empty one - so
     // "returns empty when the file does not exist" actually exercises that path.
+    // clearRuns() first resets the module's private in-memory line count to 0
+    // (matching the file it just emptied) before the file is removed entirely -
+    // otherwise the count would carry a stale value from whatever the previous
+    // test appended, corrupting the cap-rotation test below.
     beforeEach(() => {
+        clearRuns()
         try {
             rmSync(storePath(), { force: true })
         } catch {
@@ -83,5 +99,35 @@ describe("appendRun / readRuns", () => {
         appendRun(rec())
         clearRuns()
         expect(readRuns()).toEqual([])
+    })
+
+    it("drops syntactically valid but ill-shaped records without truncating the read", () => {
+        // Unlike the torn-line test above, every line written here is valid
+        // JSON - the point is that isValidRunRecord must still reject a
+        // wrong-typed field, a missing required field, and blank lines, while
+        // a good record on either side of them survives untouched.
+        appendRun(rec({ id: "first" }))
+
+        const wrongTypedCost = JSON.stringify({ ...rec({ id: "bad-cost" }), cost: "0.42" })
+        const { exclusive: _exclusive, ...missingExclusive } = rec({ id: "missing-exclusive" })
+        appendFileSync(storePath(), wrongTypedCost + "\n")
+        appendFileSync(storePath(), JSON.stringify(missingExclusive) + "\n")
+        appendFileSync(storePath(), "\n")
+        appendFileSync(storePath(), "   \n")
+
+        appendRun(rec({ id: "second" }))
+
+        expect(readRuns().map((r) => r.id)).toEqual(["second", "first"])
+    })
+
+    it("does not read the file on repeated appends below the cap", () => {
+        // The store's own rationale (top of ledger.ts) is that appending must
+        // not depend on the file's size. A spy on readFileSync proves it: with
+        // the in-memory line count already known (reset to 0 by beforeEach via
+        // clearRuns()), none of these appends should touch the file to check
+        // whether it needs rotating.
+        vi.mocked(readFileSync).mockClear()
+        for (let i = 0; i < 50; i++) appendRun(rec({ id: `r${i}` }))
+        expect(readFileSync).not.toHaveBeenCalled()
     })
 })

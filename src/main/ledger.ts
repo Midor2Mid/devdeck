@@ -64,29 +64,57 @@ function isValidRunRecord(value: unknown): value is RunRecord {
     )
 }
 
-/** Rewrite the store once, keeping only the last RUN_KEEP lines, if it has grown past RUN_CAP. */
-function rotateIfNeeded(): void {
+// In-memory line count so appendRun can decide whether to rotate without
+// reading the file on every call - only the cap-crossing rotation itself
+// reads the file (to get real line content to keep). -1 means "not yet
+// known for this process"; it is reseeded with a single read the next time
+// it's needed. This count is per-process only (it does not persist across
+// launches), which is fine because RUN_CAP is a soft bound, not an
+// invariant - a reseed after restart just re-establishes the true count.
+let lineCount = -1
+
+/** Seed lineCount from disk if it isn't already known. At most one read. */
+function seedLineCountIfUnknown(): void {
+    if (lineCount >= 0) return
+    try {
+        const raw = readFileSync(storeFile(), "utf8")
+        lineCount = raw.split("\n").filter((line) => line.length > 0).length
+    } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+            lineCount = 0
+        } else {
+            console.error("[ledger] failed to seed run count:", err)
+            // Leave lineCount at -1: the rotation check is skipped for this
+            // append (below), never the append itself.
+        }
+    }
+}
+
+/** Rewrite the store once, keeping only the last RUN_KEEP lines. */
+function rotate(): void {
     try {
         const raw = readFileSync(storeFile(), "utf8")
         const lines = raw.split("\n").filter((line) => line.length > 0)
-        if (lines.length > RUN_CAP) {
-            const kept = lines.slice(lines.length - RUN_KEEP)
-            atomicWrite(storeFile(), kept.join("\n") + "\n")
-        }
+        const kept = lines.slice(lines.length - RUN_KEEP)
+        atomicWrite(storeFile(), kept.join("\n") + "\n")
+        lineCount = kept.length
     } catch (err) {
         console.error("[ledger] failed to rotate runs:", err)
     }
 }
 
-/** Append one run record. Never reads the file to do so - only to check the cap afterward. */
+/** Append one run record. Never reads the file to do so - only the rare cap-crossing rotation does. */
 export function appendRun(rec: RunRecord): void {
+    seedLineCountIfUnknown()
     try {
         appendFileSync(storeFile(), JSON.stringify(rec) + "\n")
     } catch (err) {
         console.error("[ledger] failed to append run:", err)
         return
     }
-    rotateIfNeeded()
+    if (lineCount < 0) return
+    lineCount++
+    if (lineCount > RUN_CAP) rotate()
 }
 
 /**
@@ -123,6 +151,7 @@ export function readRuns(limit?: number): RunRecord[] {
 export function clearRuns(): void {
     try {
         atomicWrite(storeFile(), "")
+        lineCount = 0
     } catch (err) {
         console.error("[ledger] failed to clear runs:", err)
     }
