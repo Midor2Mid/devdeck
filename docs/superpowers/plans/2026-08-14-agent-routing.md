@@ -449,6 +449,6 @@ git commit -m "docs: record agent routing"
 
 - `npm run typecheck` at zero, `npx vitest run` green.
 - `agents[0]` is no longer a hidden default anywhere in the dispatch path.
-- An invalid regex leaves its rule inert and visibly flagged — never matching everything, never throwing.
+- An empty or whitespace-only pattern leaves its rule inert and visibly flagged — never matching everything, never throwing. (Originally written as "an invalid regex leaves its rule inert" — Task 1 replaced the `titleRegex` kind with `titleGlob`, a glob has no invalid form, and this line was left describing a kind that no longer exists. See `NOTES.md` for why the regex was replaced rather than hardened.)
 - A rule naming a deleted agent is skipped, and reads as broken in the editor.
 - The card shows which agent will run before you click, and names the rule when one chose it.

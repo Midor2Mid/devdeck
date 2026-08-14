@@ -54,12 +54,31 @@ So the conditions are:
 | `project` | A specific project id |
 | `always` | Everything — the fallback rule |
 
+> **Superseded (2026-08-14).** `titleRegex` did not ship. Four fix rounds on
+> the implementation (see `NOTES.md` → "Agent routing: what rules can and
+> can't see, and why the glob isn't a RegExp") found that compiling
+> user-typed text to a `RegExp` inherits the engine's backtracking — escaping
+> metacharacters closes only the nested-quantifier shape, and several plain
+> `*` tokens alone still produced multi-minute hangs on the path that renders
+> the dispatch preview. What shipped is `titleGlob`, matched by a hand-written
+> two-pointer walk that never compiles to a `RegExp` and cannot degrade
+> regardless of pattern shape. The "compiled defensively, invalid pattern
+> makes the rule inert" design below describes `titleRegex` as originally
+> planned, not `titleGlob` as built — **a glob has no invalid form**, so that
+> failure mode doesn't apply to what actually exists. `routing.ts` is the
+> source of truth for the kind that shipped.
+
 `titleRegex` is compiled defensively: an invalid pattern makes the rule **never
 match**, rather than throwing inside dispatch or matching everything. A rule you
 mistyped should be inert, not a wildcard, and certainly not a crash on the path
 that spends money.
 
 ```ts
+// Superseded (2026-08-14): shipped as `kind: "title" | "titleGlob" | "project"
+// | "always"` — see routing.ts and the note above the rule table. A glob has
+// no invalid form, so there is no "inert on bad pattern" case to speak of;
+// an empty or whitespace-only pattern is what leaves a rule inert instead
+// (and the Task 4 editor flags that case visibly — see NOTES.md).
 export interface RoutingRule {
     id: string
     enabled: boolean
@@ -124,6 +143,11 @@ already names the agent, which becomes more useful now that it can differ.
 - First enabled match wins; a disabled rule is skipped even when it matches.
 - `title` is case-insensitive and substring; `titleRegex` matches; **an invalid
   regex makes the rule inert rather than throwing or matching everything**.
+  (Superseded — see the note above the rule table: this describes `titleRegex`
+  as planned, not the `titleGlob` that shipped. A glob has no invalid form; the
+  tests that actually exist, in `tests/routing.test.ts`, cover an empty or
+  whitespace-only pattern leaving a rule inert instead, plus the glob's
+  anchoring and its resistance to catastrophic backtracking.)
 - `project` matches on id, not name.
 - No match falls back to `defaultAgentId`, and to `agents[0]` only when that is
   unset — the compatibility path.
