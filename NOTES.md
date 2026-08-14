@@ -644,6 +644,19 @@ the first's, both summable. The guard now rides on the card itself
 question worth asking of any in-memory de-dupe key: what restores the *thing*,
 and does anything restore the *key*?
 
+**An agent DevDeck never launched is invisible to this whole feature, not a
+gap in one test.** The overlap check and the live-pane check inside
+`attributionReason` both read from what DevDeck itself started — `usageLog`
+and `agentSessions()` — so an agent the user ran by typing `claude` straight
+into a plain shell pane (the most plausible way this happens) writes no usage
+event and is filtered out of `agentSessions()` entirely. A card or pipeline
+record covering that window is therefore still written as an exclusive
+receipt, over money that was partly that agent's. This is not a bug to fix
+here — DevDeck has no way to see a process it did not launch — but it is a
+real limit of attribution-by-directory, and it should be said plainly: the
+ledger catches overlap between sessions it started, not every session that
+ever shared the directory.
+
 **Known limits, and all of them fail closed *in the total*** — which is the
 test that matters, and the one the old wording here quietly skipped. A pane
 restored from a previous launch and never resumed has no start instant to

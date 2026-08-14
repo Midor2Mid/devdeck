@@ -2398,6 +2398,13 @@ export const useStore = create<AppState>((set, get) => {
 
         startResumedAgent: (termId) => {
             if (!(termId in get().agentResumePending)) return
+            // Checked before the pending flag is cleared below: if this pane were
+            // ever not an agent id, clearing the flag first would close the resume
+            // overlay with no usage event logged even though resolveResume has
+            // already spawned the process - an invariant resting on this bail
+            // running first, not on the set() happening to come after it.
+            const agentId = get().termAgents[termId]
+            if (!isAgentId(agentId)) return
             set((s) => {
                 const agentResumePending = { ...s.agentResumePending }
                 delete agentResumePending[termId]
@@ -2415,10 +2422,11 @@ export const useStore = create<AppState>((set, get) => {
             // continuing the old one, but it is the same agent in the same
             // directory costing the same money - the distinction matters to the
             // user's context, not to the accounting.
-            const agentId = get().termAgents[termId]
-            if (!isAgentId(agentId)) return
             const projectId = get().projectIdOfTerm(termId) ?? get().activeId ?? ""
-            const cwd = get().termCwd[termId] ?? get().projects.find((p) => p.id === projectId)?.path
+            // `||`, not `??`: an empty-string entry in termCwd must fall through
+            // to the project path the same way newTab's logUsageStart call does,
+            // rather than being kept as a cwd-less event.
+            const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
 

@@ -266,12 +266,14 @@ describe("session windows", () => {
 })
 
 describe("a write site that fails", () => {
-    // The guard must be stamped whether or not the record reaches disk. If it
-    // were only stamped on success, a bridge that threw would leave the card
-    // eligible to record again on the next drag - over a window that CONTAINS
-    // the failed one's rather than being a delta from it. A ledger that loses a
-    // row is an under-report; one that writes two rows for one spend is worse.
-    it("still stamps the card's guard when the bridge throws", () => {
+    // writeRun (runRecorder.ts) swallows the bridge's throw internally, so
+    // recordCardRun never actually observes it - which means this cannot tell
+    // "guard stamped before the append" from "guard stamped after", since
+    // writeRun never throws back to its caller either way. What it does pin:
+    // recordCardRun never throws even when the bridge does, and the guard is
+    // always stamped. A dispatched card must reach done and be guarded against
+    // re-recording whether or not the bridge call behind it works.
+    it("never throws when the bridge throws, and still stamps the card's guard", () => {
         throwOnAppend = true
         const marks: { taskId: string; dispatchedAt: number }[] = []
 

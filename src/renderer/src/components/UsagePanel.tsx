@@ -65,21 +65,31 @@ const UNPRICED_TIP =
     "could not be read, or there is no project directory left to price it over. It is " +
     "left out of the total."
 
-// Two cases that say the same thing: an agent session overlapped this run but
-// predates DevDeck recording which directory a session ran in, so it can be
-// neither ruled out of this one nor placed in it; or the record itself predates
-// reasons being recorded at all. Either way the honest answer is that the cost
-// cannot be vouched for, NOT that some particular session shared the project -
-// which is the fabricated fact this tooltip set exists to stop.
+// Two cases that both collapse into runsSentence's one neutral clause ("could
+// not be vouched for"), but they are not the same fact and do not share a
+// tooltip. "unknown" is a specific claim DevDeck can actually make: a session
+// overlapped this run but predates DevDeck recording which directory a
+// session ran in, so it can be neither ruled out of this one nor placed in
+// it. A reasonless record predates reasons being recorded at all - it may not
+// involve another session sharing anything (an unread price, say), so nothing
+// about sharing is known one way or the other. Giving it the "unknown" text
+// would assert a cause it does not carry, the same fabricated fact this
+// tooltip set exists to stop.
 const UNKNOWN_TIP =
     "DevDeck cannot tell whether another agent session shared this project during " +
     "the run, so this figure cannot be vouched for. It is left out of the total " +
     "rather than guessed at."
 
+const NO_REASON_TIP =
+    "DevDeck cannot say why this figure isn't a receipt - the record predates " +
+    "reasons being tracked - so it cannot be vouched for. It is left out of the " +
+    "total rather than guessed at."
+
 function exclusionTip(reason?: RunExclusionReason): string {
     if (reason === "shared") return SHARED_TIP
     if (reason === "unpriced") return UNPRICED_TIP
-    return UNKNOWN_TIP
+    if (reason === "unknown") return UNKNOWN_TIP
+    return NO_REASON_TIP
 }
 
 type Window = "today" | "week" | "all"

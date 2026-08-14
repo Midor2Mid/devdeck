@@ -189,11 +189,11 @@ export function createRunRecorder(
         // would be inventing a fact.
         if (!cwd) return "unpriced"
         const own = new Set(ownTermIds.filter(Boolean))
-        // An event that overlapped but names no directory (written before `cwd`
-        // existed) cannot be ruled out of this one - and cannot be asserted into
-        // it either. It excludes the run, but as "unknown", not as "shared":
-        // claiming a specific sharer we have no record of is the same invented
-        // fact I1 was about, one level down.
+        // An event that overlapped but names no directory cannot be ruled out
+        // of this one - and cannot be asserted into it either. It excludes the
+        // run, but as "unknown", not as "shared": claiming a specific sharer we
+        // have no record of is the same invented fact I1 was about, one level
+        // down.
         let unknown = false
         for (const e of useSettings.getState().usageLog) {
             if (own.has(e.id)) continue
@@ -309,7 +309,7 @@ export function createRunRecorder(
                 // did spent nothing, so calling it "eliminated" overstates what
                 // the race threw away — the number this field exists to report.
                 //
-                // Keyed on the status, NOT on `worktree`: two of the three paths
+                // Keyed on the status, NOT on `worktree`: two of the four paths
                 // that mark an entrant "startfailed" (a head that could not be
                 // read, and a session that would not spawn) happen *after* the
                 // worktree was created, so it is left populated for land/abandon
