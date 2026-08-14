@@ -7595,9 +7595,20 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     display: inline-flex;
     align-items: center;
 }
+.board-dispatch .board-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+/* Portaled to <body> and positioned in JS from the caret's rect (see
+   CardDispatch in TaskBoard.tsx) rather than absolutely positioned inside
+   .board-cards — that column is overflow-y: auto, which clips an absolutely
+   positioned child the moment a card sits near the bottom of a full column.
+   `left`/`top` come from an inline style computed at open time; this only
+   needs to override `.agent-menu`'s own `position: absolute; top; right`. */
 .board-dispatch-menu {
-    top: 100%;
-    margin-top: 3px;
+    position: fixed;
+    top: 0;
+    right: auto;
 }
 
 /* ---------- Agent bake-off (race modal) ---------- */
