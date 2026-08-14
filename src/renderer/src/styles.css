@@ -1840,7 +1840,7 @@ button .ic,
 .rule-row-grid select,
 .rule-row-grid .rule-pattern {
     width: 100%;
-    font-size: 12px;
+    font-size: var(--fs-sm);
 }
 .rule-row-grid .checkbox {
     width: 16px;
@@ -1864,7 +1864,7 @@ button .ic,
     border-left-color: var(--danger);
 }
 .rule-note {
-    font-size: 11px;
+    font-size: var(--fs-label);
     line-height: 1.5;
     color: color-mix(in srgb, var(--danger) 75%, var(--text));
     margin: 2px 0 0;
