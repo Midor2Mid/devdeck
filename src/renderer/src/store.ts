@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import type { Project, WorkItem, CheckResult } from "../../preload/index"
-import { useSettings } from "./settings"
+import { useSettings, aiModeAgents } from "./settings"
 import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
 import {
     type LayoutNode,
@@ -1197,7 +1197,7 @@ export const useStore = create<AppState>((set, get) => {
             // useful in a "normal" (fixed-command) preset. A rule naming a shell preset
             // is treated exactly like a rule naming a deleted agent — skipped, falling
             // through the same way a dangling reference already does.
-            const aiAgents = settingsState.agents.filter((a) => a.runMode !== "normal")
+            const aiAgents = aiModeAgents(settingsState.agents)
             // Trust the caller's agentId only if it still names a real AI-mode preset —
             // the same subset routeAgent itself chooses from, so a caller can't hand in
             // a shell preset and have it treated as routed. (Today the only caller is

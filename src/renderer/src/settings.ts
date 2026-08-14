@@ -122,6 +122,20 @@ export interface AgentPreset {
 }
 
 /**
+ * Only AI-mode presets can run a dispatched task, take a diff handoff, race,
+ * or otherwise stand in for "an agent" — a normal-mode preset is a fixed shell
+ * command with nothing to send a prompt to. Several call sites (task routing,
+ * the diff handoff picker, the race entrants list, the project strip's launch
+ * picker) each need this same subset, and independently repeating the filter
+ * predicate makes its correctness rest on every copy staying textually
+ * identical forever - exactly the kind of drift that reintroduces the bug this
+ * distinction exists to prevent. One function, called from all of them.
+ */
+export function aiModeAgents(agents: AgentPreset[]): AgentPreset[] {
+    return agents.filter((a) => a.runMode !== "normal")
+}
+
+/**
  * The curated starter set. Ships as the default for a fresh install and is the
  * source for the "Add recommended" action, which merges any of these an existing
  * config is missing. Model-pinned/skip-permissions variants exist to pair with

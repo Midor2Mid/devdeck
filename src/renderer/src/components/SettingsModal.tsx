@@ -3,6 +3,7 @@ import QRCode from "qrcode"
 import {
     useSettings,
     missingRecommended,
+    aiModeAgents,
     type ShellKind,
     type GitAccount,
     type AgentPreset,
@@ -831,13 +832,11 @@ function PipelinesSection(): JSX.Element {
                                     value={st.agentId}
                                     onChange={(e) => updateStep(pi, si, { agentId: e.target.value })}
                                 >
-                                    {agents
-                                        .filter((a) => a.runMode !== "normal")
-                                        .map((a) => (
-                                            <option key={a.id} value={a.id}>
-                                                {a.name}
-                                            </option>
-                                        ))}
+                                    {aiModeAgents(agents).map((a) => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.name}
+                                        </option>
+                                    ))}
                                 </select>
                                 <label className="pipe-fresh" data-tip="Start a new session for this step instead of reusing the agent's">
                                     <input
@@ -1151,7 +1150,7 @@ function RoutingSection(): JSX.Element {
     // maps returns a fresh array every render, which zustand reads as a
     // changed value and spins into an infinite render loop (see
     // TaskBoard.tsx:53-57, which documents the same trap for the same data).
-    const aiAgents = useMemo(() => agents.filter((a) => a.runMode !== "normal"), [agents])
+    const aiAgents = useMemo(() => aiModeAgents(agents), [agents])
     const aiAgentIds = useMemo(() => new Set(aiAgents.map((a) => a.id)), [aiAgents])
 
     const updateRule = (i: number, patch: Partial<RoutingRule>): void =>

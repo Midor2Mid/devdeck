@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { useStore } from "../store"
-import { useSettings } from "../settings"
+import { useSettings, aiModeAgents } from "../settings"
 import { Modal } from "./Modal"
 import type { ChangeFile } from "../../../preload/index"
 
@@ -48,7 +48,7 @@ export function ChangesModal(): JSX.Element | null {
     // value and spins into an infinite update loop (React #185).
     const agents = useSettings((s) => s.agents)
     // Only AI-mode presets can take a diff; normal-mode ones are plain commands.
-    const aiAgents = useMemo(() => agents.filter((a) => a.runMode !== "normal"), [agents])
+    const aiAgents = useMemo(() => aiModeAgents(agents), [agents])
     const [handoffTo, setHandoffTo] = useState("")
     // Settings load async, so the first render can precede the agent list; fall
     // back to the first agent until an explicit pick is made.

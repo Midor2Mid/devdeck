@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { useStore } from "../store"
-import { useSettings } from "../settings"
+import { useSettings, aiModeAgents } from "../settings"
 import { AgentKey } from "./AgentKey"
 import { Icon } from "./Icon"
 import { LaunchOptions } from "./LaunchOptions"
@@ -18,7 +18,7 @@ export function ProjectStrip({ strip }: { strip: DeckStrip }): JSX.Element {
     const agents = useSettings((s) => s.agents)
     // Filter in a memo, not in the selector — a fresh array from a zustand
     // selector re-renders forever (React #185).
-    const aiAgents = useMemo(() => agents.filter((a) => a.runMode !== "normal"), [agents])
+    const aiAgents = useMemo(() => aiModeAgents(agents), [agents])
     const [pickOpen, setPickOpen] = useState(false)
     const addRef = useRef<HTMLButtonElement>(null)
 

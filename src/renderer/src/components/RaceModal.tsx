@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
-import { useSettings } from "../settings"
+import { useSettings, aiModeAgents } from "../settings"
 import { Modal } from "./Modal"
 import { Icon } from "./Icon"
 import { formatCost } from "../board"
@@ -183,7 +183,7 @@ export function RaceModal(): JSX.Element | null {
     // value and spins into an infinite update loop (see ChangesModal.tsx).
     const agents = useSettings((s) => s.agents)
     const projectCommands = useSettings((s) => s.projectCommands)
-    const aiAgents = useMemo(() => agents.filter((a) => a.runMode !== "normal"), [agents])
+    const aiAgents = useMemo(() => aiModeAgents(agents), [agents])
 
     // Plain property lookups on the selected slices, not inside a selector -
     // safe because these only change identity when the underlying store data
