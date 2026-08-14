@@ -252,6 +252,88 @@ before committing. Cover:
 - A pattern of `*` matches anything, and the empty and whitespace-only guards from
   round 1 still hold.
 
+#### Task 1 corrections (round 3) — stop using RegExp at all
+
+Round 2 closed the nested-quantifier shape but not the class. Multiple independent
+`*` tokens produce the classic `^(a.*){k}Z$` blowup, which has nothing to do with
+nesting. Measured on the shipped code: `*a*a*a*a*a*NOPE` against a title of 100
+`a`s took **2153 ms**, and twenty stars against 1000 `a`s ran past **120 s** before
+being killed. The comment claiming "polynomial rather than exponential" is wrong
+and must go.
+
+Compiling a glob to a `RegExp` inherits the engine's backtracking whatever we do to
+the pattern. So don't compile one.
+
+- [ ] **R3 — replace `globToRegExp` with a linear matcher**
+
+The standard two-pointer glob algorithm, with a single backtrack point for the last
+`*`. It cannot blow up because it never explores a tree — worst case is O(pattern ×
+text), and in practice it is linear.
+
+```typescript
+/**
+ * Match a glob against a title. `*` matches any run, `?` matches one character.
+ *
+ * Deliberately NOT compiled to a RegExp. A glob built from user text and handed to
+ * the regex engine inherits its backtracking: escaping metacharacters stops a
+ * nested quantifier being written, but several plain `*` tokens still produce the
+ * `^(a.*){k}Z$` blowup — measured at 2.1s for five stars against a 100-character
+ * title, and over two minutes for twenty. This runs synchronously to render the
+ * dispatch preview, so a hang here freezes the screen the user is looking at.
+ *
+ * The two-pointer form has one backtrack point (the most recent `*`) and never
+ * explores a tree, so its worst case is O(pattern x text) and it cannot degrade.
+ *
+ * Anchored, like globs everywhere else: `login` matches only the exact title
+ * "login". Use `*login*` to match anywhere — the `title` kind is the substring
+ * one. There is no escape for a literal `*` or `?` in a pattern; the rule editor
+ * should teach the idiom with a `*login*` placeholder rather than documenting an
+ * escape nobody would find.
+ */
+export function globMatch(glob: string, text: string): boolean {
+    const p = glob.toLowerCase()
+    const s = text.toLowerCase()
+    let pi = 0
+    let si = 0
+    let star = -1
+    let mark = 0
+    while (si < s.length) {
+        if (pi < p.length && (p[pi] === "?" || p[pi] === s[si])) {
+            pi++
+            si++
+        } else if (pi < p.length && p[pi] === "*") {
+            star = pi++
+            mark = si
+        } else if (star >= 0) {
+            pi = star + 1
+            si = ++mark
+        } else {
+            return false
+        }
+    }
+    while (pi < p.length && p[pi] === "*") pi++
+    return pi === p.length
+}
+```
+
+I have run this exact function against the full case table and every blowup shape:
+`*login*` ✓, `login*` ✗, `*login` ✗, `?ix*` ✓, `??ix*` ✗, `*` ✓, `*REDIRECT` ✓,
+`fix*redirect` ✓, `a.c` ✗ against "Fix the login redirect" but ✓ against "a.c",
+`(a+)+$` ✗, empty ✗ — and 5/20/50-star patterns against 100/1000/5000-character
+runs all return in **0 ms**.
+
+- [ ] **R4 — tests for the shape that defeated round 2**
+
+Round 2's tests discriminate against both escaping-order bugs, which is good, but
+none of them uses more than one wildcard, so the blowup that survived had no
+coverage. Add:
+
+- A multi-wildcard pattern that fails to match a long repeated-character title,
+  asserted to complete — the case that took 2153 ms before.
+- `*login*` matching versus `login` not matching the full title, so the anchoring
+  rule is pinned rather than assumed.
+- `fix*redirect` spanning the middle.
+
 ---
 
 ### Task 2: Settings + an explicit agent on dispatch
