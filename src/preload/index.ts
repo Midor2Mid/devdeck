@@ -588,8 +588,7 @@ const api = {
          */
         append: (rec: RunRecord): void => ipcRenderer.send("ledger:append", rec),
         /** Stored runs, newest first. */
-        read: (limit?: number): Promise<RunRecord[]> => ipcRenderer.invoke("ledger:read", limit),
-        clear: (): Promise<void> => ipcRenderer.invoke("ledger:clear")
+        read: (limit?: number): Promise<RunRecord[]> => ipcRenderer.invoke("ledger:read", limit)
     },
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),

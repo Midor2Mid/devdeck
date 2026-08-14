@@ -9,7 +9,14 @@ import { appendFileSync, readFileSync, rmSync } from "fs"
 // not intercept calls other modules already bound at their own import time.
 vi.mock("fs", async (importOriginal) => {
     const actual = await importOriginal<typeof import("fs")>()
-    return { ...actual, readFileSync: vi.fn(actual.readFileSync) }
+    h.realAppend = actual.appendFileSync
+    return {
+        ...actual,
+        readFileSync: vi.fn(actual.readFileSync),
+        // Wrapped for the same reason, so a test can simulate a write that fails
+        // part way through and leaves the file mid-line.
+        appendFileSync: vi.fn(actual.appendFileSync)
+    }
 })
 
 // Mock Electron: a temp userData dir, so the ledger never touches the real store.
@@ -20,7 +27,12 @@ const h = vi.hoisted(() => {
     const { tmpdir } = require("os")
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { join: pjoin } = require("path")
-    return { dir: mkdtempSync(pjoin(tmpdir(), "ledger-")) }
+    return {
+        dir: mkdtempSync(pjoin(tmpdir(), "ledger-")),
+        // Filled in by the fs mock below: the real appendFileSync, so a test can
+        // write a torn tail without going back through the mock it is stubbing.
+        realAppend: null as unknown as typeof import("fs").appendFileSync
+    }
 })
 vi.mock("electron", () => ({
     app: { getPath: () => h.dir }
@@ -118,6 +130,38 @@ describe("appendRun / readRuns", () => {
         appendRun(rec({ id: "second" }))
 
         expect(readRuns().map((r) => r.id)).toEqual(["second", "first"])
+    })
+
+    // A crash - or a write that fails part way - leaves the file mid-line. The
+    // design promises at most ONE record is lost to that; appending straight
+    // onto the tail loses two, because the good record is glued to the torn one.
+    it("terminates a torn tail instead of concatenating the next record onto it", () => {
+        appendRun(rec({ id: "good" }))
+        vi.mocked(appendFileSync).mockImplementationOnce(() => {
+            h.realAppend(storePath(), '{"id":"torn","kind":"car')
+            throw new Error("disk full")
+        })
+        appendRun(rec({ id: "lost" }))
+        appendRun(rec({ id: "after" }))
+
+        expect(readRuns().map((r) => r.id)).toEqual(["after", "good"])
+    })
+
+    // A rotation that throws leaves lineCount above the cap, so every later
+    // append would re-attempt a whole-file read and rewrite: precisely the
+    // per-append file read the cached count exists to prevent, arriving exactly
+    // when the store is at its largest.
+    it("backs off after a failed rotation instead of re-reading on every append", () => {
+        for (let i = 0; i < RUN_CAP; i++) appendRun(rec({ id: `r${i}` }))
+        vi.mocked(readFileSync).mockImplementationOnce(() => {
+            throw new Error("locked")
+        })
+        appendRun(rec({ id: "trips-rotation" }))
+
+        vi.mocked(readFileSync).mockClear()
+        for (let i = 0; i < 20; i++) appendRun(rec({ id: `after${i}` }))
+
+        expect(readFileSync).not.toHaveBeenCalled()
     })
 
     it("does not read the file on repeated appends below the cap", () => {

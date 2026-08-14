@@ -12,6 +12,13 @@
  */
 
 import type { RunKind, RunRecord } from "../../main/ledger"
+// One money formatter for the whole renderer. A second one lived here and wrote
+// a real $0.004 run as "$0.00" - free, which it was not - while board.ts's
+// (same name, same renderer) already said "<$0.01". Re-exported rather than
+// reimplemented, so there is exactly one answer to how DevDeck writes a dollar.
+import { formatCost } from "./board"
+
+export { formatCost }
 
 export interface RunTotals {
     /** Summed cost of exclusive runs only. */
@@ -61,10 +68,15 @@ export function filterRuns(runs: RunRecord[], kind?: RunKind, projectId?: string
     })
 }
 
-/** Money, never blank and never a dash: zero is written `$0`, not nothing. */
-export function formatCost(cost: number): string {
-    return cost === 0 ? "$0" : "$" + cost.toFixed(2)
-}
+/**
+ * How many records to ask the bridge for. The store rotates at RUN_CAP, so this
+ * is "everything" - stated as a number rather than left unbounded, which put a
+ * whole unbounded file through IPC on every panel open and would have grown
+ * without limit if a rotation ever failed. (RUN_CAP itself lives in main, whose
+ * module imports electron; naming the same number here is the price of not
+ * pulling that into the renderer bundle.)
+ */
+export const RUN_READ_LIMIT = 5000
 
 export interface RunsSentence {
     /** How many runs are on screen. The list and this number must agree. */

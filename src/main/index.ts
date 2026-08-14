@@ -460,7 +460,10 @@ function registerIpc(): void {
                 : undefined
         return ledger.readRuns(n)
     })
-    ipcMain.handle("ledger:clear", () => ledger.clearRuns())
+    // No ledger:clear channel. clearRuns exists (the tests use it), but wiring it
+    // end-to-end put a one-call wipe of an append-only history on the bridge with
+    // no caller and no confirm behind it - a surface that can only ever be used
+    // by accident.
 
     // --- Git ---
     ipcMain.handle("git:status", (_e, cwd: string) => gitStatus(cwd))

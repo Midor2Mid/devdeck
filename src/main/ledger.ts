@@ -95,19 +95,41 @@ export function isValidRunRecord(value: unknown): value is RunRecord {
 // invariant - a reseed after restart just re-establishes the true count.
 let lineCount = -1
 
+// Does the store end in a newline? A crash - or a write that failed part way -
+// can leave a half-written final line, and appending straight onto it corrupts
+// TWO records where the design promises at most one: the torn tail, and the
+// good record concatenated onto it. Known from the seed read (which happens
+// anyway) and re-armed whenever an append fails, so the happy path never opens
+// the file to find out - that per-append read is exactly what lineCount exists
+// to avoid.
+let endsWithNewline = true
+
+// Appends to wait before retrying a rotation that failed. A failed rotate
+// leaves lineCount above the cap, so without a back-off every subsequent append
+// would re-attempt a whole-file read and rewrite - again, the thing the cached
+// count exists to prevent. RUN_CAP is a soft bound, so overshooting it for a
+// while is the cheap failure.
+const ROTATE_RETRY_AFTER = 200
+let rotateSkip = 0
+
 /** Seed lineCount from disk if it isn't already known. At most one read. */
 function seedLineCountIfUnknown(): void {
     if (lineCount >= 0) return
     try {
         const raw = readFileSync(storeFile(), "utf8")
         lineCount = raw.split("\n").filter((line) => line.length > 0).length
+        endsWithNewline = raw.length === 0 || raw.endsWith("\n")
     } catch (err) {
         if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
             lineCount = 0
+            endsWithNewline = true
         } else {
             console.error("[ledger] failed to seed run count:", err)
             // Leave lineCount at -1: the rotation check is skipped for this
-            // append (below), never the append itself.
+            // append (below), never the append itself. The tail is unknown too,
+            // so assume the worst - a leading newline costs one blank line,
+            // which readRuns already skips, while assuming wrongly costs a record.
+            endsWithNewline = false
         }
     }
 }
@@ -120,8 +142,11 @@ function rotate(): void {
         const kept = lines.slice(lines.length - RUN_KEEP)
         atomicWrite(storeFile(), kept.join("\n") + "\n")
         lineCount = kept.length
+        endsWithNewline = true
+        rotateSkip = 0
     } catch (err) {
         console.error("[ledger] failed to rotate runs:", err)
+        rotateSkip = ROTATE_RETRY_AFTER
     }
 }
 
@@ -129,14 +154,24 @@ function rotate(): void {
 export function appendRun(rec: RunRecord): void {
     seedLineCountIfUnknown()
     try {
-        appendFileSync(storeFile(), JSON.stringify(rec) + "\n")
+        appendFileSync(
+            storeFile(),
+            (endsWithNewline ? "" : "\n") + JSON.stringify(rec) + "\n"
+        )
+        endsWithNewline = true
     } catch (err) {
         console.error("[ledger] failed to append run:", err)
+        // A throw does not mean nothing was written: a partial write leaves the
+        // file mid-line, so the next append must terminate it first.
+        endsWithNewline = false
         return
     }
     if (lineCount < 0) return
     lineCount++
-    if (lineCount > RUN_CAP) rotate()
+    if (lineCount > RUN_CAP) {
+        if (rotateSkip > 0) rotateSkip--
+        else rotate()
+    }
 }
 
 /**
@@ -174,6 +209,8 @@ export function clearRuns(): void {
     try {
         atomicWrite(storeFile(), "")
         lineCount = 0
+        endsWithNewline = true
+        rotateSkip = 0
     } catch (err) {
         console.error("[ledger] failed to clear runs:", err)
     }

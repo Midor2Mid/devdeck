@@ -20,8 +20,7 @@ function stubApi(over: Record<string, unknown> = {}): void {
                 append: (rec: RunRecord): void => {
                     appended.push(rec)
                 },
-                read: async (): Promise<RunRecord[]> => [],
-                clear: async (): Promise<void> => undefined
+                read: async (): Promise<RunRecord[]> => []
             },
             usage: {
                 window: async (): Promise<Record<string, number | string>> => ({

@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
 import { Modal } from "./Modal"
 import { useSettings, type UsageEvent } from "../settings"
-import { filterRuns, formatCost, formatDuration, runTotals, runsSentence } from "../ledgerView"
+import {
+    filterRuns,
+    formatCost,
+    formatDuration,
+    runTotals,
+    runsSentence,
+    RUN_READ_LIMIT
+} from "../ledgerView"
 import type { RunExclusionReason, RunKind, RunRecord, UsageSummary } from "../../../preload/index"
 
 function fmtTok(n: number): string {
@@ -21,8 +28,15 @@ function fmtWhen(ms: number): string {
 }
 
 // Every kind, in the order a run tends to be thought about, so the filter's
-// options don't reshuffle as history arrives.
-const RUN_KINDS: RunKind[] = ["card", "race", "pipeline", "session"]
+// options don't reshuffle as history arrives. Labelled properly for the control
+// they sit in - "card"/"race" are record values, and printing them raw put
+// lowercase chrome beside "All kinds" and "All projects".
+const RUN_KINDS: { kind: RunKind; label: string }[] = [
+    { kind: "card", label: "Cards" },
+    { kind: "race", label: "Races" },
+    { kind: "pipeline", label: "Pipelines" },
+    { kind: "session", label: "Sessions" }
+]
 
 // The ledger keeps thousands of runs; the panel is a 540px modal. Totals are
 // computed over *everything* that passes the filter - only the rendering is
@@ -133,7 +147,10 @@ export function UsagePanel(): JSX.Element {
     const [runKind, setRunKind] = useState<RunKind | "all">("all")
     const [runProject, setRunProject] = useState<string>("all")
     useEffect(() => {
-        window.api.ledger.read().then(setRuns).catch(() => setRuns(NO_RUNS))
+        window.api.ledger
+            .read(RUN_READ_LIMIT)
+            .then(setRuns)
+            .catch(() => setRuns(NO_RUNS))
     }, [])
 
     const [win, setWin] = useState<Window>("week")
@@ -211,7 +228,7 @@ export function UsagePanel(): JSX.Element {
     // that can only ever return nothing is chrome pretending to be a control.
     const runKindOpts = useMemo(() => {
         const present = new Set(runList.map((r) => r.kind))
-        return RUN_KINDS.filter((k) => present.has(k))
+        return RUN_KINDS.filter((k) => present.has(k.kind))
     }, [runList])
     const runProjectOpts = useMemo(() => {
         const seen = new Map<string, string>()
@@ -343,8 +360,8 @@ export function UsagePanel(): JSX.Element {
                                     >
                                         <option value="all">All kinds</option>
                                         {runKindOpts.map((k) => (
-                                            <option key={k} value={k}>
-                                                {k}
+                                            <option key={k.kind} value={k.kind}>
+                                                {k.label}
                                             </option>
                                         ))}
                                     </select>

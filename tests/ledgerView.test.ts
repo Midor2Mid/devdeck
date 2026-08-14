@@ -78,7 +78,13 @@ describe("formatCost", () => {
     it("writes zero as $0, never blank and never a dash", () => {
         expect(formatCost(0)).toBe("$0")
         expect(formatCost(4.184)).toBe("$4.18")
-        expect(formatCost(0.004)).toBe("$0.00")
+    })
+
+    // The ledger used to carry its own formatCost, which rendered sub-cent work
+    // as "$0.00" - a real run reading as free, in the one panel that exists to
+    // be honest about money. It is now the same function the board uses.
+    it("never renders real work as free", () => {
+        expect(formatCost(0.004)).toBe("<$0.01")
     })
 })
 
