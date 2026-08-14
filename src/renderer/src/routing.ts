@@ -22,23 +22,47 @@ export interface RouteResult {
 }
 
 /**
- * Compile a glob to a regex. Every metacharacter is escaped before `*` and `?`
- * are translated, so the user cannot express a nested quantifier — which is what
- * makes catastrophic backtracking possible. This is a structural fix, not a
- * bound: a glob compiles to alternating literals and `.*`, whose backtracking is
- * polynomial rather than exponential.
+ * Match a glob against a title. `*` matches any run, `?` matches one character.
  *
- * The previous `titleRegex` kind was removed rather than mitigated. Capping the
- * input length does not help: blowup is ~2x per character, so any cap large
- * enough to be useful is still astronomically slow, and the case that prompted
- * the fix was a 31-character title.
+ * Deliberately NOT compiled to a RegExp. A glob built from user text and handed to
+ * the regex engine inherits its backtracking: escaping metacharacters stops a
+ * nested quantifier being written, but several plain `*` tokens still produce the
+ * `^(a.*){k}Z$` blowup — measured at 2.1s for five stars against a 100-character
+ * title, and over two minutes for twenty. This runs synchronously to render the
+ * dispatch preview, so a hang here freezes the screen the user is looking at.
+ *
+ * The two-pointer form has one backtrack point (the most recent `*`) and never
+ * explores a tree, so its worst case is O(pattern x text) and it cannot degrade.
+ *
+ * Anchored, like globs everywhere else: `login` matches only the exact title
+ * "login". Use `*login*` to match anywhere — the `title` kind is the substring
+ * one. There is no escape for a literal `*` or `?` in a pattern; the rule editor
+ * should teach the idiom with a `*login*` placeholder rather than documenting an
+ * escape nobody would find.
  */
-function globToRegExp(glob: string): RegExp {
-    // Escape every metacharacter, including the backslash itself.
-    const escaped = glob.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    // Then translate only the two glob tokens, matching their ESCAPED forms.
-    const body = escaped.replace(/\\\*/g, ".*").replace(/\\\?/g, ".")
-    return new RegExp("^" + body + "$", "i")
+function globMatch(glob: string, text: string): boolean {
+    const p = glob.toLowerCase()
+    const s = text.toLowerCase()
+    let pi = 0
+    let si = 0
+    let star = -1
+    let mark = 0
+    while (si < s.length) {
+        if (pi < p.length && (p[pi] === "?" || p[pi] === s[si])) {
+            pi++
+            si++
+        } else if (pi < p.length && p[pi] === "*") {
+            star = pi++
+            mark = si
+        } else if (star >= 0) {
+            pi = star + 1
+            si = ++mark
+        } else {
+            return false
+        }
+    }
+    while (pi < p.length && p[pi] === "*") pi++
+    return pi === p.length
 }
 
 /**
@@ -61,12 +85,7 @@ export function ruleMatches(rule: RoutingRule, card: { title: string; projectId:
     if (rule.kind === "titleGlob") {
         const pattern = rule.pattern.trim()
         if (!pattern) return false
-        try {
-            const regex = globToRegExp(pattern)
-            return regex.test(card.title)
-        } catch {
-            return false
-        }
+        return globMatch(pattern, card.title)
     }
 
     if (rule.kind === "project") {

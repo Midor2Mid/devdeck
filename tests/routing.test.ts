@@ -35,6 +35,25 @@ describe("ruleMatches", () => {
         expect(ruleMatches(rule({ kind: "titleGlob", pattern: "*" }), card)).toBe(true)
     })
 
+    it("handles multiple wildcards without exponential blowup", () => {
+        // The shape that defeated round 2: five stars against 100 repeated chars took 2.1s.
+        // This must complete instantly (O(pattern × text), not exponential).
+        const longTitle = "a".repeat(100)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "*a*a*a*a*a*NOPE" }), { title: longTitle, projectId: "p1" })).toBe(false)
+    })
+
+    it("shows the anchoring rule: *login* matches but login does not", () => {
+        // A glob is anchored: `login` matches only titles that are exactly "login".
+        // The substring idiom requires `*login*`.
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "*login*" }), card)).toBe(true)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "login" }), card)).toBe(false)
+    })
+
+    it("spans wildcards across the middle", () => {
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "fix*redirect" }), card)).toBe(true)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "fix*login" }), card)).toBe(false)
+    })
+
     it("matches a project by id, not by name", () => {
         expect(ruleMatches(rule({ kind: "project", pattern: "p1" }), card)).toBe(true)
         expect(ruleMatches(rule({ kind: "project", pattern: "P1" }), card)).toBe(false)
