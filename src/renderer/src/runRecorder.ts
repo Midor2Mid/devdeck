@@ -293,7 +293,15 @@ export function createRunRecorder(
                 exclusive: true,
                 outcome,
                 // Abandoning eliminates every entrant; landing eliminates the rest.
-                eliminated: outcome === "landed" ? r.entrants.length - 1 : r.entrants.length,
+                // Counted over entrants that actually got a worktree: one whose
+                // worktree failed to be created was never dispatched at all
+                // (status "startfailed") and spent nothing, so calling it
+                // "eliminated" overstates what the race threw away — the number
+                // this field exists to report.
+                eliminated: (() => {
+                    const started = r.entrants.filter((e) => e.worktree).length
+                    return outcome === "landed" ? Math.max(0, started - 1) : started
+                })(),
                 // The agent id, not the name: names are user-editable and two
                 // presets called "Claude" are entirely plausible.
                 winner: winner?.agentId,

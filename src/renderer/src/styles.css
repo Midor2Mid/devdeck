@@ -6930,6 +6930,25 @@ kbd {
     text-transform: uppercase;
     color: var(--faint);
 }
+/* The outcome sits with the kind, not with the money: "race · abandoned" is the
+   difference between money that bought something and money that bought nothing,
+   which is the first thing to know about the row. The word carries the whole
+   meaning on its own — color only reinforces it, never replaces it. */
+.usage-run-outcome {
+    flex: none;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.usage-run-outcome.landed {
+    color: var(--ok);
+}
+.usage-run-outcome.abandoned,
+.usage-run-outcome.failed {
+    color: var(--danger);
+}
 .usage-run-label {
     flex: 1;
     min-width: 0;

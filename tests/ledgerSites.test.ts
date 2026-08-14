@@ -544,6 +544,32 @@ describe("race records", () => {
         expect(appended[0]).toMatchObject({ outcome: "abandoned", cost: 1 })
     })
 
+    // An entrant whose worktree could not be created is never dispatched and
+    // spends nothing, so counting it as eliminated overstates what the race
+    // threw away - which is the one thing this number is for.
+    it("counts only entrants that actually started as eliminated", async () => {
+        useStore.setState({
+            races: {
+                c1: race({
+                    entrants: [
+                        entrant({ cost: 1 }),
+                        entrant({ agentId: "codex", agentName: "Codex", cost: 0.5 }),
+                        entrant({
+                            agentId: "gemini",
+                            agentName: "Gemini",
+                            status: "startfailed",
+                            worktree: ""
+                        })
+                    ]
+                })
+            }
+        })
+
+        await useStore.getState().landRaceWinner("c1", "claude")
+
+        expect(appended[0].eliminated).toBe(1)
+    })
+
     it("does not break landing when the ledger throws", async () => {
         stubApi({
             ledger: {

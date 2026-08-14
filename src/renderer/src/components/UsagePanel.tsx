@@ -378,6 +378,16 @@ export function UsagePanel(): JSX.Element {
                                     <div key={r.id} className="usage-run-row">
                                         <div className="usage-run-main">
                                             <span className="usage-run-kind">{r.kind}</span>
+                                            {/* Every card record is "done" by construction, and a
+                                                pipeline's "done" is the unremarkable case - showing
+                                                it would put a word on nearly every row that says
+                                                nothing. The outcomes that carry information (landed
+                                                vs abandoned, failed, stopped) are the ones shown. */}
+                                            {r.outcome && r.outcome !== "done" && (
+                                                <span className={"usage-run-outcome " + r.outcome}>
+                                                    {r.outcome}
+                                                </span>
+                                            )}
                                             <span className="usage-run-label" title={r.label}>
                                                 {r.label}
                                             </span>
