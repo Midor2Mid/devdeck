@@ -576,17 +576,36 @@ rows, each silently claiming the other's spend, both marked as receipts, "0
 excluded from the total". No unusual steps, and roughly twice the real number.
 
 It is now an overlap test over `usageLog`, which is persisted and has its
-stale open events closed on load, so it is a complete `[startedAt, endedAt]`
-list of every agent session DevDeck has ever started: **non-exclusive iff some
-other session, in the same directory, overlapped this run's window.** That
-needed a directory on the event — `projectId` alone would have demoted every
+stale open events closed on load, so it holds a `[startedAt, endedAt]` for
+every agent session that has actually run: **non-exclusive iff some other
+session, in the same directory, overlapped this run's window.** That needed a
+directory on the event — `projectId` alone would have demoted every
 worktree-isolated card and every race entrant, since a worktree is a different
 absolute path and therefore a different transcript folder — so `UsageEvent`
-gained `cwd`. The live-pane snapshot survives as a *second, additive* test,
-because a pane restored from a previous launch never calls `logUsageStart` and
-so appears in no event at all. Both tests fail closed, and so does an event
-written before `cwd` existed: it names no directory, so it cannot be ruled out
-of this one.
+gained `cwd`.
+
+**"Every agent session" turned out to be a claim the code did not honour, and
+it re-opened the whole bug.** A pane restored from a previous launch starts
+only when the user clicks Resume, and that path spawned the pty without
+calling `logUsageStart` at all — the one way a restored agent ever starts, and
+it started invisibly. That session then spent real money the overlap test
+could not see, so any card or pipeline sharing its directory was written as an
+exclusive receipt over money that was partly its, while `recordSessionRun`
+declined to record the pane on its own: the spend existed *only* inside
+someone else's total. Resume now opens the event (both modes — "fresh" is the
+same agent in the same directory costing the same money; the distinction is
+about the user's context, not the accounting). The lesson is narrower than C1's
+and just as expensive: **a predicate that reads a log is only as complete as
+its writers, so the audit is "who starts one of these without telling the
+log?", not "is the query right?"**
+
+The live-pane snapshot survives as a *second, additive* test — belt and braces
+for anything the log has not been told about, since exactly that gap is what
+N1 was. Both tests fail closed. So does an overlapping event written before
+`cwd` existed, but it excludes the run as **`"unknown"`, not `"shared"`**: it
+names no directory, so it can be neither ruled out of this one nor placed in
+it, and reporting a specific sharer nothing has a record of is the same
+invented fact one level down.
 
 The general lesson, worth more than the fix: **when a question is about a
 window, do not answer it with a snapshot, and be suspicious of any comment
@@ -600,8 +619,10 @@ collapsed into the same flag — and the panel told the user "shared a project
 with another session" in every case. A pipeline whose `usage:window` IPC
 rejected was reported as having shared a project with a session that did not
 exist: a fabricated fact, in the one panel whose whole purpose is honesty
-about attribution. Records now carry a `reason` (`"shared"` | `"unpriced"`)
-and each gets its own clause and tooltip.
+about attribution. Records now carry a `reason` (`"shared"` | `"unpriced"` |
+`"unknown"`), and each gets its own clause and tooltip — `"unknown"` sharing
+the one already written for records that predate reasons entirely, since both
+say the same thing and a fourth clause would imply a distinction there isn't.
 
 **A session record is written only for a genuinely ad-hoc pane.** A pane
 owned by a race entrant, a pipeline step, or a dispatched card writes nothing
@@ -623,12 +644,22 @@ the first's, both summable. The guard now rides on the card itself
 question worth asking of any in-memory de-dupe key: what restores the *thing*,
 and does anything restore the *key*?
 
-**Known limits, and all of them fail closed.** A pane restored from a
-previous launch never called `logUsageStart`, so it has no start instant to
-price a window from and records nothing rather than inventing one. A
-dispatched card deleted before it ever reaches done records nothing — the
-record is written on the done transition, and a deleted card never makes
-that transition. A card record is written from the cost cached on the card,
+**Known limits, and all of them fail closed *in the total*** — which is the
+test that matters, and the one the old wording here quietly skipped. A pane
+restored from a previous launch and never resumed has no start instant to
+price a window from, so it records nothing rather than inventing one; it also
+never launched, so there is no spend for anything else to absorb. (Before the
+Resume fix above, this same bullet described the un-resumed case and said
+nothing about the resumed one — where the missing event did not just lose a
+row, it left another run's row marked exclusive over money that wasn't its.
+"Records nothing" is only a safe limit when nothing else is quietly claiming
+the money instead, and that is the question to ask of every entry in a list
+like this.) A dispatched card deleted before it ever reaches done records
+nothing — the record is written on the done transition, and a deleted card
+never makes that transition. Money a card's agent spends after its first
+*done* is unrecordable, because the card is guarded against a second record;
+an under-report the feature accepts. A card record is written from the cost
+cached on the card,
 while the re-price that same move triggers resolves later, so it can be a
 little stale — fixing that would mean awaiting inside a write site, and no
 write site may block or throw on the path it sits in. `claimedTerms` (which
