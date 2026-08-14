@@ -4,7 +4,7 @@ import { Modal } from "./Modal"
 import { useSettings, type UsageEvent } from "../settings"
 import {
     filterRuns,
-    formatCost,
+    formatCostExact,
     formatDuration,
     runTotals,
     runsSentence,
@@ -414,7 +414,9 @@ export function UsagePanel(): JSX.Element {
                                                 }
                                                 title={r.exclusive ? undefined : exclusionTip(r.reason)}
                                             >
-                                                {(r.exclusive ? "" : "~") + formatCost(r.cost)}
+                                                {/* Exact cents, like the total above them: a run row
+                                                    and the figure it pays into must agree. */}
+                                                {(r.exclusive ? "" : "~") + formatCostExact(r.cost)}
                                             </span>
                                         </div>
                                         <div className="usage-run-meta">

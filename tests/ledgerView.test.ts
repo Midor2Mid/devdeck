@@ -2,11 +2,15 @@ import { describe, it, expect } from "vitest"
 import {
     runTotals,
     filterRuns,
-    formatCost,
+    formatCostExact,
     formatDuration,
     runsSentence,
     type RunTotals
 } from "../src/renderer/src/ledgerView"
+// The board's compact rendering of the same money, asserted alongside the
+// ledger's so the one thing they must share (the floor) and the one thing they
+// must not (precision above it) are both pinned in the same place.
+import { formatCost as boardFormatCost } from "../src/renderer/src/board"
 import type { RunRecord } from "../src/main/ledger"
 
 function rec(over: Partial<RunRecord> = {}): RunRecord {
@@ -74,17 +78,31 @@ describe("filterRuns", () => {
     })
 })
 
-describe("formatCost", () => {
+describe("formatCostExact", () => {
     it("writes zero as $0, never blank and never a dash", () => {
-        expect(formatCost(0)).toBe("$0")
-        expect(formatCost(4.184)).toBe("$4.18")
+        expect(formatCostExact(0)).toBe("$0")
+        expect(formatCostExact(4.184)).toBe("$4.18")
     })
 
-    // The ledger used to carry its own formatCost, which rendered sub-cent work
-    // as "$0.00" - a real run reading as free, in the one panel that exists to
-    // be honest about money. It is now the same function the board uses.
-    it("never renders real work as free", () => {
-        expect(formatCost(0.004)).toBe("<$0.01")
+    // The ledger used to carry its own sub-cent rule, which rendered real work
+    // as "$0.00" - free, which it was not - in the one panel that exists to be
+    // honest about money. The floor is now board.costFloor, shared with the
+    // figure the board prints for the same money.
+    it("shares the sub-cent floor with the board, so real work never reads as free", () => {
+        expect(formatCostExact(0.004)).toBe("<$0.01")
+        expect(boardFormatCost(0.004)).toBe("<$0.01")
+    })
+
+    // The floor is shared; the precision above it is not, and deliberately so.
+    // A cost pill in a dense board row wants a magnitude at a glance, but the
+    // Runs total is the headline figure of a ledger whose whole claim on the
+    // user's trust is that it is precise about money - and it sits directly
+    // above per-row costs it has to agree with. Rounding 50c away there is the
+    // feature undercutting itself.
+    it("keeps exact cents above $10, where the board's compact rule rounds", () => {
+        expect(formatCostExact(12.5)).toBe("$12.50")
+        expect(formatCostExact(1234.567)).toBe("$1234.57")
+        expect(boardFormatCost(12.5)).toBe("$13")
     })
 })
 
@@ -145,6 +163,16 @@ describe("runsSentence", () => {
     it("distinguishes an empty ledger from a filter that matched nothing", () => {
         expect(runsSentence(totals(), 0, false).why).toBe("nothing recorded yet")
         expect(runsSentence(totals(), 0, true).why).toBe("no runs match this filter")
+    })
+
+    // The sentence is where the headline figure is actually built, so pin it
+    // here too: a formatter that keeps cents is no use if the total reaches the
+    // screen through something that rounds.
+    it("states the headline total in exact cents, however large it gets", () => {
+        expect(runsSentence(totals({ cost: 12.5, counted: 3 }), 3, true).cost).toBe("$12.50")
+        expect(runsSentence(totals({ cost: 1234.567, counted: 90 }), 90, true).cost).toBe(
+            "$1234.57"
+        )
     })
 
     it("has no trailing clause when the total covers every row shown", () => {

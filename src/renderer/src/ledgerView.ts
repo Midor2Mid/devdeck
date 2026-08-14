@@ -14,13 +14,29 @@
  */
 
 import type { RunKind, RunRecord } from "../../main/ledger"
-// One money formatter for the whole renderer. A second one lived here and wrote
-// a real $0.004 run as "$0.00" - free, which it was not - while board.ts's
-// (same name, same renderer) already said "<$0.01". Re-exported rather than
-// reimplemented, so there is exactly one answer to how DevDeck writes a dollar.
-import { formatCost } from "./board"
+import { costFloor } from "./board"
 
-export { formatCost }
+/**
+ * Money for the Runs section: the floor is `board.costFloor`, shared with every
+ * other figure in the app, and above it this keeps exact cents.
+ *
+ * The bug that made the floor shared: this module used to carry its own
+ * `formatCost`, identical in name to the board's and different in behaviour, and
+ * it rendered a real $0.004 run as "$0.00" — free, which it was not — while the
+ * board beside it already said "<$0.01". Two functions with one name is how that
+ * hid, so the two renderings now have two names.
+ *
+ * Above the floor it deliberately does NOT follow the board's compact rule of
+ * whole dollars past $10. That rule is right for a cost pill in a dense row,
+ * where a magnitude at a glance is the whole job. This is the headline figure of
+ * a ledger whose entire claim on the user's trust is that it is precise about
+ * money and honest about what it leaves out; rounding $12.50 to "$13" there
+ * undercuts the thing the feature exists to do, and it would not even agree with
+ * the per-row costs printed directly beneath it.
+ */
+export function formatCostExact(usd: number): string {
+    return costFloor(usd) ?? `$${usd.toFixed(2)}`
+}
 
 export interface RunTotals {
     /** Summed cost of exclusive runs only. */
@@ -129,7 +145,7 @@ export function runsSentence(
     return {
         count: shown,
         unit: shown === 1 ? "run" : "runs",
-        cost: formatCost(totals.cost),
+        cost: formatCostExact(totals.cost),
         why
     }
 }
