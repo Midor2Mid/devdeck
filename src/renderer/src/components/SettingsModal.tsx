@@ -1210,7 +1210,7 @@ function RoutingSection(): JSX.Element {
                 Picks which agent a task board's Dispatch button runs, without asking every time.
                 Rules are tried top to bottom; the first <b>enabled</b> rule that matches - and
                 whose agent still exists - wins. No match falls through to <b>Default agent</b>{" "}
-                below, then to the first configured agent.
+                below, then to the first AI agent preset.
             </p>
             <p className="settings-hint" style={{ marginTop: 0 }}>
                 <b>Title contains</b> matches anywhere in the title. <b>Title matches (glob)</b>{" "}
