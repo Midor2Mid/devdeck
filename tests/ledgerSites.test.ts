@@ -174,6 +174,56 @@ describe("card records", () => {
         expect(appended[0].cost).toBe(0.42)
     })
 
+    // The guard has to be exactly as durable as the thing it guards. A quit
+    // empties any renderer-module set, while workspace.json brings the card back
+    // with dispatchedAt and termId intact - so the guard rides on the card.
+    it("stamps the guard onto the card, where it survives a restart", () => {
+        useStore.setState({ boardTasks: [dispatched], termAgents: { "term-1": "claude" } })
+
+        useStore.getState().moveBoardTask("t1", "done")
+
+        expect(useStore.getState().boardTasks[0].recordedFor).toBe(1000)
+    })
+
+    it("records nothing for a card restored from disk that was already recorded", () => {
+        // Exactly what workspace.json hands back after a quit and reopen.
+        useStore.setState({
+            boardTasks: [
+                { ...dispatched, id: "t-restart", column: "done", endedAt: 2000, recordedFor: 1000 }
+            ],
+            termAgents: { "term-1": "claude" }
+        })
+
+        useStore.getState().moveBoardTask("t-restart", "doing")
+        useStore.setState({
+            boardTasks: [{ ...useStore.getState().boardTasks[0], cost: 0.9, costTokens: 2000 }]
+        })
+        useStore.getState().moveBoardTask("t-restart", "done")
+
+        expect(appended).toEqual([])
+    })
+
+    it("records again for a restored card that was re-dispatched since", () => {
+        useStore.setState({
+            boardTasks: [
+                {
+                    ...dispatched,
+                    id: "t-restart-redis",
+                    column: "doing",
+                    dispatchedAt: 9000,
+                    endedAt: undefined,
+                    recordedFor: 1000
+                }
+            ],
+            termAgents: { "term-1": "claude" }
+        })
+
+        useStore.getState().moveBoardTask("t-restart-redis", "done")
+
+        expect(appended).toHaveLength(1)
+        expect(appended[0].startedAt).toBe(9000)
+    })
+
     it("records again when the card is genuinely re-dispatched", () => {
         useStore.setState({ boardTasks: [{ ...dispatched, id: "t-redis" }] })
         useStore.getState().moveBoardTask("t-redis", "done")

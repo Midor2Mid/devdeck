@@ -705,7 +705,20 @@ export const useStore = create<AppState>((set, get) => {
         recordPipelineRun,
         recordSessionRun,
         claimTerm
-    } = createRunRecorder(get, { newId, isAgentId })
+    } = createRunRecorder(get, {
+        newId,
+        isAgentId,
+        // Persisted with the card, so the "already recorded" guard survives a
+        // quit exactly as `dispatchedAt` and `termId` do.
+        markCardRecorded: (taskId, dispatchedAt) => {
+            set((s) => ({
+                boardTasks: s.boardTasks.map((t) =>
+                    t.id === taskId ? { ...t, recordedFor: dispatchedAt } : t
+                )
+            }))
+            persist()
+        }
+    })
 
     /** Rewrite one entrant immutably. Never trusts a captured race — always reads current state. */
     const setEntrant = (cardId: string, agentId: string, patch: Partial<Entrant>): void => {

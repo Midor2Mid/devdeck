@@ -23,6 +23,24 @@ export interface BoardTask {
      */
     cost?: number
     costTokens?: number
+    /**
+     * The `dispatchedAt` of the run already written to the run ledger for this
+     * card, or absent if none has been. Moving a card out of done clears its
+     * endedAt and cost and lets it accrue again, so done → doing → done would
+     * otherwise write a SECOND record over [dispatchedAt, laterEnd] — a window
+     * that *contains* the first one's rather than being a delta from it — and
+     * both would be summable. One ordinary drag, no race needed.
+     *
+     * It lives on the card rather than in a renderer-module set because it has
+     * to be exactly as durable as the thing it guards: a quit empties module
+     * state, while workspace.json brings `dispatchedAt` and `termId` straight
+     * back. Here it rides to disk with the rest of the card for free.
+     *
+     * Compared against `dispatchedAt`, not merely checked for presence: a
+     * genuine re-dispatch stamps a fresh `dispatchedAt`, which is a new run over
+     * a new window, and it does record again.
+     */
+    recordedFor?: number
 }
 
 /**

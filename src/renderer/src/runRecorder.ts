@@ -43,6 +43,12 @@ export interface RecorderState {
 export interface RecorderDeps {
     newId: () => string
     isAgentId: (agentId: string) => boolean
+    /**
+     * Stamp `recordedFor` on a card that has just been recorded. The recorder
+     * only reads state, so writing the guard back — the one thing it must make
+     * durable — is handed to the store, which owns the card and its persistence.
+     */
+    markCardRecorded: (taskId: string, dispatchedAt: number) => void
 }
 
 export interface RunRecorder {
@@ -70,7 +76,7 @@ export function createRunRecorder(
     get: () => RecorderState,
     deps: RecorderDeps
 ): RunRecorder {
-    const { newId, isAgentId } = deps
+    const { newId, isAgentId, markCardRecorded } = deps
 
     /** Append one record. Swallows everything — main's appendRun logs its own failures. */
     const writeRun = (rec: RunRecord): void => {
@@ -175,27 +181,27 @@ export function createRunRecorder(
             .every((s) => own.has(s.termId) || !samePath(st.termCwd[s.termId] ?? s.projectPath, cwd))
     }
 
-    // Cards already recorded, keyed by card id + the dispatch that paid for it.
-    // Moving a card out of done clears its endedAt and cost and lets it accrue
-    // again, so done -> doing -> done would otherwise write a SECOND record over
-    // [dispatchedAt, laterEnd] - a window that contains the first one's, not a
-    // delta from it - and both would be summable. One ordinary drag, no race
-    // needed. A genuine re-dispatch stamps a fresh dispatchedAt and so is a new
-    // key, and does record again. One string per finished card, on the same
-    // reasoning as raceGen: cheap, and bounded by cards that have ever run.
-    const recordedCards = new Set<string>()
-
     /**
      * A card reached done. Its cost is the figure already cached on the card (the
      * board prices it as the agent works) — deliberately not re-read here, so the
      * record says what the card said. A card that was never priced records zero,
      * and marks it as not-a-receipt rather than as a summable $0.
+     *
+     * Known and accepted: `recordCardRun` runs synchronously inside
+     * `moveBoardTask` while the re-price that move triggers resolves later, so a
+     * card record can be written from a slightly stale cost. Fixing it would mean
+     * awaiting inside a write site, and no write site may block or throw on the
+     * path it sits in — a card must reach done whether or not it is recorded.
+     *
+     * The once-only guard is `task.recordedFor` (see BoardTask): a card carries
+     * the dispatch it was recorded for, so the guard is exactly as durable as the
+     * card, and survives the quit that a renderer-module set would not.
      */
     const recordCardRun = (task: BoardTask, endedAt: number): void => {
         try {
-            const key = `${task.id}:${task.dispatchedAt ?? 0}`
-            if (recordedCards.has(key)) return
-            recordedCards.add(key)
+            const dispatchedAt = task.dispatchedAt ?? 0
+            if (task.recordedFor === dispatchedAt) return
+            markCardRecorded(task.id, dispatchedAt)
             const project = projectById(task.projectId)
             // Dispatched isolated? Then it was priced from its worktree, and
             // that is the directory whose exclusivity matters.
@@ -358,6 +364,14 @@ export function createRunRecorder(
     // blocks its removal on Windows), so the race is always still in state when
     // its panes close. If that ordering is ever inverted, the suppression below
     // stops working for races and entrant sessions start double-counting a race.
+    //
+    // Deliberately NOT persisted, unlike BoardTask.recordedFor: a renderer reload
+    // landing between a pipeline run ending and its step pane closing would drop
+    // these claims, and that pane would then write a session record over money
+    // the pipeline record already counted. Bounded (a handful of step panes) and
+    // rare (a reload inside that window), where the card guard it is contrasted
+    // with is neither — a quit between a card being recorded and being dragged
+    // around the board is ordinary use.
     const claimedTerms = new Set<string>()
 
     /**
