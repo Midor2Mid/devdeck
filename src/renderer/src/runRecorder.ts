@@ -161,9 +161,10 @@ export function createRunRecorder(
      * which is live on Windows: two spellings of one directory that differ only in
      * case are the same directory, and costInWindow cannot tell them apart either.
      * Folding can only find MORE matches, i.e. mark more runs non-exclusive, which
-     * is the fail-closed direction. (Its slash-normalising does no work here today
-     * — both sides of this comparison are `join`ed paths, not `git worktree list`
-     * output — but it costs nothing and the day one side changes it is right.)
+     * is the fail-closed direction. Its slash-normalising now earns its keep too:
+     * a worktree path reaches `UsageEvent.cwd` by way of `git worktree add`, which
+     * answers in forward slashes, while a project path is whatever the user added
+     * — so the two sides of this comparison genuinely can be spelled differently.
      *
      * Returns *why* the cost may not be summed, or undefined when it is a
      * receipt: "shared" and "unpriced" are two different things to tell a user,

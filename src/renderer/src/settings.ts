@@ -261,8 +261,8 @@ export interface UsageEvent {
      * a worktree is a different absolute path and therefore a different Claude
      * Code transcript folder, so two sessions on the same project but in
      * different worktrees never share a cost. Optional because events written
-     * before this field existed do not have it; see `runRecorder.wasExclusive`
-     * for how those are read (fail closed).
+     * before this field existed do not have it; see
+     * `runRecorder.attributionReason` for how those are read (fail closed).
      */
     cwd?: string
     startedAt: number

@@ -5,10 +5,12 @@
  *
  * The one rule that matters: a row's cost is sometimes an *attribution* over
  * a shared project directory and time window, not a receipt for that run
- * alone - RunRecord.exclusive is false whenever another agent session shared
- * the directory during the run. Summing those rows into a total would double
- * count (or worse, misattribute) real money, so runTotals leaves them out and
- * reports how many were excluded instead of silently under-reporting.
+ * alone - RunRecord.exclusive is false whenever another agent session
+ * overlapped the run's window in the same directory. Summing those rows into a
+ * total would double count (or worse, misattribute) real money, so runTotals
+ * leaves them out and reports how many were excluded instead of silently
+ * under-reporting - and, since `exclusive: false` is not one fact but two,
+ * reports which kind of not-a-receipt each one was.
  */
 
 import type { RunKind, RunRecord } from "../../main/ledger"
