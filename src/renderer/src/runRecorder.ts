@@ -72,6 +72,14 @@ export interface RunRecorder {
     claimTerm: (termId: string) => void
 }
 
+/**
+ * What a record calls a project it can no longer name. A blank renders as an
+ * empty cell and, worse, as a blank `<option>` in the run filter that every
+ * removed project collapses onto — so the ledger loses the very history it
+ * exists to keep. Said out loud instead.
+ */
+export const REMOVED_PROJECT = "(removed project)"
+
 export function createRunRecorder(
     get: () => RecorderState,
     deps: RecorderDeps
@@ -215,7 +223,9 @@ export function createRunRecorder(
             // Dispatched isolated? Then it was priced from its worktree, and
             // that is the directory whose exclusivity matters.
             const cwd = task.worktree || project?.path || ""
-            const agentId = task.termId ? get().termAgents[task.termId] : undefined
+            // The stamp from dispatch first: by the time a card is dragged to
+            // done its pane has usually closed, and termAgents no longer knows.
+            const agentId = task.agentId ?? (task.termId ? get().termAgents[task.termId] : undefined)
             const startedAt = task.dispatchedAt ?? endedAt
             // A card the board never managed to price has no figure to vouch for;
             // that is a different thing to say than "it shared a directory".
@@ -227,7 +237,9 @@ export function createRunRecorder(
                 id: newId(),
                 kind: "card",
                 projectId: task.projectId,
-                projectName: project?.name ?? "",
+                // The name as it was at dispatch, which is the one the design
+                // promises and the only one a removed project still has.
+                projectName: task.projectName || project?.name || REMOVED_PROJECT,
                 label: task.title,
                 startedAt,
                 endedAt,
@@ -271,7 +283,7 @@ export function createRunRecorder(
                 id: newId(),
                 kind: "race",
                 projectId: r.projectId,
-                projectName: project?.name ?? "",
+                projectName: project?.name || REMOVED_PROJECT,
                 label: r.title,
                 startedAt: r.startedAt,
                 endedAt: Date.now(),
@@ -342,7 +354,7 @@ export function createRunRecorder(
                         id: newId(),
                         kind: "pipeline",
                         projectId: project?.id ?? "",
-                        projectName: project?.name ?? "",
+                        projectName: project?.name || REMOVED_PROJECT,
                         label: run.name,
                         startedAt,
                         endedAt,
@@ -458,7 +470,7 @@ export function createRunRecorder(
                         id: newId(),
                         kind: "session",
                         projectId,
-                        projectName: session?.projectName ?? project?.name ?? "",
+                        projectName: session?.projectName || project?.name || REMOVED_PROJECT,
                         label,
                         startedAt,
                         endedAt,

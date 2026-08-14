@@ -137,6 +137,42 @@ describe("card records", () => {
         expect(appended[0].endedAt).toBe(useStore.getState().boardTasks[0].endedAt)
     })
 
+    // The record has to stay readable after the project it names is gone - that
+    // is most of the point of keeping one. A live lookup at record time wrote a
+    // blank, which renders as an empty cell and collapses every removed project
+    // onto one blank entry in the project filter.
+    it("names the project as it was when the project has since been removed", () => {
+        useStore.setState({
+            projects: [],
+            boardTasks: [{ ...dispatched, id: "t-gone", projectName: "P1" }]
+        })
+
+        useStore.getState().moveBoardTask("t-gone", "done")
+
+        expect(appended[0].projectName).toBe("P1")
+    })
+
+    it("says so out loud when nothing named the project at all", () => {
+        useStore.setState({ projects: [], boardTasks: [{ ...dispatched, id: "t-nameless" }] })
+
+        useStore.getState().moveBoardTask("t-nameless", "done")
+
+        expect(appended[0].projectName).toBe("(removed project)")
+    })
+
+    // The pane is normally long closed by the time a card is filed, so reading
+    // the agent back off termAgents left the agents column blank on most rows.
+    it("names the agent from the card, not from a pane that has closed", () => {
+        useStore.setState({
+            boardTasks: [{ ...dispatched, id: "t-agent", agentId: "codex" }],
+            termAgents: {}
+        })
+
+        useStore.getState().moveBoardTask("t-agent", "done")
+
+        expect(appended[0].agentIds).toEqual(["codex"])
+    })
+
     it("records nothing for a card that was never dispatched", () => {
         useStore.setState({
             boardTasks: [{ id: "t2", projectId: "p1", title: "By hand", column: "todo", createdAt: 1 }]

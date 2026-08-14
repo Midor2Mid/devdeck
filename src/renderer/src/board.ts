@@ -8,6 +8,22 @@ export interface BoardTask {
     column: BoardColumn
     /** Linked agent session once dispatched. */
     termId?: string
+    /**
+     * The agent preset dispatched on this card. Stamped alongside `termId`
+     * because it has to outlive it: the pane usually closes before the card is
+     * dragged to done, and reading the agent back off a closed pane returns
+     * nothing — which left the run ledger's agents column blank on most card
+     * rows, one of the seven columns it promises.
+     */
+    agentId?: string
+    /**
+     * The project's name as it was at dispatch. Resolving the name from live
+     * projects when a run is recorded writes a blank for a project since removed,
+     * which renders as an empty cell and collapses every removed project onto one
+     * blank entry in the run filter — the opposite of "a removed project's
+     * history stays readable".
+     */
+    projectName?: string
     /** Worktree path if dispatched isolated. */
     worktree?: string
     createdAt: number

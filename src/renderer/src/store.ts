@@ -1316,6 +1316,14 @@ export const useStore = create<AppState>((set, get) => {
                               ...t,
                               column: "doing",
                               termId,
+                              // Both stamped here because here is the last moment
+                              // they are guaranteed knowable: the pane closes long
+                              // before the card is filed, and the project can be
+                              // removed before that. A run record built from live
+                              // lookups afterwards would have a blank agent and a
+                              // blank project name.
+                              agentId,
+                              projectName: proj.name,
                               worktree: worktreePath,
                               // Opens the cost window; closed when the card hits done.
                               dispatchedAt: Date.now(),
