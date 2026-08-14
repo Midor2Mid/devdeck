@@ -12,6 +12,21 @@ import { atomicWrite } from "./atomic"
 
 export type RunKind = "card" | "race" | "pipeline" | "session"
 
+/**
+ * Why a record's cost may not be summed. `exclusive: false` alone used to mean
+ * four different things at once - a genuinely shared directory, a card that was
+ * never priced, a price read that failed, and a run with no directory left to
+ * price over - and the UI told the user the first of them in every case, which
+ * is a fabricated fact in a panel whose whole purpose is honesty about
+ * attribution.
+ *
+ * - "shared": another agent session occupied the same directory during the run's
+ *   window, so this figure covers both. Real money, wrong owner.
+ * - "unpriced": there is no figure DevDeck can vouch for - never priced, the
+ *   price could not be read, or no directory left to price it over.
+ */
+export type RunExclusionReason = "shared" | "unpriced"
+
 export interface RunRecord {
     id: string
     kind: RunKind
@@ -24,6 +39,8 @@ export interface RunRecord {
     cost: number
     tokens: number
     exclusive: boolean
+    /** Why `exclusive` is false. Absent on an exclusive run, and on records written before this existed. */
+    reason?: RunExclusionReason
     outcome?: "landed" | "abandoned" | "done" | "failed" | "stopped"
     added?: number
     removed?: number

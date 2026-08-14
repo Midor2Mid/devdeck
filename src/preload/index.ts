@@ -7,7 +7,7 @@ import { contextBridge, ipcRenderer } from "electron"
 // this boundary, instead of `ipcRenderer.invoke`'s untyped channel quietly
 // letting the two sides drift (the exact gap that hid Task 3's regression).
 import type { BindMode } from "../main/guards"
-import type { RunKind, RunRecord } from "../main/ledger"
+import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 
@@ -19,7 +19,7 @@ export type { BindMode, PublicRemoteDevice as RemoteDevice }
 // The ledger's record shape is defined once, in main, and travels across the
 // bridge unchanged - restating it here is exactly how a renamed field stops
 // being an error anywhere.
-export type { RunKind, RunRecord }
+export type { RunKind, RunRecord, RunExclusionReason }
 
 // Each terminal pane registers its own pty:data/pty:exit listener; raise the
 // cap so many open terminals don't trip Node's MaxListenersExceededWarning.

@@ -3,7 +3,7 @@ import { useStore } from "../store"
 import { Modal } from "./Modal"
 import { useSettings, type UsageEvent } from "../settings"
 import { filterRuns, formatCost, formatDuration, runTotals, runsSentence } from "../ledgerView"
-import type { RunKind, RunRecord, UsageSummary } from "../../../preload/index"
+import type { RunExclusionReason, RunKind, RunRecord, UsageSummary } from "../../../preload/index"
 
 function fmtTok(n: number): string {
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M"
@@ -34,15 +34,32 @@ const RUN_ROWS = 50
 const NO_RUNS: RunRecord[] = []
 
 /**
- * Why a run's cost may be excluded, in the words the user needs: DevDeck prices
- * a run by summing every agent transcript under the project's directory inside
- * the run's window, so a second session live in that directory during the run
- * lands in the same figure. That number is an attribution, not a receipt, and
- * adding it to anything would be adding money that may not be this run's.
+ * Why a run's cost may be excluded, in the words the user needs. Two different
+ * facts, deliberately not one sentence: DevDeck prices a run by summing every
+ * agent transcript under the project's directory inside the run's window, so a
+ * second session in that directory during the run lands in the same figure -
+ * but a run whose price simply could not be read shared nothing with anybody,
+ * and being told that it did is a fabricated fact in a panel whose whole purpose
+ * is honesty about attribution.
  */
 const SHARED_TIP =
-    "Another agent session shared this project while the run was going, so this " +
-    "figure covers both - an attribution, not a receipt. It is left out of the total."
+    "Another agent session shared this project's directory while the run was going, so " +
+    "this figure covers both - an attribution, not a receipt. It is left out of the total."
+
+const UNPRICED_TIP =
+    "DevDeck has no cost it can vouch for here - the run was never priced, its price " +
+    "could not be read, or there is no project directory left to price it over. It is " +
+    "left out of the total."
+
+// A record written before runs carried a reason. It says only that its cost is
+// not a receipt, and that is all this says back.
+const UNKNOWN_TIP = "This run's cost is not a receipt, so it is left out of the total."
+
+function exclusionTip(reason?: RunExclusionReason): string {
+    if (reason === "shared") return SHARED_TIP
+    if (reason === "unpriced") return UNPRICED_TIP
+    return UNKNOWN_TIP
+}
 
 type Window = "today" | "week" | "all"
 
@@ -368,7 +385,7 @@ export function UsagePanel(): JSX.Element {
                                                 className={
                                                     "usage-run-cost" + (r.exclusive ? "" : " approx")
                                                 }
-                                                title={r.exclusive ? undefined : SHARED_TIP}
+                                                title={r.exclusive ? undefined : exclusionTip(r.reason)}
                                             >
                                                 {(r.exclusive ? "" : "~") + formatCost(r.cost)}
                                             </span>

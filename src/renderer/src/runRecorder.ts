@@ -19,7 +19,7 @@ import type { BoardTask } from "./board"
 import type { PipelineRun } from "./pipeline"
 import { raceSpend, samePath, type Race } from "./race"
 import { useSettings, type UsageEvent } from "./settings"
-import type { RunRecord } from "../../main/ledger"
+import type { RunExclusionReason, RunRecord } from "../../main/ledger"
 
 /**
  * Exactly the slice of the store the recorder reads. Narrow on purpose: it is
@@ -156,14 +156,22 @@ export function createRunRecorder(
      * is the fail-closed direction. (Its slash-normalising does no work here today
      * — both sides of this comparison are `join`ed paths, not `git worktree list`
      * output — but it costs nothing and the day one side changes it is right.)
+     *
+     * Returns *why* the cost may not be summed, or undefined when it is a
+     * receipt: "shared" and "unpriced" are two different things to tell a user,
+     * and collapsing them meant saying "shared a project with another session"
+     * about a run whose price simply could not be read.
      */
-    const wasExclusive = (
+    const attributionReason = (
         cwd: string,
         ownTermIds: string[],
         startedAt: number,
         endedAt: number
-    ): boolean => {
-        if (!cwd) return false
+    ): RunExclusionReason | undefined => {
+        // No directory to reason about: nothing to be exclusive of, and no way to
+        // price it either. Not "shared" - we do not know that, and saying so
+        // would be inventing a fact.
+        if (!cwd) return "unpriced"
         const own = new Set(ownTermIds.filter(Boolean))
         const shared = useSettings
             .getState()
@@ -174,11 +182,12 @@ export function createRunRecorder(
                     (!e.cwd || samePath(e.cwd, cwd)) &&
                     overlaps(e, startedAt, endedAt)
             )
-        if (shared) return false
+        if (shared) return "shared"
         const st = get()
-        return st
+        const live = st
             .agentSessions()
-            .every((s) => own.has(s.termId) || !samePath(st.termCwd[s.termId] ?? s.projectPath, cwd))
+            .some((s) => !own.has(s.termId) && samePath(st.termCwd[s.termId] ?? s.projectPath, cwd))
+        return live ? "shared" : undefined
     }
 
     /**
@@ -207,8 +216,13 @@ export function createRunRecorder(
             // that is the directory whose exclusivity matters.
             const cwd = task.worktree || project?.path || ""
             const agentId = task.termId ? get().termAgents[task.termId] : undefined
-            const priced = task.cost !== undefined
             const startedAt = task.dispatchedAt ?? endedAt
+            // A card the board never managed to price has no figure to vouch for;
+            // that is a different thing to say than "it shared a directory".
+            const reason: RunExclusionReason | undefined =
+                task.cost === undefined
+                    ? "unpriced"
+                    : attributionReason(cwd, [task.termId ?? ""], startedAt, endedAt)
             writeRun({
                 id: newId(),
                 kind: "card",
@@ -220,7 +234,8 @@ export function createRunRecorder(
                 agentIds: agentId && isAgentId(agentId) ? [agentId] : [],
                 cost: task.cost ?? 0,
                 tokens: task.costTokens ?? 0,
-                exclusive: priced && wasExclusive(cwd, [task.termId ?? ""], startedAt, endedAt),
+                exclusive: reason === undefined,
+                reason,
                 outcome: "done"
             })
         } catch (err) {
@@ -305,7 +320,7 @@ export function createRunRecorder(
             const cwd = run.projectPath ?? ""
             const project = get().projects.find((p) => samePath(p.path, cwd))
             const termIds = run.steps.map((s) => s.termId ?? "")
-            const exclusive = wasExclusive(cwd, termIds, startedAt, endedAt)
+            const shared = attributionReason(cwd, termIds, startedAt, endedAt)
             // This record claims those sessions' spend. Claimed synchronously,
             // before the pricing await: a step's pane can be closed at any point
             // after the run ends, including while this is still in flight.
@@ -336,8 +351,11 @@ export function createRunRecorder(
                         tokens: bucket?.tokens ?? 0,
                         // A price that couldn't be read is not a $0 receipt. Keep
                         // the row - it still says what ran, and for how long - but
-                        // never let that zero into a total.
-                        exclusive: !!bucket && exclusive,
+                        // never let that zero into a total, and say which of the
+                        // two things went wrong rather than blaming a sharer that
+                        // may not exist.
+                        exclusive: !!bucket && shared === undefined,
+                        reason: !bucket ? "unpriced" : shared,
                         outcome
                     })
                 } catch (err) {
@@ -426,7 +444,7 @@ export function createRunRecorder(
             const startedAt = event.startedAt
             const endedAt = Date.now()
             const cwd = st.termCwd[termId] ?? session?.projectPath ?? ""
-            const exclusive = wasExclusive(cwd, [termId], startedAt, endedAt)
+            const shared = attributionReason(cwd, [termId], startedAt, endedAt)
             const projectId = session?.projectId ?? event.projectId
             const project = projectById(projectId)
             const label =
@@ -448,7 +466,8 @@ export function createRunRecorder(
                         cost: bucket?.cost ?? 0,
                         tokens: bucket?.tokens ?? 0,
                         // Same rule as a pipeline: an unread price is not a receipt.
-                        exclusive: !!bucket && exclusive
+                        exclusive: !!bucket && shared === undefined,
+                        reason: !bucket ? "unpriced" : shared
                     })
                 } catch (err) {
                     console.error("[ledger] failed to price a session:", err)

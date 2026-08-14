@@ -16,22 +16,38 @@ import type { RunKind, RunRecord } from "../../main/ledger"
 export interface RunTotals {
     /** Summed cost of exclusive runs only. */
     cost: number
-    tokens: number
     /** How many rows contributed. */
     counted: number
-    /** How many were left out because their cost was an attribution, not a receipt. */
+    /** How many were left out because their cost was not a receipt. */
     excluded: number
+    /** Of `excluded`, how many shared a directory with another session. */
+    excludedShared: number
+    /** Of `excluded`, how many had no cost to vouch for. */
+    excludedUnpriced: number
 }
 
+/**
+ * `excluded` is the total; the two sub-counts explain it and need not add up to
+ * it. A record written before `reason` existed says only that it isn't a
+ * receipt, and guessing a reason for it would be exactly the invented fact the
+ * reason field was added to stop.
+ */
 export function runTotals(runs: RunRecord[]): RunTotals {
-    const totals: RunTotals = { cost: 0, tokens: 0, counted: 0, excluded: 0 }
+    const totals: RunTotals = {
+        cost: 0,
+        counted: 0,
+        excluded: 0,
+        excludedShared: 0,
+        excludedUnpriced: 0
+    }
     for (const run of runs) {
         if (!run.exclusive) {
             totals.excluded++
+            if (run.reason === "shared") totals.excludedShared++
+            else if (run.reason === "unpriced") totals.excludedUnpriced++
             continue
         }
         totals.cost += run.cost
-        totals.tokens += run.tokens
         totals.counted++
     }
     return totals
@@ -79,7 +95,20 @@ export function runsSentence(
 ): RunsSentence {
     let why = ""
     if (totals.excluded > 0) {
-        why = `${totals.excluded} excluded from the total (shared a project with another session)`
+        // One reason covering every excluded row needs no count of its own -
+        // "3 excluded from the total (3 shared ...)" says three twice. A mix
+        // does, and so does the remainder from records written before reasons
+        // were recorded, which can only be described as "not receipts".
+        const clause = (n: number, phrase: string): string =>
+            n === totals.excluded ? phrase : `${n} ${phrase}`
+        const parts: string[] = []
+        if (totals.excludedShared > 0)
+            parts.push(clause(totals.excludedShared, "shared a project with another session"))
+        if (totals.excludedUnpriced > 0)
+            parts.push(clause(totals.excludedUnpriced, "had no cost to vouch for"))
+        const unexplained = totals.excluded - totals.excludedShared - totals.excludedUnpriced
+        if (unexplained > 0) parts.push(clause(unexplained, "not receipts"))
+        why = `${totals.excluded} excluded from the total (${parts.join(", ")})`
     } else if (shown === 0) {
         why = hasHistory ? "no runs match this filter" : "nothing recorded yet"
     }

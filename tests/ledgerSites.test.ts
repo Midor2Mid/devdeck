@@ -131,6 +131,8 @@ describe("card records", () => {
             exclusive: true,
             outcome: "done"
         })
+        // A receipt carries no reason to explain itself away.
+        expect(appended[0].reason).toBeUndefined()
         // The record's end is the same instant stamped on the card, not a second read.
         expect(appended[0].endedAt).toBe(useStore.getState().boardTasks[0].endedAt)
     })
@@ -287,6 +289,7 @@ describe("card records", () => {
         useStore.getState().moveBoardTask("t-b", "done")
 
         expect(appended.map((r) => r.exclusive)).toEqual([false, false])
+        expect(appended.map((r) => r.reason)).toEqual(["shared", "shared"])
     })
 
     // Two cards in one project that never actually overlapped are two separate
@@ -366,7 +369,28 @@ describe("card records", () => {
 
         useStore.getState().moveBoardTask("t-unpriced", "done")
 
-        expect(appended[0]).toMatchObject({ cost: 0, tokens: 0, exclusive: false })
+        // Never priced - which is a different thing to tell the user than
+        // "it shared a project with another session".
+        expect(appended[0]).toMatchObject({
+            cost: 0,
+            tokens: 0,
+            exclusive: false,
+            reason: "unpriced"
+        })
+    })
+
+    // The project this card ran in has been removed and it had no worktree, so
+    // there is no directory left to price it over. That is not evidence that
+    // anyone shared it.
+    it("says a card with no directory left has no cost to vouch for", () => {
+        useStore.setState({
+            projects: [],
+            boardTasks: [{ ...dispatched, id: "t-noproj" }]
+        })
+
+        useStore.getState().moveBoardTask("t-noproj", "done")
+
+        expect(appended[0]).toMatchObject({ exclusive: false, reason: "unpriced" })
     })
 })
 
@@ -549,7 +573,10 @@ describe("pipeline records", () => {
         expect(appended).toHaveLength(1)
     })
 
-    it("marks the cost as an attribution when the price could not be read", async () => {
+    // A price that could not be read is not a $0 receipt - but neither did it
+    // share a project with anybody, and saying so would be inventing a fact
+    // about the user's money in the one panel meant to be honest about it.
+    it("says the price could not be read, not that the run shared a project", async () => {
         stubApi({
             usage: {
                 window: async (): Promise<never> => {
@@ -562,7 +589,26 @@ describe("pipeline records", () => {
         useStore.getState().stopPipeline()
 
         await vi.waitFor(() => expect(appended).toHaveLength(1))
-        expect(appended[0]).toMatchObject({ cost: 0, tokens: 0, exclusive: false })
+        expect(appended[0]).toMatchObject({
+            cost: 0,
+            tokens: 0,
+            exclusive: false,
+            reason: "unpriced"
+        })
+    })
+
+    it("says a genuinely shared directory is shared", async () => {
+        useSettings.setState({
+            usageLog: [
+                { id: "other", agentId: "claude", projectId: "p1", cwd: "D:/p1", startedAt: 1200 }
+            ]
+        })
+        useStore.setState({ pipelineRun: { ...run, pipelineId: "pl-shared", startedAt: 1000 } })
+
+        useStore.getState().stopPipeline()
+
+        await vi.waitFor(() => expect(appended).toHaveLength(1))
+        expect(appended[0]).toMatchObject({ exclusive: false, reason: "shared" })
     })
 })
 
