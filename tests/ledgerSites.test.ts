@@ -627,9 +627,11 @@ describe("race records", () => {
         expect(appended[0]).toMatchObject({ outcome: "abandoned", cost: 1 })
     })
 
-    // An entrant whose worktree could not be created is never dispatched and
-    // spends nothing, so counting it as eliminated overstates what the race
-    // threw away - which is the one thing this number is for.
+    // An entrant that never dispatched spends nothing, so counting it as
+    // eliminated overstates what the race threw away - the one thing this number
+    // is for. Two of the three startfailed paths (unreadable head, session that
+    // would not spawn) leave the worktree populated for cleanup, so the status is
+    // what has to be read, not the presence of a directory.
     it("counts only entrants that actually started as eliminated", async () => {
         useStore.setState({
             races: {
@@ -642,6 +644,14 @@ describe("race records", () => {
                             agentName: "Gemini",
                             status: "startfailed",
                             worktree: ""
+                        }),
+                        // Worktree created, then the head read failed: never
+                        // dispatched, but there is still a directory to tidy.
+                        entrant({
+                            agentId: "aider",
+                            agentName: "Aider",
+                            status: "startfailed",
+                            worktree: "D:/p1.worktrees/aider"
                         })
                     ]
                 })
@@ -832,6 +842,21 @@ describe("session records", () => {
         })
         // usageLog still gets its end stamp - the ledger is additional, not a replacement.
         expect(useSettings.getState().usageLog[0].endedAt).toBeGreaterThan(0)
+    })
+
+    // The other three sites say "(removed project)"; this one used to say "-",
+    // because buildSessions resolves the name from live projects and falls back
+    // to a bare dash that is truthy enough to win.
+    it("names a removed project the same way every other record does", async () => {
+        useSettings.setState({
+            usageLog: [{ id: "term-9", agentId: "claude", projectId: "p1", startedAt: 4000 }]
+        })
+        useStore.setState({ projects: [] })
+
+        useStore.getState().closePane("term-9")
+
+        await vi.waitFor(() => expect(appended).toHaveLength(1))
+        expect(appended[0].projectName).toBe("(removed project)")
     })
 
     it("records nothing for a session whose window cannot be bounded", async () => {

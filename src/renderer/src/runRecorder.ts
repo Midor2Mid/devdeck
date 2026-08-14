@@ -302,13 +302,18 @@ export function createRunRecorder(
                 exclusive: true,
                 outcome,
                 // Abandoning eliminates every entrant; landing eliminates the rest.
-                // Counted over entrants that actually got a worktree: one whose
-                // worktree failed to be created was never dispatched at all
-                // (status "startfailed") and spent nothing, so calling it
-                // "eliminated" overstates what the race threw away — the number
-                // this field exists to report.
+                // Counted over entrants that actually dispatched: one that never
+                // did spent nothing, so calling it "eliminated" overstates what
+                // the race threw away — the number this field exists to report.
+                //
+                // Keyed on the status, NOT on `worktree`: two of the three paths
+                // that mark an entrant "startfailed" (a head that could not be
+                // read, and a session that would not spawn) happen *after* the
+                // worktree was created, so it is left populated for land/abandon
+                // to clean up. `worktree` answers "is there a directory to tidy",
+                // which is a different question from "did this entrant run".
                 eliminated: (() => {
-                    const started = r.entrants.filter((e) => e.worktree).length
+                    const started = r.entrants.filter((e) => e.status !== "startfailed").length
                     return outcome === "landed" ? Math.max(0, started - 1) : started
                 })(),
                 // The agent id, not the name: names are user-editable and two
@@ -487,7 +492,11 @@ export function createRunRecorder(
                         id: newId(),
                         kind: "session",
                         projectId,
-                        projectName: session?.projectName || project?.name || REMOVED_PROJECT,
+                        // Not session.projectName: buildSessions already resolves
+                        // that from live projects and falls back to a bare "-",
+                        // which is truthy and would win over the literal every
+                        // other site uses for the same situation.
+                        projectName: project?.name || REMOVED_PROJECT,
                         label,
                         startedAt,
                         endedAt,
