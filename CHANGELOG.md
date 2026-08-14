@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+Two unrelated pieces of hardening: who a task-board card dispatches to, and who
+can reach the app remotely.
+
+- **Dispatch picks an agent by rule, not by list position.** DevDeck used to
+  hand every task-board card to `agents[0]` — whichever preset happened to sit
+  first in Settings — so reordering presets silently changed who did every
+  task. An ordered set of rules now chooses instead: match a card's title
+  (substring), a title glob, a project, or match always, first enabled rule
+  wins. **Rules choose *who*, never *whether*** — nothing dispatches without a
+  click. The card itself shows the agent that would run before you click it,
+  names the rule that chose it when one did, and a chevron opens a menu to
+  override it for that dispatch only. The rules themselves live in a new
+  Settings editor, alongside a fallback default agent for when nothing
+  matches. Two behaviours worth knowing rather than discovering: a **glob is
+  anchored**, so `login` as a glob matches only the exact title "login" —
+  `*login*` is the idiom for "contains", and the editor's placeholder teaches
+  it, but it's easy to miss the first time. And **routing only ever targets
+  AI-mode presets** — a rule pointing at a shell preset (e.g. a dev-server or
+  build command) is skipped, the same as a rule naming a deleted preset,
+  because dispatch pastes the card title in as a prompt and a fixed-command
+  preset has no use for one.
+- **Fix: dispatching with no AI-mode preset configured used to proceed
+  anyway.** With nothing to route to, the confirm dialog read "Start  on
+  ..." with a blank agent name, and confirming it opened a bare shell tab,
+  moved the card to "doing", and — after the usual 2.8s boot wait — pasted the
+  raw card title into that shell as a literal typed command. Dispatch now
+  refuses before the confirm is even shown, with a message that no AI agent
+  preset is configured.
+
 Remote access is still full remote code execution for any device that gets in —
 this round changes *who gets in*, not what they can do once there. Five tasks,
 eleven fix rounds; several of the defects it caught were in the plan itself, not

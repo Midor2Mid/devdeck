@@ -491,6 +491,56 @@ policy, is the way past it today; no UI surfaces "you're at the cap"
 specifically. Recorded here rather than built, since it needs Settings-panel
 work (surfacing cap/count) that's out of scope for this fix pass.
 
+### Agent routing: what rules can and can't see, and why the glob isn't a RegExp (2026-08-14)
+
+**Rules can only match a card's title and project.** File-glob routing — "send
+anything touching `*.sql` to the model that's good at migrations" — is the
+obvious thing to want next, and it's impossible at the point routing actually
+runs. Dispatch happens *before* an agent has touched anything: there is no
+diff, no changed-file list, nothing but the card itself. A rule can only see
+what the card already carries — its title and its project — until some agent
+has done work to route on top of. Worth remembering next time this feels like
+an oversight rather than a constraint.
+
+**Routing has no cost or capability awareness.** No rule can say "the cheapest
+preset that can pass the gate" or "the one with the biggest context window
+for this file count" — routing doesn't know what anything costs or can do.
+That needs the run ledger (real per-agent cost and outcome history, the next
+piece of work per `trend-roadmap-2026`), not a hand-authored guess. Building a
+cost model now, with no data to ground it in, would bake in an assumption
+about pricing/capability that the app has no way to verify or keep current —
+worse than not having the feature at all.
+
+**The glob matcher (`routing.ts`, `globMatch`) is deliberately not a RegExp,
+and this will look like a reinvented wheel if that reasoning isn't recorded.**
+A glob built from user-typed text and compiled to a RegExp inherits the
+engine's backtracking, and three successive attempts to bound that failed
+before the matcher was rewritten from scratch:
+- Capping the input length was arithmetically useless — the blowup is
+  exponential per character, so even a 200-character cap still leaves
+  something on the order of 10^52 seconds of worst case, nowhere near a UI
+  budget.
+- Escaping regex metacharacters closed only the nested-quantifier shape
+  (`(a+)+$`-style). Several plain `*` tokens compiled to `^(a.*){k}Z$`-shaped
+  patterns still produced multi-minute hangs with no metacharacters involved
+  at all — measured at 2.1s for five stars against a 100-character title, and
+  over two minutes for twenty.
+- The fix that actually closed the class was to stop compiling to a RegExp:
+  a two-pointer matcher with a single backtrack point (the most recent `*`)
+  that never explores a tree, so its worst case is O(pattern × text) and
+  cannot degrade regardless of pattern shape. Verified against a brute-force
+  reference implementation over 42,315 input pairs with zero disagreements;
+  worst measured pathological case 1.6ms.
+
+Two behaviours fall out of that implementation and are easy to trip over:
+**it walks code units, not characters**, so `?` matches one half of a
+surrogate pair rather than a whole astral character (`globMatch("??", "😀")`
+is true, `globMatch("?", "😀")` is false) — standard glob behaviour, but worth
+knowing before it looks like a bug. And **there is no escape for a literal
+`*` or `?`** in a pattern; a rule that needs to match one literally can't, and
+the rule editor teaches the anchoring/substring distinction via its
+placeholder rather than document an escape hatch nobody would find anyway.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
