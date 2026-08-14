@@ -1818,6 +1818,58 @@ button .ic,
     color: var(--danger);
     background: transparent;
 }
+/* Agent routing rules: an ordered list (enable · kind · pattern · agent ·
+   move · remove), same row shape as .agent-edit-row/.pipe-step above. */
+.rule-list {
+    margin: 4px 0 10px;
+}
+.rule-row {
+    /* Left gutter is reserved on every row (border transparent by default),
+       not added only when broken/inert - so a row never shifts sideways
+       the moment its pattern goes empty or its agent gets deleted. */
+    padding: 3px 0 3px 9px;
+    border-left: 3px solid transparent;
+    margin-bottom: 4px;
+}
+.rule-row-grid {
+    display: grid;
+    grid-template-columns: 20px 136px 1fr 150px 22px 22px 22px;
+    gap: 6px;
+    align-items: center;
+}
+.rule-row-grid select,
+.rule-row-grid .rule-pattern {
+    width: 100%;
+    font-size: 12px;
+}
+.rule-row-grid .checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    justify-self: center;
+}
+.rule-pattern-fixed {
+    display: inline-block;
+    padding: 0 4px;
+}
+/* An inert (empty pattern) or broken (deleted agent/project) rule needs a
+   marker in its FORM, not only a color shift: the reserved gutter above
+   turns into a stripe - the same idiom as .bind-option.warn - and the text
+   note below restates it in words, so the state still reads in a theme or
+   style where --danger sits close to --border. */
+.rule-row.rule-inert,
+.rule-row.rule-broken {
+    border-left-color: var(--danger);
+}
+.rule-note {
+    font-size: 11px;
+    line-height: 1.5;
+    color: color-mix(in srgb, var(--danger) 75%, var(--text));
+    margin: 2px 0 0;
+}
+.rule-preview {
+    margin: 2px 0 0;
+}
 /* Startup-command editor: one card per command, with an agent/normal run-mode
    toggle, an icon + name header, and a details grid that adapts to the mode. */
 .cmd-edit-card {

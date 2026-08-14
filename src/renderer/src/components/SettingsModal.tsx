@@ -14,6 +14,7 @@ import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
 import { MCP_CATALOG, addServer } from "../mcpCatalog"
 import { type Pipeline, type PipelineStep, type PipelineTrigger, type BranchTarget, isRunnable, moveItem } from "../pipeline"
+import { type RoutingRule, type RuleKind } from "../routing"
 
 /** Encode/decode a BranchTarget for a <select> value. "" = use the default. */
 function encodeTarget(t?: BranchTarget): string {
@@ -1117,6 +1118,257 @@ function AgentsSection(): JSX.Element {
     )
 }
 
+/**
+ * Labels for the rule-kind picker. Kept short (the dropdown shares a row with
+ * the pattern field and target agent), so the full "title matches" phrasing
+ * lives in each row's own preview/note caption below - matched deliberately
+ * to the verbs `describeRule` (TaskBoard.tsx) uses for the same kinds
+ * ("contains" / "matches" / "is" / "always"), so the rule reads the same way
+ * whether you're editing it here or hovering its Dispatch button on the board.
+ */
+const RULE_KIND_LABEL: Record<RuleKind, string> = {
+    title: "Title contains",
+    titleGlob: "Title glob",
+    project: "Project is",
+    always: "Always"
+}
+const RULE_KINDS: RuleKind[] = ["title", "titleGlob", "project", "always"]
+
+function newRoutingRule(agentId: string): RoutingRule {
+    return { id: crypto.randomUUID(), enabled: true, kind: "title", pattern: "", agentId }
+}
+
+function RoutingSection(): JSX.Element {
+    const routingRules = useSettings((s) => s.routingRules)
+    const setRoutingRules = useSettings((s) => s.setRoutingRules)
+    const defaultAgentId = useSettings((s) => s.defaultAgentId)
+    const setDefaultAgentId = useSettings((s) => s.setDefaultAgentId)
+    const agents = useSettings((s) => s.agents)
+    const projects = useStore((s) => s.projects)
+    // Only AI-mode presets can run a dispatched task - the same restriction
+    // TaskBoard's override menu applies. Filtered here, in the render body,
+    // NOT inside the useSettings selector above: a selector that filters or
+    // maps returns a fresh array every render, which zustand reads as a
+    // changed value and spins into an infinite render loop (see
+    // TaskBoard.tsx:53-57, which documents the same trap for the same data).
+    const aiAgents = useMemo(() => agents.filter((a) => a.runMode !== "normal"), [agents])
+    const aiAgentIds = useMemo(() => new Set(aiAgents.map((a) => a.id)), [aiAgents])
+
+    const updateRule = (i: number, patch: Partial<RoutingRule>): void =>
+        setRoutingRules(routingRules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+    const removeRule = (i: number): void =>
+        setRoutingRules(routingRules.filter((_, idx) => idx !== i))
+    const moveRule = (i: number, dir: -1 | 1): void =>
+        setRoutingRules(moveItem(routingRules, i, i + dir))
+    const addRule = (): void => setRoutingRules([...routingRules, newRoutingRule(aiAgents[0]?.id ?? "")])
+
+    // Changing kind changes what the pattern field even means (free text vs.
+    // a project id) - carrying the old value across would leave, say, a
+    // project id sitting in a "title" rule's pattern, matching nothing
+    // forever with no sign why. Reset it instead of pretending it carries over.
+    const changeKind = (i: number, kind: RuleKind): void =>
+        updateRule(i, { kind, pattern: kind === "project" ? (projects[0]?.id ?? "") : "" })
+
+    // The same sentence describeRule (TaskBoard.tsx) builds for the dispatch
+    // tooltip, minus its "Routed by rule:" prefix - so the row's own caption
+    // never diverges from what the board says once this rule actually fires.
+    const preview = (r: RoutingRule): string => {
+        switch (r.kind) {
+            case "always":
+                return "Always"
+            case "title":
+                return `Title contains "${r.pattern}"`
+            case "titleGlob":
+                return `Title matches "${r.pattern}"`
+            case "project": {
+                const name = projects.find((p) => p.id === r.pattern)?.name
+                return `Project is ${name ?? "(deleted project)"}`
+            }
+            default:
+                return ""
+        }
+    }
+
+    return (
+        <div className="settings-section">
+            <h3>Routing rules</h3>
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+                Picks which agent a task board's Dispatch button runs, without asking every time.
+                Rules are tried top to bottom; the first <b>enabled</b> rule that matches - and
+                whose agent still exists - wins. No match falls through to <b>Default agent</b>{" "}
+                below, then to the first configured agent.
+            </p>
+            <p className="settings-hint" style={{ marginTop: 0 }}>
+                <b>Title contains</b> matches anywhere in the title. <b>Title matches (glob)</b>{" "}
+                is anchored to the <i>whole</i> title instead - a bare <code>login</code> only
+                matches a card titled exactly "login"; wrap it as <code>*login*</code> to match
+                anywhere.
+            </p>
+            <div className="rule-list">
+                {routingRules.map((r, i) => {
+                    const patternInert =
+                        (r.kind === "title" || r.kind === "titleGlob") && !r.pattern.trim()
+                    const projectMissing =
+                        r.kind === "project" && !projects.some((p) => p.id === r.pattern)
+                    const agentMissing = !agents.some((a) => a.id === r.agentId)
+                    const broken = agentMissing || projectMissing
+                    const notes: string[] = []
+                    if (agentMissing) notes.push("its agent was deleted - this rule is skipped")
+                    if (projectMissing)
+                        notes.push("its project was deleted - this rule never matches")
+                    if (patternInert) notes.push("empty pattern - this rule never matches")
+
+                    return (
+                        <div
+                            key={r.id}
+                            className={
+                                "rule-row" +
+                                (broken ? " rule-broken" : patternInert ? " rule-inert" : "")
+                            }
+                        >
+                            <div className="rule-row-grid">
+                                <input
+                                    type="checkbox"
+                                    className="checkbox"
+                                    checked={r.enabled}
+                                    data-tip="Enabled"
+                                    onChange={(e) => updateRule(i, { enabled: e.target.checked })}
+                                />
+                                <select
+                                    className="rule-kind"
+                                    value={r.kind}
+                                    onChange={(e) => changeKind(i, e.target.value as RuleKind)}
+                                >
+                                    {RULE_KINDS.map((k) => (
+                                        <option key={k} value={k}>
+                                            {RULE_KIND_LABEL[k]}
+                                        </option>
+                                    ))}
+                                </select>
+                                {r.kind === "always" && (
+                                    <span className="rule-pattern rule-pattern-fixed muted small">
+                                        matches every card
+                                    </span>
+                                )}
+                                {(r.kind === "title" || r.kind === "titleGlob") && (
+                                    <input
+                                        className="rule-pattern"
+                                        value={r.pattern}
+                                        placeholder={r.kind === "titleGlob" ? "*login*" : "login"}
+                                        data-tip={
+                                            r.kind === "titleGlob"
+                                                ? "Anchored to the whole title - * matches any run of characters, ? matches one"
+                                                : "Matches anywhere in the title, case-insensitive"
+                                        }
+                                        onChange={(e) => updateRule(i, { pattern: e.target.value })}
+                                    />
+                                )}
+                                {r.kind === "project" && (
+                                    <select
+                                        className="rule-pattern"
+                                        value={r.pattern}
+                                        onChange={(e) => updateRule(i, { pattern: e.target.value })}
+                                    >
+                                        {projectMissing && (
+                                            <option value={r.pattern} disabled>
+                                                (deleted project)
+                                            </option>
+                                        )}
+                                        {projects.map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                                <select
+                                    className="rule-agent"
+                                    value={r.agentId}
+                                    onChange={(e) => updateRule(i, { agentId: e.target.value })}
+                                >
+                                    {!aiAgentIds.has(r.agentId) && (
+                                        <option value={r.agentId} disabled>
+                                            {agents.find((a) => a.id === r.agentId)?.name ??
+                                                "(deleted agent)"}
+                                        </option>
+                                    )}
+                                    {aiAgents.map((a) => (
+                                        <option key={a.id} value={a.id}>
+                                            {a.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    className="btn-min"
+                                    disabled={i === 0}
+                                    onClick={() => moveRule(i, -1)}
+                                    data-tip="Move up"
+                                >
+                                    ↑
+                                </button>
+                                <button
+                                    className="btn-min"
+                                    disabled={i === routingRules.length - 1}
+                                    onClick={() => moveRule(i, 1)}
+                                    data-tip="Move down"
+                                >
+                                    ↓
+                                </button>
+                                <button
+                                    className="row-remove"
+                                    data-tip="Remove"
+                                    onClick={() => removeRule(i)}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            {notes.length > 0 ? (
+                                <div className="rule-note">{notes.join(" · ")}</div>
+                            ) : (
+                                <div className="rule-preview muted small">{preview(r)}</div>
+                            )}
+                        </div>
+                    )
+                })}
+            </div>
+            <button onClick={addRule} disabled={aiAgents.length === 0}>
+                + Add rule
+            </button>
+            {routingRules.length === 0 && (
+                <p className="muted small" style={{ marginTop: 8 }}>
+                    No rules yet - every dispatch falls through to Default agent below.
+                </p>
+            )}
+
+            <div className="setting-row" style={{ marginTop: 18 }}>
+                <label>Default agent</label>
+                <select value={defaultAgentId} onChange={(e) => setDefaultAgentId(e.target.value)}>
+                    <option value="">First configured agent</option>
+                    {defaultAgentId && !aiAgentIds.has(defaultAgentId) && (
+                        <option value={defaultAgentId} disabled>
+                            {agents.find((a) => a.id === defaultAgentId)?.name ?? "(deleted agent)"}
+                        </option>
+                    )}
+                    {aiAgents.map((a) => (
+                        <option key={a.id} value={a.id}>
+                            {a.name}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            {defaultAgentId && !agents.some((a) => a.id === defaultAgentId) && (
+                <div className="rule-note">
+                    Default agent was deleted - falling back to the first configured agent.
+                </div>
+            )}
+            <p className="settings-hint">
+                Used when no rule matches (or none is configured). "First configured agent" is
+                today's original behavior - whichever agent is first in Startup commands above.
+            </p>
+        </div>
+    )
+}
+
 function AISection(): JSX.Element {
     const agents = useSettings((s) => s.agents)
     const setAgents = useSettings((s) => s.setAgents)
@@ -2116,7 +2368,12 @@ export function SettingsModal(): JSX.Element {
                         </div>
                     )}
 
-                    {section === "agents" && <AgentsSection />}
+                    {section === "agents" && (
+                        <>
+                            <AgentsSection />
+                            <RoutingSection />
+                        </>
+                    )}
 
                     {section === "ai" && <AISection />}
 
