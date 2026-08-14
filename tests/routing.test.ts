@@ -54,6 +54,28 @@ describe("ruleMatches", () => {
         expect(ruleMatches(rule({ kind: "titleGlob", pattern: "fix*login" }), card)).toBe(false)
     })
 
+    it("matches ? against Unicode characters that expand when lowercased", () => {
+        // Turkish dotted capital I (U+0130) lowercases to two code units: i + combining dot.
+        // The ? should match exactly one code unit, so this tests that we don't pre-lowercase
+        // the whole string and then walk by position (which would desync indices).
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "?" }), { title: "İ", projectId: "p1" })).toBe(true)
+    })
+
+    it("matches Unicode characters case-insensitively", () => {
+        // Greek Alpha and alpha match case-insensitively
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "Α" }), { title: "α", projectId: "p1" })).toBe(true)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "α" }), { title: "Α", projectId: "p1" })).toBe(true)
+    })
+
+    it("walks code units, so ? matches one half of a surrogate pair", () => {
+        // A surrogate pair is two code units. The ? matcher walks code units,
+        // so it matches one half, not the whole character. This documents the
+        // code-unit behavior rather than leaving it accidental.
+        const emoji = "😀" // Surrogate pair: 😀
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "??" }), { title: emoji, projectId: "p1" })).toBe(true)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "?" }), { title: emoji, projectId: "p1" })).toBe(false)
+    })
+
     it("matches a project by id, not by name", () => {
         expect(ruleMatches(rule({ kind: "project", pattern: "p1" }), card)).toBe(true)
         expect(ruleMatches(rule({ kind: "project", pattern: "P1" }), card)).toBe(false)

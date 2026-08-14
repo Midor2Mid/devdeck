@@ -22,6 +22,15 @@ export interface RouteResult {
 }
 
 /**
+ * Case-insensitive character comparison. Folds both characters to lowercase
+ * independently rather than pre-lowercasing the strings, which avoids issues
+ * with Unicode expansions (e.g., Turkish dotted capital I expands when lowercased).
+ */
+function sameChar(a: string, b: string): boolean {
+    return a === b || a.toLowerCase() === b.toLowerCase()
+}
+
+/**
  * Match a glob against a title. `*` matches any run, `?` matches one character.
  *
  * Deliberately NOT compiled to a RegExp. A glob built from user text and handed to
@@ -39,19 +48,22 @@ export interface RouteResult {
  * one. There is no escape for a literal `*` or `?` in a pattern; the rule editor
  * should teach the idiom with a `*login*` placeholder rather than documenting an
  * escape nobody would find.
+ *
+ * The walk is over code units, so `?` matches one code unit (one half of a
+ * surrogate pair rather than a whole astral character). This is how most glob
+ * implementations behave and allows efficient operation on the native JS string
+ * representation.
  */
 function globMatch(glob: string, text: string): boolean {
-    const p = glob.toLowerCase()
-    const s = text.toLowerCase()
     let pi = 0
     let si = 0
     let star = -1
     let mark = 0
-    while (si < s.length) {
-        if (pi < p.length && (p[pi] === "?" || p[pi] === s[si])) {
+    while (si < text.length) {
+        if (pi < glob.length && (glob[pi] === "?" || sameChar(glob[pi], text[si]))) {
             pi++
             si++
-        } else if (pi < p.length && p[pi] === "*") {
+        } else if (pi < glob.length && glob[pi] === "*") {
             star = pi++
             mark = si
         } else if (star >= 0) {
@@ -61,8 +73,8 @@ function globMatch(glob: string, text: string): boolean {
             return false
         }
     }
-    while (pi < p.length && p[pi] === "*") pi++
-    return pi === p.length
+    while (pi < glob.length && glob[pi] === "*") pi++
+    return pi === glob.length
 }
 
 /**
