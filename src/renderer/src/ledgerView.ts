@@ -45,6 +45,52 @@ export function filterRuns(runs: RunRecord[], kind?: RunKind, projectId?: string
     })
 }
 
+/** Money, never blank and never a dash: zero is written `$0`, not nothing. */
+export function formatCost(cost: number): string {
+    return cost === 0 ? "$0" : "$" + cost.toFixed(2)
+}
+
+export interface RunsSentence {
+    /** How many runs are on screen. The list and this number must agree. */
+    count: number
+    unit: "run" | "runs"
+    /** The exclusive-only total, formatted. */
+    cost: string
+    /** The clause after the figures - why the total omits rows, or why there are none. Empty when neither applies. */
+    why: string
+}
+
+/**
+ * The one sentence above the run list: "12 runs · $4.18 · 3 excluded from the
+ * total (shared a project with another session)".
+ *
+ * Two numbers with two different jobs, and they are deliberately not the same
+ * one. `count` counts the rows the user can see - stating the exclusive-only
+ * count there would print "0 runs" above three rendered rows. `cost` sums only
+ * the exclusive ones, because a shared run's figure is an attribution over a
+ * project directory and time window rather than a receipt for that run. The gap
+ * between the two is exactly what the `why` clause exists to say out loud;
+ * dropping it would leave an under-report looking like a receipt.
+ */
+export function runsSentence(
+    totals: RunTotals,
+    shown: number,
+    hasHistory: boolean
+): RunsSentence {
+    let why = ""
+    if (totals.excluded > 0) {
+        why = `${totals.excluded} excluded from the total (shared a project with another session)`
+    } else if (shown === 0) {
+        why = hasHistory ? "no runs match this filter" : "nothing recorded yet"
+    }
+    return {
+        count: shown,
+        unit: shown === 1 ? "run" : "runs",
+        cost: formatCost(totals.cost),
+        why
+    }
+}
+
 /** Reads in the largest sensible unit; never renders a negative or nonsense duration. */
 export function formatDuration(ms: number): string {
     if (!Number.isFinite(ms) || ms <= 0) return "0s"

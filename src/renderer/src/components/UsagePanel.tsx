@@ -2,18 +2,13 @@ import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
 import { Modal } from "./Modal"
 import { useSettings, type UsageEvent } from "../settings"
-import { filterRuns, formatDuration, runTotals } from "../ledgerView"
+import { filterRuns, formatCost, formatDuration, runTotals, runsSentence } from "../ledgerView"
 import type { RunKind, RunRecord, UsageSummary } from "../../../preload/index"
 
 function fmtTok(n: number): string {
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M"
     if (n >= 1000) return Math.round(n / 1000) + "k"
     return String(n)
-}
-
-/** Never a blank or a dash: a zero total is written as `$0`, not as nothing. */
-function fmtCost(n: number): string {
-    return n === 0 ? "$0" : "$" + n.toFixed(2)
 }
 
 function fmtWhen(ms: number): string {
@@ -34,6 +29,10 @@ const RUN_KINDS: RunKind[] = ["card", "race", "pipeline", "session"]
 // capped, and the tail is stated rather than silently dropped.
 const RUN_ROWS = 50
 
+// Stable empty list for the pre-load render, so the memos below don't see a
+// fresh array on every pass while the ledger is still being read.
+const NO_RUNS: RunRecord[] = []
+
 /**
  * Why a run's cost may be excluded, in the words the user needs: DevDeck prices
  * a run by summing every agent transcript under the project's directory inside
@@ -41,7 +40,6 @@ const RUN_ROWS = 50
  * lands in the same figure. That number is an attribution, not a receipt, and
  * adding it to anything would be adding money that may not be this run's.
  */
-const SHARED_WHY = "shared a project with another session"
 const SHARED_TIP =
     "Another agent session shared this project while the run was going, so this " +
     "figure covers both - an attribution, not a receipt. It is left out of the total."
@@ -111,11 +109,14 @@ export function UsagePanel(): JSX.Element {
     // opens. `runs` is the stable array everything below derives from - the
     // filter and the totals are memos over it, never work done inside a store
     // selector (a selector that returns a fresh array re-renders forever).
-    const [runs, setRuns] = useState<RunRecord[]>([])
+    // `null` until the read resolves: an empty array would be rendered as
+    // "0 runs · $0 · nothing recorded yet", which is a lie told to someone with
+    // a long history for as long as the IPC takes.
+    const [runs, setRuns] = useState<RunRecord[] | null>(null)
     const [runKind, setRunKind] = useState<RunKind | "all">("all")
     const [runProject, setRunProject] = useState<string>("all")
     useEffect(() => {
-        window.api.ledger.read().then(setRuns).catch(() => setRuns([]))
+        window.api.ledger.read().then(setRuns).catch(() => setRuns(NO_RUNS))
     }, [])
 
     const [win, setWin] = useState<Window>("week")
@@ -172,38 +173,34 @@ export function UsagePanel(): JSX.Element {
     const maxAgent = Math.max(1, ...stats.agents.map((b) => b.count))
     const maxProject = Math.max(1, ...stats.projects.map((b) => b.count))
 
+    const runList = runs ?? NO_RUNS
     const shownRuns = useMemo(
         () =>
             filterRuns(
-                runs,
+                runList,
                 runKind === "all" ? undefined : runKind,
                 runProject === "all" ? undefined : runProject
             ),
-        [runs, runKind, runProject]
+        [runList, runKind, runProject]
     )
-    const runSums = useMemo(() => runTotals(shownRuns), [shownRuns])
+    // The sentence above the list: rows on screen, exclusive-only money, and the
+    // count left out of that money said in words. All of it lives in ledgerView
+    // so the branch is under test, not just the arithmetic behind it.
+    const runsLine = useMemo(
+        () => runsSentence(runTotals(shownRuns), shownRuns.length, runList.length > 0),
+        [shownRuns, runList]
+    )
     // Only the kinds and projects that actually appear in the history - a filter
     // that can only ever return nothing is chrome pretending to be a control.
     const runKindOpts = useMemo(() => {
-        const present = new Set(runs.map((r) => r.kind))
+        const present = new Set(runList.map((r) => r.kind))
         return RUN_KINDS.filter((k) => present.has(k))
-    }, [runs])
+    }, [runList])
     const runProjectOpts = useMemo(() => {
         const seen = new Map<string, string>()
-        for (const r of runs) if (!seen.has(r.projectId)) seen.set(r.projectId, r.projectName)
+        for (const r of runList) if (!seen.has(r.projectId)) seen.set(r.projectId, r.projectName)
         return [...seen].map(([id, name]) => ({ id, name }))
-    }, [runs])
-
-    // The sentence under the title. The total is exclusive runs only; the count
-    // left out of it is said out loud, next to the figure, in words - hiding it
-    // would make an under-report look like a receipt.
-    const emptyWhy = runs.length === 0 ? "nothing recorded yet" : "no runs match this filter"
-    const runsWhy =
-        runSums.excluded > 0
-            ? `${runSums.excluded} excluded from the total (${SHARED_WHY})`
-            : runSums.counted === 0
-              ? emptyWhy
-              : ""
+    }, [runList])
 
     const renderBars = (buckets: Bucket[], max: number): JSX.Element => (
         <div className="usage-bars">
@@ -312,88 +309,95 @@ export function UsagePanel(): JSX.Element {
                     {renderBars(stats.projects, maxProject)}
                 </div>
 
-                <div className="usage-section">
-                    <div className="usage-runs-head">
-                        <div className="usage-section-title">Runs</div>
-                        {runs.length > 0 && (
-                            <div className="usage-run-filters">
-                                <select
-                                    value={runKind}
-                                    onChange={(e) => setRunKind(e.target.value as RunKind | "all")}
-                                    aria-label="Filter runs by kind"
-                                >
-                                    <option value="all">All kinds</option>
-                                    {runKindOpts.map((k) => (
-                                        <option key={k} value={k}>
-                                            {k}
-                                        </option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={runProject}
-                                    onChange={(e) => setRunProject(e.target.value)}
-                                    aria-label="Filter runs by project"
-                                >
-                                    <option value="all">All projects</option>
-                                    {runProjectOpts.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                    </div>
-                    <div className="usage-runs-total">
-                        <span className="usage-runs-num">{runSums.counted}</span>
-                        {runSums.counted === 1 ? " run · " : " runs · "}
-                        <span className="usage-runs-num">{fmtCost(runSums.cost)}</span>
-                        {runsWhy !== "" && (
-                            <span className="usage-runs-why"> · {runsWhy}</span>
-                        )}
-                    </div>
-                    {shownRuns.length > 0 && (
-                        <div className="usage-runs">
-                            {shownRuns.slice(0, RUN_ROWS).map((r) => (
-                                <div key={r.id} className="usage-run-row">
-                                    <div className="usage-run-main">
-                                        <span className="usage-run-kind">{r.kind}</span>
-                                        <span className="usage-run-label" title={r.label}>
-                                            {r.label}
-                                        </span>
-                                        <span
-                                            className={
-                                                "usage-run-cost" + (r.exclusive ? "" : " approx")
-                                            }
-                                            title={r.exclusive ? undefined : SHARED_TIP}
-                                        >
-                                            {(r.exclusive ? "" : "~") + fmtCost(r.cost)}
-                                        </span>
-                                    </div>
-                                    <div className="usage-run-meta">
-                                        <span className="usage-run-when">{fmtWhen(r.endedAt)}</span>
-                                        <span className="usage-run-proj" title={r.projectName}>
-                                            {r.projectName}
-                                        </span>
-                                        {r.agentIds.length > 0 && (
-                                            <span className="usage-run-agents">
-                                                {r.agentIds.map(agentName).join(", ")}
-                                            </span>
-                                        )}
-                                        <span className="usage-run-dur">
-                                            {formatDuration(r.endedAt - r.startedAt)}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                            {shownRuns.length > RUN_ROWS && (
-                                <div className="muted small">
-                                    {shownRuns.length - RUN_ROWS} older runs not shown
+                {runs !== null && (
+                    <div className="usage-section">
+                        <div className="usage-runs-head">
+                            {/* The window buttons in the head don't govern this section, so
+                                it states its own scope inline - the same answer the
+                                "Tokens & cost · last Nd" block already gives. */}
+                            <div className="usage-section-title">Runs · all time</div>
+                            {runs.length > 0 && (
+                                <div className="usage-run-filters">
+                                    <select
+                                        className="usage-run-filter"
+                                        value={runKind}
+                                        onChange={(e) => setRunKind(e.target.value as RunKind | "all")}
+                                        aria-label="Filter runs by kind"
+                                    >
+                                        <option value="all">All kinds</option>
+                                        {runKindOpts.map((k) => (
+                                            <option key={k} value={k}>
+                                                {k}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        className="usage-run-filter"
+                                        value={runProject}
+                                        onChange={(e) => setRunProject(e.target.value)}
+                                        aria-label="Filter runs by project"
+                                    >
+                                        <option value="all">All projects</option>
+                                        {runProjectOpts.map((p) => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             )}
                         </div>
-                    )}
-                </div>
+                        <div className="usage-runs-total">
+                            <span className="usage-runs-num">{runsLine.count}</span>
+                            {" " + runsLine.unit + " · "}
+                            <span className="usage-runs-num">{runsLine.cost}</span>
+                            {runsLine.why !== "" && (
+                                <span className="usage-runs-why"> · {runsLine.why}</span>
+                            )}
+                        </div>
+                        {shownRuns.length > 0 && (
+                            <div className="usage-runs">
+                                {shownRuns.slice(0, RUN_ROWS).map((r) => (
+                                    <div key={r.id} className="usage-run-row">
+                                        <div className="usage-run-main">
+                                            <span className="usage-run-kind">{r.kind}</span>
+                                            <span className="usage-run-label" title={r.label}>
+                                                {r.label}
+                                            </span>
+                                            <span
+                                                className={
+                                                    "usage-run-cost" + (r.exclusive ? "" : " approx")
+                                                }
+                                                title={r.exclusive ? undefined : SHARED_TIP}
+                                            >
+                                                {(r.exclusive ? "" : "~") + formatCost(r.cost)}
+                                            </span>
+                                        </div>
+                                        <div className="usage-run-meta">
+                                            <span className="usage-run-when">{fmtWhen(r.endedAt)}</span>
+                                            <span className="usage-run-proj" title={r.projectName}>
+                                                {r.projectName}
+                                            </span>
+                                            {r.agentIds.length > 0 && (
+                                                <span className="usage-run-agents">
+                                                    {r.agentIds.map(agentName).join(", ")}
+                                                </span>
+                                            )}
+                                            <span className="usage-run-dur">
+                                                {formatDuration(r.endedAt - r.startedAt)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {shownRuns.length > RUN_ROWS && (
+                                    <div className="muted small">
+                                        {shownRuns.length - RUN_ROWS} older runs not shown
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {live.length > 0 && (
                     <div className="usage-section">

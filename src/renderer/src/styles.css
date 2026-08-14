@@ -6880,7 +6880,10 @@ kbd {
     display: flex;
     gap: var(--sp-xs);
 }
-.usage-run-filters select {
+/* A bare class (0,1,0), not `.usage-run-filters select` (0,1,1): the style
+   layers own `[data-style="…"] select`, and a base rule declared later in the
+   file must not out-rank them just because it comes after. */
+.usage-run-filter {
     font-size: var(--fs-label);
     padding: 2px 5px;
     max-width: 130px;
@@ -6954,8 +6957,9 @@ kbd {
     font-size: var(--fs-label);
     color: var(--faint);
 }
+/* Mono is for machine-readable values only. The project is a *name* — sans, like
+   its neighbour .usage-live-proj. */
 .usage-run-when,
-.usage-run-proj,
 .usage-run-dur {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;

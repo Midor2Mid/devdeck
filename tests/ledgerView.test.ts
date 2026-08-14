@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { runTotals, filterRuns, formatDuration } from "../src/renderer/src/ledgerView"
+import {
+    runTotals,
+    filterRuns,
+    formatCost,
+    formatDuration,
+    runsSentence,
+    type RunTotals
+} from "../src/renderer/src/ledgerView"
 import type { RunRecord } from "../src/main/ledger"
 
 function rec(over: Partial<RunRecord> = {}): RunRecord {
@@ -44,6 +51,49 @@ describe("filterRuns", () => {
         expect(filterRuns(runs, undefined, "p1").map((r) => r.id)).toEqual(["a", "b"])
         expect(filterRuns(runs, "card", "p1").map((r) => r.id)).toEqual(["a"])
         expect(filterRuns(runs).map((r) => r.id)).toEqual(["a", "b", "c"])
+    })
+})
+
+describe("formatCost", () => {
+    it("writes zero as $0, never blank and never a dash", () => {
+        expect(formatCost(0)).toBe("$0")
+        expect(formatCost(4.184)).toBe("$4.18")
+        expect(formatCost(0.004)).toBe("$0.00")
+    })
+})
+
+describe("runsSentence", () => {
+    const totals = (over: Partial<RunTotals> = {}): RunTotals => ({
+        cost: 0, tokens: 0, counted: 0, excluded: 0, ...over
+    })
+
+    it("counts the rows on screen, not the rows that paid into the total", () => {
+        // 15 rows, 3 of them attributions: the money is the exclusive 12's, but
+        // "N runs" describes what the user is looking at. Stating 12 above 15
+        // rendered rows would be false about the screen.
+        const s = runsSentence(totals({ cost: 4.18, counted: 12, excluded: 3 }), 15, true)
+        expect(s.count).toBe(15)
+        expect(s.unit).toBe("runs")
+        expect(s.cost).toBe("$4.18")
+        expect(s.why).toBe("3 excluded from the total (shared a project with another session)")
+    })
+
+    it("says $0 and why when every row on screen is an attribution", () => {
+        const s = runsSentence(totals({ excluded: 3 }), 3, true)
+        expect(s.count).toBe(3)
+        expect(s.cost).toBe("$0")
+        expect(s.why).toBe("3 excluded from the total (shared a project with another session)")
+    })
+
+    it("distinguishes an empty ledger from a filter that matched nothing", () => {
+        expect(runsSentence(totals(), 0, false).why).toBe("nothing recorded yet")
+        expect(runsSentence(totals(), 0, true).why).toBe("no runs match this filter")
+    })
+
+    it("has no trailing clause when the total covers every row shown", () => {
+        const s = runsSentence(totals({ cost: 1.5, counted: 1 }), 1, true)
+        expect(s.unit).toBe("run")
+        expect(s.why).toBe("")
     })
 })
 

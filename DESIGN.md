@@ -295,6 +295,12 @@ the form, the color is only reinforcement, so it survives a theme that flattens
 muted toward text. Attributed figures are never summed into a total; the total
 states how many rows it left out, in words, beside itself.
 
+This rule is **not** part of the active-state grammar above and must not be read
+as precedent for it: it is 1px and **dashed**, never accent-colored, and it sits
+under a *static figure* rather than a control — deliberately distinct from the
+2px solid accent underline that marks an active document tab. A dashed rule says
+"this number is qualified"; a solid accent rule says "this thing is selected".
+
 ## Do's and Don'ts
 
 **Do**
