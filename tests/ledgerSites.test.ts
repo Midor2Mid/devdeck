@@ -682,11 +682,19 @@ describe("pipeline records", () => {
         })
         useStore.setState({ pipelineRun: { ...run, pipelineId: "pl-stomped", startedAt: 5000 } })
 
-        // viaTrigger: skips the confirm, which is not what this test is about.
-        void useStore.getState().runPipeline("pl-next", true)
-        await vi.waitFor(() => expect(appended).toHaveLength(1))
-        // End the runner this started so it does not poll past the test.
-        useStore.getState().stopPipeline()
+        // Fake timers so the runner this starts is drained inside the test
+        // rather than left parked in a real 2.8s agent-boot wait past the end
+        // of it. viaTrigger skips the confirm, which is not what this is about.
+        vi.useFakeTimers()
+        try {
+            void useStore.getState().runPipeline("pl-next", true)
+            await vi.waitFor(() => expect(appended).toHaveLength(1))
+            useStore.getState().stopPipeline()
+            // The runner only notices the stop on the far side of that wait.
+            await vi.advanceTimersByTimeAsync(3000)
+        } finally {
+            vi.useRealTimers()
+        }
 
         expect(appended[0]).toMatchObject({
             kind: "pipeline",
@@ -868,19 +876,31 @@ describe("session records", () => {
             ]
         })
 
-        // Deliberately not awaited: dispatch ends with a 2.8s wait for the agent
-        // CLI to boot, long after the termId this test is about has been swapped.
-        void useStore.getState().dispatchBoardTask("t1", { worktree: false })
-        await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
-        useConfirm.getState().answer(true)
-        await vi.waitFor(() =>
-            expect(useStore.getState().boardTasks[0].termId).not.toBe("old-term")
-        )
+        // Dispatch ends with a 2.8s wait for the agent CLI to boot, long after
+        // the termId this test is about has been swapped. Held and driven to
+        // completion rather than left floating: an unawaited real timer outlives
+        // the test and its tail writes lastAgentTermId into whatever is running
+        // by then, and this is the one suite that has to stay trustworthy.
+        // Fake timers so the wait costs nothing; installed before the call,
+        // because they cannot adopt a timeout that real timers already scheduled.
+        vi.useFakeTimers()
+        try {
+            const dispatched = useStore.getState().dispatchBoardTask("t1", { worktree: false })
+            await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
+            useConfirm.getState().answer(true)
+            await vi.waitFor(() =>
+                expect(useStore.getState().boardTasks[0].termId).not.toBe("old-term")
+            )
 
-        useStore.getState().closePane("old-term")
+            useStore.getState().closePane("old-term")
+            await vi.advanceTimersByTimeAsync(20)
+            expect(appended).toEqual([])
 
-        await new Promise((r) => setTimeout(r, 20))
-        expect(appended).toEqual([])
+            await vi.advanceTimersByTimeAsync(2800)
+            await dispatched
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
     it("records nothing for a plain shell pane", async () => {
