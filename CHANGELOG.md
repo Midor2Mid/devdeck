@@ -81,6 +81,29 @@ just the code.
   every setting, not only the ones this feature touches. The flush now waits for
   load to actually apply before it's allowed to write.
 
+A third, unrelated piece: a race's or a pipeline's cost used to disappear the
+moment its pane closed. It now survives.
+
+- **Every finished run is kept, in a new Runs · all time section of the usage
+  panel.** A task-board card reaching done, a race landing or being abandoned, a
+  pipeline run reaching a terminal status, and an ad-hoc agent pane closing each
+  add one row — newest first, filterable by kind and by project, showing date,
+  kind, label, project, agents, duration and cost. Deleting the card, race, or
+  pipeline afterward doesn't touch the row; it lives on its own in a new
+  `runs.jsonl`, independent of whatever spent the money.
+- **Totals exclude any run that shared a project with another session, and say
+  so.** A cost here is an attribution over a project directory and a time
+  window, not a receipt — DevDeck prices a run by summing every agent
+  transcript under the project's directory across the run's window, because
+  Claude Code names transcripts by project rather than by pty, so a second
+  session working in that same directory during the run lands in the same
+  figure. Adding two such figures together would double-count the same money.
+  So a non-exclusive run is still shown, but is never added to a total: its own
+  figure gets a `~` and a dashed underline so it can't be mistaken for a plain
+  number, the total beside it counts only the exclusive rows, and the number
+  left out is stated right next to that total rather than silently vanishing
+  from it.
+
 ## 0.7.13 - 2026-08-13
 
 Two features. One is finished; the other is built, reviewed hard, and has never

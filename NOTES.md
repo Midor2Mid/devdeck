@@ -541,6 +541,67 @@ knowing before it looks like a bug. And **there is no escape for a literal
 the rule editor teaches the anchoring/substring distinction via its
 placeholder rather than document an escape hatch nobody would find anyway.
 
+### The run ledger: the app's first append-only store, and what it still can't see (2026-08-15)
+
+**First store in the app that isn't read-whole/mutate/write-whole.**
+`workspace.json`, `settings.json`, `aikeys.json`, `remote-devices.json` — every
+one of them loads the whole file, mutates the in-memory shape, and calls
+`atomicWrite` to replace it, which is fine because none of them grows without
+bound. `runs.jsonl` (`src/main/ledger.ts`) is the opposite shape on purpose:
+its entire reason to exist is to keep growing, so a store that gets more
+expensive to write exactly as its history becomes more valuable would be
+fighting its own point, and a crash mid-rewrite would risk the whole file
+instead of one line. `appendRun` only ever appends a line; nothing rewrites the
+file except the rare cap-crossing rotation (past `RUN_CAP` = 5000 lines,
+trimmed back to the most recent `RUN_KEEP` = 4000). The payoff shows up on
+read: a torn final line from a crash mid-append fails `JSON.parse` or the
+shape check, and `readRuns` skips it rather than throwing — the crash costs
+one record, not the file.
+
+**Exclusivity is a snapshot at the run's end, not an integral over its
+window.** `wasExclusive` is only ever asked once, at the moment a run
+finishes, against whichever agent sessions happen to be live right then — not
+against everything that was true at any point during the run. A session that
+shared the project directory for part of the run but had already closed
+before the run's own end leaves nothing to see at checkpoint time, so that run
+reads as exclusive when a full accounting of the window would say otherwise.
+The error only runs one direction — it can call a run exclusive that briefly
+wasn't, never the reverse — which is the direction that never drops a real
+cost out of a total, but it does mean "exclusive" here reads as "nothing else
+was here at the very end," not a guarantee for the whole window.
+
+**A session record is written only for a genuinely ad-hoc pane.** A pane
+owned by a race entrant, a pipeline step, or a dispatched card writes nothing
+of its own when it closes, because its parent already records that same money
+with better facts attached — an outcome, a diffstat, a winner — over the
+identical figure. Recording both would not be a double-count in the
+exclusivity sense (each is honestly exclusive on its own), it would be
+subsumption: the same spend described twice. Landing a three-way race, for
+instance, would otherwise write one race record plus three ad-hoc-looking
+session records for money the race record already accounts for in full.
+
+**Known limits, and all of them fail closed.** A pane restored from a
+previous launch never called `logUsageStart`, so it has no start instant to
+price a window from and records nothing rather than inventing one. A
+dispatched card deleted before it ever reaches done records nothing — the
+record is written on the done transition, and a deleted card never makes
+that transition. A pipeline run replaced by a new run before the first one
+finishes is never recorded either — `recordPipelineRun` only fires from a
+terminal status, and a stomped run never reaches one. In every case the cost
+of the bug is a missing figure, not a doubled one, which is the direction
+this feature is willing to be wrong in.
+
+**Cost-aware routing is now possible, and still deliberately not built.** The
+"Agent routing" note above (2026-08-14) named exactly this gap: no rule can
+say "the cheapest preset that can pass the gate" because routing has no cost
+history to check that against. The ledger is that history now. It's still not
+wired into routing — a few days of one race, some dispatched cards, and a
+handful of ad-hoc sessions is nowhere near enough data to tell a genuinely
+cheap agent from a lucky one, and baking a cost-aware rule on top of that now
+would be exactly the kind of hand-authored guess dressed up as data the
+earlier note warned against. Worth revisiting once the ledger has real
+history behind it, not before.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
