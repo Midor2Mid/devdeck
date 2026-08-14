@@ -247,6 +247,41 @@ describe("race records", () => {
         expect(useStore.getState().races.c1).toBeDefined()
     })
 
+    // Landing closes every entrant's pane before deleting the race, so the race
+    // is still in state when those panes close - which is what lets the session
+    // site recognise them as owned. One record for the race, not one per entrant.
+    it("writes one record for the race, not one per entrant pane it closes", async () => {
+        useSettings.setState({
+            usageLog: [
+                { id: "e-claude", agentId: "claude", projectId: "p1", startedAt: 1000 },
+                { id: "e-codex", agentId: "codex", projectId: "p1", startedAt: 1000 }
+            ]
+        })
+        useStore.setState({
+            races: {
+                c1: race({
+                    entrants: [
+                        entrant({ termId: "e-claude", cost: 1, costTokens: 10 }),
+                        entrant({
+                            agentId: "codex",
+                            agentName: "Codex",
+                            status: "failed",
+                            termId: "e-codex",
+                            cost: 0.5,
+                            costTokens: 5
+                        })
+                    ]
+                })
+            }
+        })
+
+        await useStore.getState().landRaceWinner("c1", "claude")
+        await new Promise((r) => setTimeout(r, 20))
+
+        expect(appended.map((r) => r.kind)).toEqual(["race"])
+        expect(appended[0].cost).toBe(1.5)
+    })
+
     it("does not break landing when the ledger throws", async () => {
         stubApi({
             ledger: {
@@ -367,6 +402,82 @@ describe("session records", () => {
 
         await new Promise((r) => setTimeout(r, 20))
         expect(appended).toEqual([])
+    })
+
+    // A session record for an owned pane describes the same money as its parent's
+    // record, and both would be honestly exclusive - so a total that summed them
+    // would double count a race. The parent's record is the better one (it has an
+    // outcome, a winner, a diffstat), so the session record is the one to drop.
+    it("records nothing for a race entrant's pane, whose race records it instead", async () => {
+        useSettings.setState({
+            usageLog: [{ id: "term-9", agentId: "claude", projectId: "p1", startedAt: 4000 }]
+        })
+        useStore.setState({
+            races: { c1: race({ entrants: [entrant({ termId: "term-9", cost: 1 })] }) }
+        })
+
+        useStore.getState().closePane("term-9")
+
+        await new Promise((r) => setTimeout(r, 20))
+        expect(appended).toEqual([])
+    })
+
+    it("records nothing for a dispatched card's pane", async () => {
+        useSettings.setState({
+            usageLog: [{ id: "term-9", agentId: "claude", projectId: "p1", startedAt: 4000 }]
+        })
+        useStore.setState({
+            boardTasks: [
+                {
+                    id: "t1",
+                    projectId: "p1",
+                    title: "Fix the login redirect",
+                    column: "doing",
+                    createdAt: 1,
+                    dispatchedAt: 1000,
+                    termId: "term-9"
+                }
+            ]
+        })
+
+        useStore.getState().closePane("term-9")
+
+        await new Promise((r) => setTimeout(r, 20))
+        expect(appended).toEqual([])
+    })
+
+    // The ordering that matters: a pipeline never closes its step sessions, and
+    // `pipelineRun` - the only place step term ids live - is nulled seconds after
+    // the run ends. So the pane almost always closes with no live run to
+    // recognise it, and the claim made when the run was recorded is the only
+    // thing standing between that pane and a duplicate of the pipeline's spend.
+    it("records nothing for a pipeline step's pane closed after the run is gone", async () => {
+        useStore.setState({
+            pipelineRun: {
+                pipelineId: "pl-late",
+                name: "Nightly review",
+                stepIndex: 0,
+                total: 1,
+                stepTitle: "Write",
+                status: "running",
+                startedAt: 9000,
+                projectPath: "D:/p1",
+                steps: [{ title: "Write", agentId: "claude", status: "done", termId: "term-9" }]
+            }
+        })
+        useStore.getState().stopPipeline()
+        await vi.waitFor(() => expect(appended).toHaveLength(1))
+
+        // The run object is gone, exactly as it is a few seconds after any run ends.
+        useStore.setState({ pipelineRun: null })
+        useSettings.setState({
+            usageLog: [{ id: "term-9", agentId: "claude", projectId: "p1", startedAt: 9000 }]
+        })
+        useStore.getState().closePane("term-9")
+
+        await new Promise((r) => setTimeout(r, 20))
+        expect(appended).toHaveLength(1)
+        expect(appended[0].kind).toBe("pipeline")
     })
 
     it("records nothing for a plain shell pane", async () => {

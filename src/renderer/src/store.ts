@@ -852,6 +852,10 @@ export const useStore = create<AppState>((set, get) => {
             const project = get().projects.find((p) => samePath(p.path, cwd))
             const termIds = run.steps.map((s) => s.termId ?? "")
             const exclusive = wasExclusive(cwd, termIds)
+            // This record claims those sessions' spend. Claimed synchronously,
+            // before the pricing await: a step's pane can be closed at any point
+            // after the run ends, including while this is still in flight.
+            for (const id of termIds) if (id) claimedTerms.add(id)
             const agentIds = Array.from(new Set(run.steps.map((s) => s.agentId).filter(Boolean)))
             void (async () => {
                 try {
@@ -884,11 +888,53 @@ export const useStore = create<AppState>((set, get) => {
         }
     }
 
+    // Term ids whose spend a parent record already claims, kept because the
+    // parent's own link to them does not survive it. A pipeline's step sessions
+    // outlive the run: the runner never closes them, and `pipelineRun` (the only
+    // place `step.termId` exists) is nulled seconds after the run ends. By the
+    // time such a pane is closed there is nothing live left to recognise it, and
+    // it would write a session record for money the pipeline record already
+    // counted. Entries are removed as those panes close.
+    //
+    // Deliberately NOT needed for the other two owners: a card keeps `termId` on
+    // the card itself, which is persisted to workspace.json, and a race closes
+    // every entrant's pane BEFORE deleting the race object (both in
+    // landRaceWinner and in abandonRace — a live process cwd'd into a worktree
+    // blocks its removal on Windows), so the race is always still in state when
+    // its panes close. If that ordering is ever inverted, the suppression below
+    // stops working for races and entrant sessions start double-counting a race.
+    const claimedTerms = new Set<string>()
+
+    /**
+     * Is this pane's spend already recorded by the run that owns it?
+     *
+     * A race entrant, a pipeline step and a dispatched card each close their own
+     * run with a record carrying better facts than a session ever could — an
+     * outcome, a diffstat, a winner — over the same money. Only a genuinely
+     * ad-hoc pane is a run in its own right. Ownership is read from the term-id
+     * links the store already keeps, not from a second notion of who owns what.
+     */
+    const isOwnedPane = (termId: string): boolean => {
+        if (claimedTerms.has(termId)) return true
+        const st = get()
+        if (Object.values(st.races).some((r) => r.entrants.some((e) => e.termId === termId)))
+            return true
+        if (st.pipelineRun?.steps.some((s) => s.termId === termId)) return true
+        return st.boardTasks.some((t) => t.termId === termId && !!t.dispatchedAt)
+    }
+
     /**
      * An agent pane closed. Pairs with the usageLog event `logUsageEnd` closes,
      * carrying the cost that log deliberately omits. Priced over the session's own
      * window in its own directory — which is an attribution, not a receipt,
      * whenever another session shared that directory.
+     *
+     * Only an ad-hoc pane gets one. A pane owned by a race entrant, a pipeline
+     * step or a dispatched card describes the same money as its parent's record,
+     * and both would be honestly exclusive — so summing them double counts. That
+     * is a subsumption problem, not an exclusivity one, and it is fixed here at
+     * the source rather than by a filter downstream that could not tell an
+     * owned session from an ad-hoc one.
      *
      * A session with no open usage event (a pane restored from a previous launch,
      * which never called logUsageStart) has no start instant, so there is no
@@ -897,6 +943,10 @@ export const useStore = create<AppState>((set, get) => {
      */
     const recordSessionRun = (termId: string, agentId: string): void => {
         try {
+            if (isOwnedPane(termId)) {
+                claimedTerms.delete(termId)
+                return
+            }
             const st = get()
             const session = st.agentSessions().find((s) => s.termId === termId)
             const event = useSettings
