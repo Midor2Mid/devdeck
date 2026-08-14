@@ -116,8 +116,14 @@ export interface CanvasPos {
 interface AppState extends Persisted {
     /** Agent terminals restored from a previous run, awaiting a resume/fresh choice (runtime-only). */
     agentResumePending: Record<string, boolean>
-    /** Clear a terminal's pending-resume flag (after the user picks resume or fresh). */
-    clearAgentResume: (termId: string) => void
+    /**
+     * A restored agent pane has actually launched (the user picked resume or
+     * fresh): clear its pending flag and open its usage event. One action, not
+     * two, because those are one fact — an agent is now running in a directory,
+     * spending money — and splitting them is how the pty came to be spawned
+     * without anything recording that a session had started.
+     */
+    startResumedAgent: (termId: string) => void
     projects: Project[]
     activeId: string | null
     /** Project ids, most recently used first (persisted to localStorage). */
@@ -2390,13 +2396,31 @@ export const useStore = create<AppState>((set, get) => {
             get().newTab(SHELL, command, label ?? command)
         },
 
-        clearAgentResume: (termId) =>
+        startResumedAgent: (termId) => {
+            if (!(termId in get().agentResumePending)) return
             set((s) => {
-                if (!(termId in s.agentResumePending)) return s
                 const agentResumePending = { ...s.agentResumePending }
                 delete agentResumePending[termId]
                 return { agentResumePending }
-            }),
+            })
+            // Resume is the ONLY way a restored agent session ever starts (every
+            // restored agent term is marked pending at load), so without this the
+            // pane spends real money that no usage event has ever seen. It is not
+            // only its own missing record: exclusivity is answered from usageLog,
+            // so an unlogged session sitting in a project directory silently lets
+            // every card, pipeline and session whose window it overlaps be written
+            // as an exclusive receipt over money that was partly its.
+            //
+            // Both modes log. "fresh" starts a brand-new conversation rather than
+            // continuing the old one, but it is the same agent in the same
+            // directory costing the same money - the distinction matters to the
+            // user's context, not to the accounting.
+            const agentId = get().termAgents[termId]
+            if (!isAgentId(agentId)) return
+            const projectId = get().projectIdOfTerm(termId) ?? get().activeId ?? ""
+            const cwd = get().termCwd[termId] ?? get().projects.find((p) => p.id === projectId)?.path
+            useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
+        },
 
         splitActive: (dir, agentId) => {
             const s = get()

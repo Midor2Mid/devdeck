@@ -37,7 +37,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const themeId = useSettings((s) => s.appearance.theme)
     // A restored agent session waits for a resume/fresh choice before it launches.
     const pending = useStore((s) => !!s.agentResumePending[termId])
-    const clearAgentResume = useStore((s) => s.clearAgentResume)
+    const startResumedAgent = useStore((s) => s.startResumedAgent)
 
     const resumeAgentId = useStore.getState().agentOf(termId)
     const resumePreset = useSettings.getState().agentById(resumeAgentId)
@@ -49,8 +49,16 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         ? `${resumePreset.command} ${resumePreset.resumeArgs}`
         : coldCmd
     const resolveResume = (mode: "resume" | "fresh"): void => {
-        spawnRef.current?.(mode === "resume" ? resumeCmd : coldCmd)
-        clearAgentResume(termId)
+        // Only mark the session started if it actually started. The spawn closure
+        // is set inside the attach effect's async tail, so a click landing in that
+        // gap used to clear the pending flag without ever launching a pty, leaving
+        // a dead pane with no way back; now the buttons stay up. It also keeps the
+        // invariant the accounting depends on: a usage event exists iff an agent
+        // was started.
+        const spawn = spawnRef.current
+        if (!spawn) return
+        spawn(mode === "resume" ? resumeCmd : coldCmd)
+        startResumedAgent(termId)
         termRef.current?.focus()
     }
 

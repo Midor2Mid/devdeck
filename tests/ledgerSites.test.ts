@@ -92,6 +92,7 @@ beforeEach(() => {
         termCwd: {},
         termNames: {},
         agentStatus: {},
+        agentResumePending: {},
         races: {},
         raceCardId: null,
         pipelineRun: null,
@@ -343,6 +344,55 @@ describe("card records", () => {
         useStore.getState().moveBoardTask("t-solo", "done")
 
         expect(appended[0].exclusive).toBe(true)
+    })
+
+    // Resume is the ONLY way a restored agent session ever starts, and it used to
+    // spawn the pty without opening a usage event. That pane then spent real
+    // money invisibly: the overlap test found no event (the pre-quit event was
+    // closed at load) and the live test found no pane once it was shut, so a card
+    // sharing its directory was written as an exclusive receipt over money that
+    // was partly the resumed session's - and recordSessionRun declined to record
+    // that pane too, so the money appeared ONLY inside someone else's total.
+    it("counts a resumed pane, whose session only exists because Resume was clicked", () => {
+        useStore.setState({
+            agentResumePending: { "term-resumed": true },
+            termAgents: { "term-resumed": "claude" },
+            tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-resumed") }] }
+        })
+
+        useStore.getState().startResumedAgent("term-resumed")
+
+        const ev = useSettings.getState().usageLog
+        expect(ev).toHaveLength(1)
+        expect(ev[0]).toMatchObject({ id: "term-resumed", agentId: "claude", projectId: "p1", cwd: "D:/p1" })
+        expect(useStore.getState().agentResumePending["term-resumed"]).toBeUndefined()
+
+        // And the card that shared its directory is no longer a receipt.
+        useStore.setState({ boardTasks: [{ ...dispatched, id: "t-vs-resumed" }] })
+        useStore.getState().moveBoardTask("t-vs-resumed", "done")
+
+        expect(appended[0]).toMatchObject({ exclusive: false, reason: "shared" })
+    })
+
+    it("logs a resumed pane's own worktree, not the project it branched from", () => {
+        useStore.setState({
+            agentResumePending: { "term-wt": true },
+            termAgents: { "term-wt": "claude" },
+            termCwd: { "term-wt": "D:/p1.worktrees/x" },
+            tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-wt") }] }
+        })
+
+        useStore.getState().startResumedAgent("term-wt")
+
+        expect(useSettings.getState().usageLog[0].cwd).toBe("D:/p1.worktrees/x")
+    })
+
+    it("logs nothing when the pane was not awaiting a resume", () => {
+        useStore.setState({ agentResumePending: {}, termAgents: { "term-x": "claude" } })
+
+        useStore.getState().startResumedAgent("term-x")
+
+        expect(useSettings.getState().usageLog).toEqual([])
     })
 
     it("is exclusive in its own worktree even with another session in the project", () => {
