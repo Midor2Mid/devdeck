@@ -597,6 +597,44 @@ describe("pipeline records", () => {
         })
     })
 
+    // runPipeline bumps the run token with no check for a run already in flight,
+    // so the old runner returns stale and never reaches a terminal status. That
+    // made starting a second run the one way to spend money on a pipeline and
+    // have the ledger never hear about it.
+    it("records a run stomped by a new run rather than discarding its spend", async () => {
+        useSettings.setState({
+            pipelines: [
+                {
+                    id: "pl-next",
+                    name: "The next run",
+                    steps: [
+                        {
+                            id: "s1",
+                            title: "Write",
+                            agentId: "claude",
+                            prompt: "do the thing",
+                            fresh: false
+                        }
+                    ]
+                }
+            ]
+        })
+        useStore.setState({ pipelineRun: { ...run, pipelineId: "pl-stomped", startedAt: 5000 } })
+
+        // viaTrigger: skips the confirm, which is not what this test is about.
+        void useStore.getState().runPipeline("pl-next", true)
+        await vi.waitFor(() => expect(appended).toHaveLength(1))
+        // End the runner this started so it does not poll past the test.
+        useStore.getState().stopPipeline()
+
+        expect(appended[0]).toMatchObject({
+            kind: "pipeline",
+            label: "Nightly review",
+            startedAt: 5000,
+            outcome: "stopped"
+        })
+    })
+
     it("says a genuinely shared directory is shared", async () => {
         useSettings.setState({
             usageLog: [

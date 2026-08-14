@@ -1923,6 +1923,14 @@ export const useStore = create<AppState>((set, get) => {
                 if (!ok) return
             }
 
+            // Starting a run stomps whatever is already in flight: the token bump
+            // below makes the old runner return without ever setting a terminal
+            // status, so its spend would never be recorded at all. Same shape as
+            // stopPipeline, and for the same reason - this is the only place that
+            // run is observed ending. recordPipelineRun ignores a run it has
+            // already written, so a previous run that finished cleanly is not
+            // recorded twice as "stopped".
+            recordPipelineRun(get().pipelineRun, "stopped")
             pipelineToken += 1
             const token = pipelineToken
             const stale = (): boolean => token !== pipelineToken
