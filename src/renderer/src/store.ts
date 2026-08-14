@@ -1198,12 +1198,15 @@ export const useStore = create<AppState>((set, get) => {
             // is treated exactly like a rule naming a deleted agent — skipped, falling
             // through the same way a dangling reference already does.
             const aiAgents = settingsState.agents.filter((a) => a.runMode !== "normal")
-            // Trust the caller's agentId only if it still names a real preset — a
-            // stale or deleted id (e.g. a card queued before a preset was removed)
-            // must fall through to the router rather than dispatching to nothing.
+            // Trust the caller's agentId only if it still names a real AI-mode preset —
+            // the same subset routeAgent itself chooses from, so a caller can't hand in
+            // a shell preset and have it treated as routed. (Today the only caller is
+            // the board's override menu, which already lists AI-mode presets only, but
+            // checking the same subset here keeps this in step with routeAgent instead
+            // of trusting a wider list "just in case".)
             const requestedAgentId = opts.agentId
             const agentId =
-                requestedAgentId && settingsState.agents.some((a) => a.id === requestedAgentId)
+                requestedAgentId && aiAgents.some((a) => a.id === requestedAgentId)
                     ? requestedAgentId
                     : routeAgent(
                           settingsState.routingRules,
@@ -1211,6 +1214,13 @@ export const useStore = create<AppState>((set, get) => {
                           aiAgents,
                           settingsState.defaultAgentId
                       ).agentId
+            // No AI-mode preset exists to name: refuse rather than proceed with a blank
+            // agent, which used to fall through to a bare shell tab that received the
+            // raw card title as a literal pasted command 2.8s later.
+            if (!agentId) {
+                pushActivity("attention", "", "No AI agent preset is configured — add one in Settings to dispatch")
+                return
+            }
             const agent = settingsState.agents.find((a) => a.id === agentId)
             // One beat before spending real tokens: dispatch silently picked the
             // first agent preset, created a worktree, and pasted the card title
