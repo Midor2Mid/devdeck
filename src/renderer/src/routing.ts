@@ -6,7 +6,7 @@
  * what a rule *is* and when it matches.
  */
 
-export type RuleKind = "title" | "titleRegex" | "project" | "always"
+export type RuleKind = "title" | "titleGlob" | "project" | "always"
 
 export interface RoutingRule {
     id: string
@@ -22,21 +22,30 @@ export interface RouteResult {
 }
 
 /**
- * Does this rule match the card? Returns false on invalid regex rather than
- * throwing: a rule malfunction must be inert, not crash the dispatch path that
- * spends money. Empty or whitespace-only patterns on text kinds also return
- * false: in JavaScript, `"".includes("")` is true, which would turn a
- * half-typed rule into a catch-all. The same applies to a space: "title
- * ".includes(" ") is almost always true.
+ * Compile a glob to a regex. Every metacharacter is escaped before `*` and `?`
+ * are translated, so the user cannot express a nested quantifier — which is what
+ * makes catastrophic backtracking possible. This is a structural fix, not a
+ * bound: a glob compiles to alternating literals and `.*`, whose backtracking is
+ * polynomial rather than exponential.
  *
- * For titleRegex, we cap both the pattern length (200 chars) and the title
- * slice tested against it (200 chars). A catastrophic regex like `(a+)+$`
- * is syntactically valid and won't throw, but runs exponentially in input
- * length and can freeze the UI during dispatch preview. These caps are
- * damage limitation, not a security boundary — the rule author is the user
- * editing their own settings. An oversized pattern becomes inert; the title
- * slice is transparent to realistic matches (a 300-char title with a pattern
- * matching its first 50 words still matches).
+ * The previous `titleRegex` kind was removed rather than mitigated. Capping the
+ * input length does not help: blowup is ~2x per character, so any cap large
+ * enough to be useful is still astronomically slow, and the case that prompted
+ * the fix was a 31-character title.
+ */
+function globToRegExp(glob: string): RegExp {
+    // Escape every metacharacter, including the backslash itself.
+    const escaped = glob.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    // Then translate only the two glob tokens, matching their ESCAPED forms.
+    const body = escaped.replace(/\\\*/g, ".*").replace(/\\\?/g, ".")
+    return new RegExp("^" + body + "$", "i")
+}
+
+/**
+ * Does this rule match the card? Returns false when patterns are empty or
+ * whitespace-only: in JavaScript, `"".includes("")` is true, which would turn a
+ * half-typed rule into a catch-all. The same applies to a space: `"title
+ * ".includes(" ")` is almost always true.
  */
 export function ruleMatches(rule: RoutingRule, card: { title: string; projectId: string }): boolean {
     if (rule.kind === "always") {
@@ -49,13 +58,12 @@ export function ruleMatches(rule: RoutingRule, card: { title: string; projectId:
         return card.title.toLowerCase().includes(pattern.toLowerCase())
     }
 
-    if (rule.kind === "titleRegex") {
+    if (rule.kind === "titleGlob") {
         const pattern = rule.pattern.trim()
         if (!pattern) return false
-        if (pattern.length > 200) return false
         try {
-            const regex = new RegExp(pattern)
-            return regex.test(card.title.slice(0, 200))
+            const regex = globToRegExp(pattern)
+            return regex.test(card.title)
         } catch {
             return false
         }

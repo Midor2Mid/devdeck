@@ -14,15 +14,25 @@ describe("ruleMatches", () => {
         expect(ruleMatches(rule({ kind: "title", pattern: "logout" }), card)).toBe(false)
     })
 
-    it("matches a title regex", () => {
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: "^Fix .*redirect$" }), card)).toBe(true)
+    it("matches a title glob with * and ?", () => {
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "*login*" }), card)).toBe(true)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "login*" }), card)).toBe(false)
     })
 
-    it("treats an invalid regex as never matching", () => {
-        // An inert rule is the safe failure. Matching everything would silently
-        // reroute every dispatch, and throwing would do it on the path that
-        // spends money.
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: "([" }), card)).toBe(false)
+    it("supports ? for single-character matches in globs", () => {
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "?ix*" }), card)).toBe(true)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "??ix*" }), card)).toBe(false)
+    })
+
+    it("treats regex metacharacters as literals in globs", () => {
+        // a.c is literal, not "a<any>c"
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "a.c" }), card)).toBe(false)
+        // (a+)+$ would be exponentially slow as a regex, but is literal here
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "(a+)+$" }), card)).toBe(false)
+    })
+
+    it("matches anything with * glob", () => {
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "*" }), card)).toBe(true)
     })
 
     it("matches a project by id, not by name", () => {
@@ -38,35 +48,15 @@ describe("ruleMatches", () => {
         // An empty substring matches everything in JS; that would turn a
         // half-typed rule into a catch-all.
         expect(ruleMatches(rule({ kind: "title", pattern: "" }), card)).toBe(false)
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: "" }), card)).toBe(false)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "" }), card)).toBe(false)
     })
 
     it("does not match whitespace-only patterns for the text kinds", () => {
         // A space or tab after trim becomes empty: same catch-all risk.
         expect(ruleMatches(rule({ kind: "title", pattern: " " }), card)).toBe(false)
         expect(ruleMatches(rule({ kind: "title", pattern: "\t" }), card)).toBe(false)
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: " " }), card)).toBe(false)
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: "\t" }), card)).toBe(false)
-    })
-
-    it("matches a titleRegex pattern at exactly 200 characters", () => {
-        // A pattern of exactly 200 chars is acceptable; 201 is not.
-        const pattern200 = "a".repeat(200)
-        const cardWithA = { title: "a aaa", projectId: "p1" }
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: pattern200 }), cardWithA)).toBe(false)
-    })
-
-    it("treats a titleRegex pattern over 200 characters as inert", () => {
-        // An oversized pattern becomes inert: same as invalid or empty.
-        const pattern201 = "a".repeat(201)
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: pattern201 }), card)).toBe(false)
-    })
-
-    it("matches a long title against a titleRegex by slicing to 200 chars", () => {
-        // A 300-char title with a pattern matching its first word should still match.
-        const longTitle = "Fix " + "x".repeat(300)
-        const longCard = { title: longTitle, projectId: "p1" }
-        expect(ruleMatches(rule({ kind: "titleRegex", pattern: "^Fix" }), longCard)).toBe(true)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: " " }), card)).toBe(false)
+        expect(ruleMatches(rule({ kind: "titleGlob", pattern: "\t" }), card)).toBe(false)
     })
 })
 
