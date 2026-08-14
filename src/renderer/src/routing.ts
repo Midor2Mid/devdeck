@@ -24,9 +24,19 @@ export interface RouteResult {
 /**
  * Does this rule match the card? Returns false on invalid regex rather than
  * throwing: a rule malfunction must be inert, not crash the dispatch path that
- * spends money. Empty patterns on text kinds also return false: in JavaScript,
- * `"".includes("")` is true, which would turn a half-typed rule into a
- * catch-all.
+ * spends money. Empty or whitespace-only patterns on text kinds also return
+ * false: in JavaScript, `"".includes("")` is true, which would turn a
+ * half-typed rule into a catch-all. The same applies to a space: "title
+ * ".includes(" ") is almost always true.
+ *
+ * For titleRegex, we cap both the pattern length (200 chars) and the title
+ * slice tested against it (200 chars). A catastrophic regex like `(a+)+$`
+ * is syntactically valid and won't throw, but runs exponentially in input
+ * length and can freeze the UI during dispatch preview. These caps are
+ * damage limitation, not a security boundary — the rule author is the user
+ * editing their own settings. An oversized pattern becomes inert; the title
+ * slice is transparent to realistic matches (a 300-char title with a pattern
+ * matching its first 50 words still matches).
  */
 export function ruleMatches(rule: RoutingRule, card: { title: string; projectId: string }): boolean {
     if (rule.kind === "always") {
@@ -34,15 +44,18 @@ export function ruleMatches(rule: RoutingRule, card: { title: string; projectId:
     }
 
     if (rule.kind === "title") {
-        if (!rule.pattern) return false
-        return card.title.toLowerCase().includes(rule.pattern.toLowerCase())
+        const pattern = rule.pattern.trim()
+        if (!pattern) return false
+        return card.title.toLowerCase().includes(pattern.toLowerCase())
     }
 
     if (rule.kind === "titleRegex") {
-        if (!rule.pattern) return false
+        const pattern = rule.pattern.trim()
+        if (!pattern) return false
+        if (pattern.length > 200) return false
         try {
-            const regex = new RegExp(rule.pattern)
-            return regex.test(card.title)
+            const regex = new RegExp(pattern)
+            return regex.test(card.title.slice(0, 200))
         } catch {
             return false
         }
