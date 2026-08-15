@@ -30,10 +30,12 @@ import {
     parseShortstat,
     entrantBranch,
     raceSettled,
+    raceSpend,
     samePath,
     type Entrant,
     type Race
 } from "./race"
+import { createRunRecorder } from "./runRecorder"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -114,8 +116,14 @@ export interface CanvasPos {
 interface AppState extends Persisted {
     /** Agent terminals restored from a previous run, awaiting a resume/fresh choice (runtime-only). */
     agentResumePending: Record<string, boolean>
-    /** Clear a terminal's pending-resume flag (after the user picks resume or fresh). */
-    clearAgentResume: (termId: string) => void
+    /**
+     * A restored agent pane has actually launched (the user picked resume or
+     * fresh): clear its pending flag and open its usage event. One action, not
+     * two, because those are one fact — an agent is now running in a directory,
+     * spending money — and splitting them is how the pty came to be spawned
+     * without anything recording that a session had started.
+     */
+    startResumedAgent: (termId: string) => void
     projects: Project[]
     activeId: string | null
     /** Project ids, most recently used first (persisted to localStorage). */
@@ -626,7 +634,12 @@ export const useStore = create<AppState>((set, get) => {
         idleTimers.delete(termId)
         pendingSince.delete(termId)
         forgetTail(termId)
-        if (isAgentId(get().termAgents[termId] ?? SHELL)) useSettings.getState().logUsageEnd(termId)
+        const closingAgent = get().termAgents[termId] ?? SHELL
+        if (isAgentId(closingAgent)) {
+            // Before logUsageEnd, which stamps the event this reads its start from.
+            recordSessionRun(termId, closingAgent)
+            useSettings.getState().logUsageEnd(termId)
+        }
         set((s) => {
             const agentStatus = { ...s.agentStatus }
             delete agentStatus[termId]
@@ -686,6 +699,32 @@ export const useStore = create<AppState>((set, get) => {
         }
         return out
     }
+
+    // ---- Run ledger -------------------------------------------------------
+    // The four write sites live in ./runRecorder — they are a cohesive unit with
+    // a narrow interface, and the question they exist to answer ("may this cost
+    // be summed?") is about a window in the past, which is testable there
+    // without driving the whole store.
+    const {
+        recordCardRun,
+        recordRaceRun,
+        recordPipelineRun,
+        recordSessionRun,
+        claimTerm
+    } = createRunRecorder(get, {
+        newId,
+        isAgentId,
+        // Persisted with the card, so the "already recorded" guard survives a
+        // quit exactly as `dispatchedAt` and `termId` do.
+        markCardRecorded: (taskId, dispatchedAt) => {
+            set((s) => ({
+                boardTasks: s.boardTasks.map((t) =>
+                    t.id === taskId ? { ...t, recordedFor: dispatchedAt } : t
+                )
+            }))
+            persist()
+        }
+    })
 
     /** Rewrite one entrant immutably. Never trusts a captured race — always reads current state. */
     const setEntrant = (cardId: string, agentId: string, patch: Partial<Entrant>): void => {
@@ -1124,13 +1163,19 @@ export const useStore = create<AppState>((set, get) => {
             persist()
         },
         moveBoardTask: (id, column) => {
+            // Read the card before the move: reaching done is what ends the run,
+            // and the record describes the card as it was at that moment. One
+            // `endedAt` is shared by the card and the record so the two agree.
+            const before = get().boardTasks.find((t) => t.id === id)
+            const endedAt = Date.now()
+            const ending = !!before?.dispatchedAt && !before.endedAt && column === "done"
             set((s) => ({
                 boardTasks: s.boardTasks.map((t) => {
                     if (t.id !== id) return t
                     // Reaching done closes the cost window; moving back out of done
                     // reopens it, so a reopened card keeps accruing.
                     if (column === "done" && t.dispatchedAt && !t.endedAt) {
-                        return { ...t, column, endedAt: Date.now() }
+                        return { ...t, column, endedAt }
                     }
                     if (column !== "done" && t.endedAt) {
                         return { ...t, column, endedAt: undefined, cost: undefined, costTokens: undefined }
@@ -1139,6 +1184,9 @@ export const useStore = create<AppState>((set, get) => {
                 })
             }))
             persist()
+            // Written after the move, so a card that fails to record still moves.
+            // Moving back out of done does not retract it: it was true when written.
+            if (ending && before) recordCardRun(before, endedAt)
         },
         refreshTaskCost: async (id) => {
             const st = get()
@@ -1257,6 +1305,16 @@ export const useStore = create<AppState>((set, get) => {
             const label = "task " + task.title.slice(0, 24)
             const termId = get().newTab(agentId, undefined, label, worktreePath)
             if (!termId) return
+            // Re-dispatching displaces the previous pane: the card stops naming it
+            // below, so nothing would recognise it as owned when it eventually
+            // closes, and it would write a session record over a window the
+            // earlier dispatch's card record already covers. Keep it suppressed.
+            // Only if it is still open — a pane already closed was recognised as
+            // owned while the card still named it, and claiming it now would leave
+            // an entry nothing can remove.
+            const displaced = get().boardTasks.find((t) => t.id === id)?.termId
+            if (displaced && displaced !== termId && get().termAgents[displaced])
+                claimTerm(displaced)
             set((s) => ({
                 boardTasks: s.boardTasks.map((t) =>
                     t.id === id
@@ -1264,6 +1322,14 @@ export const useStore = create<AppState>((set, get) => {
                               ...t,
                               column: "doing",
                               termId,
+                              // Both stamped here because here is the last moment
+                              // they are guaranteed knowable: the pane closes long
+                              // before the card is filed, and the project can be
+                              // removed before that. A run record built from live
+                              // lookups afterwards would have a blank agent and a
+                              // blank project name.
+                              agentId,
+                              projectName: proj.name,
                               worktree: worktreePath,
                               // Opens the cost window; closed when the card hits done.
                               dispatchedAt: Date.now(),
@@ -1543,6 +1609,11 @@ export const useStore = create<AppState>((set, get) => {
                 // suspended tick from THIS race may be carrying — which reopens
                 // exactly the spend-in-a-deleted-worktree hole the counter
                 // exists to close. Leave it be.
+                //
+                // The record goes in BEFORE the delete below: entrant costs,
+                // diffstats and the gate outcome exist nowhere else, and the next
+                // line is where they stop existing.
+                recordRaceRun(cardId, race, "landed", winner.agentId)
                 set((s) => {
                     const rest = { ...s.races }
                     delete rest[cardId]
@@ -1636,6 +1707,10 @@ export const useStore = create<AppState>((set, get) => {
                         )
                     }
                 }
+                // See the comment in landRaceWinner: the record goes in before the
+                // delete, because the entrant costs live nowhere else. Abandoning
+                // discards the work, not the fact that it was paid for.
+                recordRaceRun(cardId, race, "abandoned")
                 // See the comment in landRaceWinner: raceGen is deliberately
                 // never deleted, only ever bumped.
                 set((s) => {
@@ -1828,6 +1903,10 @@ export const useStore = create<AppState>((set, get) => {
 
         stopPipeline: () => {
             pipelineToken += 1
+            // Recorded here as well as in the runner: bumping the token makes the
+            // runner return without ever setting a terminal status, so this is the
+            // only place a stopped run is observed ending.
+            recordPipelineRun(get().pipelineRun, "stopped")
             set((s) => (s.pipelineRun ? { pipelineRun: { ...s.pipelineRun, status: "stopped" } } : {}))
             setTimeout(() => {
                 if (get().pipelineRun?.status === "stopped") set({ pipelineRun: null })
@@ -1858,12 +1937,29 @@ export const useStore = create<AppState>((set, get) => {
                 if (!ok) return
             }
 
+            // Starting a run stomps whatever is already in flight: the token bump
+            // below makes the old runner return without ever setting a terminal
+            // status, so its spend would never be recorded at all. Same shape as
+            // stopPipeline, and for the same reason - this is the only place that
+            // run is observed ending. recordPipelineRun ignores a run it has
+            // already written, so a previous run that finished cleanly is not
+            // recorded twice as "stopped".
+            recordPipelineRun(get().pipelineRun, "stopped")
             pipelineToken += 1
             const token = pipelineToken
             const stale = (): boolean => token !== pipelineToken
 
-            const setRun = (patch: Partial<PipelineRun>): void =>
+            // Every terminal transition records the run, and it does so here
+            // rather than at the five places that make one: the runner exits on
+            // a step cap, a missing session, a dangling goto, a failed gate and
+            // completion, and a sixth exit added later would otherwise be one
+            // more run whose spend is silently discarded. recordPipelineRun
+            // ignores repeats of the same run.
+            const setRun = (patch: Partial<PipelineRun>): void => {
                 set((s) => ({ pipelineRun: s.pipelineRun ? { ...s.pipelineRun, ...patch } : s.pipelineRun }))
+                if (patch.status === "done" || patch.status === "error")
+                    recordPipelineRun(get().pipelineRun, patch.status === "done" ? "done" : "failed")
+            }
 
             // Patch one step's state in the run timeline.
             const setStep = (i: number, patch: Partial<PipelineStepState>): void =>
@@ -2267,7 +2363,16 @@ export const useStore = create<AppState>((set, get) => {
             }))
             if (isAgentId(agentId)) {
                 pushActivity("start", termId, `${tab.name} · started`)
-                useSettings.getState().logUsageStart(termId, agentId, projectId)
+                // The directory, not just the project: an isolated session runs in
+                // `cwd` (a worktree), which is its own transcript folder.
+                useSettings
+                    .getState()
+                    .logUsageStart(
+                        termId,
+                        agentId,
+                        projectId,
+                        cwd || get().projects.find((p) => p.id === projectId)?.path
+                    )
             }
             persist()
             return termId
@@ -2291,13 +2396,39 @@ export const useStore = create<AppState>((set, get) => {
             get().newTab(SHELL, command, label ?? command)
         },
 
-        clearAgentResume: (termId) =>
+        startResumedAgent: (termId) => {
+            if (!(termId in get().agentResumePending)) return
+            // Checked before the pending flag is cleared below: if this pane were
+            // ever not an agent id, clearing the flag first would close the resume
+            // overlay with no usage event logged even though resolveResume has
+            // already spawned the process - an invariant resting on this bail
+            // running first, not on the set() happening to come after it.
+            const agentId = get().termAgents[termId]
+            if (!isAgentId(agentId)) return
             set((s) => {
-                if (!(termId in s.agentResumePending)) return s
                 const agentResumePending = { ...s.agentResumePending }
                 delete agentResumePending[termId]
                 return { agentResumePending }
-            }),
+            })
+            // Resume is the ONLY way a restored agent session ever starts (every
+            // restored agent term is marked pending at load), so without this the
+            // pane spends real money that no usage event has ever seen. It is not
+            // only its own missing record: exclusivity is answered from usageLog,
+            // so an unlogged session sitting in a project directory silently lets
+            // every card, pipeline and session whose window it overlaps be written
+            // as an exclusive receipt over money that was partly its.
+            //
+            // Both modes log. "fresh" starts a brand-new conversation rather than
+            // continuing the old one, but it is the same agent in the same
+            // directory costing the same money - the distinction matters to the
+            // user's context, not to the accounting.
+            const projectId = get().projectIdOfTerm(termId) ?? get().activeId ?? ""
+            // `||`, not `??`: an empty-string entry in termCwd must fall through
+            // to the project path the same way newTab's logUsageStart call does,
+            // rather than being kept as a cwd-less event.
+            const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
+            useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
+        },
 
         splitActive: (dir, agentId) => {
             const s = get()
@@ -2325,7 +2456,15 @@ export const useStore = create<AppState>((set, get) => {
                 lastAgentTermId: isAgentId(agentId) ? newTermId : s.lastAgentTermId
             })
             if (isAgentId(agentId))
-                useSettings.getState().logUsageStart(newTermId, agentId, projectId)
+                // A split inherits the project's own tree — splitActive takes no cwd.
+                useSettings
+                    .getState()
+                    .logUsageStart(
+                        newTermId,
+                        agentId,
+                        projectId,
+                        s.projects.find((p) => p.id === projectId)?.path
+                    )
             persist()
         },
 
@@ -2474,7 +2613,14 @@ export const useStore = create<AppState>((set, get) => {
             }))
             window.api.projects.setActive(pid)
             for (const termId of startedAgents)
-                useSettings.getState().logUsageStart(termId, termAgents[termId], pid)
+                useSettings
+                    .getState()
+                    .logUsageStart(
+                        termId,
+                        termAgents[termId],
+                        pid,
+                        get().projects.find((p) => p.id === pid)?.path
+                    )
             persist()
         },
 

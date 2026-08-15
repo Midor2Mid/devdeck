@@ -81,6 +81,43 @@ just the code.
   every setting, not only the ones this feature touches. The flush now waits for
   load to actually apply before it's allowed to write.
 
+A third, unrelated piece: a race's or a pipeline's cost used to disappear the
+moment its pane closed. It now survives.
+
+- **Every finished run is kept, in a new Runs · all time section of the usage
+  panel.** A task-board card reaching done, a race landing or being abandoned, a
+  pipeline run reaching a terminal status, and an ad-hoc agent pane closing each
+  add one row — newest first, filterable by kind and by project, showing date,
+  kind, outcome, label, project, agents, duration and cost. A race row says
+  whether it **landed or was abandoned**, which is the difference between money
+  that bought something and money that bought nothing. Deleting the card, race,
+  or pipeline afterward doesn't touch the row; it lives on its own in a new
+  `runs.jsonl`, independent of whatever spent the money, and it keeps the
+  project's name as it was, so a removed project's history stays readable.
+- **Totals exclude any run whose cost isn't a receipt, and say which kind of
+  not-a-receipt it was.** A cost here is an attribution over a project
+  directory and a time window — DevDeck prices a run by summing every agent
+  transcript under the project's directory across the run's window, because
+  Claude Code names transcripts by project rather than by pty, so a second
+  session working in that same directory during the run lands in the same
+  figure. Adding two such figures together would double-count the same money.
+  So an excluded run is still shown, but is never added to a total: its own
+  figure gets a `~` and a dashed underline so it can't be mistaken for a plain
+  number, the total beside it counts only the summable rows, and the number
+  left out is stated right next to that total rather than silently vanishing
+  from it — separating a run that genuinely **shared a project** from one whose
+  price simply **couldn't be read**, which are different things to be told
+  about your own money.
+- **Whether a run shared a project is decided over the run's own window, not by
+  looking at what happens to be open when it is filed.** This is the whole
+  feature working or not working: a card is usually dragged to *done* long
+  after its agent finished and its pane closed, so asking "is anyone else here
+  right now?" at that moment would have let two cards dispatched into the same
+  project each quietly claim the other's spend — two rows, both presented as
+  receipts, adding up to roughly twice the real number. DevDeck now answers it
+  from its own persisted record of every agent session's start and end, so the
+  answer is the same however long the card sat in *review* first.
+
 ## 0.7.13 - 2026-08-13
 
 Two features. One is finished; the other is built, reviewed hard, and has never

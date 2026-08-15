@@ -541,6 +541,158 @@ knowing before it looks like a bug. And **there is no escape for a literal
 the rule editor teaches the anchoring/substring distinction via its
 placeholder rather than document an escape hatch nobody would find anyway.
 
+### The run ledger: the app's first append-only store, and what it still can't see (2026-08-15)
+
+**First store in the app that isn't read-whole/mutate/write-whole.**
+`workspace.json`, `settings.json`, `aikeys.json`, `remote-devices.json` — every
+one of them loads the whole file, mutates the in-memory shape, and calls
+`atomicWrite` to replace it, which is fine because none of them grows without
+bound. `runs.jsonl` (`src/main/ledger.ts`) is the opposite shape on purpose:
+its entire reason to exist is to keep growing, so a store that gets more
+expensive to write exactly as its history becomes more valuable would be
+fighting its own point, and a crash mid-rewrite would risk the whole file
+instead of one line. `appendRun` only ever appends a line; nothing rewrites the
+file except the rare cap-crossing rotation (past `RUN_CAP` = 5000 lines,
+trimmed back to the most recent `RUN_KEEP` = 4000). The payoff shows up on
+read: a torn final line from a crash mid-append fails `JSON.parse` or the
+shape check, and `readRuns` skips it rather than throwing — the crash costs
+one record, not the file.
+
+**The one predicate the whole feature rests on asked the wrong question, and
+the comment defending it had the reasoning backwards.** Exclusivity started as
+a snapshot: at the moment a run finished, are any other agent panes open in
+this directory? The note that used to sit here called that a safe
+approximation because "it can only call something exclusive that was briefly
+shared, never the reverse". That is the *dangerous* direction, not the safe
+one. Calling a shared run exclusive is what puts a doubled attribution into a
+total; calling an exclusive run shared only under-reports, out loud, next to a
+stated count. Fail-open reasoning wearing a fail-closed sentence.
+
+And the snapshot was not even a near-miss, because for a card the snapshot is
+taken whenever it is dragged to *done* — which can be hours after the money
+was spent, by which time every pane involved has closed. Dispatch two cards
+into one project, let both agents finish, tidy both cards into *done*: two
+rows, each silently claiming the other's spend, both marked as receipts, "0
+excluded from the total". No unusual steps, and roughly twice the real number.
+
+It is now an overlap test over `usageLog`, which is persisted and has its
+stale open events closed on load, so it holds a `[startedAt, endedAt]` for
+every agent session that has actually run: **non-exclusive iff some other
+session, in the same directory, overlapped this run's window.** That needed a
+directory on the event — `projectId` alone would have demoted every
+worktree-isolated card and every race entrant, since a worktree is a different
+absolute path and therefore a different transcript folder — so `UsageEvent`
+gained `cwd`.
+
+**"Every agent session" turned out to be a claim the code did not honour, and
+it re-opened the whole bug.** A pane restored from a previous launch starts
+only when the user clicks Resume, and that path spawned the pty without
+calling `logUsageStart` at all — the one way a restored agent ever starts, and
+it started invisibly. That session then spent real money the overlap test
+could not see, so any card or pipeline sharing its directory was written as an
+exclusive receipt over money that was partly its, while `recordSessionRun`
+declined to record the pane on its own: the spend existed *only* inside
+someone else's total. Resume now opens the event (both modes — "fresh" is the
+same agent in the same directory costing the same money; the distinction is
+about the user's context, not the accounting). The lesson is narrower than C1's
+and just as expensive: **a predicate that reads a log is only as complete as
+its writers, so the audit is "who starts one of these without telling the
+log?", not "is the query right?"**
+
+The live-pane snapshot survives as a *second, additive* test — belt and braces
+for anything the log has not been told about, since exactly that gap is what
+N1 was. Both tests fail closed. So does an overlapping event written before
+`cwd` existed, but it excludes the run as **`"unknown"`, not `"shared"`**: it
+names no directory, so it can be neither ruled out of this one nor placed in
+it, and reporting a specific sharer nothing has a record of is the same
+invented fact one level down.
+
+The general lesson, worth more than the fix: **when a question is about a
+window, do not answer it with a snapshot, and be suspicious of any comment
+that argues an approximation is safe without saying which direction the error
+runs in the total.**
+
+**`exclusive: false` used to mean four different things, and the UI asserted
+one of them.** A genuinely shared directory, a card the board never priced, a
+price read that failed, and a run with no directory left to price over all
+collapsed into the same flag — and the panel told the user "shared a project
+with another session" in every case. A pipeline whose `usage:window` IPC
+rejected was reported as having shared a project with a session that did not
+exist: a fabricated fact, in the one panel whose whole purpose is honesty
+about attribution. Records now carry a `reason` (`"shared"` | `"unpriced"` |
+`"unknown"`), and each gets its own clause and tooltip — `"unknown"` sharing
+the one already written for records that predate reasons entirely, since both
+say the same thing and a fourth clause would imply a distinction there isn't.
+
+**A session record is written only for a genuinely ad-hoc pane.** A pane
+owned by a race entrant, a pipeline step, or a dispatched card writes nothing
+of its own when it closes, because its parent already records that same money
+with better facts attached — an outcome, a diffstat, a winner — over the
+identical figure. Recording both would not be a double-count in the
+exclusivity sense (each is honestly exclusive on its own), it would be
+subsumption: the same spend described twice. Landing a three-way race, for
+instance, would otherwise write one race record plus three ad-hoc-looking
+session records for money the race record already accounts for in full.
+
+**A guard has to be exactly as durable as the thing it guards.** The
+once-only guard for a card record was a renderer-module `Set`, which a quit
+empties — while `workspace.json` restores the card with `dispatchedAt` and
+`termId` intact. Drag that card out of *done* and back and it re-priced over
+`[dispatchedAt, now]` and wrote a second record whose window strictly contains
+the first's, both summable. The guard now rides on the card itself
+(`recordedFor`), where it is persisted alongside the fields it guards. Same
+question worth asking of any in-memory de-dupe key: what restores the *thing*,
+and does anything restore the *key*?
+
+**An agent DevDeck never launched is invisible to this whole feature, not a
+gap in one test.** The overlap check and the live-pane check inside
+`attributionReason` both read from what DevDeck itself started — `usageLog`
+and `agentSessions()` — so an agent the user ran by typing `claude` straight
+into a plain shell pane (the most plausible way this happens) writes no usage
+event and is filtered out of `agentSessions()` entirely. A card or pipeline
+record covering that window is therefore still written as an exclusive
+receipt, over money that was partly that agent's. This is not a bug to fix
+here — DevDeck has no way to see a process it did not launch — but it is a
+real limit of attribution-by-directory, and it should be said plainly: the
+ledger catches overlap between sessions it started, not every session that
+ever shared the directory.
+
+**Known limits, and all of them fail closed *in the total*** — which is the
+test that matters, and the one the old wording here quietly skipped. A pane
+restored from a previous launch and never resumed has no start instant to
+price a window from, so it records nothing rather than inventing one; it also
+never launched, so there is no spend for anything else to absorb. (Before the
+Resume fix above, this same bullet described the un-resumed case and said
+nothing about the resumed one — where the missing event did not just lose a
+row, it left another run's row marked exclusive over money that wasn't its.
+"Records nothing" is only a safe limit when nothing else is quietly claiming
+the money instead, and that is the question to ask of every entry in a list
+like this.) A dispatched card deleted before it ever reaches done records
+nothing — the record is written on the done transition, and a deleted card
+never makes that transition. Money a card's agent spends after its first
+*done* is unrecordable, because the card is guarded against a second record;
+an under-report the feature accepts. A card record is written from the cost
+cached on the card,
+while the re-price that same move triggers resolves later, so it can be a
+little stale — fixing that would mean awaiting inside a write site, and no
+write site may block or throw on the path it sits in. `claimedTerms` (which
+stops a pipeline step's pane double-counting its run) is still module state, so
+a renderer reload between a run ending and its step panes closing drops it;
+bounded and rare, where the card guard above was neither. In every case the
+cost of the bug is a missing or slightly stale figure, not a doubled one, which
+is the direction this feature is willing to be wrong in.
+
+**Cost-aware routing is now possible, and still deliberately not built.** The
+"Agent routing" note above (2026-08-14) named exactly this gap: no rule can
+say "the cheapest preset that can pass the gate" because routing has no cost
+history to check that against. The ledger is that history now. It's still not
+wired into routing — a few days of one race, some dispatched cards, and a
+handful of ad-hoc sessions is nowhere near enough data to tell a genuinely
+cheap agent from a lucky one, and baking a cost-aware rule on top of that now
+would be exactly the kind of hand-authored guess dressed up as data the
+earlier note warned against. Worth revisiting once the ledger has real
+history behind it, not before.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).

@@ -8,6 +8,22 @@ export interface BoardTask {
     column: BoardColumn
     /** Linked agent session once dispatched. */
     termId?: string
+    /**
+     * The agent preset dispatched on this card. Stamped alongside `termId`
+     * because it has to outlive it: the pane usually closes before the card is
+     * dragged to done, and reading the agent back off a closed pane returns
+     * nothing — which left the run ledger's agents column blank on most card
+     * rows, one of the seven columns it promises.
+     */
+    agentId?: string
+    /**
+     * The project's name as it was at dispatch. Resolving the name from live
+     * projects when a run is recorded writes a blank for a project since removed,
+     * which renders as an empty cell and collapses every removed project onto one
+     * blank entry in the run filter — the opposite of "a removed project's
+     * history stays readable".
+     */
+    projectName?: string
     /** Worktree path if dispatched isolated. */
     worktree?: string
     createdAt: number
@@ -23,6 +39,24 @@ export interface BoardTask {
      */
     cost?: number
     costTokens?: number
+    /**
+     * The `dispatchedAt` of the run already written to the run ledger for this
+     * card, or absent if none has been. Moving a card out of done clears its
+     * endedAt and cost and lets it accrue again, so done → doing → done would
+     * otherwise write a SECOND record over [dispatchedAt, laterEnd] — a window
+     * that *contains* the first one's rather than being a delta from it — and
+     * both would be summable. One ordinary drag, no race needed.
+     *
+     * It lives on the card rather than in a renderer-module set because it has
+     * to be exactly as durable as the thing it guards: a quit empties module
+     * state, while workspace.json brings `dispatchedAt` and `termId` straight
+     * back. Here it rides to disk with the rest of the card for free.
+     *
+     * Compared against `dispatchedAt`, not merely checked for presence: a
+     * genuine re-dispatch stamps a fresh `dispatchedAt`, which is a new run over
+     * a new window, and it does record again.
+     */
+    recordedFor?: number
 }
 
 /**
@@ -35,13 +69,35 @@ export function costWindow(task: BoardTask, now: number): { from: number; to: nu
     return { from: task.dispatchedAt, to: task.endedAt ?? now }
 }
 
-/** Two-significant-figure USD, so sub-cent work doesn't render as "$0.00". */
-export function formatCost(usd: number): string {
+/**
+ * The floor every money figure in DevDeck shares, wherever it is rendered:
+ * exactly zero is `$0`, and anything below a cent is `<$0.01` — never `$0.00`,
+ * because real per-card spend is often fractions of a cent and a run that cost
+ * money must never read as free.
+ *
+ * Returns null above the floor, where the caller decides how much precision the
+ * surface it is rendering into deserves. That is the one thing the app's two
+ * money renderings legitimately disagree about, and keeping the floor here means
+ * they can never disagree about *this* — which is how the ledger came to render
+ * a real $0.004 run as "$0.00" while the board beside it said "<$0.01".
+ */
+export function costFloor(usd: number): string | null {
     if (usd <= 0) return "$0"
     if (usd < 0.01) return "<$0.01"
-    if (usd < 1) return `$${usd.toFixed(2)}`
-    if (usd < 10) return `$${usd.toFixed(2)}`
-    return `$${usd.toFixed(0)}`
+    return null
+}
+
+/**
+ * Compact USD for a dense row — a board card's cost pill, a race entrant, the
+ * pipeline bar. Whole dollars above $10, because the reader of a pill wants a
+ * magnitude at a glance and the extra two characters cost more than they buy.
+ *
+ * Not for a headline total: see `ledgerView.formatCostExact`, which keeps cents
+ * because a ledger's claim on the user's trust is that it is precise about
+ * money.
+ */
+export function formatCost(usd: number): string {
+    return costFloor(usd) ?? (usd < 10 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(0)}`)
 }
 
 export const COLUMNS: BoardColumn[] = ["todo", "doing", "review", "done"]
