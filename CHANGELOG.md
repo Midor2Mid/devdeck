@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 - 2026-08-18
 
 Two unrelated pieces of hardening: who a task-board card dispatches to, and who
 can reach the app remotely.
@@ -116,7 +116,11 @@ moment its pane closed. It now survives.
   project each quietly claim the other's spend — two rows, both presented as
   receipts, adding up to roughly twice the real number. DevDeck now answers it
   from its own persisted record of every agent session's start and end, so the
-  answer is the same however long the card sat in *review* first.
+  answer is the same however long the card sat in *review* first. The limit
+  worth knowing: DevDeck can only account for agents **it** started. Type
+  `claude` straight into a plain shell pane and it writes no session record, so
+  a run covering that window is still filed as a receipt over money that was
+  partly that agent's.
 
 ## 0.7.13 - 2026-08-13
 
