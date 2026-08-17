@@ -454,7 +454,9 @@ export function UsagePanel(): JSX.Element {
                                 ))}
                                 {shownRuns.length > RUN_ROWS && (
                                     <div className="muted small">
-                                        {shownRuns.length - RUN_ROWS} older runs not shown
+                                        {shownRuns.length - RUN_ROWS} older{" "}
+                                        {shownRuns.length - RUN_ROWS === 1 ? "run" : "runs"} not
+                                        shown
                                     </div>
                                 )}
                             </div>
