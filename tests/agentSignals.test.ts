@@ -1,5 +1,10 @@
 import { describe, expect, it, afterEach } from "vitest"
-import { newPathsSince, captureBaseline, baselineOf, forgetSignals } from "../src/renderer/src/agentSignals"
+import {
+    newPathsSince,
+    captureBaseline,
+    baselineOf,
+    forgetSignals
+} from "../src/renderer/src/agentSignals"
 
 describe("newPathsSince", () => {
     it("reports a path that appeared after the baseline", () => {
@@ -69,5 +74,118 @@ describe("captureBaseline", () => {
         await new Promise((r) => setTimeout(r, 0))
         expect(baselineOf("s-fail")).toBeUndefined()
         forgetSignals("s-fail")
+    })
+})
+
+describe("captureBaseline invalidates before it reads (fail-closed rebase)", () => {
+    afterEach(() => {
+        delete (globalThis as unknown as { window?: unknown }).window
+    })
+
+    it("drops the previous baseline when the re-capture rejects", async () => {
+        // C1. A rebase (card dragged back to doing) captures over a baseline
+        // that already exists. If that capture fails - `.git/index.lock` lost a
+        // race, or an AV product killed the child - keeping the OLD baseline
+        // fails OPEN: the files that earned review the first time are still
+        // "fresh", so the card snaps straight back to review having produced
+        // nothing. Unknown is the only honest state after a failed capture.
+        stubGitChanges(async () => [{ path: "a.ts" }])
+        captureBaseline("s-rebase", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-rebase")).toEqual(new Set(["a.ts"]))
+
+        stubGitChanges(async () => {
+            throw new Error("index.lock")
+        })
+        captureBaseline("s-rebase", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-rebase")).toBeUndefined()
+        forgetSignals("s-rebase")
+    })
+
+    it("drops the previous baseline when there is no cwd to re-read", async () => {
+        // The other silent-keep path: an empty cwd returned before touching the
+        // map at all, so a rebase on a session whose directory can no longer be
+        // resolved kept a baseline taken against a different moment in time.
+        stubGitChanges(async () => [{ path: "a.ts" }])
+        captureBaseline("s-nocwd", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-nocwd")).toEqual(new Set(["a.ts"]))
+
+        captureBaseline("s-nocwd", "")
+        expect(baselineOf("s-nocwd")).toBeUndefined()
+        forgetSignals("s-nocwd")
+    })
+
+    it("is unknown while a re-capture is still in flight", async () => {
+        // The in-flight window matters as much as the failure: between the drag
+        // and the read resolving, the old baseline was still being compared
+        // against. An idle pause in that window moved the card.
+        stubGitChanges(async () => [{ path: "a.ts" }])
+        captureBaseline("s-inflight", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+
+        let release: (files: { path: string }[]) => void = () => undefined
+        stubGitChanges(
+            () =>
+                new Promise<{ path: string }[]>((r) => {
+                    release = r
+                })
+        )
+        captureBaseline("s-inflight", "/repo")
+        expect(baselineOf("s-inflight")).toBeUndefined()
+
+        release([{ path: "b.ts" }])
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-inflight")).toEqual(new Set(["b.ts"]))
+        forgetSignals("s-inflight")
+    })
+})
+
+describe("a capture that resolves too late", () => {
+    afterEach(() => {
+        delete (globalThis as unknown as { window?: unknown }).window
+    })
+
+    it("does not resurrect a session that was forgotten mid-read", async () => {
+        // M1. forgetSignals runs when the pane closes, but a capture already in
+        // flight still had a `.then` waiting to write. Every such session left an
+        // entry behind for the rest of the process's uptime.
+        let release: (files: { path: string }[]) => void = () => undefined
+        stubGitChanges(
+            () =>
+                new Promise<{ path: string }[]>((r) => {
+                    release = r
+                })
+        )
+        captureBaseline("s-closed", "/repo")
+        forgetSignals("s-closed")
+
+        release([{ path: "a.ts" }])
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-closed")).toBeUndefined()
+    })
+
+    it("does not overwrite the baseline a newer capture already recorded", async () => {
+        // Two captures overlapping: the older reply must not land on top of the
+        // newer one, or a rebase resolves backwards to the launch-time dirt.
+        let releaseOld: (files: { path: string }[]) => void = () => undefined
+        stubGitChanges(
+            () =>
+                new Promise<{ path: string }[]>((r) => {
+                    releaseOld = r
+                })
+        )
+        captureBaseline("s-race", "/repo")
+
+        stubGitChanges(async () => [{ path: "new.ts" }])
+        captureBaseline("s-race", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-race")).toEqual(new Set(["new.ts"]))
+
+        releaseOld([{ path: "old.ts" }])
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-race")).toEqual(new Set(["new.ts"]))
+        forgetSignals("s-race")
     })
 })
