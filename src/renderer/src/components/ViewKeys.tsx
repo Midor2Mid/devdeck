@@ -1,11 +1,14 @@
 import { useStore, type MainView } from "../store"
 import { Icon, type IconName } from "./Icon"
 
-export const DECK_VIEWS: { view: MainView; icon: IconName; name: string }[] = [
+export const DECK_VIEWS: { view: MainView; icon: IconName; name: string; group?: "verify" }[] = [
     { view: "mission", icon: "activity", name: "Mission" },
     { view: "tasks", icon: "list", name: "Tasks" },
     { view: "terminal", icon: "terminal", name: "Terminal" },
-    { view: "api", icon: "send", name: "API" },
+    // Verification tools: where you check what an agent did. Grouped apart so the
+    // deck reads supervision-first, without costing anyone a keystroke — the
+    // order (and so Ctrl+1..8) is unchanged.
+    { view: "api", icon: "send", name: "API", group: "verify" },
     { view: "database", icon: "database", name: "Database" },
     { view: "browser", icon: "appWindow", name: "Browser" },
     { view: "network", icon: "globe", name: "Network" },
@@ -20,7 +23,11 @@ export function ViewKeys(): JSX.Element {
             {DECK_VIEWS.map((v, i) => (
                 <button
                     key={v.view}
-                    className={"deck-view" + (view === v.view ? " on" : "")}
+                    className={
+                        "deck-view" +
+                        (view === v.view ? " on" : "") +
+                        (v.group === "verify" ? " group-start" : "")
+                    }
                     role="tab"
                     aria-selected={view === v.view}
                     data-tip={`${v.name} (Ctrl+${i + 1})`}
