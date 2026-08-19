@@ -348,10 +348,33 @@ describe("hasBell", () => {
         expect(hasBell("t9", "\x07")).toBe(true)
         forgetTail("t9")
     })
-    it("does not swallow a real bell that follows a stray, unpaired ESC", () => {
+    it("does not confuse a fresh ESC with the stray one it just fell through on, and still catches a real bell after", () => {
+        // Byte stream: "hello" + ESC (falls through, unpaired) + ESC (this one
+        // pairs with the ']' that follows) + "0;title" + BEL (its terminator)
+        // + BEL (a real one). Against the pre-round implementation (no
+        // pendingEsc at all) the third call wrongly reads true: it has no
+        // memory of chunk 2's trailing ESC, so it sees a bare ']' followed by
+        // ordinary text ending in BEL and calls that a real bell.
         expect(hasBell("t10", "hello\x1b")).toBe(false)
+        expect(hasBell("t10", "\x1b")).toBe(false)
+        expect(hasBell("t10", "]0;title\x07")).toBe(false)
         expect(hasBell("t10", "\x07")).toBe(true)
         forgetTail("t10")
+    })
+    it("treats an empty chunk mid-pairing as a complete no-op (split ST terminator)", () => {
+        // Reproduces the round-2 finding: an empty chunk between the two
+        // halves of a split ST must not discard the carried ESC.
+        expect(hasBell("t11", "\x1b]0;title\x1b")).toBe(false)
+        expect(hasBell("t11", "")).toBe(false)
+        expect(hasBell("t11", "\\")).toBe(false)
+        expect(hasBell("t11", "\x07")).toBe(true)
+        forgetTail("t11")
+    })
+    it("treats an empty chunk mid-pairing as a complete no-op (split OSC opener)", () => {
+        expect(hasBell("t12", "hello\x1b")).toBe(false)
+        expect(hasBell("t12", "")).toBe(false)
+        expect(hasBell("t12", "]0;title\x07")).toBe(false)
+        forgetTail("t12")
     })
 })
 

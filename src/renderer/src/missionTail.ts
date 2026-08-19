@@ -134,13 +134,19 @@ const oscState = new Map<string, OscState>()
  * Cleared by forgetTail.
  */
 export function hasBell(id: string, chunk: string): boolean {
-    const prev = oscState.get(id) ?? { open: false, pendingEsc: false }
-    let open = prev.open
-    let pendingEsc = prev.pendingEsc
+    const prev = oscState.get(id)
+    let open = prev?.open ?? false
+    let pendingEsc = prev?.pendingEsc ?? false
     let bell = false
     let i = 0
 
-    if (pendingEsc) {
+    // An empty chunk must be a complete no-op: with nothing to resolve
+    // pendingEsc against, entering the resolution branch below would discard
+    // it (there is no chunk[0] to pair it with), losing the carried ESC even
+    // though no byte actually arrived. Guarding on length here means a
+    // zero-length chunk — whether or not the pty ever actually emits one —
+    // can never be the reason a pairing across chunks is missed.
+    if (pendingEsc && chunk.length > 0) {
         pendingEsc = false
         const c = chunk[0]
         if (!open && c === "]") {
@@ -190,7 +196,15 @@ export function hasBell(id: string, chunk: string): boolean {
         }
         if (c === "\x07") bell = true
     }
-    oscState.set(id, { open, pendingEsc })
+    // Mutate the existing per-session record in place rather than allocating
+    // a fresh object on every chunk — this runs on every pty chunk of every
+    // session, and a session's record already exists after its first chunk.
+    if (prev) {
+        prev.open = open
+        prev.pendingEsc = pendingEsc
+    } else {
+        oscState.set(id, { open, pendingEsc })
+    }
     return bell
 }
 
