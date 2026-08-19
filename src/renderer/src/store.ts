@@ -19,7 +19,7 @@ import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail, recordRate, hasBell, markLaunched } from "./missionTail"
-import { captureBaseline, forgetSignals } from "./agentSignals"
+import { captureBaseline, forgetSignals, newPathsSince, baselineOf } from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -616,12 +616,37 @@ export const useStore = create<AppState>((set, get) => {
                         const away = !isVisible(id)
                         setStatus(id, away ? "waiting" : "idle")
                         if (away) notifyWaiting()
-                        // A dispatched task whose agent just finished a turn is ready to review.
-                        set((s) => ({
-                            boardTasks: s.boardTasks.map((t) =>
-                                t.termId === id && t.column === "doing" ? { ...t, column: "review" } : t
-                            )
-                        }))
+                        // A dispatched card moves to review only on EVIDENCE the
+                        // agent produced something — not because it went quiet for
+                        // a second. Unawaited so the timer stays synchronous, and
+                        // fully caught: failing to move a card must never break a
+                        // pty handler.
+                        void (async () => {
+                            try {
+                                const task = get().boardTasks.find(
+                                    (t) => t.termId === id && t.column === "doing"
+                                )
+                                if (!task) return
+                                const cwd = get().termCwd[id]
+                                if (!cwd) return
+                                const files = await window.api.git.changes(cwd)
+                                const fresh = newPathsSince(
+                                    baselineOf(id),
+                                    files.map((f) => f.path)
+                                )
+                                if (fresh.length === 0) return
+                                set((s) => ({
+                                    boardTasks: s.boardTasks.map((t) =>
+                                        t.id === task.id && t.column === "doing"
+                                            ? { ...t, column: "review" }
+                                            : t
+                                    )
+                                }))
+                            } catch {
+                                // Leave the card in doing. "Still working" is the
+                                // honest reading when we cannot tell.
+                            }
+                        })()
                     }
                 },
                 useSettings.getState().agentIdleMs
