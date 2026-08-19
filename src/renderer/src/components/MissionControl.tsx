@@ -8,7 +8,8 @@ import {
     sortForFollow,
     getTrace,
     barsPath,
-    isStalled
+    isStalled,
+    awaitedTermIds
 } from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
 import type { SystemInfo } from "../../../preload/index"
@@ -33,6 +34,11 @@ export function MissionControl(): JSX.Element {
     const agentStatus = useStore((s) => s.agentStatus)
     const termAgents = useStore((s) => s.termAgents)
     const termNames = useStore((s) => s.termNames)
+    // The two places an outstanding expectation on a session is recorded. Both
+    // are stable slices; the derived Set is built outside the selector, since a
+    // selector returning a fresh object every render never settles.
+    const boardTasks = useStore((s) => s.boardTasks)
+    const pipelineRun = useStore((s) => s.pipelineRun)
     void tabsByProject
     void agentStatus
     void termAgents
@@ -40,6 +46,8 @@ export function MissionControl(): JSX.Element {
 
     // Attention-first: the agent that needs you floats to the top.
     const sessions = sortForFollow(agentSessions())
+    // A quiet agent is only stalled if something is actually waiting on it.
+    const awaited = awaitedTermIds(boardTasks, pipelineRun)
     const totalAgents = sessions.length
     const attention = sessions.filter((s) => s.status === "attention").length
 
@@ -173,6 +181,7 @@ export function MissionControl(): JSX.Element {
                             const stalled = isStalled(
                                 getLastAt(s.termId),
                                 !!termAgents[s.termId],
+                                awaited.has(s.termId),
                                 Date.now()
                             )
                             return (

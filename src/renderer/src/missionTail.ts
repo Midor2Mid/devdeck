@@ -213,8 +213,8 @@ const BUCKETS = 60
 /**
  * The trace window's width in ms, and isStalled's default silence threshold —
  * historically the same number, but the two no longer read each other:
- * isStalled looks only at liveness plus wall-clock silence, the trace only at
- * recent output volume.
+ * isStalled looks at wall-clock silence on a session something is waiting on,
+ * the trace only at recent output volume.
  */
 export const STALL_MS = BUCKET_MS * BUCKETS
 /** Characters in one bucket that count as a full-height bar. */
@@ -343,22 +343,61 @@ export function relTime(now: number, then?: number): string {
 }
 
 /**
- * A live session that has produced no output for longer than `thresholdMs` is
- * stalled — stuck in a loop, waiting on something that will not arrive, or dead
- * without exiting.
+ * The sessions something is currently WAITING ON: a board card in `doing` that
+ * names the session, or the pipeline step a live run is blocked on.
+ *
+ * This is what makes a stall a stall. Status cannot separate "stuck" from
+ * "finished" — that is the spec's own point, and why isStalled ignores it — but
+ * expectation can: if nothing is waiting on a session, its silence is the normal
+ * resting state of an agent that finished and handed back to you, and saying
+ * "stalled" about it is noise.
+ *
+ * Structurally typed rather than importing BoardTask / PipelineRun, so this
+ * module still has no dependency on the store it would otherwise have to reach
+ * into. Pure: callers pass the state in.
+ */
+export function awaitedTermIds(
+    cards: readonly { column: string; termId?: string }[],
+    run: { status: string; steps: readonly { status: string; termId?: string }[] } | null | undefined
+): Set<string> {
+    const ids = new Set<string>()
+    // A card in review or done is not waiting on its agent — you are. Only
+    // `doing` is an outstanding expectation, the same column the evidence read
+    // gates the card move on.
+    for (const c of cards) if (c.column === "doing" && c.termId) ids.add(c.termId)
+    // "waiting" is the run's word for "the agent asked the user something" — the
+    // step is still the reason that session is being watched. paused/done/
+    // stopped/error are not blocked on any agent.
+    if (run && (run.status === "running" || run.status === "waiting")) {
+        for (const s of run.steps) if (s.status === "running" && s.termId) ids.add(s.termId)
+    }
+    return ids
+}
+
+/**
+ * A live session something is waiting on that has produced no output for longer
+ * than `thresholdMs` is stalled — stuck in a loop, waiting on something that
+ * will not arrive, or dead without exiting.
  *
  * This deliberately does NOT read AgentStatus. `working` cannot survive
  * `agentIdleMs` (1s by default), so a status-based stall check could never fire;
  * quiet duration plus liveness can. `lastAt` is stamped at launch by
  * markLaunched, so a session that crashed before printing anything still counts.
+ *
+ * `awaited` is what keeps that from marking everything. `alive` is structurally
+ * true for every session the Mission grid renders, so quiet-and-live alone flags
+ * every agent that finished its turn and every pane opened and never typed into
+ * — a marker that is always on, which carries exactly as much information as one
+ * that never fires. See awaitedTermIds for what counts as waiting on a session.
  */
 export function isStalled(
     lastAt: number | undefined,
     alive: boolean,
+    awaited: boolean,
     now: number,
     thresholdMs = STALL_MS
 ): boolean {
-    return alive && !!lastAt && now - lastAt > thresholdMs
+    return alive && awaited && !!lastAt && now - lastAt > thresholdMs
 }
 
 /**
