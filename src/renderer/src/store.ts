@@ -19,6 +19,7 @@ import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import { recordTail, forgetTail, recordRate, hasBell, markLaunched } from "./missionTail"
+import { captureBaseline, forgetSignals } from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -634,6 +635,7 @@ export const useStore = create<AppState>((set, get) => {
         idleTimers.delete(termId)
         pendingSince.delete(termId)
         forgetTail(termId)
+        forgetSignals(termId)
         const closingAgent = get().termAgents[termId] ?? SHELL
         if (isAgentId(closingAgent)) {
             // Before logUsageEnd, which stamps the event this reads its start from.
@@ -2363,6 +2365,7 @@ export const useStore = create<AppState>((set, get) => {
             }))
             if (isAgentId(agentId)) {
                 markLaunched(termId)
+                captureBaseline(termId, cwd || get().projects.find((p) => p.id === projectId)?.path || "")
                 pushActivity("start", termId, `${tab.name} · started`)
                 // The directory, not just the project: an isolated session runs in
                 // `cwd` (a worktree), which is its own transcript folder.
@@ -2429,6 +2432,7 @@ export const useStore = create<AppState>((set, get) => {
             // rather than being kept as a cwd-less event.
             const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
             markLaunched(termId)
+            captureBaseline(termId, cwd || "")
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
 
@@ -2460,6 +2464,7 @@ export const useStore = create<AppState>((set, get) => {
             if (isAgentId(agentId)) {
                 markLaunched(newTermId)
                 // A split inherits the project's own tree — splitActive takes no cwd.
+                captureBaseline(newTermId, s.projects.find((p) => p.id === projectId)?.path ?? "")
                 useSettings
                     .getState()
                     .logUsageStart(
@@ -2618,6 +2623,7 @@ export const useStore = create<AppState>((set, get) => {
             window.api.projects.setActive(pid)
             for (const termId of startedAgents) {
                 markLaunched(termId)
+                captureBaseline(termId, get().projects.find((p) => p.id === pid)?.path ?? "")
                 useSettings
                     .getState()
                     .logUsageStart(
