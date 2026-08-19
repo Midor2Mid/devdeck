@@ -410,6 +410,12 @@ export function isStalled(
  * pty (currently `newTab`, `startResumedAgent`, `splitActive`, and
  * `openWorkspacePreset` in store.ts), so it is where the next new launch path
  * should add this too rather than assume `newTab` covers it.
+ *
+ * That invariant is no longer only a sentence: tests/signalSites.test.ts scans
+ * store.ts and fails if any `logUsageStart(` is not preceded by a
+ * `markLaunched(`. A launch path that forgets this one is a session whose
+ * silence is unmeasurable, and the unit tests here call markLaunched directly,
+ * so nothing else would notice.
  */
 export function markLaunched(id: string, now = Date.now()): void {
     if (!lastAt.has(id)) lastAt.set(id, now)

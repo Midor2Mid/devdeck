@@ -502,8 +502,9 @@ export const useStore = create<AppState>((set, get) => {
      *
      * `||`, not `??`: an empty-string termCwd entry falls through to the project
      * path, the same way logUsageStart resolves the same session. The activeId
-     * fallback is startResumedAgent's, kept so folding that site into this
-     * expression does not narrow it.
+     * fallback came from startResumedAgent and is kept deliberately: a dispatch
+     * into a project whose panes are not yet registered in tabsByProject would
+     * otherwise resolve no directory at all.
      *
      * Known and not engineered around: this reads live store state at call time,
      * so editing a project's path between a session's launch and a later
@@ -1462,6 +1463,18 @@ export const useStore = create<AppState>((set, get) => {
                         : t
                 )
             }))
+            // The card's baseline, taken where the card starts - not where the
+            // pane does. Only this path ever writes task.termId, so this and the
+            // rebase in moveBoardTask are the only two captures any reader can
+            // reach; capturing on every launch instead meant splitActive and
+            // openWorkspacePreset each fired a `git status` for a baseline
+            // nothing could ever consult (a six-pane preset fired six), and a
+            // fifth launch path would have had to remember to join in.
+            //
+            // After the set above, so sessionCwd resolves the worktree this
+            // dispatch may have just created; before the 2800ms boot wait, which
+            // is orders of magnitude more than this IPC round-trip needs.
+            captureBaseline(termId, sessionCwd(termId))
             persist()
             // Let the agent CLI boot, then send the task as its first prompt.
             await sleep(2800)
@@ -2485,7 +2498,6 @@ export const useStore = create<AppState>((set, get) => {
             }))
             if (isAgentId(agentId)) {
                 markLaunched(termId)
-                captureBaseline(termId, sessionCwd(termId))
                 pushActivity("start", termId, `${tab.name} · started`)
                 // The directory, not just the project: an isolated session runs in
                 // `cwd` (a worktree), which is its own transcript folder.
@@ -2552,7 +2564,6 @@ export const useStore = create<AppState>((set, get) => {
             // rather than being kept as a cwd-less event.
             const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
             markLaunched(termId)
-            captureBaseline(termId, sessionCwd(termId))
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
 
@@ -2583,8 +2594,6 @@ export const useStore = create<AppState>((set, get) => {
             })
             if (isAgentId(agentId)) {
                 markLaunched(newTermId)
-                // A split inherits the project's own tree — splitActive takes no cwd.
-                captureBaseline(newTermId, sessionCwd(newTermId))
                 useSettings
                     .getState()
                     .logUsageStart(
@@ -2743,7 +2752,6 @@ export const useStore = create<AppState>((set, get) => {
             window.api.projects.setActive(pid)
             for (const termId of startedAgents) {
                 markLaunched(termId)
-                captureBaseline(termId, sessionCwd(termId))
                 useSettings
                     .getState()
                     .logUsageStart(
