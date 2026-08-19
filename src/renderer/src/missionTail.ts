@@ -113,39 +113,84 @@ import type { AgentStatus, AnySession } from "./store"
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
 
-// True while a chunk ended inside an OSC sequence whose terminator has not
-// arrived yet. Pty chunks split anywhere, so the BEL that closes an OSC can
-// land in the *next* chunk — and a bare BEL is the only thing that means
-// "the agent wants you".
-const inOsc = new Map<string, boolean>()
+// Per-session OSC-scanning state. `open` is true while inside an OSC escape
+// whose terminator (BEL or ST) has not arrived yet. `pendingEsc` is true when
+// the chunk ended on a lone, unpaired ESC — pty chunks can split anywhere, so
+// not only can the terminating BEL land in the *next* chunk, the two-byte
+// opener (ESC ]) and the two-byte ST terminator (ESC \) can each split across
+// the chunk boundary themselves, with the ESC in one chunk and its partner
+// byte in the next.
+interface OscState {
+    open: boolean
+    pendingEsc: boolean
+}
+const oscState = new Map<string, OscState>()
 
 /**
  * Does this chunk contain a real BEL — as opposed to the BEL that terminates an
  * OSC escape (a terminal-title set, an OSC 8 hyperlink)? Stateful per session so
- * an OSC split across chunks is not mistaken for a bell. Cleared by forgetTail.
+ * an OSC — or the two-byte opener/terminator that bounds it — split across
+ * chunks is never mistaken for a bell, and a real bell is never swallowed.
+ * Cleared by forgetTail.
  */
 export function hasBell(id: string, chunk: string): boolean {
-    let open = inOsc.get(id) ?? false
+    const prev = oscState.get(id) ?? { open: false, pendingEsc: false }
+    let open = prev.open
+    let pendingEsc = prev.pendingEsc
     let bell = false
-    for (let i = 0; i < chunk.length; i++) {
+    let i = 0
+
+    if (pendingEsc) {
+        pendingEsc = false
+        const c = chunk[0]
+        if (!open && c === "]") {
+            open = true
+            i = 1
+        } else if (open && c === "\\") {
+            open = false
+            i = 1
+        }
+        // Otherwise the ESC carried from the last chunk did not pair with an
+        // opener or a terminator — it was some other escape (or nothing).
+        // `c` is deliberately NOT consumed here: it falls through to the loop
+        // below and is evaluated on its own merits. That is the safer of the
+        // two readings when we can't be sure what the lone ESC was for — at
+        // worst a stray bracket shows up in the tail, whereas discarding `c`
+        // could silently swallow a real bell in that position, which is the
+        // one outcome this function exists to prevent.
+    }
+
+    for (; i < chunk.length; i++) {
         const c = chunk[i]
+        const next = chunk[i + 1]
         if (open) {
             // OSC ends at BEL or ST (ESC \). Either way it is not a bell.
-            if (c === "\x07") open = false
-            else if (c === "\x1b" && chunk[i + 1] === "\\") {
+            if (c === "\x07") {
                 open = false
-                i++
+            } else if (c === "\x1b") {
+                if (next === "\\") {
+                    open = false
+                    i++
+                } else if (next === undefined) {
+                    // ESC is the last byte of this chunk — its terminator
+                    // status is decided by the first byte of the next one.
+                    pendingEsc = true
+                }
             }
             continue
         }
-        if (c === "\x1b" && chunk[i + 1] === "]") {
-            open = true
-            i++
+        if (c === "\x1b") {
+            if (next === "]") {
+                open = true
+                i++
+            } else if (next === undefined) {
+                pendingEsc = true
+            }
             continue
         }
         if (c === "\x07") bell = true
     }
-    inOsc.set(id, open)
+    oscState.set(id, { open, pendingEsc })
     return bell
 }
 
@@ -270,7 +315,7 @@ export function forgetTail(id: string): void {
     tails.delete(id)
     lastAt.delete(id)
     rings.delete(id)
-    inOsc.delete(id)
+    oscState.delete(id)
 }
 
 /** A short "time since" label: "" · "now" · "35s" · "2m" · "1h". */

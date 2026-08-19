@@ -318,8 +318,13 @@ describe("hasBell", () => {
         forgetTail("t3")
     })
     it("still sees a real bell after a split OSC closes", () => {
+        // The chunk that closes the OSC carries only its own terminator BEL —
+        // if that terminator were mistaken for a bell (or this were tested
+        // with a naive chunk.includes("\x07")) this call would wrongly read
+        // true, the way the very bug this function exists to fix would.
         expect(hasBell("t4", "\x1b]0;title")).toBe(false)
-        expect(hasBell("t4", "\x07ding\x07")).toBe(true)
+        expect(hasBell("t4", "\x07")).toBe(false)
+        expect(hasBell("t4", "ding\x07")).toBe(true)
         forgetTail("t4")
     })
     it("sees a bell alongside an OSC in one chunk", () => {
@@ -331,6 +336,22 @@ describe("hasBell", () => {
         expect(hasBell("t7", "\x07")).toBe(true)
         forgetTail("t6")
         forgetTail("t7")
+    })
+    it("recognizes an OSC opener split across chunks (lone ESC, then ']')", () => {
+        expect(hasBell("t8", "hello\x1b")).toBe(false)
+        expect(hasBell("t8", "]0;title\x07")).toBe(false)
+        forgetTail("t8")
+    })
+    it("recognizes an ST terminator split across chunks and still sees the next real bell", () => {
+        expect(hasBell("t9", "\x1b]0;title\x1b")).toBe(false)
+        expect(hasBell("t9", "\\")).toBe(false)
+        expect(hasBell("t9", "\x07")).toBe(true)
+        forgetTail("t9")
+    })
+    it("does not swallow a real bell that follows a stray, unpaired ESC", () => {
+        expect(hasBell("t10", "hello\x1b")).toBe(false)
+        expect(hasBell("t10", "\x07")).toBe(true)
+        forgetTail("t10")
     })
 })
 
