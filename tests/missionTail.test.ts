@@ -11,7 +11,9 @@ import {
     recordRate,
     getTrace,
     barsPath,
-    STALL_MS
+    STALL_MS,
+    hasBell,
+    forgetTail
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 import type { DeltaState } from "../src/renderer/src/missionTail"
@@ -298,6 +300,37 @@ describe("trace ring", () => {
 
     it("STALL_MS is the width of the whole window", () => {
         expect(STALL_MS).toBe(120000)
+    })
+})
+
+describe("hasBell", () => {
+    it("detects a real bell", () => {
+        expect(hasBell("t1", "done\x07")).toBe(true)
+        forgetTail("t1")
+    })
+    it("ignores the BEL that terminates an OSC title sequence", () => {
+        expect(hasBell("t2", "\x1b]0;my-project\x07")).toBe(false)
+        forgetTail("t2")
+    })
+    it("ignores an OSC split across chunks", () => {
+        expect(hasBell("t3", "\x1b]0;my-pro")).toBe(false)
+        expect(hasBell("t3", "ject\x07")).toBe(false)
+        forgetTail("t3")
+    })
+    it("still sees a real bell after a split OSC closes", () => {
+        expect(hasBell("t4", "\x1b]0;title")).toBe(false)
+        expect(hasBell("t4", "\x07ding\x07")).toBe(true)
+        forgetTail("t4")
+    })
+    it("sees a bell alongside an OSC in one chunk", () => {
+        expect(hasBell("t5", "\x1b]0;title\x07\x07")).toBe(true)
+        forgetTail("t5")
+    })
+    it("does not leak state between sessions", () => {
+        expect(hasBell("t6", "\x1b]0;open")).toBe(false)
+        expect(hasBell("t7", "\x07")).toBe(true)
+        forgetTail("t6")
+        forgetTail("t7")
     })
 })
 

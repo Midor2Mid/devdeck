@@ -113,6 +113,42 @@ import type { AgentStatus, AnySession } from "./store"
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
 
+// True while a chunk ended inside an OSC sequence whose terminator has not
+// arrived yet. Pty chunks split anywhere, so the BEL that closes an OSC can
+// land in the *next* chunk — and a bare BEL is the only thing that means
+// "the agent wants you".
+const inOsc = new Map<string, boolean>()
+
+/**
+ * Does this chunk contain a real BEL — as opposed to the BEL that terminates an
+ * OSC escape (a terminal-title set, an OSC 8 hyperlink)? Stateful per session so
+ * an OSC split across chunks is not mistaken for a bell. Cleared by forgetTail.
+ */
+export function hasBell(id: string, chunk: string): boolean {
+    let open = inOsc.get(id) ?? false
+    let bell = false
+    for (let i = 0; i < chunk.length; i++) {
+        const c = chunk[i]
+        if (open) {
+            // OSC ends at BEL or ST (ESC \). Either way it is not a bell.
+            if (c === "\x07") open = false
+            else if (c === "\x1b" && chunk[i + 1] === "\\") {
+                open = false
+                i++
+            }
+            continue
+        }
+        if (c === "\x1b" && chunk[i + 1] === "]") {
+            open = true
+            i++
+            continue
+        }
+        if (c === "\x07") bell = true
+    }
+    inOsc.set(id, open)
+    return bell
+}
+
 const BUCKET_MS = 2000
 const BUCKETS = 60
 /**
@@ -234,6 +270,7 @@ export function forgetTail(id: string): void {
     tails.delete(id)
     lastAt.delete(id)
     rings.delete(id)
+    inOsc.delete(id)
 }
 
 /** A short "time since" label: "" · "now" · "35s" · "2m" · "1h". */

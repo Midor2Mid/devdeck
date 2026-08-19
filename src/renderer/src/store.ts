@@ -18,7 +18,7 @@ import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } f
 import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
-import { recordTail, forgetTail, recordRate } from "./missionTail"
+import { recordTail, forgetTail, recordRate, hasBell } from "./missionTail"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -591,7 +591,7 @@ export const useStore = create<AppState>((set, get) => {
         // …and its committed-output rate, for the tile's trace.
         recordRate(id, data)
         const visible = isVisible(id)
-        if (data.includes("\x07") && !visible) {
+        if (hasBell(id, data) && !visible) {
             const was = get().agentStatus[id]
             setStatus(id, "attention")
             if (was !== "attention") {
