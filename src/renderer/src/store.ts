@@ -490,6 +490,12 @@ export const useStore = create<AppState>((set, get) => {
      * path, the same way logUsageStart resolves the same session. The activeId
      * fallback is startResumedAgent's, kept so folding that site into this
      * expression does not narrow it.
+     *
+     * Known and not engineered around: this reads live store state at call time,
+     * so editing a project's path between a session's launch and a later
+     * evidence read would still resolve two different directories. Pre-existing,
+     * vanishingly rare, and the cost of guarding it (pinning a directory per
+     * session) is not worth paying - but written down so it is not rediscovered.
      */
     const sessionCwd = (termId: string): string =>
         get().termCwd[termId] ||
@@ -1239,14 +1245,24 @@ export const useStore = create<AppState>((set, get) => {
                     return { ...t, column }
                 })
             }))
-            // Dragging a card out of review back to doing means "not done, keep
-            // going" - so the work already on disk stops counting as evidence.
-            // Without this rebase those paths stay fresh for the session's life
-            // and the very next idle pause yanks the card back to review having
-            // produced nothing: the same "moved without evidence" complaint this
-            // fix exists to answer, one level up. captureBaseline overwrites, so
-            // only work done after the drag counts from here.
-            if (before?.termId && before.column === "review" && column === "doing") {
+            // ENTERING `doing` rebases the session's evidence. Stated as a rule
+            // about the destination on purpose, not as a list of source columns:
+            // a path that was fresh against the launch baseline stays fresh for
+            // the session's life, so any card put back to work would be yanked
+            // forward to review on the very next idle pause having produced
+            // nothing - the same "moved without evidence" complaint this whole
+            // fix exists to answer, one level up. review -> doing ("not done,
+            // keep going") and done -> doing (reopened; reaching done never
+            // closed the pane, so its baseline is still the launch-time one) are
+            // the same failure, and a column added later would be too.
+            // todo -> doing matches as well, which is right: a card being
+            // activated should start from a fresh baseline.
+            //
+            // Guarded on a LIVE agent session - once the pane is gone there is
+            // nothing to baseline, and captureBaseline overwrites, so from here
+            // only work done after the move counts.
+            const enteringDoing = column === "doing" && !!before && before.column !== column
+            if (enteringDoing && before.termId && isAgentId(get().agentOf(before.termId))) {
                 captureBaseline(before.termId, sessionCwd(before.termId))
             }
             persist()

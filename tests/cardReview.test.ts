@@ -290,4 +290,39 @@ describe("a dispatched card reaching review", () => {
         await tick(IDLE_MS * 4)
         expect(columnOf("t1")).toBe("review")
     })
+
+    it("rebases a card reopened from done, not only one sent back from review", async () => {
+        // Reaching done never closes the pane: the pty and its baseline entry
+        // both stay alive. So a reopened card still carried its LAUNCH-time
+        // baseline, the paths that earned it review were still fresh, and the
+        // next idle pause snapped it straight back to review having done
+        // nothing. Same failure as the review -> doing case on a different
+        // transition, which is why the rule is keyed on entering doing at all.
+        await seedBaseline([])
+        seedSession()
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+
+        ptyData({ id: TERM, data: "wrote a file" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
+
+        // Reviewed, filed as done - then reopened, because it was not done.
+        useStore.getState().moveBoardTask("t1", "done")
+        useStore.getState().moveBoardTask("t1", "doing")
+        await tick() // the rebase capture is fire-and-forget
+
+        // A quiet spell over the same one file: nothing new since the reopen.
+        ptyData({ id: TERM, data: "still thinking" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("doing")
+
+        // And a genuinely new file after the reopen still counts.
+        gitChanges = async (): Promise<{ path: string }[]> => [
+            { path: "src/new.ts" },
+            { path: "src/newer.ts" }
+        ]
+        ptyData({ id: TERM, data: "wrote another" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
+    })
 })
