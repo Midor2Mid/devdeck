@@ -27,7 +27,13 @@ import {
     getFullTail
 } from "./missionTail"
 import { detectApproval } from "./approval"
-import { captureBaseline, forgetSignals, newPathsSince, baselineOf } from "./agentSignals"
+import {
+    captureBaseline,
+    adoptBaseline,
+    forgetSignals,
+    newPathsSince,
+    baselineOf
+} from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -683,10 +689,26 @@ export const useStore = create<AppState>((set, get) => {
                                 const cwd = sessionCwd(id)
                                 if (!cwd) return
                                 const files = await window.api.git.changes(cwd)
-                                const fresh = newPathsSince(
-                                    baselineOf(id),
-                                    files.map((f) => f.path)
-                                )
+                                const paths = files.map((f) => f.path)
+                                // An UNKNOWN baseline used to be permanent: this
+                                // read is armed only by onPtyData and runs once per
+                                // idle expiry, and an agent that has finished emits
+                                // nothing more - so one transient `git status`
+                                // failure at the one moment it mattered stranded
+                                // that card in doing for the rest of the session,
+                                // silently. Adopt what is dirty NOW as the baseline
+                                // and let the next pause judge against it: unknown
+                                // self-heals instead of being terminal. Nothing
+                                // moves on this pass - these paths are a starting
+                                // point, not evidence.
+                                if (!baselineOf(id)) {
+                                    // Only for a session still live: this writes
+                                    // into a module Map that forget() has already
+                                    // cleared if the pane closed while we awaited.
+                                    if (get().termAgents[id]) adoptBaseline(id, paths)
+                                    return
+                                }
+                                const fresh = newPathsSince(baselineOf(id), paths)
                                 if (fresh.length === 0) return
                                 set((s) => ({
                                     boardTasks: s.boardTasks.map((t) =>

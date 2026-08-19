@@ -71,6 +71,20 @@ export function captureBaseline(id: string, cwd: string): void {
         })
 }
 
+/**
+ * Adopt a dirty set the caller already has as this session's baseline.
+ *
+ * The self-heal for an unknown baseline: rather than leaving a card stranded in
+ * `doing` for the rest of the session because one `git status` failed at the one
+ * moment it mattered, the next evidence read re-establishes the baseline from
+ * the paths it just fetched and lets the pause after that decide. Callers must
+ * only adopt for a session they have just confirmed is still live.
+ */
+export function adoptBaseline(id: string, paths: readonly string[]): void {
+    captures.set(id, ++ticket)
+    baselines.set(id, new Set(paths))
+}
+
 export function baselineOf(id: string): ReadonlySet<string> | undefined {
     return baselines.get(id)
 }

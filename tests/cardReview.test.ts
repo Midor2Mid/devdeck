@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest"
 import { useStore } from "../src/renderer/src/store"
 import { useSettings } from "../src/renderer/src/settings"
-import { captureBaseline, forgetSignals } from "../src/renderer/src/agentSignals"
+import { captureBaseline, baselineOf, forgetSignals } from "../src/renderer/src/agentSignals"
 import { leaf } from "../src/renderer/src/layout"
 import type { BoardColumn } from "../src/renderer/src/board"
 
@@ -349,6 +349,101 @@ describe("a dispatched card reaching review", () => {
         await tick(IDLE_MS * 4)
 
         expect(columnOf("t1")).toBe("review")
+    })
+
+    it("re-establishes an unknown baseline instead of stranding the card forever", async () => {
+        // I2. The evidence read is armed only by onPtyData and runs once per
+        // idle expiry. A single transient `git status` failure at the one moment
+        // it mattered left the card in doing (correct) with no retry and no
+        // re-arm - and an agent that has finished emits nothing more, so that
+        // card never advanced again for the rest of the session and nothing in
+        // the UI said the check had failed. Same for a baseline that was never
+        // captured at all (a card left in doing across a restart).
+        //
+        // Unknown now self-heals: the read adopts the paths it just fetched as
+        // the baseline and returns without moving, so the NEXT pause can decide.
+        forgetSignals(TERM)
+        seedSession()
+        expect(baselineOf(TERM)).toBeUndefined()
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "old.ts" }]
+
+        ptyData({ id: TERM, data: "thinking" })
+        await tick(IDLE_MS * 4)
+        // Nothing moves on the healing pass: the paths just fetched are the
+        // baseline, not evidence. Anything else would move a card on dirt the
+        // agent may never have touched.
+        expect(columnOf("t1")).toBe("doing")
+        expect(baselineOf(TERM)).toEqual(new Set(["old.ts"]))
+
+        gitChanges = async (): Promise<{ path: string }[]> => [
+            { path: "old.ts" },
+            { path: "src/new.ts" }
+        ]
+        ptyData({ id: TERM, data: "wrote a file" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
+    })
+
+    it("recovers from a failed rebase capture on the next pause", async () => {
+        // C1's residue, end to end: the drag back to doing invalidates the
+        // baseline, its re-capture fails, and the session is left unknown. That
+        // used to be permanent for the session; now the next pause adopts and
+        // the pause after that judges against it.
+        await seedBaseline([])
+        seedSession()
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+        ptyData({ id: TERM, data: "wrote a file" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
+
+        // "Not done, keep going" - and the rebase capture fails outright.
+        gitChanges = async (): Promise<{ path: string }[]> => {
+            throw new Error("index.lock")
+        }
+        useStore.getState().moveBoardTask("t1", "doing")
+        await tick()
+        expect(baselineOf(TERM)).toBeUndefined()
+
+        // Heal: one quiet spell adopts what is dirty now, and does not move.
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+        ptyData({ id: TERM, data: "still going" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("doing")
+
+        // Only work done after the heal counts - which is the whole point.
+        gitChanges = async (): Promise<{ path: string }[]> => [
+            { path: "src/new.ts" },
+            { path: "src/newer.ts" }
+        ]
+        ptyData({ id: TERM, data: "wrote another" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
+    })
+
+    it("does not adopt a baseline for a session that closed mid-read", async () => {
+        // The self-heal writes into a module Map, so it must not resurrect a
+        // session that went away while its git read was in flight.
+        forgetSignals(TERM)
+        seedSession()
+        let release: (files: { path: string }[]) => void = () => undefined
+        let readStarted: () => void = () => undefined
+        const inFlight = new Promise<void>((r) => {
+            readStarted = r
+        })
+        gitChanges = (): Promise<{ path: string }[]> => {
+            readStarted()
+            return new Promise((r) => {
+                release = r
+            })
+        }
+
+        ptyData({ id: TERM, data: "thinking" })
+        await inFlight
+        useStore.setState({ termAgents: {} })
+        release([{ path: "old.ts" }])
+        await tick(IDLE_MS)
+
+        expect(baselineOf(TERM)).toBeUndefined()
     })
 
     it("rebases a card reopened from done, not only one sent back from review", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from "vitest"
 import {
     newPathsSince,
     captureBaseline,
+    adoptBaseline,
     baselineOf,
     forgetSignals
 } from "../src/renderer/src/agentSignals"
@@ -187,5 +188,37 @@ describe("a capture that resolves too late", () => {
         await new Promise((r) => setTimeout(r, 0))
         expect(baselineOf("s-race")).toEqual(new Set(["new.ts"]))
         forgetSignals("s-race")
+    })
+})
+
+describe("adoptBaseline", () => {
+    afterEach(() => {
+        delete (globalThis as unknown as { window?: unknown }).window
+    })
+
+    it("records the paths the caller already fetched", () => {
+        adoptBaseline("s-adopt", ["a.ts", "b.ts"])
+        expect(baselineOf("s-adopt")).toEqual(new Set(["a.ts", "b.ts"]))
+        forgetSignals("s-adopt")
+    })
+
+    it("wins over a capture that was still in flight when it ran", async () => {
+        // The self-heal must be the answer that stands: it was taken from a read
+        // the caller had just completed, so an older pending capture landing on
+        // top of it would re-open the unknown it just closed.
+        let release: (files: { path: string }[]) => void = () => undefined
+        stubGitChanges(
+            () =>
+                new Promise<{ path: string }[]>((r) => {
+                    release = r
+                })
+        )
+        captureBaseline("s-adopt2", "/repo")
+        adoptBaseline("s-adopt2", ["fresh.ts"])
+
+        release([{ path: "stale.ts" }])
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-adopt2")).toEqual(new Set(["fresh.ts"]))
+        forgetSignals("s-adopt2")
     })
 })
