@@ -365,6 +365,18 @@ function generateToken(): string {
 
 export const DEFAULT_ACCENT = "#b8895c"
 
+export const IDLE_MIN = 300
+// No practical ceiling - this is "how long before we call an agent quiet", not a
+// claim that it finished. Bounded only so a typo cannot disable the signal.
+export const IDLE_MAX = 600_000
+export const DEFAULT_IDLE_MS = 1000
+
+/** A usable idle threshold, whatever the input. Junk falls back to the default. */
+export function clampIdleMs(ms: unknown): number {
+    if (typeof ms !== "number" || !Number.isFinite(ms)) return DEFAULT_IDLE_MS
+    return Math.min(IDLE_MAX, Math.max(IDLE_MIN, Math.ceil(ms)))
+}
+
 const DEFAULTS: AppSettings = {
     terminal: {
         shell: "powershell",
@@ -379,7 +391,7 @@ const DEFAULTS: AppSettings = {
         minimap: false
     },
     agents: RECOMMENDED_COMMANDS,
-    agentIdleMs: 1000,
+    agentIdleMs: DEFAULT_IDLE_MS,
     snippets: [
         {
             id: "review",
@@ -747,7 +759,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                         icon: a.icon ?? "",
                         category: a.category ?? ""
                     })),
-                    agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
+                    agentIdleMs: clampIdleMs(raw.agentIdleMs),
                     snippets: raw.snippets ?? DEFAULTS.snippets,
                     pipelines: raw.pipelines ?? DEFAULTS.pipelines,
                     triggers: raw.triggers ?? DEFAULTS.triggers,
@@ -839,7 +851,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             return missing.length
         },
         setAgentIdleMs: (ms) => {
-            set({ agentIdleMs: ms })
+            set({ agentIdleMs: clampIdleMs(ms) })
             persist()
         },
         setSnippets: (snippets) => {

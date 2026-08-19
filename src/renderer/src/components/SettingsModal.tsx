@@ -1098,11 +1098,10 @@ function AgentsSection(): JSX.Element {
                 )}
             </div>
             <div className="setting-row" style={{ marginTop: 18 }}>
-                <label>Idle → attention (ms)</label>
+                <label>Quiet after (ms)</label>
                 <input
                     type="number"
                     min={300}
-                    max={5000}
                     step={100}
                     value={agentIdleMs}
                     onChange={(e) => setAgentIdleMs(Number(e.target.value))}
