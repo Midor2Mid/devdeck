@@ -107,7 +107,9 @@ describe("isStalled", () => {
     it("flags a session that launched and never emitted anything", () => {
         // The crashed-CLI case, unreachable before markLaunched: lastAt is the
         // launch instant rather than undefined, so silence is measurable.
-        expect(isStalled(now - 10 * 60000, true, now, 2 * 60000)).toBe(true)
+        markLaunched("crashed-cli", now - 10 * 60000)
+        expect(isStalled(getLastAt("crashed-cli"), true, now, 2 * 60000)).toBe(true)
+        forgetTail("crashed-cli")
     })
     it("cannot judge a session with no timestamp at all", () => {
         expect(isStalled(undefined, true, now, 2 * 60000)).toBe(false)

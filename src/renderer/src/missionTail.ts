@@ -213,8 +213,8 @@ const BUCKETS = 60
 /**
  * The trace window's width in ms, and isStalled's default silence threshold —
  * historically the same number, but the two no longer read each other:
- * isStalled looks only at wall-clock silence on a "working" session, the trace
- * only at recent output volume.
+ * isStalled looks only at liveness plus wall-clock silence, the trace only at
+ * recent output volume.
  */
 export const STALL_MS = BUCKET_MS * BUCKETS
 /** Characters in one bucket that count as a full-height bar. */
@@ -365,6 +365,12 @@ export function isStalled(
  * Stamp a launch instant, so "has emitted nothing since it started" is a
  * measurable silence rather than an unknown. Never overwrites a real output
  * time — recordTail always wins.
+ *
+ * Invariant: every agent-launch path must call this beside its
+ * `logUsageStart` call — that call is made on every path that spawns an agent
+ * pty (currently `newTab`, `startResumedAgent`, `splitActive`, and
+ * `openWorkspacePreset` in store.ts), so it is where the next new launch path
+ * should add this too rather than assume `newTab` covers it.
  */
 export function markLaunched(id: string, now = Date.now()): void {
     if (!lastAt.has(id)) lastAt.set(id, now)

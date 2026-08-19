@@ -2428,6 +2428,7 @@ export const useStore = create<AppState>((set, get) => {
             // to the project path the same way newTab's logUsageStart call does,
             // rather than being kept as a cwd-less event.
             const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
+            markLaunched(termId)
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
 
@@ -2456,7 +2457,8 @@ export const useStore = create<AppState>((set, get) => {
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: newTermId },
                 lastAgentTermId: isAgentId(agentId) ? newTermId : s.lastAgentTermId
             })
-            if (isAgentId(agentId))
+            if (isAgentId(agentId)) {
+                markLaunched(newTermId)
                 // A split inherits the project's own tree — splitActive takes no cwd.
                 useSettings
                     .getState()
@@ -2466,6 +2468,7 @@ export const useStore = create<AppState>((set, get) => {
                         projectId,
                         s.projects.find((p) => p.id === projectId)?.path
                     )
+            }
             persist()
         },
 
@@ -2613,7 +2616,8 @@ export const useStore = create<AppState>((set, get) => {
                 view: "terminal"
             }))
             window.api.projects.setActive(pid)
-            for (const termId of startedAgents)
+            for (const termId of startedAgents) {
+                markLaunched(termId)
                 useSettings
                     .getState()
                     .logUsageStart(
@@ -2622,6 +2626,7 @@ export const useStore = create<AppState>((set, get) => {
                         pid,
                         get().projects.find((p) => p.id === pid)?.path
                     )
+            }
             persist()
         },
 
