@@ -547,13 +547,15 @@ export function forgetSignals(id: string): void {
 
 - [ ] **Step 4: Wire capture and cleanup into the store**
 
-In `store.ts`, in the same `if (isAgentId(agentId))` block where Task 3 added `markLaunched(termId)`:
+**There are four agent-launch paths, not one.** Task 3 shipped with the stamp on `newTab` alone and had to be fixed, because `splitActive`, `openWorkspacePreset` and `startResumedAgent` each create agent panes directly. Do not repeat that: `captureBaseline` goes **beside every `logUsageStart` call site**, which is the invariant Task 3 established and documented on `markLaunched`. Grep for `logUsageStart` and `markLaunched` in `store.ts` — they are already co-located at all four, and this is the third member of that group.
+
+At each site, inside the existing `isAgentId(agentId)` gating so a plain shell never gets a baseline:
 
 ```ts
-                captureBaseline(termId, cwd ?? get().activeProject()?.path ?? "")
+                captureBaseline(termId, cwd)
 ```
 
-Use whatever expression the surrounding code already uses for the session's directory — the `logUsageStart` call immediately below resolves the same thing; match it rather than inventing a second rule.
+Pass the **same directory expression that site already passes to `logUsageStart`** — each of the four resolves it slightly differently (a worktree's `cwd`, the project path, a restored pane's `termCwd`), and the baseline must describe the directory the agent will actually work in. Match the neighbouring call rather than inventing a rule.
 
 Then in `forget(termId)` (around `store.ts:631-670`), beside the existing `forgetTail(termId)` call, add:
 
