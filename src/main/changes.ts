@@ -68,7 +68,15 @@ export function parseStatus(porcelain: string): ChangeFile[] {
 
 export async function listChanges(cwd: string): Promise<ChangeFile[]> {
     const r = await git(cwd, ["status", "--porcelain=v1", "-z"])
-    if (!r.ok) return []
+    // A failed `git status` is not "no changes" — it is "we don't know". Resolving
+    // empty here made a transient failure (a missing git binary, a non-repo
+    // directory, the 8s timeout, a `.git/index.lock` held by another agent or
+    // worktree op) indistinguishable from a genuinely clean tree, which is
+    // exactly the conflation agentSignals' baseline exists to avoid. Throw so
+    // callers that need "unknown" and "clean" to read differently (captureBaseline)
+    // can tell them apart; callers that are fine treating a failure as "nothing to
+    // show" (MissionControl, ChangesModal, holdersIn) already catch to [].
+    if (!r.ok) throw new Error(r.stderr.trim() || "git status failed")
     // -z separates entries with NUL and never quotes paths.
     const parts = r.stdout.split("\0").filter(Boolean)
     const out: ChangeFile[] = []

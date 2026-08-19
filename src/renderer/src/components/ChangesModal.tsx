@@ -58,7 +58,10 @@ export function ChangesModal(): JSX.Element | null {
 
     const refresh = useCallback(async () => {
         if (!cwd) return
-        const list = await window.api.git.changes(cwd)
+        // A failed read (transient lock, missing git, timeout) now rejects rather
+        // than resolving empty (see main/changes.ts's listChanges) — this panel
+        // still treats a failure as "nothing to show" rather than surfacing it.
+        const list = await window.api.git.changes(cwd).catch(() => [])
         setFiles(list)
         setSel((prev) => list.find((f) => f.path === prev?.path) ?? list[0] ?? null)
     }, [cwd])
