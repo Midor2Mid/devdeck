@@ -4,6 +4,9 @@ import {
     useSettings,
     missingRecommended,
     aiModeAgents,
+    commitIdleMs,
+    idleFieldValue,
+    IDLE_MIN,
     type ShellKind,
     type GitAccount,
     type AgentPreset,
@@ -952,6 +955,10 @@ function AgentsSection(): JSX.Element {
     const addRecommended = useSettings((s) => s.addRecommended)
     const agentIdleMs = useSettings((s) => s.agentIdleMs)
     const setAgentIdleMs = useSettings((s) => s.setAgentIdleMs)
+    // The half-typed field, or null when it is not being edited. The stored
+    // value is always clamped; the draft deliberately is not, so a value can be
+    // typed a digit at a time (see idleFieldValue / commitIdleMs).
+    const [idleDraft, setIdleDraft] = useState<string | null>(null)
     const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
 
     // Which API-key env vars are present in the environment terminals inherit.
@@ -1101,10 +1108,17 @@ function AgentsSection(): JSX.Element {
                 <label>Quiet after (ms)</label>
                 <input
                     type="number"
-                    min={300}
+                    min={IDLE_MIN}
                     step={100}
-                    value={agentIdleMs}
-                    onChange={(e) => setAgentIdleMs(Number(e.target.value))}
+                    value={idleFieldValue(idleDraft, agentIdleMs)}
+                    onChange={(e) => setIdleDraft(e.target.value)}
+                    onBlur={() => {
+                        setAgentIdleMs(commitIdleMs(idleDraft, agentIdleMs))
+                        setIdleDraft(null)
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur()
+                    }}
                 />
             </div>
             <p className="settings-hint">
