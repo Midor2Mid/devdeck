@@ -95,6 +95,27 @@ Expected: FAIL — `hasBell is not a function`.
 
 - [ ] **Step 3: Implement `hasBell` in `missionTail.ts`**
 
+> **The code below is WRONG and was superseded during implementation. Do not copy
+> it — read the shipped `hasBell` in `src/renderer/src/missionTail.ts` instead.**
+>
+> It shipped in `f990ce9` and took two fix rounds (`dd20a62`, `25ea28c`) to
+> correct. All three defects were the same shape — **a two-byte decision made
+> with fewer than two bytes in hand**:
+>
+> 1. A split *opener* (`ESC` ends a chunk, `]` starts the next) went unrecognised,
+>    so the OSC's terminating BEL read as a bell — the exact false positive this
+>    task exists to remove.
+> 2. A split *ST terminator* (`ESC` then `\`) left the session stuck open, and the
+>    next genuine bell was swallowed as a phantom terminator — a false negative,
+>    which is worse: a blocked agent is never flagged.
+> 3. A zero-length chunk arriving mid-pairing discarded the carried `ESC`,
+>    reopening both classes above.
+>
+> The fix carries a `pendingEsc` flag across chunks alongside the in-OSC flag, and
+> resolves it only when there is actually a byte to resolve against. Each of the
+> three was found by a reviewer **executing** the function; none was caught by
+> reading it, including by me when I wrote this block.
+
 Add beside the other module Maps (near `const lastAt = new Map<string, number>()`):
 
 ```ts
