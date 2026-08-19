@@ -43,11 +43,25 @@ describe("captureBaseline", () => {
         forgetSignals("s-ok")
     })
 
+    it("records an empty (not unknown) baseline for a genuinely clean repo", async () => {
+        // Distinguishes "clean" from "unknown" at this layer too, not only in
+        // newPathsSince's pure logic above: a clean repo must produce a real
+        // (empty) Set, so a later comparison can tell it apart from a session
+        // whose capture never resolved at all.
+        stubGitChanges(async () => [])
+        captureBaseline("s-clean", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-clean")).toEqual(new Set())
+        forgetSignals("s-clean")
+    })
+
     it("keeps the baseline unknown when the read rejects, not clean", async () => {
-        // The bug this pins: main/changes.ts's listChanges used to swallow a
-        // failed `git status` and resolve []  — indistinguishable from a
-        // genuinely clean tree, and the exact conflation this module exists to
-        // avoid. A rejection here must leave baselineOf undefined, never a set.
+        // This exercises captureBaseline's OWN .catch, which was already
+        // correct before this fix round -- the bug lived one layer down, in
+        // main/changes.ts's listChanges resolving [] on a failed `git status`
+        // instead of rejecting (see tests/changes.test.ts, which pins that
+        // directly). This test guards against a regression here, at the
+        // boundary this module actually owns.
         stubGitChanges(async () => {
             throw new Error("git status failed")
         })
