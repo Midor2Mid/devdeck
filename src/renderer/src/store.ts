@@ -477,6 +477,26 @@ export const useStore = create<AppState>((set, get) => {
         persistTimer = setTimeout(writeNow, 300)
     }
 
+    /**
+     * The directory a session's git evidence is read against.
+     *
+     * `captureBaseline` and the idle-timer evidence read MUST resolve the SAME
+     * directory, through this one expression. The two produce path sets that are
+     * compared against each other, so a baseline taken in the project root and a
+     * status read taken in a worktree compare nothing meaningful: every path
+     * would look new, and the card would move on no evidence at all.
+     *
+     * `||`, not `??`: an empty-string termCwd entry falls through to the project
+     * path, the same way logUsageStart resolves the same session. The activeId
+     * fallback is startResumedAgent's, kept so folding that site into this
+     * expression does not narrow it.
+     */
+    const sessionCwd = (termId: string): string =>
+        get().termCwd[termId] ||
+        get().projects.find((p) => p.id === (get().projectIdOfTerm(termId) ?? get().activeId))
+            ?.path ||
+        ""
+
     const setStatus = (termId: string, status: AgentStatus): void => {
         if (get().agentStatus[termId] === status) return
         // Stamp / clear when a session enters or leaves a wants-you state.
@@ -623,11 +643,20 @@ export const useStore = create<AppState>((set, get) => {
                         // pty handler.
                         void (async () => {
                             try {
+                                // `find`, not the blanket `map` this replaced: a
+                                // termId belongs to exactly one dispatched card
+                                // (dispatchBoardTask stamps it on one), and the
+                                // re-check below has to name the card it re-checked
+                                // to mean anything.
                                 const task = get().boardTasks.find(
                                     (t) => t.termId === id && t.column === "doing"
                                 )
                                 if (!task) return
-                                const cwd = get().termCwd[id]
+                                // sessionCwd, not termCwd directly: a dispatch with
+                                // the worktree box off records no termCwd entry at
+                                // all, and reading termCwd alone stranded every
+                                // non-isolated card in doing forever.
+                                const cwd = sessionCwd(id)
                                 if (!cwd) return
                                 const files = await window.api.git.changes(cwd)
                                 const fresh = newPathsSince(
@@ -1210,6 +1239,16 @@ export const useStore = create<AppState>((set, get) => {
                     return { ...t, column }
                 })
             }))
+            // Dragging a card out of review back to doing means "not done, keep
+            // going" - so the work already on disk stops counting as evidence.
+            // Without this rebase those paths stay fresh for the session's life
+            // and the very next idle pause yanks the card back to review having
+            // produced nothing: the same "moved without evidence" complaint this
+            // fix exists to answer, one level up. captureBaseline overwrites, so
+            // only work done after the drag counts from here.
+            if (before?.termId && before.column === "review" && column === "doing") {
+                captureBaseline(before.termId, sessionCwd(before.termId))
+            }
             persist()
             // Written after the move, so a card that fails to record still moves.
             // Moving back out of done does not retract it: it was true when written.
@@ -2390,7 +2429,7 @@ export const useStore = create<AppState>((set, get) => {
             }))
             if (isAgentId(agentId)) {
                 markLaunched(termId)
-                captureBaseline(termId, cwd || get().projects.find((p) => p.id === projectId)?.path || "")
+                captureBaseline(termId, sessionCwd(termId))
                 pushActivity("start", termId, `${tab.name} · started`)
                 // The directory, not just the project: an isolated session runs in
                 // `cwd` (a worktree), which is its own transcript folder.
@@ -2457,7 +2496,7 @@ export const useStore = create<AppState>((set, get) => {
             // rather than being kept as a cwd-less event.
             const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
             markLaunched(termId)
-            captureBaseline(termId, cwd || "")
+            captureBaseline(termId, sessionCwd(termId))
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
 
@@ -2489,7 +2528,7 @@ export const useStore = create<AppState>((set, get) => {
             if (isAgentId(agentId)) {
                 markLaunched(newTermId)
                 // A split inherits the project's own tree — splitActive takes no cwd.
-                captureBaseline(newTermId, s.projects.find((p) => p.id === projectId)?.path ?? "")
+                captureBaseline(newTermId, sessionCwd(newTermId))
                 useSettings
                     .getState()
                     .logUsageStart(
@@ -2648,7 +2687,7 @@ export const useStore = create<AppState>((set, get) => {
             window.api.projects.setActive(pid)
             for (const termId of startedAgents) {
                 markLaunched(termId)
-                captureBaseline(termId, get().projects.find((p) => p.id === pid)?.path ?? "")
+                captureBaseline(termId, sessionCwd(termId))
                 useSettings
                     .getState()
                     .logUsageStart(

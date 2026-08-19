@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest"
 import { useStore } from "../src/renderer/src/store"
 import { useSettings } from "../src/renderer/src/settings"
 import { captureBaseline, forgetSignals } from "../src/renderer/src/agentSignals"
+import { leaf } from "../src/renderer/src/layout"
 import type { BoardColumn } from "../src/renderer/src/board"
 
 // The live bug this file pins. The agent idle timer used to move a dispatched
@@ -26,6 +27,9 @@ const IDLE_MS = 20
  * the *post-idle* call differently - that difference is the whole subject.
  */
 let gitChanges: (cwd: string) => Promise<{ path: string }[]> = async () => []
+
+/** Every directory `git.changes` was asked about, in order. */
+let askedFor: string[] = []
 
 /** The pty data handler the store registers in init() - the way into onPtyData. */
 let ptyData: (e: { id: string; data: string }) => void = () => undefined
@@ -52,7 +56,12 @@ function stubApi(): void {
             workspace: { load: async (): Promise<null> => null, save: (): void => undefined },
             settings: { save: (): void => undefined },
             ledger: { append: (): void => undefined, read: async (): Promise<unknown[]> => [] },
-            git: { changes: (cwd: string): Promise<{ path: string }[]> => gitChanges(cwd) }
+            git: {
+                changes: (cwd: string): Promise<{ path: string }[]> => {
+                    askedFor.push(cwd)
+                    return gitChanges(cwd)
+                }
+            }
         }
     }
 }
@@ -69,8 +78,15 @@ async function seedBaseline(paths: string[]): Promise<void> {
     await tick()
 }
 
-/** A dispatched card in `doing`, its agent session live and quiet. */
-function seedSession(): void {
+/**
+ * A dispatched card in `doing`, its agent session live and quiet.
+ *
+ * `termCwd` is seeded only for an isolated dispatch: with the board's worktree
+ * box off nothing records a termCwd entry at all, which is the case that used
+ * to strand a card in doing no matter how much the agent wrote.
+ */
+function seedSession(opts: { isolated?: boolean } = {}): void {
+    const isolated = opts.isolated ?? true
     useStore.setState({
         // Not the terminal view, so isVisible() is false: this is a background
         // session finishing a turn, which is the case the bug bit hardest.
@@ -78,8 +94,12 @@ function seedSession(): void {
         activeId: "p1",
         projects: [{ id: "p1", name: "P1", path: CWD, addedAt: Date.now() }],
         termAgents: { [TERM]: "claude" },
-        termCwd: { [TERM]: CWD },
+        termCwd: isolated ? { [TERM]: CWD } : {},
         agentStatus: {},
+        // The session must be findable in a project for the cwd fallback to
+        // resolve: that is the route sessionCwd takes to the project path.
+        tabsByProject: { p1: [{ id: "tab1", name: "claude 1", root: leaf(TERM) }] },
+        activeTabByProject: { p1: "tab1" },
         activePaneByProject: {},
         notifications: [],
         activity: [],
@@ -105,6 +125,7 @@ describe("a dispatched card reaching review", () => {
     })
 
     beforeEach(() => {
+        askedFor = []
         useSettings.setState({
             agentIdleMs: IDLE_MS,
             notifications: { desktop: false, sound: false, waitingSound: false }
@@ -170,8 +191,11 @@ describe("a dispatched card reaching review", () => {
         }
         process.on("unhandledRejection", onRejection)
         try {
-            // The handler runs inside a pty data callback: it must not throw,
-            // and the failure must not escape as an unhandled rejection either.
+            // Weak on its own - ptyData only arms a timer, so there is little
+            // for it to throw. The real protection is the two checks below: the
+            // git failure must not surface as an unhandled rejection, and an
+            // exception thrown from inside the timer callback would fail this
+            // test as an uncaught error rather than as an assertion.
             expect(() => ptyData({ id: TERM, data: "output\n" })).not.toThrow()
             await tick(IDLE_MS * 4)
         } finally {
@@ -214,5 +238,56 @@ describe("a dispatched card reaching review", () => {
         await tick(IDLE_MS)
 
         expect(columnOf("t1")).toBe("done")
+    })
+
+    it("advances a dispatch that recorded no termCwd, reading the project path", async () => {
+        // M1. Only an ISOLATED dispatch records a termCwd entry - newTab stores
+        // one just when a cwd is passed, and the board passes a worktree path
+        // only when its worktree box is ticked. Reading termCwd directly made
+        // the evidence read bail for every non-isolated card, which then sat in
+        // doing forever no matter how much the agent wrote.
+        seedSession({ isolated: false })
+        await seedBaseline([])
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+
+        ptyData({ id: TERM, data: "wrote a file" })
+        await tick(IDLE_MS * 4)
+
+        expect(columnOf("t1")).toBe("review")
+        // Two reads, one directory: the baseline capture and the evidence read
+        // must resolve the same tree or their path sets are not comparable.
+        expect(askedFor).toEqual([CWD, CWD])
+    })
+
+    it("does not snap a card dragged back to doing forward again without new work", async () => {
+        // L2. A path fresh against the baseline stays fresh for the session's
+        // life, so "not done, keep going" was undone by the very next pause -
+        // the same move-without-evidence complaint, one level up. Sending a card
+        // out of review rebases the baseline so only later work counts.
+        await seedBaseline([])
+        seedSession()
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+
+        ptyData({ id: TERM, data: "wrote a file" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
+
+        // "Not done, keep going."
+        useStore.getState().moveBoardTask("t1", "doing")
+        await tick() // the rebase capture is fire-and-forget
+
+        // Another quiet spell over the same one file: no new work since the drag.
+        ptyData({ id: TERM, data: "still thinking" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("doing")
+
+        // The session is not deaf afterwards, though - a genuinely new file counts.
+        gitChanges = async (): Promise<{ path: string }[]> => [
+            { path: "src/new.ts" },
+            { path: "src/newer.ts" }
+        ]
+        ptyData({ id: TERM, data: "wrote another" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
     })
 })
