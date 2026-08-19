@@ -343,16 +343,31 @@ export function relTime(now: number, then?: number): string {
 }
 
 /**
- * A "working" agent that hasn't produced output for longer than `thresholdMs`
- * is likely stalled or stuck in a loop — worth surfacing so you can check on it.
+ * A live session that has produced no output for longer than `thresholdMs` is
+ * stalled — stuck in a loop, waiting on something that will not arrive, or dead
+ * without exiting.
+ *
+ * This deliberately does NOT read AgentStatus. `working` cannot survive
+ * `agentIdleMs` (1s by default), so a status-based stall check could never fire;
+ * quiet duration plus liveness can. `lastAt` is stamped at launch by
+ * markLaunched, so a session that crashed before printing anything still counts.
  */
 export function isStalled(
-    status: AgentStatus,
     lastAt: number | undefined,
+    alive: boolean,
     now: number,
     thresholdMs = STALL_MS
 ): boolean {
-    return status === "working" && !!lastAt && now - lastAt > thresholdMs
+    return alive && !!lastAt && now - lastAt > thresholdMs
+}
+
+/**
+ * Stamp a launch instant, so "has emitted nothing since it started" is a
+ * measurable silence rather than an unknown. Never overwrites a real output
+ * time — recordTail always wins.
+ */
+export function markLaunched(id: string, now = Date.now()): void {
+    if (!lastAt.has(id)) lastAt.set(id, now)
 }
 
 const RANK: Record<AgentStatus, number> = { attention: 0, waiting: 1, working: 2, idle: 3 }

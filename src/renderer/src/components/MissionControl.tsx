@@ -170,7 +170,11 @@ export function MissionControl(): JSX.Element {
                             const ago = relTime(Date.now(), getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
                             const trace = getTrace(s.termId)
-                            const stalled = isStalled(s.status, getLastAt(s.termId), Date.now())
+                            const stalled = isStalled(
+                                getLastAt(s.termId),
+                                !!termAgents[s.termId],
+                                Date.now()
+                            )
                             return (
                                 <div
                                     key={s.termId}

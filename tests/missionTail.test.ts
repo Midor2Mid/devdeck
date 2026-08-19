@@ -6,6 +6,9 @@ import {
     sortForFollow,
     lastLines,
     isStalled,
+    markLaunched,
+    getLastAt,
+    recordTail,
     printableDelta,
     CARRY_MAX,
     recordRate,
@@ -91,18 +94,39 @@ describe("lastLines", () => {
 
 describe("isStalled", () => {
     const now = 1_000_000
-    it("flags a working agent with no output past the threshold", () => {
-        expect(isStalled("working", now - 5 * 60000, now, 2 * 60000)).toBe(true)
+    it("flags a live session quiet past the threshold", () => {
+        expect(isStalled(now - 10 * 60000, true, now, 2 * 60000)).toBe(true)
     })
-    it("does not flag recent working agents", () => {
-        expect(isStalled("working", now - 30000, now, 2 * 60000)).toBe(false)
+    it("does not flag a session that spoke recently", () => {
+        expect(isStalled(now - 30000, true, now, 2 * 60000)).toBe(false)
     })
-    it("only applies to working status", () => {
-        expect(isStalled("idle", now - 10 * 60000, now, 2 * 60000)).toBe(false)
-        expect(isStalled("attention", now - 10 * 60000, now, 2 * 60000)).toBe(false)
+    it("does not flag a dead session", () => {
+        // Nothing to check on: the pane is gone, not stuck.
+        expect(isStalled(now - 10 * 60000, false, now, 2 * 60000)).toBe(false)
     })
-    it("needs a known last-output time", () => {
-        expect(isStalled("working", undefined, now, 2 * 60000)).toBe(false)
+    it("flags a session that launched and never emitted anything", () => {
+        // The crashed-CLI case, unreachable before markLaunched: lastAt is the
+        // launch instant rather than undefined, so silence is measurable.
+        expect(isStalled(now - 10 * 60000, true, now, 2 * 60000)).toBe(true)
+    })
+    it("cannot judge a session with no timestamp at all", () => {
+        expect(isStalled(undefined, true, now, 2 * 60000)).toBe(false)
+    })
+})
+
+describe("markLaunched", () => {
+    it("stamps a last-output time so silence is measurable from launch", () => {
+        markLaunched("boot", 5000)
+        expect(getLastAt("boot")).toBe(5000)
+        forgetTail("boot")
+    })
+    it("does not clobber a real output time", () => {
+        markLaunched("boot2", 5000)
+        recordTail("boot2", "hello")
+        const after = getLastAt("boot2")
+        markLaunched("boot2", 6000)
+        expect(getLastAt("boot2")).toBe(after)
+        forgetTail("boot2")
     })
 })
 
