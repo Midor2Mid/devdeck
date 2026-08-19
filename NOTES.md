@@ -693,6 +693,79 @@ would be exactly the kind of hand-authored guess dressed up as data the
 earlier note warned against. Worth revisiting once the ledger has real
 history behind it, not before.
 
+### Supervision cockpit: three broken signals, one headline fix, and what's still missing (2026-08-20)
+
+The "Mission trace" note above (2026-08-11) already named the first defect —
+`isStalled` could never fire — and left it for later. This round fixed that
+one plus two more, and closed the actual headline bug: a card reaching
+*review* on silence rather than on evidence.
+
+**`\x07` is a bell and an OSC terminator, and any BEL check has to tell them
+apart.** A shell or CLI setting its terminal title, or emitting an OSC-8
+hyperlink, writes `ESC ] ... \x07` — the same `\x07` a real bell is. Treating
+every `\x07` as "the agent rang the bell" meant an agent doing something as
+mundane as naming its own tab marked itself as needing you. The fix
+(`hasBell` in `missionTail.ts`) has to be stateful *per session*, not just
+per chunk: pty output is chunked at arbitrary byte boundaries, so the `ESC`
+that opens or closes an OSC sequence can be the very last byte of one chunk
+with its pair (`]` or `\`) arriving as the first byte of the next. A
+stateless check would misread that split as either a stray bracket or a
+missed terminator, and a zero-length chunk has to be a hard no-op — entering
+the resolution branch with nothing to pair against would silently drop a
+carried `ESC` even though no byte actually arrived. Any future BEL-adjacent
+check needs to strip OSC first, statefully, or it will reintroduce this
+exact bug in a new shape.
+
+**`git status` has no notion of a baseline, so "the tree is dirty" was never
+evidence that *this* agent did anything.** A dispatched card used to move
+`doing → review` the instant its agent's terminal went quiet for
+`agentIdleMs` (1 second by default) — a thinking pause and a finished turn
+looked identical. Cards now snapshot the session's directory when they enter
+`doing` (`captureBaseline`), and only advance on `newPathsSince` finding a
+path dirty now that wasn't dirty at that snapshot. An **unknown baseline
+reads as no evidence, never as "everything is new"** — fail-closed on
+purpose, because the alternative (treating a failed snapshot as an empty
+baseline) marks every agent working in an already-dirty repo as productive
+forever. This is also why `listChanges` had to stop swallowing a failed
+`git status` into `[]`: an empty list is indistinguishable from "nothing
+changed," which is fatal precisely at the one call site (`captureBaseline`)
+that needs to tell "clean" and "unknown" apart.
+
+**What this still doesn't do, honestly:**
+- A card can sit in `doing` forever after a turn that writes nothing — a
+  question answered, a plan produced, only gitignored paths touched. The
+  soft `waiting` status still fires (the terminal did go quiet), but the
+  board itself gives no hint that the card is stuck. That's a missing
+  affordance, not a bug, and it's the accepted cost of refusing to lie about
+  doneness.
+- An agent that writes a file before its own baseline-capture IPC round-trip
+  resolves gets that write baked into its *own* baseline — it will never
+  register as new evidence, because the snapshot it's compared against
+  already contains it.
+- `sessionCwd` re-reads live store state on every check, so editing a
+  project's path mid-session can make the baseline and the later evidence
+  read resolve two different directories. Known, not engineered around —
+  documented at the call site in `store.ts` rather than guarded against.
+- `git status` still has no notion of *who* touched a file. The baseline
+  distinguishes "changed since this session started" from "changed before
+  that," never "changed by this agent." A human editing files in the same
+  directory while a card is dispatched is indistinguishable from the agent
+  doing it.
+
+**Deliberately left alone, and why, before someone "cleans it up":** the
+`AgentStatus` enum (`working` / `idle` / `attention` / `waiting`), the values
+the idle timer transitions between, and `waitForIdle` in `store.ts`.
+`waitForIdle` is an unbounded loop whose only exit is `st === "idle"` — a
+pipeline step waits on it with no timeout and no error path, so redefining
+what `idle` means (or when it's reached) would hang every pipeline run, not
+just the caller that changed it. The enum's string values also aren't purely
+internal: `main/server.ts` serves a mobile web client whose own status dot
+and title-badge logic switch on the literal strings `"working"` / `"idle"` /
+`"attention"` / `"waiting"` (see its inline `<script>`, around the `.dot`
+CSS and `updateBadge`) — changing a value here has to change it on both
+sides of that process boundary, or the phone's UI silently stops matching
+the desktop's.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
