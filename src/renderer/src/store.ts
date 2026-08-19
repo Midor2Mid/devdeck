@@ -18,7 +18,15 @@ import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } f
 import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
-import { recordTail, forgetTail, recordRate, hasBell, markLaunched } from "./missionTail"
+import {
+    recordTail,
+    forgetTail,
+    recordRate,
+    hasBell,
+    markLaunched,
+    getFullTail
+} from "./missionTail"
+import { detectApproval } from "./approval"
 import { captureBaseline, forgetSignals, newPathsSince, baselineOf } from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
@@ -658,6 +666,16 @@ export const useStore = create<AppState>((set, get) => {
                                     (t) => t.termId === id && t.column === "doing"
                                 )
                                 if (!task) return
+                                // "Quiet with evidence" is also true of "blocked
+                                // mid-task": an agent that writes three files and
+                                // then asks `Do you want to proceed? 1. Yes 2. No`
+                                // is quiet, has real evidence, and is waiting on a
+                                // keystroke. Filing that as ready for review hands
+                                // you a half-applied change. detectApproval is the
+                                // same classifier the Overview's one-click approve
+                                // uses - pure, renderer-side, and cheaper than the
+                                // git read it skips, so it goes before the spawn.
+                                if (detectApproval(getFullTail(id, 16))) return
                                 // sessionCwd, not termCwd directly: a dispatch with
                                 // the worktree box off records no termCwd entry at
                                 // all, and reading termCwd alone stranded every

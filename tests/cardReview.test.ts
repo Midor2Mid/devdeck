@@ -291,6 +291,66 @@ describe("a dispatched card reaching review", () => {
         expect(columnOf("t1")).toBe("review")
     })
 
+    it("leaves the card in doing while the agent is waiting on a permission prompt", async () => {
+        // I5. "Quiet + evidence" is also true of "blocked mid-task": an agent
+        // that writes three files and then asks `Do you want to proceed?` goes
+        // quiet with real evidence behind it, and its card was filed as ready
+        // for review while it sat waiting for a keystroke. You open it expecting
+        // a finished change and find a half-applied one.
+        //
+        // Reachable whenever the prompt rings no bell (Codex, Gemini, bell off)
+        // or the pane is visible, and this branch made it MORE reachable: the
+        // OSC fix un-pinned background title-setting agents from `attention`,
+        // and `attention` was what blocked the `working` transition the timer
+        // needs.
+        await seedBaseline([])
+        seedSession()
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+
+        ptyData({
+            id: TERM,
+            data:
+                "wrote src/new.ts\n" +
+                "Do you want to proceed?\n" +
+                "❯ 1. Yes\n" +
+                "  2. No, and tell Claude what to do differently (esc)\n"
+        })
+        await tick(IDLE_MS * 4)
+
+        expect(columnOf("t1")).toBe("doing")
+    })
+
+    it("moves the card once the prompt is answered and the agent goes quiet again", async () => {
+        // The other half: the guard must not strand a card whose prompt has
+        // been dealt with. Once real output follows the options they are stale,
+        // detectApproval stops matching, and the next pause files the card.
+        await seedBaseline([])
+        seedSession()
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+
+        ptyData({
+            id: TERM,
+            data:
+                "Do you want to proceed?\n" +
+                "❯ 1. Yes\n" +
+                "  2. No, and tell Claude what to do differently (esc)\n"
+        })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("doing")
+
+        // detectApproval only calls a prompt live while it is still within the
+        // last three lines of the tail, so a resumed agent's own output is what
+        // clears the guard - deliberately, since options still sitting at the
+        // very bottom are exactly what "still waiting" looks like.
+        ptyData({
+            id: TERM,
+            data: "Applied the edit.\nWrote src/new.ts\nDone - nothing else to change.\n"
+        })
+        await tick(IDLE_MS * 4)
+
+        expect(columnOf("t1")).toBe("review")
+    })
+
     it("rebases a card reopened from done, not only one sent back from review", async () => {
         // Reaching done never closes the pane: the pty and its baseline entry
         // both stay alive. So a reopened card still carried its LAUNCH-time
