@@ -16,7 +16,8 @@
 - **Do not run `npm run dev`** — live HMR on a mid-edit state crashes the dev process.
 - Do not launch the app; the controller owns the `run-app` verification pass.
 - **No write path may gain an `await` that blocks it, and none may throw.** The card auto-move sits inside a pty data handler.
-- Do not edit `AgentStatus`, the `store.ts:605-627` timer transition, `waitForIdle`, or `MainView`. If a task seems to require it, stop and report.
+- Do not change the **`AgentStatus` enum**, the **status values the idle timer sets** (`waiting`/`idle` at `store.ts:611-618`), `waitForIdle`, or `MainView`. If a task seems to require it, stop and report.
+  - Task 5 *does* edit the card-move block at `store.ts:619-623`, which sits inside that same timer callback. That is intended: the constraint is about the **status transition's semantics**, which `waitForIdle` and the mobile client read, not about those line numbers. Leave the `setStatus(id, away ? "waiting" : "idle")` call and its condition untouched; change only what happens to the card.
 - Renderer modules must not import `electron`. Use `window.api`.
 
 ## File Structure
