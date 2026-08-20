@@ -16,7 +16,20 @@ before they held up.
   path that wasn't dirty at that snapshot — a real, new change, not a silence.
   Re-entering *doing* (reopening a card, or sending it back for another pass)
   takes a fresh snapshot, so a card given more work doesn't get yanked forward
-  again on the very next pause.
+  again on the very next pause — and if that snapshot fails, the baseline is
+  dropped rather than kept, so a card sent back for more work can never snap
+  straight to *review* on the strength of the work that got it there. A card
+  also stays put while its agent is waiting on a permission prompt: quiet with
+  three files written is what "blocked halfway" looks like too, and handing you
+  a half-applied change as "ready for review" is the same lie in a new place.
+  A snapshot that never happened (or failed) is no longer permanent either —
+  the next pause re-establishes it and the pause after that decides, instead of
+  the card sitting in *doing* for the rest of the session.
+  **This fixes the card, not the chrome:** on a thinking pause the tile still
+  flips to "waiting", the deck badge still counts it and the soft beep still
+  fires. The status transition is deliberately out of scope — a thinking pause
+  no longer files a card as finished, but DevDeck has not stopped saying your
+  agent went quiet.
 - **A terminal title is no longer read as a request for attention.** `\x07`
   (BEL) is both the terminal bell *and* the byte that terminates an OSC escape
   sequence — the same one a shell prompt or a CLI uses to set its terminal's
@@ -32,16 +45,23 @@ before they held up.
   two conditions could never both be true, and the check had never fired in
   production. It also required a last-output timestamp that was only ever
   stamped on real output, so an agent that crashed before printing a single
-  line was invisible to it. Stalled is now liveness plus wall-clock silence,
-  and every agent-launch path now stamps a launch time up front so silence is
-  measurable from the first second.
-- **The "quiet after" threshold is now a real bound, not a suggestion.** Its
+  line was invisible to it. Every agent-launch path now stamps a launch time up
+  front, so silence is measurable from the first second. And because "quiet for
+  two minutes" is also the normal resting state of an agent that finished and
+  handed back to you, stalled asks one more question: is anything actually
+  waiting on this session — a card in *doing*, or a pipeline step blocked on it?
+  If not, its silence is not a stall, and the tile says nothing. A marker that
+  is always on tells you as little as one that never fires.
+- **The "quiet after" threshold is now a real bound, and still typeable.** Its
   `min`/`max` were HTML attributes only — nothing stopped a typed value (or an
   emptied field, which reads as `0`) from reaching the setting itself. Both the
-  setter and the settings loader now clamp it. The previous 5-second ceiling
-  is gone on purpose: this number answers "how long before we call an agent
-  quiet," not "how long before its work is done," so there's no reason to cap
-  it low.
+  setter and the settings loader now clamp it. The clamp lands when you leave
+  the field, not on every keystroke: clamping mid-typing meant the first `2` of
+  `2500` became `300` and the rest was appended to that, so any value starting
+  below the floor was untypeable and the field could never be cleared. The
+  previous 5-second ceiling is gone on purpose: this number answers "how long
+  before we call an agent quiet," not "how long before its work is done," so
+  there's no reason to cap it low.
 - **Fix: a failed `git status` used to read as a clean working tree.** The
   change-review helper swallowed any git failure and resolved an empty list —
   indistinguishable from "nothing changed." That's fatal for a baseline: a

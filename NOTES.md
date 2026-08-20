@@ -766,6 +766,103 @@ CSS and `updateBadge`) — changing a value here has to change it on both
 sides of that process boundary, or the phone's UI silently stops matching
 the desktop's.
 
+### The whole-branch review of that fix round: what per-task gates could not see (2026-08-20)
+
+Every one of the seven tasks above passed its own review. A review of the
+branch as a whole then found five more things, two of which made DevDeck
+*worse* than before the branch — which is the point worth keeping: a gate that
+only ever sees one task's diff cannot see a fix that is correct in isolation
+and wrong beside its neighbours.
+
+**A fail-closed module can still fail open at one call site.**
+`captureBaseline` treated "the read failed" as "leave the baseline unknown",
+and that reading is only true of a *first* capture. On the rebase path
+(a card dragged back to `doing`) there is a previous baseline, so a failed
+capture silently kept it — the files that earned the card review the first time
+stayed "fresh", and the next quiet spell filed it as finished again having
+produced nothing. The whole branch's thesis is fail-closed, and this was the
+one path where it wasn't. The fix is one line (`baselines.delete(id)` first)
+and it covers three states at once: the failure, the missing-cwd early return,
+and the in-flight window where the answer has not arrived yet.
+
+**Clamping is correct; clamping on every keystroke is not.** The same task
+that stopped a 5ms threshold reaching the idle timer made the Settings field
+unusable: a controlled numeric input clamped in its `onChange` turns the first
+`2` of `2500` into `300` and appends to that. Validation belongs on commit, not
+on input — the stored value is what has to be legal, and a half-typed number is
+not a value yet. Anything numeric with a floor in this app has the same shape.
+
+**A marker that is always on and a marker that never fires are the same
+defect.** `isStalled` was fixed from "could never fire" (it required `working`,
+which the idle timer clears within a second) to firing on any live session
+quiet for 120s. But `alive` is structurally true for every session the Mission
+grid renders, so the new predicate marked every agent that had finished its
+turn and every pane opened and never typed into. Left on Mission over lunch,
+every tile grew the stripe and every aria-label announced "stalled". Status
+genuinely cannot separate *stuck* from *finished* — that is the spec's own
+premise — so the gate is **expectation**: a board card in `doing` naming the
+session, or the pipeline step a run is blocked on. If nothing is waiting on a
+session, quiet is its normal resting state and saying anything about it is
+noise. `awaitedTermIds` answers that question purely (structurally typed, no
+store import) and `MissionControl` passes the answer in.
+
+**"Quiet with evidence" is also what "blocked halfway" looks like.** The card
+move asked whether files changed since the baseline and never whether the agent
+was still asking you something. An agent that writes three files and then puts
+up `Do you want to proceed? 1. Yes 2. No` is quiet, has real evidence, and was
+filed as ready for review while waiting for a keystroke. Reachable whenever the
+prompt rings no bell (Codex, Gemini, bell off) or the pane is visible — and
+this branch made it *more* reachable, because the OSC fix un-pinned
+title-setting background agents from `attention`, and `attention` was what had
+been blocking the `working` transition the timer needs. `detectApproval` (pure,
+renderer-side, already driving the Overview's one-click approve) now guards the
+move, before the git spawn, since it is cheaper than the read it skips.
+
+**A failure with no retry is a permanent failure.** The evidence read is armed
+only by `onPtyData` and runs once per idle expiry, and an agent that has
+finished emits nothing more — so one transient `git status` failure at the one
+moment it mattered stranded that card in `doing` for the rest of the session,
+silently. Unknown now self-heals: the read adopts the paths it just fetched as
+the baseline and returns *without moving*, so the next pause judges against
+them. Nothing moves on the healing pass, because those paths are a starting
+point and not evidence.
+
+**Eight call sites, one JSDoc sentence, zero tests.** The reviewer commented
+out all eight `markLaunched`/`captureBaseline` calls and ran the five suites
+that plausibly covered them: 126/126 green, because the unit tests seed their
+own signals by calling both functions directly. Two different fixes, because
+the two calls are not the same kind of thing:
+- The baseline is a property of the **card**, not the pane. Only
+  `dispatchBoardTask` ever writes `task.termId`, so capturing at dispatch and
+  at "entering `doing`" reaches 100% of readers from two card-lifecycle sites,
+  and a fifth launch path needs no change at all. That also deleted two
+  captures nothing could ever read — `splitActive` and `openWorkspacePreset`
+  were spawning `git status` for baselines no card can name (a six-pane preset
+  fired six concurrently).
+- `markLaunched` really does belong on every launch path, so it stays on all
+  four and is pinned by a source scan (`tests/signalSites.test.ts`) asserting
+  every `logUsageStart(` in `store.ts` is preceded by a `markLaunched(`. Note
+  the scan has to blank comments first: on the first attempt, commenting the
+  call *out* still satisfied it — the exact mutation it exists to catch.
+
+**M4, and it is still true:** `startResumedAgent` no longer captures a
+baseline, but a card left in `doing` across a restart still has no baseline in
+memory (the map is per-process). Its first quiet spell after the restart adopts
+whatever is dirty at that moment — including its own pre-restart work — so that
+work never counts as evidence and only what the agent does after the restart can
+advance the card. Fail-closed, consistent with everything else here, and
+recorded rather than fixed: pinning a baseline across restarts means persisting
+it, and a persisted baseline that outlives the session it describes is a worse
+lie than a conservative one.
+
+**Still missing, and named so it isn't rediscovered:** the evidence read now
+refuses to overlap itself per session, but it is still one `git status` spawn
+per *pause* rather than per turn — the very pauses this branch exists to say
+are not turn-ends. A cwd-keyed TTL cache is what the spec's own condition for
+polling git off-Mission actually asks for, and this branch introduced an
+uncached off-Mission git path without it. Also: a read that fails is still
+silent — no card advances and nothing in the UI says a check failed.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).
