@@ -13,13 +13,19 @@
 const baselines = new Map<string, ReadonlySet<string>>()
 
 /**
- * The capture each session is currently waiting on.
+ * The capture each session is waiting on RIGHT NOW, if any.
  *
- * A capture is asynchronous, so by the time it resolves it may have been
- * superseded by a newer capture (a rebase) or orphaned entirely (the pane
- * closed). Stamping each capture with a ticket and checking it on arrival is
- * what stops a late reply writing a baseline for a session nobody is watching -
- * without it `baselines` only ever grows over a long uptime.
+ * Two jobs. A capture is asynchronous, so by the time it resolves it may have
+ * been superseded by a newer capture (a rebase) or orphaned entirely (the pane
+ * closed): the ticket is checked on arrival, which is what stops a late reply
+ * writing a baseline for a session nobody is watching - without it `baselines`
+ * only ever grows over a long uptime.
+ *
+ * And because an entry is REMOVED on arrival, presence answers "is a capture
+ * outstanding?" - which `adoptBaseline` needs, since an outstanding capture was
+ * issued later than the read a self-heal is holding and is therefore the truer
+ * answer. Every path that issues nothing (no cwd, a synchronous throw) has to
+ * clear its ticket too, or the self-heal defers forever to a read nobody made.
  */
 const captures = new Map<string, number>()
 let ticket = 0
@@ -54,21 +60,44 @@ export function newPathsSince(
  */
 export function captureBaseline(id: string, cwd: string): void {
     baselines.delete(id)
+    if (!cwd) {
+        // Nothing is in flight: there is no directory to read. Clearing rather
+        // than claiming a ticket matters - a ticket left here would hold off
+        // every later self-heal on a capture that was never issued.
+        captures.delete(id)
+        return
+    }
     const mine = ++ticket
     captures.set(id, mine)
-    if (!cwd) return
-    void window.api.git
-        .changes(cwd)
-        .then((files) => {
-            // Superseded by a later capture, or the session is gone: either way
-            // this answer describes a moment nobody is comparing against.
-            if (captures.get(id) !== mine) return
-            baselines.set(id, new Set(files.map((f) => f.path)))
-        })
-        .catch(() => {
-            // Unknown baseline. Deliberately not an empty set, which would read
-            // as "the repo was clean" and make pre-existing dirt look new.
-        })
+    /** Arrived: no longer outstanding, unless a newer capture has taken over. */
+    const settle = (): boolean => {
+        if (captures.get(id) !== mine) return false
+        captures.delete(id)
+        return true
+    }
+    try {
+        void window.api.git
+            .changes(cwd)
+            .then((files) => {
+                // Superseded by a later capture, or the session is gone: either
+                // way this answer describes a moment nobody is comparing against.
+                if (!settle()) return
+                baselines.set(id, new Set(files.map((f) => f.path)))
+            })
+            .catch(() => {
+                // Unknown baseline. Deliberately not an empty set, which would
+                // read as "the repo was clean" and make pre-existing dirt look
+                // new. Settled all the same: a rejection IS an arrival, and a
+                // failed capture must not hold off the self-heal that recovers
+                // from it.
+                settle()
+            })
+    } catch {
+        // A synchronous throw (a torn-down preload bridge) means there is no
+        // promise, so nothing will ever arrive. Clear the ticket, and never let
+        // this reach the launch or rebase path that called us.
+        settle()
+    }
 }
 
 /**
@@ -79,9 +108,15 @@ export function captureBaseline(id: string, cwd: string): void {
  * moment it mattered, the next evidence read re-establishes the baseline from
  * the paths it just fetched and lets the pause after that decide. Callers must
  * only adopt for a session they have just confirmed is still live.
+ *
+ * Stands down while a capture is outstanding. That capture was issued LATER
+ * than the read these paths came from - a rebase, most likely, which is a
+ * deliberate statement about what should stop counting - so overriding it with
+ * an older snapshot reinstates exactly the snap-back C1 fixed. Deferring costs
+ * one pause and fails closed: the baseline stays unknown, so nothing moves.
  */
 export function adoptBaseline(id: string, paths: readonly string[]): void {
-    captures.set(id, ++ticket)
+    if (captures.has(id)) return
     baselines.set(id, new Set(paths))
 }
 

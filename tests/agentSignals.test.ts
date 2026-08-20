@@ -202,10 +202,13 @@ describe("adoptBaseline", () => {
         forgetSignals("s-adopt")
     })
 
-    it("wins over a capture that was still in flight when it ran", async () => {
-        // The self-heal must be the answer that stands: it was taken from a read
-        // the caller had just completed, so an older pending capture landing on
-        // top of it would re-open the unknown it just closed.
+    it("stands down while a capture is in flight, and lets it win", async () => {
+        // N2. The adopt used to claim a fresh ticket, which SUPERSEDED a capture
+        // that was still out - and that capture is the later, truer answer: it
+        // was issued after the read these paths came from. A rebase capture
+        // dropped this way reinstates C1's snap-back exactly (see the store-level
+        // repro in tests/cardReview.test.ts). An outstanding capture is now
+        // knowable, and the self-heal defers to it.
         let release: (files: { path: string }[]) => void = () => undefined
         stubGitChanges(
             () =>
@@ -214,11 +217,55 @@ describe("adoptBaseline", () => {
                 })
         )
         captureBaseline("s-adopt2", "/repo")
-        adoptBaseline("s-adopt2", ["fresh.ts"])
+        adoptBaseline("s-adopt2", ["stale.ts"])
+        // Still unknown: deferring means the card does not advance this pause,
+        // which is the fail-closed direction.
+        expect(baselineOf("s-adopt2")).toBeUndefined()
 
-        release([{ path: "stale.ts" }])
+        release([{ path: "truer.ts" }])
         await new Promise((r) => setTimeout(r, 0))
-        expect(baselineOf("s-adopt2")).toEqual(new Set(["fresh.ts"]))
+        expect(baselineOf("s-adopt2")).toEqual(new Set(["truer.ts"]))
         forgetSignals("s-adopt2")
+    })
+
+    it("heals once a failed capture is known to have arrived", async () => {
+        // The other side of standing down: a capture that REJECTED is no longer
+        // outstanding, so the next self-heal must be allowed through. Holding
+        // off on a capture that will never arrive would restore the permanent
+        // stranding I2 exists to end.
+        stubGitChanges(async () => {
+            throw new Error("index.lock")
+        })
+        captureBaseline("s-adopt3", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-adopt3")).toBeUndefined()
+
+        adoptBaseline("s-adopt3", ["healed.ts"])
+        expect(baselineOf("s-adopt3")).toEqual(new Set(["healed.ts"]))
+        forgetSignals("s-adopt3")
+    })
+
+    it("heals after a capture with no directory to read", async () => {
+        // `captureBaseline(id, "")` issues nothing at all. It must not leave a
+        // phantom capture outstanding, or every later self-heal defers to a read
+        // that was never made.
+        stubGitChanges(async () => [])
+        captureBaseline("s-adopt4", "")
+        adoptBaseline("s-adopt4", ["healed.ts"])
+        expect(baselineOf("s-adopt4")).toEqual(new Set(["healed.ts"]))
+        forgetSignals("s-adopt4")
+    })
+
+    it("heals after a capture whose read throws synchronously", async () => {
+        // Same hazard as N1, one module over: a synchronous throw means no
+        // promise, so no arrival, so no ticket would ever be cleared. It must
+        // also not reach the launch/rebase path that called it.
+        stubGitChanges(() => {
+            throw new Error("bridge torn down")
+        })
+        expect(() => captureBaseline("s-adopt5", "/repo")).not.toThrow()
+        adoptBaseline("s-adopt5", ["healed.ts"])
+        expect(baselineOf("s-adopt5")).toEqual(new Set(["healed.ts"]))
+        forgetSignals("s-adopt5")
     })
 })

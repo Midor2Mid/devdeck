@@ -518,6 +518,62 @@ describe("a dispatched card reaching review", () => {
         expect(columnOf("t1")).toBe("review")
     })
 
+    it("does not let a self-heal discard the rebase capture that overtook it", async () => {
+        // N2, executed end to end. The read is in flight; the user parks the card
+        // in review and sends it straight back to doing inside that window. The
+        // drag invalidates the baseline (C1) and issues a rebase capture, which
+        // is the LATER and truer answer. The self-heal used to claim a newer
+        // ticket, discard that capture, and install the read's PRE-DRAG snapshot
+        // - so the file the agent wrote before the drag read as fresh work
+        // afterwards and the card snapped straight back to review having done
+        // nothing since. C1's failure, restored through I2's fix.
+        await seedBaseline([])
+        seedSession()
+        askedFor = []
+
+        // Every git read resolves on demand, in call order: [0] is the evidence
+        // read, [1] is the rebase capture the drag issues while it is out.
+        const pending: ((files: { path: string }[]) => void)[] = []
+        gitChanges = (): Promise<{ path: string }[]> =>
+            new Promise((r) => {
+                pending.push(r)
+            })
+
+        ptyData({ id: TERM, data: "wrote a.ts" })
+        await tick(IDLE_MS * 4)
+        expect(pending).toHaveLength(1)
+
+        // "Looks done" - then "no, keep going", both inside the read's window.
+        useStore.getState().moveBoardTask("t1", "review")
+        useStore.getState().moveBoardTask("t1", "doing")
+        await tick()
+        expect(pending).toHaveLength(2)
+        expect(baselineOf(TERM)).toBeUndefined()
+
+        // The read answers first, with the tree as it was BEFORE the drag.
+        pending[0]([])
+        await tick()
+        // Then the rebase capture, which correctly sees a.ts already dirty.
+        pending[1]([{ path: "a.ts" }])
+        await tick()
+        expect(baselineOf(TERM)).toEqual(new Set(["a.ts"]))
+
+        // So a.ts is not new work, and the card stays where the user put it.
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "a.ts" }]
+        ptyData({ id: TERM, data: "still going" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("doing")
+
+        // Post-drag work still counts, so nothing is stranded by deferring.
+        gitChanges = async (): Promise<{ path: string }[]> => [
+            { path: "a.ts" },
+            { path: "b.ts" }
+        ]
+        ptyData({ id: TERM, data: "wrote b.ts" })
+        await tick(IDLE_MS * 4)
+        expect(columnOf("t1")).toBe("review")
+    })
+
     it("rebases a card reopened from done, not only one sent back from review", async () => {
         // Reaching done never closes the pane: the pty and its baseline entry
         // both stay alive. So a reopened card still carried its LAUNCH-time
