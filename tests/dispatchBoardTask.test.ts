@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import { useStore } from "../src/renderer/src/store"
 import { useSettings, type AgentPreset, type RunMode } from "../src/renderer/src/settings"
 import { useConfirm } from "../src/renderer/src/confirm"
+import { baselineOf, forgetSignals } from "../src/renderer/src/agentSignals"
+import { getLastAt } from "../src/renderer/src/missionTail"
 
 /** A minimal, valid AgentPreset — only the fields a given test cares about need overriding. */
 function agentPreset(over: { id: string; name: string; runMode: RunMode }): AgentPreset {
@@ -149,6 +151,81 @@ describe("dispatchBoardTask with opts.agentId naming a normal-mode preset", () =
         expect(message).not.toContain("Shell Preset")
 
         useConfirm.getState().answer(false)
+        await dispatched
+    })
+})
+
+// The wiring the whole-branch review found untested: dispatch is the ONLY path
+// that writes task.termId, so it is the only launch the card's evidence
+// baseline is ever read against. Commenting the capture out left every suite
+// green - the card then compared a later `git status` against nothing, and
+// "unknown" meant no card could advance at all.
+describe("dispatching a card", () => {
+    /** Only the namespaces the dispatch path touches. */
+    function stubApi(dirty: string[]): void {
+        ;(globalThis as unknown as { window: unknown }).window = {
+            api: {
+                projects: { setActive: async (): Promise<void> => undefined },
+                git: { changes: async (): Promise<{ path: string }[]> => dirty.map((path) => ({ path })) },
+                pty: { input: (): void => undefined, kill: (): void => undefined },
+                workspace: { save: (): void => undefined },
+                settings: { save: (): void => undefined },
+                ledger: { append: (): void => undefined }
+            }
+        }
+    }
+
+    beforeEach(() => {
+        useConfirm.setState({ current: null })
+        stubApi(["already-dirty.ts"])
+        useSettings.setState({
+            agents: [agentPreset({ id: "claude-ai", name: "Claude", runMode: "agent" })],
+            routingRules: [],
+            defaultAgentId: "claude-ai",
+            usageLog: []
+        })
+        useStore.setState({
+            activeId: "p1",
+            projects: [{ id: "p1", name: "P1", path: "/repo", addedAt: Date.now() }],
+            tabsByProject: {},
+            termAgents: {},
+            termCwd: {},
+            boardTasks: [
+                {
+                    id: "t1",
+                    projectId: "p1",
+                    title: "Fix the login redirect",
+                    column: "todo",
+                    createdAt: Date.now()
+                }
+            ],
+            activity: []
+        })
+    })
+
+    it("captures the baseline for the session it stamps on the card", async () => {
+        const dispatched = useStore.getState().dispatchBoardTask("t1", { worktree: false })
+        await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
+        useConfirm.getState().answer(true)
+
+        await vi.waitFor(() =>
+            expect(useStore.getState().boardTasks.find((t) => t.id === "t1")?.column).toBe("doing")
+        )
+        const termId = useStore.getState().boardTasks.find((t) => t.id === "t1")?.termId
+        expect(termId).toBeTruthy()
+
+        // Fire-and-forget, so it lands a tick after the card does.
+        await vi.waitFor(() => expect(baselineOf(termId!)).toBeDefined())
+        // The dirt that was already there must be IN the baseline - that is the
+        // whole point of taking one. Without it the first quiet spell reads
+        // already-dirty.ts as the agent's work and files the card.
+        expect(baselineOf(termId!)).toEqual(new Set(["already-dirty.ts"]))
+
+        // The stall clock is stamped too: launch is when silence starts being
+        // measurable, whether or not this session is ever a card's.
+        expect(getLastAt(termId!)).toBeTruthy()
+
+        forgetSignals(termId!)
         await dispatched
     })
 })

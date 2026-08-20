@@ -16,7 +16,8 @@
 - **Do not run `npm run dev`** — live HMR on a mid-edit state crashes the dev process.
 - Do not launch the app; the controller owns the `run-app` verification pass.
 - **No write path may gain an `await` that blocks it, and none may throw.** The card auto-move sits inside a pty data handler.
-- Do not edit `AgentStatus`, the `store.ts:605-627` timer transition, `waitForIdle`, or `MainView`. If a task seems to require it, stop and report.
+- Do not change the **`AgentStatus` enum**, the **status values the idle timer sets** (`waiting`/`idle` at `store.ts:611-618`), `waitForIdle`, or `MainView`. If a task seems to require it, stop and report.
+  - Task 5 *does* edit the card-move block at `store.ts:619-623`, which sits inside that same timer callback. That is intended: the constraint is about the **status transition's semantics**, which `waitForIdle` and the mobile client read, not about those line numbers. Leave the `setStatus(id, away ? "waiting" : "idle")` call and its condition untouched; change only what happens to the card.
 - Renderer modules must not import `electron`. Use `window.api`.
 
 ## File Structure
@@ -93,6 +94,27 @@ Run: `npx vitest run tests/missionTail.test.ts`
 Expected: FAIL — `hasBell is not a function`.
 
 - [ ] **Step 3: Implement `hasBell` in `missionTail.ts`**
+
+> **The code below is WRONG and was superseded during implementation. Do not copy
+> it — read the shipped `hasBell` in `src/renderer/src/missionTail.ts` instead.**
+>
+> It shipped in `f990ce9` and took two fix rounds (`dd20a62`, `25ea28c`) to
+> correct. All three defects were the same shape — **a two-byte decision made
+> with fewer than two bytes in hand**:
+>
+> 1. A split *opener* (`ESC` ends a chunk, `]` starts the next) went unrecognised,
+>    so the OSC's terminating BEL read as a bell — the exact false positive this
+>    task exists to remove.
+> 2. A split *ST terminator* (`ESC` then `\`) left the session stuck open, and the
+>    next genuine bell was swallowed as a phantom terminator — a false negative,
+>    which is worse: a blocked agent is never flagged.
+> 3. A zero-length chunk arriving mid-pairing discarded the carried `ESC`,
+>    reopening both classes above.
+>
+> The fix carries a `pendingEsc` flag across chunks alongside the in-OSC flag, and
+> resolves it only when there is actually a byte to resolve against. Each of the
+> three was found by a reviewer **executing** the function; none was caught by
+> reading it, including by me when I wrote this block.
 
 Add beside the other module Maps (near `const lastAt = new Map<string, number>()`):
 
@@ -525,13 +547,15 @@ export function forgetSignals(id: string): void {
 
 - [ ] **Step 4: Wire capture and cleanup into the store**
 
-In `store.ts`, in the same `if (isAgentId(agentId))` block where Task 3 added `markLaunched(termId)`:
+**There are four agent-launch paths, not one.** Task 3 shipped with the stamp on `newTab` alone and had to be fixed, because `splitActive`, `openWorkspacePreset` and `startResumedAgent` each create agent panes directly. Do not repeat that: `captureBaseline` goes **beside every `logUsageStart` call site**, which is the invariant Task 3 established and documented on `markLaunched`. Grep for `logUsageStart` and `markLaunched` in `store.ts` — they are already co-located at all four, and this is the third member of that group.
+
+At each site, inside the existing `isAgentId(agentId)` gating so a plain shell never gets a baseline:
 
 ```ts
-                captureBaseline(termId, cwd ?? get().activeProject()?.path ?? "")
+                captureBaseline(termId, cwd)
 ```
 
-Use whatever expression the surrounding code already uses for the session's directory — the `logUsageStart` call immediately below resolves the same thing; match it rather than inventing a second rule.
+Pass the **same directory expression that site already passes to `logUsageStart`** — each of the four resolves it slightly differently (a worktree's `cwd`, the project path, a restored pane's `termCwd`), and the baseline must describe the directory the agent will actually work in. Match the neighbouring call rather than inventing a rule.
 
 Then in `forget(termId)` (around `store.ts:631-670`), beside the existing `forgetTail(termId)` call, add:
 

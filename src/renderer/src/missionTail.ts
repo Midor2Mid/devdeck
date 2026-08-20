@@ -113,13 +113,108 @@ import type { AgentStatus, AnySession } from "./store"
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
 
+// Per-session OSC-scanning state. `open` is true while inside an OSC escape
+// whose terminator (BEL or ST) has not arrived yet. `pendingEsc` is true when
+// the chunk ended on a lone, unpaired ESC — pty chunks can split anywhere, so
+// not only can the terminating BEL land in the *next* chunk, the two-byte
+// opener (ESC ]) and the two-byte ST terminator (ESC \) can each split across
+// the chunk boundary themselves, with the ESC in one chunk and its partner
+// byte in the next.
+interface OscState {
+    open: boolean
+    pendingEsc: boolean
+}
+const oscState = new Map<string, OscState>()
+
+/**
+ * Does this chunk contain a real BEL — as opposed to the BEL that terminates an
+ * OSC escape (a terminal-title set, an OSC 8 hyperlink)? Stateful per session so
+ * an OSC — or the two-byte opener/terminator that bounds it — split across
+ * chunks is never mistaken for a bell, and a real bell is never swallowed.
+ * Cleared by forgetTail.
+ */
+export function hasBell(id: string, chunk: string): boolean {
+    const prev = oscState.get(id)
+    let open = prev?.open ?? false
+    let pendingEsc = prev?.pendingEsc ?? false
+    let bell = false
+    let i = 0
+
+    // An empty chunk must be a complete no-op: with nothing to resolve
+    // pendingEsc against, entering the resolution branch below would discard
+    // it (there is no chunk[0] to pair it with), losing the carried ESC even
+    // though no byte actually arrived. Guarding on length here means a
+    // zero-length chunk — whether or not the pty ever actually emits one —
+    // can never be the reason a pairing across chunks is missed.
+    if (pendingEsc && chunk.length > 0) {
+        pendingEsc = false
+        const c = chunk[0]
+        if (!open && c === "]") {
+            open = true
+            i = 1
+        } else if (open && c === "\\") {
+            open = false
+            i = 1
+        }
+        // Otherwise the ESC carried from the last chunk did not pair with an
+        // opener or a terminator — it was some other escape (or nothing).
+        // `c` is deliberately NOT consumed here: it falls through to the loop
+        // below and is evaluated on its own merits. That is the safer of the
+        // two readings when we can't be sure what the lone ESC was for — at
+        // worst a stray bracket shows up in the tail, whereas discarding `c`
+        // could silently swallow a real bell in that position, which is the
+        // one outcome this function exists to prevent.
+    }
+
+    for (; i < chunk.length; i++) {
+        const c = chunk[i]
+        const next = chunk[i + 1]
+        if (open) {
+            // OSC ends at BEL or ST (ESC \). Either way it is not a bell.
+            if (c === "\x07") {
+                open = false
+            } else if (c === "\x1b") {
+                if (next === "\\") {
+                    open = false
+                    i++
+                } else if (next === undefined) {
+                    // ESC is the last byte of this chunk — its terminator
+                    // status is decided by the first byte of the next one.
+                    pendingEsc = true
+                }
+            }
+            continue
+        }
+        if (c === "\x1b") {
+            if (next === "]") {
+                open = true
+                i++
+            } else if (next === undefined) {
+                pendingEsc = true
+            }
+            continue
+        }
+        if (c === "\x07") bell = true
+    }
+    // Mutate the existing per-session record in place rather than allocating
+    // a fresh object on every chunk — this runs on every pty chunk of every
+    // session, and a session's record already exists after its first chunk.
+    if (prev) {
+        prev.open = open
+        prev.pendingEsc = pendingEsc
+    } else {
+        oscState.set(id, { open, pendingEsc })
+    }
+    return bell
+}
+
 const BUCKET_MS = 2000
 const BUCKETS = 60
 /**
  * The trace window's width in ms, and isStalled's default silence threshold —
  * historically the same number, but the two no longer read each other:
- * isStalled looks only at wall-clock silence on a "working" session, the trace
- * only at recent output volume.
+ * isStalled looks at wall-clock silence on a session something is waiting on,
+ * the trace only at recent output volume.
  */
 export const STALL_MS = BUCKET_MS * BUCKETS
 /** Characters in one bucket that count as a full-height bar. */
@@ -234,6 +329,7 @@ export function forgetTail(id: string): void {
     tails.delete(id)
     lastAt.delete(id)
     rings.delete(id)
+    oscState.delete(id)
 }
 
 /** A short "time since" label: "" · "now" · "35s" · "2m" · "1h". */
@@ -247,16 +343,82 @@ export function relTime(now: number, then?: number): string {
 }
 
 /**
- * A "working" agent that hasn't produced output for longer than `thresholdMs`
- * is likely stalled or stuck in a loop — worth surfacing so you can check on it.
+ * The sessions something is currently WAITING ON: a board card in `doing` that
+ * names the session, or the pipeline step a live run is blocked on.
+ *
+ * This is what makes a stall a stall. Status cannot separate "stuck" from
+ * "finished" — that is the spec's own point, and why isStalled ignores it — but
+ * expectation can: if nothing is waiting on a session, its silence is the normal
+ * resting state of an agent that finished and handed back to you, and saying
+ * "stalled" about it is noise.
+ *
+ * Structurally typed rather than importing BoardTask / PipelineRun, so this
+ * module still has no dependency on the store it would otherwise have to reach
+ * into. Pure: callers pass the state in.
+ */
+export function awaitedTermIds(
+    cards: readonly { column: string; termId?: string }[],
+    run: { status: string; steps: readonly { status: string; termId?: string }[] } | null | undefined
+): Set<string> {
+    const ids = new Set<string>()
+    // A card in review or done is not waiting on its agent — you are. Only
+    // `doing` is an outstanding expectation, the same column the evidence read
+    // gates the card move on.
+    for (const c of cards) if (c.column === "doing" && c.termId) ids.add(c.termId)
+    // "waiting" is the run's word for "the agent asked the user something" — the
+    // step is still the reason that session is being watched. paused/done/
+    // stopped/error are not blocked on any agent.
+    if (run && (run.status === "running" || run.status === "waiting")) {
+        for (const s of run.steps) if (s.status === "running" && s.termId) ids.add(s.termId)
+    }
+    return ids
+}
+
+/**
+ * A live session something is waiting on that has produced no output for longer
+ * than `thresholdMs` is stalled — stuck in a loop, waiting on something that
+ * will not arrive, or dead without exiting.
+ *
+ * This deliberately does NOT read AgentStatus. `working` cannot survive
+ * `agentIdleMs` (1s by default), so a status-based stall check could never fire;
+ * quiet duration plus liveness can. `lastAt` is stamped at launch by
+ * markLaunched, so a session that crashed before printing anything still counts.
+ *
+ * `awaited` is what keeps that from marking everything. `alive` is structurally
+ * true for every session the Mission grid renders, so quiet-and-live alone flags
+ * every agent that finished its turn and every pane opened and never typed into
+ * — a marker that is always on, which carries exactly as much information as one
+ * that never fires. See awaitedTermIds for what counts as waiting on a session.
  */
 export function isStalled(
-    status: AgentStatus,
     lastAt: number | undefined,
+    alive: boolean,
+    awaited: boolean,
     now: number,
     thresholdMs = STALL_MS
 ): boolean {
-    return status === "working" && !!lastAt && now - lastAt > thresholdMs
+    return alive && awaited && !!lastAt && now - lastAt > thresholdMs
+}
+
+/**
+ * Stamp a launch instant, so "has emitted nothing since it started" is a
+ * measurable silence rather than an unknown. Never overwrites a real output
+ * time — recordTail always wins.
+ *
+ * Invariant: every agent-launch path must call this beside its
+ * `logUsageStart` call — that call is made on every path that spawns an agent
+ * pty (currently `newTab`, `startResumedAgent`, `splitActive`, and
+ * `openWorkspacePreset` in store.ts), so it is where the next new launch path
+ * should add this too rather than assume `newTab` covers it.
+ *
+ * That invariant is no longer only a sentence: tests/signalSites.test.ts scans
+ * store.ts and fails if any `logUsageStart(` is not preceded by a
+ * `markLaunched(`. A launch path that forgets this one is a session whose
+ * silence is unmeasurable, and the unit tests here call markLaunched directly,
+ * so nothing else would notice.
+ */
+export function markLaunched(id: string, now = Date.now()): void {
+    if (!lastAt.has(id)) lastAt.set(id, now)
 }
 
 const RANK: Record<AgentStatus, number> = { attention: 0, waiting: 1, working: 2, idle: 3 }

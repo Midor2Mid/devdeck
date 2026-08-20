@@ -4,6 +4,9 @@ import {
     useSettings,
     missingRecommended,
     aiModeAgents,
+    commitIdleMs,
+    idleFieldValue,
+    IDLE_MIN,
     type ShellKind,
     type GitAccount,
     type AgentPreset,
@@ -952,6 +955,10 @@ function AgentsSection(): JSX.Element {
     const addRecommended = useSettings((s) => s.addRecommended)
     const agentIdleMs = useSettings((s) => s.agentIdleMs)
     const setAgentIdleMs = useSettings((s) => s.setAgentIdleMs)
+    // The half-typed field, or null when it is not being edited. The stored
+    // value is always clamped; the draft deliberately is not, so a value can be
+    // typed a digit at a time (see idleFieldValue / commitIdleMs).
+    const [idleDraft, setIdleDraft] = useState<string | null>(null)
     const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
 
     // Which API-key env vars are present in the environment terminals inherit.
@@ -1098,14 +1105,38 @@ function AgentsSection(): JSX.Element {
                 )}
             </div>
             <div className="setting-row" style={{ marginTop: 18 }}>
-                <label>Idle → attention (ms)</label>
+                <label>Quiet after (ms)</label>
                 <input
                     type="number"
-                    min={300}
-                    max={5000}
+                    min={IDLE_MIN}
                     step={100}
-                    value={agentIdleMs}
-                    onChange={(e) => setAgentIdleMs(Number(e.target.value))}
+                    value={idleFieldValue(idleDraft, agentIdleMs)}
+                    onChange={(e) => setIdleDraft(e.target.value)}
+                    onBlur={() => {
+                        setAgentIdleMs(commitIdleMs(idleDraft, agentIdleMs))
+                        setIdleDraft(null)
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur()
+                    }}
+                    // Escape while a draft is pending CANCELS the edit, and says
+                    // so by repainting the stored value. Commit-on-blur made this
+                    // the one field whose typing could vanish: the modal's Escape
+                    // unmounts the input, and React fires no blur on unmount, so
+                    // a typed number was silently dropped and Settings closed on
+                    // top of it. Capture, not bubble, and stopPropagation - the
+                    // same reasoning as the device-name input below: Modal.tsx
+                    // renders children inline and its own Escape handler is a
+                    // native bubble-phase listener on a real DOM ancestor, which
+                    // therefore runs BEFORE React's bubble dispatch. Only the
+                    // capture phase gets in front of it. Escape with no draft
+                    // pending is left alone, so it still closes Settings.
+                    onKeyDownCapture={(e) => {
+                        if (e.key === "Escape" && idleDraft !== null) {
+                            e.stopPropagation()
+                            setIdleDraft(null)
+                        }
+                    }}
                 />
             </div>
             <p className="settings-hint">

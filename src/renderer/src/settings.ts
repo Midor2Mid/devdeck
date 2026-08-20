@@ -365,6 +365,48 @@ function generateToken(): string {
 
 export const DEFAULT_ACCENT = "#b8895c"
 
+export const IDLE_MIN = 300
+// No practical ceiling - this is "how long before we call an agent quiet", not a
+// claim that it finished. Bounded only so a typo cannot disable the signal.
+export const IDLE_MAX = 600_000
+export const DEFAULT_IDLE_MS = 1000
+
+/** A usable idle threshold, whatever the input. Junk falls back to the default. */
+export function clampIdleMs(ms: unknown): number {
+    if (typeof ms !== "number" || !Number.isFinite(ms)) return DEFAULT_IDLE_MS
+    return Math.min(IDLE_MAX, Math.max(IDLE_MIN, Math.ceil(ms)))
+}
+
+/**
+ * What the "Quiet after (ms)" input renders: the half-typed draft while the
+ * field is being edited, the stored value when it is not.
+ *
+ * The field is edited as TEXT and clamped only on commit. Clamping a controlled
+ * numeric input on every keystroke makes it fight the user: typing 2500 clamps
+ * the first "2" to 300, repaints, and appends the remaining digits to THAT - so
+ * no value whose first digit falls below the floor can be typed, and the field
+ * can never be cleared to start again.
+ */
+export function idleFieldValue(draft: string | null, stored: number): string {
+    return draft ?? String(stored)
+}
+
+/**
+ * The value to store when the field commits (blur / Enter). Anything unusable -
+ * an empty field, a stray letter - keeps the last good value rather than
+ * snapping to the default, which would silently discard a setting the user
+ * chose. What IS stored is always clamped, so the loose typing above never
+ * reaches the idle timer.
+ */
+export function commitIdleMs(draft: string | null, stored: number): number {
+    if (draft === null) return stored
+    const text = draft.trim()
+    if (!text) return stored
+    const parsed = Number(text)
+    if (!Number.isFinite(parsed)) return stored
+    return clampIdleMs(parsed)
+}
+
 const DEFAULTS: AppSettings = {
     terminal: {
         shell: "powershell",
@@ -379,7 +421,7 @@ const DEFAULTS: AppSettings = {
         minimap: false
     },
     agents: RECOMMENDED_COMMANDS,
-    agentIdleMs: 1000,
+    agentIdleMs: DEFAULT_IDLE_MS,
     snippets: [
         {
             id: "review",
@@ -747,7 +789,7 @@ export const useSettings = create<SettingsState>((set, get) => {
                         icon: a.icon ?? "",
                         category: a.category ?? ""
                     })),
-                    agentIdleMs: raw.agentIdleMs ?? DEFAULTS.agentIdleMs,
+                    agentIdleMs: clampIdleMs(raw.agentIdleMs),
                     snippets: raw.snippets ?? DEFAULTS.snippets,
                     pipelines: raw.pipelines ?? DEFAULTS.pipelines,
                     triggers: raw.triggers ?? DEFAULTS.triggers,
@@ -839,7 +881,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             return missing.length
         },
         setAgentIdleMs: (ms) => {
-            set({ agentIdleMs: ms })
+            set({ agentIdleMs: clampIdleMs(ms) })
             persist()
         },
         setSnippets: (snippets) => {

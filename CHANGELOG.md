@@ -1,5 +1,82 @@
 # Changelog
 
+## Unreleased
+
+Four signals DevDeck uses to tell you an agent needs you, and one of them was
+wrong three different ways. Six tasks, several needing more than one fix round
+before they held up.
+
+- **A dispatched card now reaches "review" on evidence, not on a pause.** The
+  card board used to slide a dispatched card from *doing* to *review* the
+  moment its agent's terminal went quiet for `agentIdleMs` — one second by
+  default — whether or not it had written anything. An agent thinking through
+  a hard problem, or answering a question with no file touched at all, filed
+  itself as finished. DevDeck now snapshots the session's directory when the
+  card enters *doing* and only advances the card once `git status` shows a
+  path that wasn't dirty at that snapshot — a real, new change, not a silence.
+  Re-entering *doing* (reopening a card, or sending it back for another pass)
+  takes a fresh snapshot, so a card given more work doesn't get yanked forward
+  again on the very next pause — and if that snapshot fails, the baseline is
+  dropped rather than kept, so a card sent back for more work can never snap
+  straight to *review* on the strength of the work that got it there. A card
+  also stays put while its agent is waiting on a permission prompt: quiet with
+  three files written is what "blocked halfway" looks like too, and handing you
+  a half-applied change as "ready for review" is the same lie in a new place.
+  A snapshot that never happened (or failed) is no longer permanent either —
+  the next pause re-establishes it and the pause after that decides, instead of
+  the card sitting in *doing* for the rest of the session.
+  **This fixes the card, not the chrome:** on a thinking pause the tile still
+  flips to "waiting", the deck badge still counts it and the soft beep still
+  fires. The status transition is deliberately out of scope — a thinking pause
+  no longer files a card as finished, but DevDeck has not stopped saying your
+  agent went quiet.
+- **A terminal title is no longer read as a request for attention.** `\x07`
+  (BEL) is both the terminal bell *and* the byte that terminates an OSC escape
+  sequence — the same one a shell prompt or a CLI uses to set its terminal's
+  title, or to emit an OSC-8 hyperlink. DevDeck's "agent rang the bell" signal
+  fired on both, so an agent naming its own tab could mark itself as needing
+  you. It now tracks, per session, whether it is inside an OSC sequence, so
+  only a genuine bell raises attention — including when the escape sequence's
+  bytes are split across two separate chunks of pty output, which happens
+  routinely.
+- **Fix: a stalled agent could never actually be flagged.** The stalled check
+  required a session to still read as "working" after 120 seconds of silence,
+  but the idle timer always clears "working" within about a second — so the
+  two conditions could never both be true, and the check had never fired in
+  production. It also required a last-output timestamp that was only ever
+  stamped on real output, so an agent that crashed before printing a single
+  line was invisible to it. Every agent-launch path now stamps a launch time up
+  front, so silence is measurable from the first second. And because "quiet for
+  two minutes" is also the normal resting state of an agent that finished and
+  handed back to you, stalled asks one more question: is anything actually
+  waiting on this session — a card in *doing*, or a pipeline step blocked on it?
+  If not, its silence is not a stall, and the tile says nothing. A marker that
+  is always on tells you as little as one that never fires.
+- **The "quiet after" threshold is now a real bound, and still typeable.** Its
+  `min`/`max` were HTML attributes only — nothing stopped a typed value (or an
+  emptied field, which reads as `0`) from reaching the setting itself. Both the
+  setter and the settings loader now clamp it. The clamp lands when you leave
+  the field, not on every keystroke: clamping mid-typing meant the first `2` of
+  `2500` became `300` and the rest was appended to that, so any value starting
+  below the floor was untypeable and the field could never be cleared. The
+  previous 5-second ceiling is gone on purpose: this number answers "how long
+  before we call an agent quiet," not "how long before its work is done," so
+  there's no reason to cap it low.
+- **Fix: a failed `git status` used to read as a clean working tree.** The
+  change-review helper swallowed any git failure and resolved an empty list —
+  indistinguishable from "nothing changed." That's fatal for a baseline: a
+  transient failure (no git on PATH, an `.git/index.lock` held by another
+  operation, the read timing out) would make a card that was mid-work look
+  finished. It now rejects instead, and every caller decides for itself
+  whether "unknown" should read as "nothing to show" or as "no evidence yet."
+- **The deck groups the supervision keys apart from the verification tools.**
+  Mission, Tasks, and Terminal now sit visually apart from API, Database,
+  Browser, Network, and Editor behind a hairline divider — no border box, no
+  new chrome, just a gap that says "these two rows answer different
+  questions." **No shortcut changed**: `Ctrl+1`–`Ctrl+8` keep meaning exactly
+  what they meant before, since the views were already ordered
+  supervision-first.
+
 ## 0.8.0 - 2026-08-18
 
 Two unrelated pieces of hardening: who a task-board card dispatches to, and who

@@ -8,7 +8,8 @@ import {
     sortForFollow,
     getTrace,
     barsPath,
-    isStalled
+    isStalled,
+    awaitedTermIds
 } from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
 import type { SystemInfo } from "../../../preload/index"
@@ -33,6 +34,14 @@ export function MissionControl(): JSX.Element {
     const agentStatus = useStore((s) => s.agentStatus)
     const termAgents = useStore((s) => s.termAgents)
     const termNames = useStore((s) => s.termNames)
+    // The two places an outstanding expectation on a session is recorded. Both
+    // are stable slices, so subscribing to them is safe; the Set is derived in
+    // the body below rather than inside a selector, because a SELECTOR returning
+    // a fresh Set on every call is the getSnapshot trap (see NOTES). Deriving it
+    // here carries none of that risk and needs no memo - one pass over
+    // boardTasks, on a component that already re-renders once a second.
+    const boardTasks = useStore((s) => s.boardTasks)
+    const pipelineRun = useStore((s) => s.pipelineRun)
     void tabsByProject
     void agentStatus
     void termAgents
@@ -40,6 +49,8 @@ export function MissionControl(): JSX.Element {
 
     // Attention-first: the agent that needs you floats to the top.
     const sessions = sortForFollow(agentSessions())
+    // A quiet agent is only stalled if something is actually waiting on it.
+    const awaited = awaitedTermIds(boardTasks, pipelineRun)
     const totalAgents = sessions.length
     const attention = sessions.filter((s) => s.status === "attention").length
 
@@ -129,7 +140,12 @@ export function MissionControl(): JSX.Element {
                     projectName: s.projectName,
                     files: (
                         await window.api.git
-                            .changes(st.termCwd[s.termId] ?? s.projectPath)
+                            // M6: through sessionCwd, not a second spelling of it.
+                            // `?? projectPath` and `|| projectPath` disagree for an
+                            // empty-string termCwd entry, so the conflict map could
+                            // read a different directory than the card evidence for
+                            // the same session - the mismatch b66a23e existed to end.
+                            .changes(st.sessionCwd(s.termId))
                             .catch(() => [])
                     ).map((c) => c.path)
                 }))
@@ -170,7 +186,12 @@ export function MissionControl(): JSX.Element {
                             const ago = relTime(Date.now(), getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
                             const trace = getTrace(s.termId)
-                            const stalled = isStalled(s.status, getLastAt(s.termId), Date.now())
+                            const stalled = isStalled(
+                                getLastAt(s.termId),
+                                !!termAgents[s.termId],
+                                awaited.has(s.termId),
+                                Date.now()
+                            )
                             return (
                                 <div
                                     key={s.termId}

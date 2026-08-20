@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Project, WorkItem, CheckResult } from "../../preload/index"
+import type { Project, WorkItem, CheckResult, ChangeFile } from "../../preload/index"
 import { useSettings, aiModeAgents } from "./settings"
 import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
 import {
@@ -18,7 +18,22 @@ import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } f
 import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses } from "./gate"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
-import { recordTail, forgetTail, recordRate } from "./missionTail"
+import {
+    recordTail,
+    forgetTail,
+    recordRate,
+    hasBell,
+    markLaunched,
+    getFullTail
+} from "./missionTail"
+import { detectApproval } from "./approval"
+import {
+    captureBaseline,
+    adoptBaseline,
+    forgetSignals,
+    newPathsSince,
+    baselineOf
+} from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -157,6 +172,13 @@ interface AppState extends Persisted {
      * they have both written. Hits git per live session, so call it on demand.
      */
     holdersIn: (cwd: string) => Promise<CwdHolder[]>
+    /**
+     * The directory a session's git reads resolve against. Exposed because more
+     * than one view asks the same question, and two spellings of it drifted
+     * apart once already (`?? projectPath` vs `|| projectPath`, which differ for
+     * an empty-string entry). One rule, one expression.
+     */
+    sessionCwd: (termId: string) => string
 
     // Agent bake-off: race two or three agents on one card, each in its own
     // worktree (runtime-only — the worktrees themselves are the recovery story
@@ -476,6 +498,33 @@ export const useStore = create<AppState>((set, get) => {
         persistTimer = setTimeout(writeNow, 300)
     }
 
+    /**
+     * The directory a session's git evidence is read against.
+     *
+     * `captureBaseline` and the idle-timer evidence read MUST resolve the SAME
+     * directory, through this one expression. The two produce path sets that are
+     * compared against each other, so a baseline taken in the project root and a
+     * status read taken in a worktree compare nothing meaningful: every path
+     * would look new, and the card would move on no evidence at all.
+     *
+     * `||`, not `??`: an empty-string termCwd entry falls through to the project
+     * path, the same way logUsageStart resolves the same session. The activeId
+     * fallback came from startResumedAgent and is kept deliberately: a dispatch
+     * into a project whose panes are not yet registered in tabsByProject would
+     * otherwise resolve no directory at all.
+     *
+     * Known and not engineered around: this reads live store state at call time,
+     * so editing a project's path between a session's launch and a later
+     * evidence read would still resolve two different directories. Pre-existing,
+     * vanishingly rare, and the cost of guarding it (pinning a directory per
+     * session) is not worth paying - but written down so it is not rediscovered.
+     */
+    const sessionCwd = (termId: string): string =>
+        get().termCwd[termId] ||
+        get().projects.find((p) => p.id === (get().projectIdOfTerm(termId) ?? get().activeId))
+            ?.path ||
+        ""
+
     const setStatus = (termId: string, status: AgentStatus): void => {
         if (get().agentStatus[termId] === status) return
         // Stamp / clear when a session enters or leaves a wants-you state.
@@ -584,6 +633,11 @@ export const useStore = create<AppState>((set, get) => {
         }))
     }
 
+    // Sessions with an evidence read out right now — see the guard in the idle
+    // timer below. Cleared by the read itself, and by forget() for the case
+    // where a pane closes while its read is in flight.
+    const evidenceInFlight = new Set<string>()
+
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
         if (!isAgentId(get().agentOf(id))) return
         // Keep a cleaned tail of this agent's output for the Mission Control peek.
@@ -591,7 +645,7 @@ export const useStore = create<AppState>((set, get) => {
         // …and its committed-output rate, for the tile's trace.
         recordRate(id, data)
         const visible = isVisible(id)
-        if (data.includes("\x07") && !visible) {
+        if (hasBell(id, data) && !visible) {
             const was = get().agentStatus[id]
             setStatus(id, "attention")
             if (was !== "attention") {
@@ -615,12 +669,92 @@ export const useStore = create<AppState>((set, get) => {
                         const away = !isVisible(id)
                         setStatus(id, away ? "waiting" : "idle")
                         if (away) notifyWaiting()
-                        // A dispatched task whose agent just finished a turn is ready to review.
-                        set((s) => ({
-                            boardTasks: s.boardTasks.map((t) =>
-                                t.termId === id && t.column === "doing" ? { ...t, column: "review" } : t
-                            )
-                        }))
+                        // A dispatched card moves to review only on EVIDENCE the
+                        // agent produced something — not because it went quiet for
+                        // a second. Unawaited so the timer stays synchronous, and
+                        // fully caught: failing to move a card must never break a
+                        // pty handler.
+                        void (async () => {
+                            try {
+                                // `find`, not the blanket `map` this replaced: a
+                                // termId belongs to exactly one dispatched card
+                                // (dispatchBoardTask stamps it on one), and the
+                                // re-check below has to name the card it re-checked
+                                // to mean anything.
+                                const task = get().boardTasks.find(
+                                    (t) => t.termId === id && t.column === "doing"
+                                )
+                                if (!task) return
+                                // "Quiet with evidence" is also true of "blocked
+                                // mid-task": an agent that writes three files and
+                                // then asks `Do you want to proceed? 1. Yes 2. No`
+                                // is quiet, has real evidence, and is waiting on a
+                                // keystroke. Filing that as ready for review hands
+                                // you a half-applied change. detectApproval is the
+                                // same classifier the Overview's one-click approve
+                                // uses - pure, renderer-side, and cheaper than the
+                                // git read it skips, so it goes before the spawn.
+                                if (detectApproval(getFullTail(id, 16))) return
+                                // sessionCwd, not termCwd directly: a dispatch with
+                                // the worktree box off records no termCwd entry at
+                                // all, and reading termCwd alone stranded every
+                                // non-isolated card in doing forever.
+                                const cwd = sessionCwd(id)
+                                if (!cwd) return
+                                // One read per session at a time. The spawn is per
+                                // PAUSE, not per turn - a turn with ten thinking
+                                // pauses is ten `git status` spawns - and without
+                                // this a read that outlives the next pause overlaps
+                                // itself, up to the 8s execFile timeout each.
+                                // Skipping is free: the next pause reads again.
+                                if (evidenceInFlight.has(id)) return
+                                evidenceInFlight.add(id)
+                                // A finally BLOCK, not a `.finally()` chained onto
+                                // the call: if `changes` throws SYNCHRONOUSLY (a
+                                // torn-down preload bridge) there is no promise to
+                                // chain onto, the add has already happened, and
+                                // nothing would ever release it - the outer catch
+                                // swallows the throw and that session is deaf for
+                                // the rest of its life.
+                                let files: ChangeFile[]
+                                try {
+                                    files = await window.api.git.changes(cwd)
+                                } finally {
+                                    evidenceInFlight.delete(id)
+                                }
+                                const paths = files.map((f) => f.path)
+                                // An UNKNOWN baseline used to be permanent: this
+                                // read is armed only by onPtyData and runs once per
+                                // idle expiry, and an agent that has finished emits
+                                // nothing more - so one transient `git status`
+                                // failure at the one moment it mattered stranded
+                                // that card in doing for the rest of the session,
+                                // silently. Adopt what is dirty NOW as the baseline
+                                // and let the next pause judge against it: unknown
+                                // self-heals instead of being terminal. Nothing
+                                // moves on this pass - these paths are a starting
+                                // point, not evidence.
+                                if (!baselineOf(id)) {
+                                    // Only for a session still live: this writes
+                                    // into a module Map that forget() has already
+                                    // cleared if the pane closed while we awaited.
+                                    if (get().termAgents[id]) adoptBaseline(id, paths)
+                                    return
+                                }
+                                const fresh = newPathsSince(baselineOf(id), paths)
+                                if (fresh.length === 0) return
+                                set((s) => ({
+                                    boardTasks: s.boardTasks.map((t) =>
+                                        t.id === task.id && t.column === "doing"
+                                            ? { ...t, column: "review" }
+                                            : t
+                                    )
+                                }))
+                            } catch {
+                                // Leave the card in doing. "Still working" is the
+                                // honest reading when we cannot tell.
+                            }
+                        })()
                     }
                 },
                 useSettings.getState().agentIdleMs
@@ -633,7 +767,9 @@ export const useStore = create<AppState>((set, get) => {
         if (t) clearTimeout(t)
         idleTimers.delete(termId)
         pendingSince.delete(termId)
+        evidenceInFlight.delete(termId)
         forgetTail(termId)
+        forgetSignals(termId)
         const closingAgent = get().termAgents[termId] ?? SHELL
         if (isAgentId(closingAgent)) {
             // Before logUsageEnd, which stamps the event this reads its start from.
@@ -1183,6 +1319,26 @@ export const useStore = create<AppState>((set, get) => {
                     return { ...t, column }
                 })
             }))
+            // ENTERING `doing` rebases the session's evidence. Stated as a rule
+            // about the destination on purpose, not as a list of source columns:
+            // a path that was fresh against the launch baseline stays fresh for
+            // the session's life, so any card put back to work would be yanked
+            // forward to review on the very next idle pause having produced
+            // nothing - the same "moved without evidence" complaint this whole
+            // fix exists to answer, one level up. review -> doing ("not done,
+            // keep going") and done -> doing (reopened; reaching done never
+            // closed the pane, so its baseline is still the launch-time one) are
+            // the same failure, and a column added later would be too.
+            // todo -> doing matches as well, which is right: a card being
+            // activated should start from a fresh baseline.
+            //
+            // Guarded on a LIVE agent session - once the pane is gone there is
+            // nothing to baseline, and captureBaseline overwrites, so from here
+            // only work done after the move counts.
+            const enteringDoing = column === "doing" && !!before && before.column !== column
+            if (enteringDoing && before.termId && isAgentId(get().agentOf(before.termId))) {
+                captureBaseline(before.termId, sessionCwd(before.termId))
+            }
             persist()
             // Written after the move, so a card that fails to record still moves.
             // Moving back out of done does not retract it: it was true when written.
@@ -1219,11 +1375,14 @@ export const useStore = create<AppState>((set, get) => {
             set((s) => ({ boardTasks: s.boardTasks.filter((t) => t.id !== id) }))
             persist()
         },
+        sessionCwd,
         holdersIn: async (cwd) => {
             const st = get()
             const entries = await Promise.all(
                 st.agentSessions().map(async (s) => {
-                    const dir = st.termCwd[s.termId] ?? s.projectPath
+                    // Same one rule as the evidence read and the conflict map: an
+                    // empty-string termCwd entry must fall through, not be kept.
+                    const dir = sessionCwd(s.termId)
                     return {
                         termId: s.termId,
                         sessionName: s.sessionName,
@@ -1340,6 +1499,18 @@ export const useStore = create<AppState>((set, get) => {
                         : t
                 )
             }))
+            // The card's baseline, taken where the card starts - not where the
+            // pane does. Only this path ever writes task.termId, so this and the
+            // rebase in moveBoardTask are the only two captures any reader can
+            // reach; capturing on every launch instead meant splitActive and
+            // openWorkspacePreset each fired a `git status` for a baseline
+            // nothing could ever consult (a six-pane preset fired six), and a
+            // fifth launch path would have had to remember to join in.
+            //
+            // After the set above, so sessionCwd resolves the worktree this
+            // dispatch may have just created; before the 2800ms boot wait, which
+            // is orders of magnitude more than this IPC round-trip needs.
+            captureBaseline(termId, sessionCwd(termId))
             persist()
             // Let the agent CLI boot, then send the task as its first prompt.
             await sleep(2800)
@@ -2362,6 +2533,7 @@ export const useStore = create<AppState>((set, get) => {
                 view: "terminal"
             }))
             if (isAgentId(agentId)) {
+                markLaunched(termId)
                 pushActivity("start", termId, `${tab.name} · started`)
                 // The directory, not just the project: an isolated session runs in
                 // `cwd` (a worktree), which is its own transcript folder.
@@ -2427,6 +2599,7 @@ export const useStore = create<AppState>((set, get) => {
             // to the project path the same way newTab's logUsageStart call does,
             // rather than being kept as a cwd-less event.
             const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
+            markLaunched(termId)
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
 
@@ -2455,8 +2628,8 @@ export const useStore = create<AppState>((set, get) => {
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: newTermId },
                 lastAgentTermId: isAgentId(agentId) ? newTermId : s.lastAgentTermId
             })
-            if (isAgentId(agentId))
-                // A split inherits the project's own tree — splitActive takes no cwd.
+            if (isAgentId(agentId)) {
+                markLaunched(newTermId)
                 useSettings
                     .getState()
                     .logUsageStart(
@@ -2465,6 +2638,7 @@ export const useStore = create<AppState>((set, get) => {
                         projectId,
                         s.projects.find((p) => p.id === projectId)?.path
                     )
+            }
             persist()
         },
 
@@ -2612,7 +2786,8 @@ export const useStore = create<AppState>((set, get) => {
                 view: "terminal"
             }))
             window.api.projects.setActive(pid)
-            for (const termId of startedAgents)
+            for (const termId of startedAgents) {
+                markLaunched(termId)
                 useSettings
                     .getState()
                     .logUsageStart(
@@ -2621,6 +2796,7 @@ export const useStore = create<AppState>((set, get) => {
                         pid,
                         get().projects.find((p) => p.id === pid)?.path
                     )
+            }
             persist()
         },
 

@@ -6,12 +6,18 @@ import {
     sortForFollow,
     lastLines,
     isStalled,
+    awaitedTermIds,
+    markLaunched,
+    getLastAt,
+    recordTail,
     printableDelta,
     CARRY_MAX,
     recordRate,
     getTrace,
     barsPath,
-    STALL_MS
+    STALL_MS,
+    hasBell,
+    forgetTail
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 import type { DeltaState } from "../src/renderer/src/missionTail"
@@ -89,18 +95,104 @@ describe("lastLines", () => {
 
 describe("isStalled", () => {
     const now = 1_000_000
-    it("flags a working agent with no output past the threshold", () => {
-        expect(isStalled("working", now - 5 * 60000, now, 2 * 60000)).toBe(true)
+    it("flags a live session something is waiting on that has gone quiet", () => {
+        expect(isStalled(now - 10 * 60000, true, true, now, 2 * 60000)).toBe(true)
     })
-    it("does not flag recent working agents", () => {
-        expect(isStalled("working", now - 30000, now, 2 * 60000)).toBe(false)
+    it("does not flag a session that spoke recently", () => {
+        expect(isStalled(now - 30000, true, true, now, 2 * 60000)).toBe(false)
     })
-    it("only applies to working status", () => {
-        expect(isStalled("idle", now - 10 * 60000, now, 2 * 60000)).toBe(false)
-        expect(isStalled("attention", now - 10 * 60000, now, 2 * 60000)).toBe(false)
+    it("does not flag a dead session", () => {
+        // Nothing to check on: the pane is gone, not stuck.
+        expect(isStalled(now - 10 * 60000, false, true, now, 2 * 60000)).toBe(false)
     })
-    it("needs a known last-output time", () => {
-        expect(isStalled("working", undefined, now, 2 * 60000)).toBe(false)
+    it("does not flag a quiet session nothing is waiting on", () => {
+        // THE REGRESSION IN THE OTHER DIRECTION. Quiet + live is the normal
+        // resting state of an agent that finished its turn and is waiting for
+        // YOU, and of every pane opened and never typed into (markLaunched
+        // starts the clock at launch). Marking those stalled put the stripe on
+        // every tile over a lunch break, and a marker that is always on carries
+        // no information - the same defect as never firing, wearing the
+        // opposite sign. Status cannot separate stuck from finished, so the gate
+        // is EXPECTATION: is anything actually waiting on this session?
+        expect(isStalled(now - 10 * 60000, true, false, now, 2 * 60000)).toBe(false)
+    })
+    it("flags a session that launched and never emitted anything", () => {
+        // The crashed-CLI case, unreachable before markLaunched: lastAt is the
+        // launch instant rather than undefined, so silence is measurable.
+        markLaunched("crashed-cli", now - 10 * 60000)
+        expect(isStalled(getLastAt("crashed-cli"), true, true, now, 2 * 60000)).toBe(true)
+        forgetTail("crashed-cli")
+    })
+    it("cannot judge a session with no timestamp at all", () => {
+        expect(isStalled(undefined, true, true, now, 2 * 60000)).toBe(false)
+    })
+})
+
+describe("awaitedTermIds", () => {
+    const doing = { column: "doing", termId: "t1" }
+
+    it("counts a board card in doing that names the session", () => {
+        expect(awaitedTermIds([doing], null).has("t1")).toBe(true)
+    })
+    it("ignores a card in any other column", () => {
+        // A card in review or done is not waiting on its agent - you are.
+        const ids = awaitedTermIds(
+            [
+                { column: "todo", termId: "t1" },
+                { column: "review", termId: "t2" },
+                { column: "done", termId: "t3" }
+            ],
+            null
+        )
+        expect(ids.size).toBe(0)
+    })
+    it("ignores a card that names no session", () => {
+        expect(awaitedTermIds([{ column: "doing" }], null).size).toBe(0)
+    })
+    it("counts the session a running pipeline step is blocked on", () => {
+        const run = {
+            status: "running",
+            steps: [
+                { status: "done", termId: "t-old" },
+                { status: "running", termId: "t-now" }
+            ]
+        }
+        const ids = awaitedTermIds([], run)
+        expect(ids.has("t-now")).toBe(true)
+        // A step that already finished is not waiting on anything.
+        expect(ids.has("t-old")).toBe(false)
+    })
+    it("counts a step in a run that is itself waiting on the user", () => {
+        // "waiting" means the AGENT asked something mid-step: the step is still
+        // the reason that session is being watched.
+        const run = { status: "waiting", steps: [{ status: "running", termId: "t-now" }] }
+        expect(awaitedTermIds([], run).has("t-now")).toBe(true)
+    })
+    it("ignores a run that has stopped, failed or finished", () => {
+        for (const status of ["done", "stopped", "error", "paused"]) {
+            const run = { status, steps: [{ status: "running", termId: "t-now" }] }
+            expect(awaitedTermIds([], run).size).toBe(0)
+        }
+    })
+    it("takes both sources at once", () => {
+        const run = { status: "running", steps: [{ status: "running", termId: "t-step" }] }
+        expect([...awaitedTermIds([doing], run)].sort()).toEqual(["t-step", "t1"])
+    })
+})
+
+describe("markLaunched", () => {
+    it("stamps a last-output time so silence is measurable from launch", () => {
+        markLaunched("boot", 5000)
+        expect(getLastAt("boot")).toBe(5000)
+        forgetTail("boot")
+    })
+    it("does not clobber a real output time", () => {
+        markLaunched("boot2", 5000)
+        recordTail("boot2", "hello")
+        const after = getLastAt("boot2")
+        markLaunched("boot2", 6000)
+        expect(getLastAt("boot2")).toBe(after)
+        forgetTail("boot2")
     })
 })
 
@@ -298,6 +390,81 @@ describe("trace ring", () => {
 
     it("STALL_MS is the width of the whole window", () => {
         expect(STALL_MS).toBe(120000)
+    })
+})
+
+describe("hasBell", () => {
+    it("detects a real bell", () => {
+        expect(hasBell("t1", "done\x07")).toBe(true)
+        forgetTail("t1")
+    })
+    it("ignores the BEL that terminates an OSC title sequence", () => {
+        expect(hasBell("t2", "\x1b]0;my-project\x07")).toBe(false)
+        forgetTail("t2")
+    })
+    it("ignores an OSC split across chunks", () => {
+        expect(hasBell("t3", "\x1b]0;my-pro")).toBe(false)
+        expect(hasBell("t3", "ject\x07")).toBe(false)
+        forgetTail("t3")
+    })
+    it("still sees a real bell after a split OSC closes", () => {
+        // The chunk that closes the OSC carries only its own terminator BEL —
+        // if that terminator were mistaken for a bell (or this were tested
+        // with a naive chunk.includes("\x07")) this call would wrongly read
+        // true, the way the very bug this function exists to fix would.
+        expect(hasBell("t4", "\x1b]0;title")).toBe(false)
+        expect(hasBell("t4", "\x07")).toBe(false)
+        expect(hasBell("t4", "ding\x07")).toBe(true)
+        forgetTail("t4")
+    })
+    it("sees a bell alongside an OSC in one chunk", () => {
+        expect(hasBell("t5", "\x1b]0;title\x07\x07")).toBe(true)
+        forgetTail("t5")
+    })
+    it("does not leak state between sessions", () => {
+        expect(hasBell("t6", "\x1b]0;open")).toBe(false)
+        expect(hasBell("t7", "\x07")).toBe(true)
+        forgetTail("t6")
+        forgetTail("t7")
+    })
+    it("recognizes an OSC opener split across chunks (lone ESC, then ']')", () => {
+        expect(hasBell("t8", "hello\x1b")).toBe(false)
+        expect(hasBell("t8", "]0;title\x07")).toBe(false)
+        forgetTail("t8")
+    })
+    it("recognizes an ST terminator split across chunks and still sees the next real bell", () => {
+        expect(hasBell("t9", "\x1b]0;title\x1b")).toBe(false)
+        expect(hasBell("t9", "\\")).toBe(false)
+        expect(hasBell("t9", "\x07")).toBe(true)
+        forgetTail("t9")
+    })
+    it("does not confuse a fresh ESC with the stray one it just fell through on, and still catches a real bell after", () => {
+        // Byte stream: "hello" + ESC (falls through, unpaired) + ESC (this one
+        // pairs with the ']' that follows) + "0;title" + BEL (its terminator)
+        // + BEL (a real one). Against the pre-round implementation (no
+        // pendingEsc at all) the third call wrongly reads true: it has no
+        // memory of chunk 2's trailing ESC, so it sees a bare ']' followed by
+        // ordinary text ending in BEL and calls that a real bell.
+        expect(hasBell("t10", "hello\x1b")).toBe(false)
+        expect(hasBell("t10", "\x1b")).toBe(false)
+        expect(hasBell("t10", "]0;title\x07")).toBe(false)
+        expect(hasBell("t10", "\x07")).toBe(true)
+        forgetTail("t10")
+    })
+    it("treats an empty chunk mid-pairing as a complete no-op (split ST terminator)", () => {
+        // Reproduces the round-2 finding: an empty chunk between the two
+        // halves of a split ST must not discard the carried ESC.
+        expect(hasBell("t11", "\x1b]0;title\x1b")).toBe(false)
+        expect(hasBell("t11", "")).toBe(false)
+        expect(hasBell("t11", "\\")).toBe(false)
+        expect(hasBell("t11", "\x07")).toBe(true)
+        forgetTail("t11")
+    })
+    it("treats an empty chunk mid-pairing as a complete no-op (split OSC opener)", () => {
+        expect(hasBell("t12", "hello\x1b")).toBe(false)
+        expect(hasBell("t12", "")).toBe(false)
+        expect(hasBell("t12", "]0;title\x07")).toBe(false)
+        forgetTail("t12")
     })
 })
 
