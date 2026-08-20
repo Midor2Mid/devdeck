@@ -2452,8 +2452,11 @@ button .ic,
     color: var(--text);
     box-shadow: inset 0 1px 0 var(--accent);
 }
+/* Quiet: the bar only appears when there is a draft, so its presence is the
+   signal. The accent stays on `.cl-draft`, which marks the thing you can act
+   on — one accent in the frame, spent on the action and not on the icon. */
 .composer-launcher .cl-icon {
-    color: var(--accent);
+    color: var(--muted);
 }
 .composer-launcher .cl-text {
     flex: 1;

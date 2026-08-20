@@ -71,18 +71,10 @@ export function TerminalView(): JSX.Element {
     const draggingTabId = useStore((s) => s.draggingTabId)
     const composerOpen = useStore((s) => s.composerOpen)
     const setComposerOpen = useStore((s) => s.setComposerOpen)
-    // The prompt composer only sends into agent sessions, so its launcher bar
-    // earns its space only when at least one exists. With none (pure shell /
-    // running `claude` yourself in a terminal) the bar is hidden — Ctrl+Shift+I
-    // still opens the composer as a power-user escape hatch.
+    // The prompt composer only sends into agent sessions, so there is nothing to
+    // resume into without one. This is a necessary but no longer sufficient
+    // condition for the launcher bar — see the draft check at its render site.
     const hasAgentSession = useStore((s) => s.agentSessions().length > 0)
-    // The composer fans out to whichever agent sessions you pick — it was never
-    // Claude-specific. Naming the *live sessions* instead of the first configured
-    // preset stops the label implying otherwise, and surfaces the fan-out.
-    const agentSessionCount = useStore((s) => s.agentSessions().length)
-    const soleAgentSession = useStore((s) =>
-        s.agentSessions().length === 1 ? s.agentSessions()[0].sessionName : ""
-    )
     const recordingTermId = useStore((s) => s.recordingTermId)
     const setRecordingTermId = useStore((s) => s.setRecordingTermId)
     const setRecordingsOpen = useStore((s) => s.setRecordingsOpen)
@@ -715,21 +707,23 @@ export function TerminalView(): JSX.Element {
             </div>
             {composerOpen ? (
                 <PromptComposer onClose={() => setComposerOpen(false)} />
-            ) : hasAgentSession ? (
+            ) : hasAgentSession && composerDraft.trim() ? (
+                // Only an UNSENT DRAFT earns a bar here. Talking to the agent in
+                // front of you is what the terminal is for, so a permanent
+                // "Write a prompt…" strip spent fixed height, and the frame's one
+                // accent, advertising a composer whose real value (fan-out to
+                // several sessions, @file, /snippet, image paste) is occasional.
+                // A draft is different: it is state you would otherwise lose track
+                // of, so its presence is the signal. Ctrl+Shift+I opens the
+                // composer whether or not this bar is showing.
                 <div
                     className="composer-launcher"
                     onClick={() => setComposerOpen(true)}
-                    data-tip="Open the prompt composer (Ctrl+Shift+I)"
+                    data-tip="Resume your prompt draft (Ctrl+Shift+I)"
                 >
                     <span className="cl-icon"><Icon name="pencil" size={14} /></span>
-                    <span className="cl-text">
-                        {composerDraft.trim()
-                            ? "Resume your prompt draft…"
-                            : soleAgentSession
-                              ? `Write a prompt for ${soleAgentSession}…`
-                              : `Write a prompt · ${agentSessionCount} agent sessions…`}
-                    </span>
-                    {composerDraft.trim() && <span className="cl-draft">● draft</span>}
+                    <span className="cl-text">Resume your prompt draft…</span>
+                    <span className="cl-draft">● draft</span>
                     <span className="cl-kbd">Ctrl+Shift+I</span>
                 </div>
             ) : null}
