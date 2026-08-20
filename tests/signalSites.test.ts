@@ -149,3 +149,62 @@ describe("the scanner itself", () => {
         expect(strip("    markLaunched(termId) // stamp it")[0]).toContain("markLaunched(")
     })
 })
+
+// N3. The two fixes that live in a component were pinned by nothing: this repo
+// has no component tests, so replacing MissionControl's `awaited.has(s.termId)`
+// argument with a constant `true` restored the I1 regression - every quiet
+// session marked stalled - with the entire suite green. Same class for the
+// Settings field: idleClamp.test.ts drives the two pure functions through a
+// local harness, which says nothing about whether the component still calls
+// them. These are argument-level pins, in the same style as the launch scan
+// above, and they are the cheapest thing that fails when the wiring is undone.
+
+const MISSION = src("../src/renderer/src/components/MissionControl.tsx")
+const SETTINGS = src("../src/renderer/src/components/SettingsModal.tsx")
+
+/** The `n` code lines starting at the sole line containing `needle`. */
+function callSite(needle: string, from: string[], n = 12): string {
+    const at = linesWith(needle, from)
+    expect(at, "expected exactly one " + needle + " call site").toHaveLength(1)
+    return from.slice(at[0] - 1, at[0] - 1 + n).join("\n")
+}
+
+describe("the stall marker is still gated on expectation", () => {
+    const mission = codeLines(MISSION)
+
+    it("passes the awaited set into isStalled, not a constant", () => {
+        const call = callSite("isStalled(", mission, 7)
+        expect(call).toContain("awaited.has(s.termId)")
+        // A constant in that position is the whole regression, and it type-checks.
+        expect(call).not.toContain("true,")
+    })
+
+    it("derives that set from the board and the pipeline run", () => {
+        const derive = callSite("awaitedTermIds(", mission, 1)
+        expect(derive).toContain("boardTasks")
+        expect(derive).toContain("pipelineRun")
+    })
+})
+
+describe("the quiet-after field still commits rather than clamps as you type", () => {
+    const settings = codeLines(SETTINGS)
+    // Anchored on the label rather than on any one call, so the window covers
+    // the whole input including the attributes above the value binding - and so
+    // ripping the wiring out cannot move the window away from the evidence.
+    const field = (): string => callSite("Quiet after (ms)", settings, 18)
+
+    it("renders the draft and commits on blur", () => {
+        expect(field()).toContain("value={idleFieldValue(")
+        expect(field()).toContain("setIdleDraft(e.target.value)")
+        expect(field()).toContain("commitIdleMs(")
+        // THE REGRESSION: clamping inside onChange. `setAgentIdleMs` belongs in
+        // the blur/commit handler, never against a keystroke.
+        expect(field()).not.toContain("onChange={(e) => setAgentIdleMs(")
+    })
+
+    it("takes its floor from the exported constant", () => {
+        // M2: a hardcoded 300 beside an exported IDLE_MIN.
+        expect(field()).toContain("min={IDLE_MIN}")
+        expect(field()).not.toContain("min={300}")
+    })
+})
