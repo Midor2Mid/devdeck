@@ -488,6 +488,36 @@ describe("a dispatched card reaching review", () => {
         expect(askedFor).toHaveLength(2)
     })
 
+    it("releases the in-flight guard when the read throws synchronously", async () => {
+        // N1. The guard was released by a `.finally()` chained onto the CALL'S
+        // RETURN VALUE, so a synchronous throw - a torn-down preload bridge, a
+        // stub that is not a promise - happened after the add and before there
+        // was anything to chain onto. Nothing ever removed the entry, the outer
+        // catch swallowed the error, and that session was deaf for the rest of
+        // its life: every later pause hit the guard and returned. Only closing
+        // the pane cleared it. The release has to be a `finally` BLOCK around
+        // the await, not a link in a promise chain that may never exist.
+        await seedBaseline([])
+        seedSession()
+        askedFor = []
+        gitChanges = (): Promise<{ path: string }[]> => {
+            throw new Error("bridge torn down")
+        }
+
+        expect(() => ptyData({ id: TERM, data: "thinking" })).not.toThrow()
+        await tick(IDLE_MS * 4)
+        expect(askedFor).toHaveLength(1)
+        expect(columnOf("t1")).toBe("doing")
+
+        // The session must still be readable afterwards - this is the assertion
+        // that failed before the fix: zero further reads, forever.
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+        ptyData({ id: TERM, data: "wrote a file" })
+        await tick(IDLE_MS * 4)
+        expect(askedFor).toHaveLength(2)
+        expect(columnOf("t1")).toBe("review")
+    })
+
     it("rebases a card reopened from done, not only one sent back from review", async () => {
         // Reaching done never closes the pane: the pty and its baseline entry
         // both stay alive. So a reopened card still carried its LAUNCH-time

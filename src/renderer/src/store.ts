@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Project, WorkItem, CheckResult } from "../../preload/index"
+import type { Project, WorkItem, CheckResult, ChangeFile } from "../../preload/index"
 import { useSettings, aiModeAgents } from "./settings"
 import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
 import {
@@ -709,9 +709,19 @@ export const useStore = create<AppState>((set, get) => {
                                 // Skipping is free: the next pause reads again.
                                 if (evidenceInFlight.has(id)) return
                                 evidenceInFlight.add(id)
-                                const files = await window.api.git
-                                    .changes(cwd)
-                                    .finally(() => evidenceInFlight.delete(id))
+                                // A finally BLOCK, not a `.finally()` chained onto
+                                // the call: if `changes` throws SYNCHRONOUSLY (a
+                                // torn-down preload bridge) there is no promise to
+                                // chain onto, the add has already happened, and
+                                // nothing would ever release it - the outer catch
+                                // swallows the throw and that session is deaf for
+                                // the rest of its life.
+                                let files: ChangeFile[]
+                                try {
+                                    files = await window.api.git.changes(cwd)
+                                } finally {
+                                    evidenceInFlight.delete(id)
+                                }
                                 const paths = files.map((f) => f.path)
                                 // An UNKNOWN baseline used to be permanent: this
                                 // read is armed only by onPtyData and runs once per
