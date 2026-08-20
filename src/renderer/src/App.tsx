@@ -198,11 +198,13 @@ export function App(): JSX.Element {
                 useStore.getState().jumpToPending()
                 return
             }
-            // Ctrl+Shift+K — instant flip to the previously used project.
+            // Ctrl+Shift+K — recent projects, alt-tab style. One tap is the old
+            // instant flip; holding the modifier and tapping again walks further
+            // back, committing on release (see the keyup listener below).
             if (mod && e.shiftKey && e.code === "KeyK") {
                 e.preventDefault()
                 e.stopPropagation()
-                useStore.getState().switchToPreviousProject()
+                useStore.getState().cycleProject()
                 return
             }
             if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
@@ -232,8 +234,23 @@ export function App(): JSX.Element {
                 return
             }
         }
+        // Releasing either modifier lands a project cycle. Blur commits too: if
+        // the window loses focus mid-walk the keyup never arrives, and an open
+        // cycle would leave activeId moved with nothing persisted.
+        const release = (e: KeyboardEvent): void => {
+            if (e.key === "Control" || e.key === "Meta" || e.key === "Shift") {
+                useStore.getState().commitProjectCycle()
+            }
+        }
+        const blur = (): void => useStore.getState().commitProjectCycle()
         window.addEventListener("keydown", handler, true)
-        return () => window.removeEventListener("keydown", handler, true)
+        window.addEventListener("keyup", release, true)
+        window.addEventListener("blur", blur)
+        return () => {
+            window.removeEventListener("keydown", handler, true)
+            window.removeEventListener("keyup", release, true)
+            window.removeEventListener("blur", blur)
+        }
     }, [openSwitcher, closeSwitcher])
 
     return (

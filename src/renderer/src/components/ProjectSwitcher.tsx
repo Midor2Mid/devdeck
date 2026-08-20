@@ -97,6 +97,17 @@ export function ProjectSwitcher(): JSX.Element {
         if (e.key === "Enter") {
             e.preventDefault()
             open(ordered[sel].id)
+        } else if (!q && /^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            // Jump straight to a row: two deterministic keystrokes instead of
+            // type-then-arrow. ONLY while the query is empty — this handler sits
+            // on the container, so it sees digits bubbling from the focused
+            // search input, and a project called "api2" must stay filterable.
+            // Once you are typing, digits are text and arrows+Enter are the pick.
+            const n = Number(e.key) - 1
+            if (n < ordered.length) {
+                e.preventDefault()
+                open(ordered[n].id)
+            }
         } else if (e.key === "ArrowRight") {
             e.preventDefault()
             setSel((i) => Math.min(ordered.length - 1, i + 1))
@@ -173,6 +184,11 @@ export function ProjectSwitcher(): JSX.Element {
                                         {p.name}
                                         {c?.attention ? <span className="card-attn">●</span> : null}
                                     </div>
+                                    {/* Shown only while the query is empty, which is
+                                        exactly when the digit actually picks this row. */}
+                                    {!q && i < 9 && (
+                                        <span className="switcher-card-key">{i + 1}</span>
+                                    )}
                                 </div>
                                 {p.group && <div className="switcher-card-group">{p.group}</div>}
                                 <div className="switcher-card-path">{p.path}</div>

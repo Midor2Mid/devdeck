@@ -35,7 +35,15 @@ export function Topbar(): JSX.Element {
                 <button
                     className="topbar-proj-btn"
                     onClick={openSwitcher}
-                    data-tip={project ? project.path : "Open a project (Ctrl+K)"}
+                    // With a project open this used to show only its path, so the
+                    // two fast paths were invisible exactly when you wanted them.
+                    // One line, ` · `-separated: `.tip` is `white-space: normal`,
+                    // so a newline here would collapse to a space anyway.
+                    data-tip={
+                        project
+                            ? `${project.path} · Ctrl+K switch · Ctrl+Shift+K recent (hold to cycle)`
+                            : "Open a project (Ctrl+K)"
+                    }
                     data-tip-pos="bottom"
                 >
                     {project && <ProjectChip project={project} size="sm" />}

@@ -8121,6 +8121,18 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     align-items: center;
     gap: 8px;
 }
+/* The digit that picks this row. Same quiet key-hint idiom as the composer's
+   Ctrl+Shift+I badge — a hint, not an action, so it takes no accent. */
+.switcher-card-key {
+    margin-left: auto;
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--faint);
+    border: 1px solid var(--border-soft);
+    border-radius: 5px;
+    padding: 1px 5px;
+}
 
 /* ---------- Project appearance modal ---------- */
 .identity-modal {

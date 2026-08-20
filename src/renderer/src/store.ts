@@ -35,7 +35,7 @@ import {
     baselineOf
 } from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
-import { recordMru, previousProjectId } from "./projectMru"
+import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
 import { routeAgent } from "./routing"
@@ -144,6 +144,10 @@ interface AppState extends Persisted {
     /** Project ids, most recently used first (persisted to localStorage). */
     projectMru: string[]
     switchToPreviousProject: () => void
+    /** Frozen MRU walk while the modifier is held; null when not cycling. */
+    projectCycle: { order: string[]; index: number } | null
+    cycleProject: () => void
+    commitProjectCycle: () => void
     init: () => Promise<void>
     addProject: () => Promise<void>
     removeProject: (id: string) => Promise<void>
@@ -1093,6 +1097,7 @@ export const useStore = create<AppState>((set, get) => {
         projects: [],
         activeId: null,
         projectMru: loadMru(),
+        projectCycle: null,
         termAgents: {},
         termInit: {},
         agentResumePending: {},
@@ -1249,6 +1254,42 @@ export const useStore = create<AppState>((set, get) => {
         switchToPreviousProject: () => {
             const prev = previousProjectId(get().projectMru, get().activeId)
             if (prev) void get().setActiveProject(prev)
+        },
+
+        /**
+         * Walk back through recent projects, alt-tab style: each tap goes one
+         * further back, and releasing the modifier commits where you landed.
+         *
+         * The order is FROZEN when the cycle starts, and MRU is not recorded
+         * until commit. Both matter: `setActiveProject` records MRU on every
+         * call, so a naive repeat-tap re-sorts the list under itself and just
+         * ping-pongs between two projects — which is exactly what
+         * switchToPreviousProject does on its own, by design.
+         *
+         * Only `activeId` moves while cycling. The IPC write and the pane ack
+         * are deferred to commit, so a fast walk across five projects is one
+         * write rather than five, and there is no ordering race between them.
+         */
+        cycleProject: () => {
+            const st = get()
+            const ids = st.projects.map((p) => p.id)
+            if (ids.length < 2) return
+            // Current project sorts to index 0, so the first tap lands on the
+            // previous one — identical to a single switchToPreviousProject.
+            const cur = st.projectCycle ?? { order: orderByMru(ids, st.projectMru), index: 0 }
+            const order = cur.order.filter((id) => ids.includes(id))
+            if (order.length < 2) return
+            const index = (cur.index + 1) % order.length
+            set({ projectCycle: { order, index }, activeId: order[index] })
+        },
+
+        /** Land the cycle: record MRU, persist, ack. No-op when not cycling. */
+        commitProjectCycle: () => {
+            const cyc = get().projectCycle
+            if (!cyc) return
+            set({ projectCycle: null })
+            const id = cyc.order[cyc.index]
+            if (get().projects.some((p) => p.id === id)) void get().setActiveProject(id)
         },
 
         setProjectGroup: async (id, group) => {
