@@ -18,28 +18,63 @@ import { fileURLToPath } from "node:url"
 // what this file pins; tests/cardReview.test.ts and tests/dispatchBoardTask.ts
 // pin the behaviour of each site.
 
-const STORE = fileURLToPath(new URL("../src/renderer/src/store.ts", import.meta.url))
+const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
+const STORE = src("../src/renderer/src/store.ts")
 
 /**
- * store.ts with its comments blanked out.
+ * A file's EXECUTABLE lines: comments and quoted literals blanked, line numbers
+ * preserved.
  *
- * Not cosmetic: without it, commenting a call OUT still satisfies the scan -
- * which is precisely the mutation this file exists to catch, and it passed
- * against a `// markLaunched(...)` on the first attempt. Line-oriented and
- * deliberately crude: the only things scanned for are call sites.
+ * Not cosmetic - every removal here was added because a mutation got past the
+ * version without it. Stripping `//` came first (commenting a call OUT still
+ * satisfied the scan, the exact mutation this file exists to catch). A
+ * re-review then got two more through: a block comment wrapped around a call,
+ * and a decoy string literal spelling the call. A scan a one-line edit can fool
+ * is worse than no scan, because it reports a confidence it does not have.
+ *
+ * Deliberately crude for all that: line-oriented, and the only things looked
+ * for are call sites. It is not a parser and must not grow into one.
  */
-const lines = readFileSync(STORE, "utf8")
-    .split("\n")
-    .map((l) => {
-        const t = l.trim()
-        if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return ""
-        return l.replace(/\/\/.*$/, "")
-    })
+function stripCode(text: string): string[] {
+    let inBlock = false
+    return text
+        .split("\n")
+        .map((raw) => {
+            let l = raw
+            if (inBlock) {
+                const end = l.indexOf("*/")
+                if (end === -1) return ""
+                l = " ".repeat(end + 2) + l.slice(end + 2)
+                inBlock = false
+            }
+            // Block comments opened and closed within this line.
+            l = l.replace(/\/\*[\s\S]*?\*\//g, " ")
+            const opens = l.indexOf("/*")
+            if (opens !== -1) {
+                l = l.slice(0, opens)
+                inBlock = true
+            }
+            const slashes = l.indexOf("//")
+            if (slashes !== -1) l = l.slice(0, slashes)
+            // A quoted literal can spell a call without being one.
+            return l
+                .replace(/"[^"]*"/g, '""')
+                .replace(/'[^']*'/g, "''")
+                .replace(/`[^`]*`/g, "``")
+        })
+}
+
+/** The executable lines of a file on disk. */
+function codeLines(path: string): string[] {
+    return stripCode(readFileSync(path, "utf8"))
+}
+
+const lines = codeLines(STORE)
 
 /** 1-based line numbers of real code containing `needle`. */
-function linesWith(needle: string): number[] {
+function linesWith(needle: string, from: string[] = lines): number[] {
     const hits: number[] = []
-    lines.forEach((l, i) => {
+    from.forEach((l, i) => {
         if (l.includes(needle)) hits.push(i + 1)
     })
     return hits
@@ -73,5 +108,44 @@ describe("the baseline is captured on the card's lifecycle, not the pane's", () 
         // openWorkspacePreset firing `git status` for baselines no reader could
         // ever consult.
         expect(linesWith("captureBaseline(")).toHaveLength(2)
+    })
+})
+
+describe("the scanner itself", () => {
+    // The scan is only worth anything if it cannot be talked out of a finding,
+    // so the stripping is tested directly against the three mutations that have
+    // actually got past it.
+    // Exercising the same function the real scan runs on store.ts, not a
+    // re-implementation of it - the point of the whole file is that a pin which
+    // paraphrases the thing it pins proves nothing.
+    const strip = stripCode
+
+    it("ignores a line-commented call", () => {
+        expect(strip("    // markLaunched(termId)")[0]).not.toContain("markLaunched(")
+    })
+
+    it("ignores a call wrapped in a block comment on one line", () => {
+        expect(strip("    /* markLaunched(termId) */")[0]).not.toContain("markLaunched(")
+    })
+
+    it("ignores a call inside a block comment spanning lines", () => {
+        const out = strip("    /*\n    markLaunched(termId)\n    */\n    real()")
+        expect(out.slice(0, 3).join("\n")).not.toContain("markLaunched(")
+        // …and comes back out the other side, so a block comment cannot blind
+        // the scan to everything below it.
+        expect(out[3]).toContain("real()")
+    })
+
+    it("ignores a call spelled inside a string literal", () => {
+        expect(strip('    const decoy = "markLaunched(termId)"')[0]).not.toContain(
+            "markLaunched("
+        )
+        expect(strip("    const decoy = `markLaunched(termId)`")[0]).not.toContain(
+            "markLaunched("
+        )
+    })
+
+    it("still sees a real call on a line that also carries a comment", () => {
+        expect(strip("    markLaunched(termId) // stamp it")[0]).toContain("markLaunched(")
     })
 })
