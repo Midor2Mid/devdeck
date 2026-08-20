@@ -446,6 +446,48 @@ describe("a dispatched card reaching review", () => {
         expect(baselineOf(TERM)).toBeUndefined()
     })
 
+    it("does not start a second evidence read while one is still in flight", async () => {
+        // I6. The spawn is per PAUSE, not per turn - a turn with ten thinking
+        // pauses is ten `git status` spawns, the very pauses this branch exists
+        // to say are not turn-ends - and with no guard a read that outlives the
+        // next pause overlaps itself, up to the 8s execFile timeout each.
+        await seedBaseline([])
+        seedSession()
+        askedFor = []
+
+        let release: (files: { path: string }[]) => void = () => undefined
+        let readStarted: () => void = () => undefined
+        const inFlight = new Promise<void>((r) => {
+            readStarted = r
+        })
+        gitChanges = (): Promise<{ path: string }[]> => {
+            readStarted()
+            return new Promise((r) => {
+                release = r
+            })
+        }
+
+        ptyData({ id: TERM, data: "thinking" })
+        await inFlight
+        expect(askedFor).toHaveLength(1)
+
+        // A second pause lands while the first read is still out.
+        ptyData({ id: TERM, data: "still thinking" })
+        await tick(IDLE_MS * 4)
+        expect(askedFor).toHaveLength(1)
+
+        release([{ path: "src/new.ts" }])
+        await tick(IDLE_MS)
+        expect(columnOf("t1")).toBe("review")
+
+        // And the guard releases: the session is not deaf afterwards.
+        seedSession()
+        gitChanges = async (): Promise<{ path: string }[]> => [{ path: "src/new.ts" }]
+        ptyData({ id: TERM, data: "more" })
+        await tick(IDLE_MS * 4)
+        expect(askedFor).toHaveLength(2)
+    })
+
     it("rebases a card reopened from done, not only one sent back from review", async () => {
         // Reaching done never closes the pane: the pty and its baseline entry
         // both stay alive. So a reopened card still carried its LAUNCH-time

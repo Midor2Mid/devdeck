@@ -172,6 +172,13 @@ interface AppState extends Persisted {
      * they have both written. Hits git per live session, so call it on demand.
      */
     holdersIn: (cwd: string) => Promise<CwdHolder[]>
+    /**
+     * The directory a session's git reads resolve against. Exposed because more
+     * than one view asks the same question, and two spellings of it drifted
+     * apart once already (`?? projectPath` vs `|| projectPath`, which differ for
+     * an empty-string entry). One rule, one expression.
+     */
+    sessionCwd: (termId: string) => string
 
     // Agent bake-off: race two or three agents on one card, each in its own
     // worktree (runtime-only — the worktrees themselves are the recovery story
@@ -626,6 +633,11 @@ export const useStore = create<AppState>((set, get) => {
         }))
     }
 
+    // Sessions with an evidence read out right now — see the guard in the idle
+    // timer below. Cleared by the read itself, and by forget() for the case
+    // where a pane closes while its read is in flight.
+    const evidenceInFlight = new Set<string>()
+
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
         if (!isAgentId(get().agentOf(id))) return
         // Keep a cleaned tail of this agent's output for the Mission Control peek.
@@ -689,7 +701,17 @@ export const useStore = create<AppState>((set, get) => {
                                 // non-isolated card in doing forever.
                                 const cwd = sessionCwd(id)
                                 if (!cwd) return
-                                const files = await window.api.git.changes(cwd)
+                                // One read per session at a time. The spawn is per
+                                // PAUSE, not per turn - a turn with ten thinking
+                                // pauses is ten `git status` spawns - and without
+                                // this a read that outlives the next pause overlaps
+                                // itself, up to the 8s execFile timeout each.
+                                // Skipping is free: the next pause reads again.
+                                if (evidenceInFlight.has(id)) return
+                                evidenceInFlight.add(id)
+                                const files = await window.api.git
+                                    .changes(cwd)
+                                    .finally(() => evidenceInFlight.delete(id))
                                 const paths = files.map((f) => f.path)
                                 // An UNKNOWN baseline used to be permanent: this
                                 // read is armed only by onPtyData and runs once per
@@ -735,6 +757,7 @@ export const useStore = create<AppState>((set, get) => {
         if (t) clearTimeout(t)
         idleTimers.delete(termId)
         pendingSince.delete(termId)
+        evidenceInFlight.delete(termId)
         forgetTail(termId)
         forgetSignals(termId)
         const closingAgent = get().termAgents[termId] ?? SHELL
@@ -1342,11 +1365,14 @@ export const useStore = create<AppState>((set, get) => {
             set((s) => ({ boardTasks: s.boardTasks.filter((t) => t.id !== id) }))
             persist()
         },
+        sessionCwd,
         holdersIn: async (cwd) => {
             const st = get()
             const entries = await Promise.all(
                 st.agentSessions().map(async (s) => {
-                    const dir = st.termCwd[s.termId] ?? s.projectPath
+                    // Same one rule as the evidence read and the conflict map: an
+                    // empty-string termCwd entry must fall through, not be kept.
+                    const dir = sessionCwd(s.termId)
                     return {
                         termId: s.termId,
                         sessionName: s.sessionName,

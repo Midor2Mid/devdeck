@@ -137,7 +137,12 @@ export function MissionControl(): JSX.Element {
                     projectName: s.projectName,
                     files: (
                         await window.api.git
-                            .changes(st.termCwd[s.termId] ?? s.projectPath)
+                            // M6: through sessionCwd, not a second spelling of it.
+                            // `?? projectPath` and `|| projectPath` disagree for an
+                            // empty-string termCwd entry, so the conflict map could
+                            // read a different directory than the card evidence for
+                            // the same session - the mismatch b66a23e existed to end.
+                            .changes(st.sessionCwd(s.termId))
                             .catch(() => [])
                     ).map((c) => c.path)
                 }))
