@@ -2,8 +2,17 @@
 // output, so the Overview can offer one-click Approve / Deny without opening the
 // session. Deliberately CONSERVATIVE: returns null unless the tail clearly ends in
 // a known prompt shape, because acting on a wrong guess sends the wrong keystroke
-// to a live agent. Callers should only run this for sessions already flagged
-// "attention"/"waiting", which further guards against mid-stream false positives.
+// to a live agent.
+//
+// Callers reading this to decide whether to ACT on a prompt (send a keystroke)
+// should only run it for sessions already flagged "attention"/"waiting", which
+// further guards against mid-stream false positives. That is a rule about
+// answering an agent, not about asking the question: the store's card-evidence
+// gate calls this for any quiet session holding a `doing` card and REFUSES to
+// act on a match (it declines to file the card), which is the conservative
+// direction. It has to: on a visible pane the status is "idle", never
+// "attention", and that is exactly the path where a permission prompt used to
+// get a half-applied change filed as ready for review.
 
 export interface ApprovalPrompt {
     kind: "menu" | "yesno"

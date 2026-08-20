@@ -35,8 +35,11 @@ export function MissionControl(): JSX.Element {
     const termAgents = useStore((s) => s.termAgents)
     const termNames = useStore((s) => s.termNames)
     // The two places an outstanding expectation on a session is recorded. Both
-    // are stable slices; the derived Set is built outside the selector, since a
-    // selector returning a fresh object every render never settles.
+    // are stable slices, so subscribing to them is safe; the Set is derived in
+    // the body below rather than inside a selector, because a SELECTOR returning
+    // a fresh Set on every call is the getSnapshot trap (see NOTES). Deriving it
+    // here carries none of that risk and needs no memo - one pass over
+    // boardTasks, on a component that already re-renders once a second.
     const boardTasks = useStore((s) => s.boardTasks)
     const pipelineRun = useStore((s) => s.pipelineRun)
     void tabsByProject

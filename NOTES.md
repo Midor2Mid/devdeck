@@ -855,6 +855,30 @@ recorded rather than fixed: pinning a baseline across restarts means persisting
 it, and a persisted baseline that outlives the session it describes is a worse
 lie than a conservative one.
 
+**Two properties of these fixes, stated plainly because they are easy to
+over-read.** `adoptBaseline` swallows whatever happens to be dirty at the
+healing pause — that is what the self-heal *is*, not an oversight. It converts
+*permanent* stranding into *stranding-unless-one-more-file-changes*: an
+improvement, not an elimination, and the same shape as the restart case above
+rather than a separate defect. And narrowing the stall marker to sessions
+something is waiting on costs real coverage: an ad-hoc pane whose CLI died
+silently is no longer flagged, because nothing is waiting on it. That is the
+right trade — the marker earns its place by being rare — but it is a loss, and
+worth knowing before someone reports the dead pane as a regression.
+
+**The mutation-testing habit this round earned.** Two rounds of review here
+were settled by *executing* the mutation rather than reading the diff: comment
+the call out, replace the argument with a constant, throw synchronously instead
+of rejecting. Three of the findings (the guard leaking on a sync throw, the
+self-heal discarding a newer capture, an argument pinned by nothing) were
+invisible to inspection and obvious to execution. Two of them were in code
+written *to fix* an earlier finding. When a fix introduces a guard, a ticket, or
+an argument, the question to run — not reason about — is "what happens if this
+one is wrong?", and a source-scanning pin is only worth having if the mutation
+it exists to catch has actually been tried against it (this one needed three
+attempts: `//`, a block comment, and a decoy string literal all got past
+earlier versions).
+
 **Still missing, and named so it isn't rediscovered:** the evidence read now
 refuses to overlap itself per session, but it is still one `git status` spawn
 per *pause* rather than per turn — the very pauses this branch exists to say
