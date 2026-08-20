@@ -191,7 +191,7 @@ describe("the quiet-after field still commits rather than clamps as you type", (
     // Anchored on the label rather than on any one call, so the window covers
     // the whole input including the attributes above the value binding - and so
     // ripping the wiring out cannot move the window away from the evidence.
-    const field = (): string => callSite("Quiet after (ms)", settings, 18)
+    const field = (): string => callSite("Quiet after (ms)", settings, 36)
 
     it("renders the draft and commits on blur", () => {
         expect(field()).toContain("value={idleFieldValue(")
@@ -206,5 +206,18 @@ describe("the quiet-after field still commits rather than clamps as you type", (
         // M2: a hardcoded 300 beside an exported IDLE_MIN.
         expect(field()).toContain("min={IDLE_MIN}")
         expect(field()).not.toContain("min={300}")
+    })
+
+    it("cancels the draft on Escape instead of losing it", () => {
+        // N5. Commit-on-blur made this the one Settings field whose typing could
+        // vanish: the modal's Escape unmounts the input and React fires no blur
+        // on unmount. Capture phase, because Modal's own Escape listener is a
+        // native bubble-phase one on a DOM ancestor. (The key name itself is a
+        // string literal, which the scanner blanks - these three tokens are what
+        // survives, and they are only ever written together.)
+        const f = field()
+        expect(f).toContain("onKeyDownCapture")
+        expect(f).toContain("e.stopPropagation()")
+        expect(f).toContain("setIdleDraft(null)")
     })
 })

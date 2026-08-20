@@ -1119,6 +1119,24 @@ function AgentsSection(): JSX.Element {
                     onKeyDown={(e) => {
                         if (e.key === "Enter") e.currentTarget.blur()
                     }}
+                    // Escape while a draft is pending CANCELS the edit, and says
+                    // so by repainting the stored value. Commit-on-blur made this
+                    // the one field whose typing could vanish: the modal's Escape
+                    // unmounts the input, and React fires no blur on unmount, so
+                    // a typed number was silently dropped and Settings closed on
+                    // top of it. Capture, not bubble, and stopPropagation - the
+                    // same reasoning as the device-name input below: Modal.tsx
+                    // renders children inline and its own Escape handler is a
+                    // native bubble-phase listener on a real DOM ancestor, which
+                    // therefore runs BEFORE React's bubble dispatch. Only the
+                    // capture phase gets in front of it. Escape with no draft
+                    // pending is left alone, so it still closes Settings.
+                    onKeyDownCapture={(e) => {
+                        if (e.key === "Escape" && idleDraft !== null) {
+                            e.stopPropagation()
+                            setIdleDraft(null)
+                        }
+                    }}
                 />
             </div>
             <p className="settings-hint">
