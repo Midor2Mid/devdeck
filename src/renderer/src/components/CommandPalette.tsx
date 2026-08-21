@@ -84,6 +84,20 @@ export function CommandPalette(): JSX.Element {
                     store.setTermLayout(l)
                 }
             })
+        // Overview was the one layout with no palette entry, so the only surface
+        // that answers an agent's permission prompt WITHOUT opening its terminal
+        // was reachable solely as the fourth state of an unlabelled cycling icon.
+        // Titled for what you would actually search for - approve, deny, all
+        // projects - not just "overview".
+        cmds.push({
+            id: "layout:overview",
+            section: "Layout",
+            title: "Overview - all projects, approve or deny without opening a terminal",
+            run: () => {
+                store.setView("terminal")
+                store.setTermLayout("overview")
+            }
+        })
 
         for (const t of Object.values(THEMES))
             cmds.push({
@@ -110,6 +124,10 @@ export function CommandPalette(): JSX.Element {
             })
 
         cmds.push({ id: "act:switcher", section: "Actions", title: "Switch project…", kbd: "Ctrl+K", run: () => store.openSwitcher() })
+        // Searching "recent project" found nothing: the walk-back existed only as a
+        // key binding. One tap here is the plain flip, which is what a palette run
+        // can express - holding to cycle needs the keyboard.
+        cmds.push({ id: "act:recent", section: "Actions", title: "Recent project - flip back", kbd: "Ctrl+Shift+K", run: () => store.switchToPreviousProject() })
         cmds.push({ id: "act:search", section: "Actions", title: "Search across projects", kbd: "Ctrl+Shift+F", run: () => store.setSearchOpen(true) })
         cmds.push({ id: "act:tasks", section: "Actions", title: "Task board", kbd: "Ctrl+2", run: () => store.setView("tasks") })
         cmds.push({ id: "act:dotnet", section: "Actions", title: "Build / test (.NET)", kbd: "Ctrl+Shift+B", run: () => store.setDotnetOpen(true) })

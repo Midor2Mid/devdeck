@@ -71,7 +71,7 @@ export function TaskRunner(): JSX.Element | null {
             {scripts.length > 0 && (
                 <>
                     <div className="sidebar-section-title">
-                        <span>TASKS</span>
+                        <span>SCRIPTS</span>
                     </div>
                     <div className="task-list">
                         {scripts.map((name) => (

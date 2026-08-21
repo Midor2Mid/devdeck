@@ -9,7 +9,8 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
     {
         title: "Global",
         items: [
-            ["Ctrl + K", "Switch project"],
+            ["Ctrl + K", "Switch project (then 1-9 to pick)"],
+            ["Ctrl + Shift + K", "Recent project - hold and tap to walk back"],
             ["Ctrl + Shift + P", "Command palette"],
             [
                 `Ctrl + 1 … ${DECK_VIEWS.length}`,
@@ -18,6 +19,7 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
             ["Ctrl + Shift + F", "Search across projects"],
             ["Ctrl + Shift + B", "Build / test (.NET)"],
             ["Ctrl + Shift + R", "Review changes"],
+            ["Ctrl + Shift + J", "Agents inbox"],
             ["Ctrl + Tab", "Next agent session"],
             ["Ctrl + Shift + Tab", "Previous agent session"],
             ["F1", "This shortcuts list"]

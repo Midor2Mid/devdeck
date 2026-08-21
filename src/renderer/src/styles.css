@@ -605,8 +605,15 @@ button .ic,
 .mission-tile:hover {
     border-color: var(--accent);
 }
+/* ACCENT, not --danger. DESIGN.md is explicit that ok/danger are "semantic only
+   - success and destructive. They never stand in for the accent." An agent asking
+   a question is the most actionable thing on the screen, which is precisely what
+   the accent means; destructive is what it does not mean. The form carries the
+   distinction from `stalled` below: solid vs dashed, so the two never rest on
+   hue - which was the original problem, since --danger and --clay are a shade
+   apart in Sumi and Washi. */
 .mission-tile.status-attention {
-    border-left: 2px solid var(--danger);
+    border-left: 2px solid var(--accent);
 }
 .mission-tile-head {
     display: flex;
@@ -649,7 +656,7 @@ button .ic,
 }
 .mission-tile-attn {
     font-size: 11px;
-    color: var(--danger);
+    color: var(--accent);
 }
 /* DASHED, where attention is solid: the two were both 2px left rules separated
    only by hue (--clay vs --danger), which in Sumi and Washi are a shade apart
