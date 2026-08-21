@@ -11,11 +11,6 @@ export function ToolCluster(): JSX.Element {
     const setInboxOpen = useStore((s) => s.setInboxOpen)
     const setUsageOpen = useStore((s) => s.setUsageOpen)
     const openSettings = useSettings((s) => s.openSettings)
-    // Count everything that wants you — bell "attention" and finished "waiting".
-    const attention = useStore(
-        (s) =>
-            Object.values(s.agentStatus).filter((x) => x === "attention" || x === "waiting").length
-    )
     const [tasksOpen, setTasksOpen] = useState(false)
     const [contextOpen, setContextOpen] = useState(false)
 
@@ -75,8 +70,12 @@ export function ToolCluster(): JSX.Element {
                 tipPos="top"
                 onClick={() => setInboxOpen(true)}
             >
+                {/* No count here. The flag in the status region on this same bar
+                    is the one authoritative "who wants you" number - two badges
+                    200px apart, computing different sets, taught the user to
+                    trust neither. This also restores DESIGN.md's badge-tier
+                    claim that the app has no filled count badge. */}
                 <Icon name="inbox" size={16} />
-                {attention ? <span className="rail-badge">{attention}</span> : null}
             </IconButton>
             <IconButton
                 className="deck-tool"

@@ -651,8 +651,16 @@ button .ic,
     font-size: 11px;
     color: var(--danger);
 }
+/* DASHED, where attention is solid: the two were both 2px left rules separated
+   only by hue (--clay vs --danger), which in Sumi and Washi are a shade apart
+   and indistinguishable at 2px. A broken rule reads as "interrupted" and is
+   still a form difference in every one of the 84 skins. */
 .mission-tile.stalled {
-    border-left: 2px solid var(--clay);
+    border-left: 2px dashed var(--clay);
+}
+.mission-tile-stall {
+    font-size: 11px;
+    color: var(--muted);
 }
 .mission-tile-expand {
     margin-left: auto;
@@ -6651,21 +6659,6 @@ kbd {
 /* ---------- Agents inbox / triage drawer ---------- */
 .rail-inbox {
     position: relative;
-}
-.rail-badge {
-    position: absolute;
-    top: 0;
-    right: 0;
-    min-width: 15px;
-    height: 15px;
-    padding: 0 3px;
-    border-radius: 8px;
-    background: var(--accent);
-    color: var(--bg);
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 15px;
-    text-align: center;
 }
 .inbox-row {
     border: 1px solid var(--border-soft);

@@ -254,6 +254,18 @@ export function MissionControl(): JSX.Element {
                                     {s.status === "attention" && (
                                         <div className="mission-tile-attn">needs you</div>
                                     )}
+                                    {/* Stalled carried nothing but a 2px left border
+                                        whose colour is a shade off attention's — so a
+                                        dead agent read as a slightly different stripe,
+                                        and the state this view exists to surface was
+                                        its least visible one. The word is the fix; the
+                                        border also goes dashed so it differs in FORM
+                                        from attention's solid rule, not only in hue. */}
+                                    {stalled && s.status !== "attention" && (
+                                        <div className="mission-tile-stall">
+                                            stalled · silent {ago}
+                                        </div>
+                                    )}
                                     <svg
                                         className="mission-trace"
                                         viewBox={`0 0 ${trace.length} 12`}

@@ -74,7 +74,15 @@ export function DeckStatus(): JSX.Element {
         refreshGit()
     }
 
-    const attention = sessions().filter((s) => s.status === "attention").length
+    // The ONE count in the frame for "who wants you". It covers both bell
+    // "attention" and finished-a-turn "waiting", because the user's question is
+    // "does anything need me", not "which mechanism raised it". The inbox used
+    // to render a second, filled-accent badge on this same bar counting exactly
+    // this set while the flag here counted only attention - two numbers for one
+    // question, 200px apart, disagreeing by construction.
+    const attention = sessions().filter(
+        (s) => s.status === "attention" || s.status === "waiting"
+    ).length
 
     return (
         <div className="deck-status">
@@ -153,7 +161,7 @@ export function DeckStatus(): JSX.Element {
             )}
             <span className="deck-status-spacer" />
             {attention > 0 && (
-                <span className="sb-item sb-attn" data-tip="Agent sessions needing attention" data-tip-pos="top">
+                <span className="sb-item sb-attn" data-tip="Agent sessions that want you - asking a question, or finished a turn" data-tip-pos="top">
                     <Icon name="flag" size={12} /> {attention}
                 </span>
             )}
