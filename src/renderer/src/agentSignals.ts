@@ -28,6 +28,33 @@ const baselines = new Map<string, ReadonlySet<string>>()
  * clear its ticket too, or the self-heal defers forever to a read nobody made.
  */
 const captures = new Map<string, number>()
+
+/**
+ * Sessions whose most recent check for file changes FAILED (git unreachable, an
+ * index.lock held by another agent, the 8s timeout). Kept so the board can say
+ * "couldn't check" instead of leaving a card in Doing with no explanation - the
+ * failure used to be swallowed entirely, which made a stuck card and a quiet
+ * agent look identical.
+ *
+ * Set on a failed read, cleared on the next successful one, so it always
+ * describes the latest attempt rather than accumulating history.
+ */
+const checkFailed = new Set<string>()
+
+/** Record that a check for this session's file changes failed. */
+export function markCheckFailed(id: string): void {
+    checkFailed.add(id)
+}
+
+/** Record that a check succeeded, clearing any earlier failure. */
+export function clearCheckFailed(id: string): void {
+    checkFailed.delete(id)
+}
+
+/** Did this session's most recent change-check fail? */
+export function checkFailedFor(id: string): boolean {
+    return checkFailed.has(id)
+}
 let ticket = 0
 
 /**
@@ -127,4 +154,5 @@ export function baselineOf(id: string): ReadonlySet<string> | undefined {
 export function forgetSignals(id: string): void {
     baselines.delete(id)
     captures.delete(id)
+    checkFailed.delete(id)
 }

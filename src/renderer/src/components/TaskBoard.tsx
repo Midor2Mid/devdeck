@@ -2,9 +2,18 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useStore } from "../store"
 import { useSettings, aiModeAgents, type AgentPreset } from "../settings"
-import { tasksByColumn, COLUMNS, formatCost, type BoardColumn, type BoardTask } from "../board"
+import {
+    tasksByColumn,
+    COLUMNS,
+    formatCost,
+    cardStatusLabel,
+    type BoardColumn,
+    type BoardTask
+} from "../board"
 import { routeAgent, type RoutingRule } from "../routing"
 import { Icon } from "./Icon"
+import { getLastAt, relTime } from "../missionTail"
+import { checkFailedFor } from "../agentSignals"
 
 const COL_LABEL: Record<BoardColumn, string> = {
     todo: "Todo",
@@ -168,13 +177,32 @@ function CardDispatch({
 
 /**
  * Per-project task board: create task cards, dispatch one to an agent (in its own
- * worktree by default), and track it across Todo · Doing · Review · Done. A
- * dispatched card auto-moves to Review when its agent goes idle.
+ * worktree by default), and track it across Todo · Doing · Review · Done.
+ *
+ * A dispatched card auto-moves to Review on EVIDENCE that its agent produced
+ * something — file changes since the session started — not merely because the
+ * agent went quiet. Going quiet is not finishing: a one-second thinking pause
+ * used to file a card as done. So a card can legitimately sit in Doing with a
+ * quiet agent, and the status dot's label says which of the two it is.
  */
 export function TaskBoard(): JSX.Element {
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
     const boardTasks = useStore((s) => s.boardTasks)
     const agentStatus = useStore((s) => s.agentStatus)
+    const boardView = useStore((s) => s.view)
+    // getLastAt and checkFailedFor read module Maps that the pty path mutates
+    // WITHOUT a set(), so nothing here would re-render when they change: the
+    // dot's label would freeze, and could keep claiming "no file changes yet"
+    // after a check had actually failed - the one case it exists to report.
+    // Same tick MissionControl/OverviewView/DeckStatus use for the same reason,
+    // and only while the board is on screen.
+    const [, setDotTick] = useState(0)
+    useEffect(() => {
+        if (boardView !== "tasks") return
+        setDotTick((t) => t + 1)
+        const iv = setInterval(() => setDotTick((t) => t + 1), 1000)
+        return () => clearInterval(iv)
+    }, [boardView])
     const addBoardTask = useStore((s) => s.addBoardTask)
     const moveBoardTask = useStore((s) => s.moveBoardTask)
     const removeBoardTask = useStore((s) => s.removeBoardTask)
@@ -292,6 +320,18 @@ export function TaskBoard(): JSX.Element {
                         <div className="board-cards">
                             {grouped[col].map((t) => {
                                 const status = t.termId ? agentStatus[t.termId] : undefined
+                                // Module-map reads, not store state: these change on
+                                // the pty stream and must not churn React. The board
+                                // already re-renders on its own cost tick, which is
+                                // often enough for a duration measured in minutes.
+                                const label = status
+                                    ? cardStatusLabel(
+                                          status,
+                                          t.column,
+                                          t.termId ? relTime(Date.now(), getLastAt(t.termId)) : "",
+                                          !!t.termId && checkFailedFor(t.termId)
+                                      )
+                                    : ""
                                 // A race outlives the todo column — cards are draggable and have move
                                 // arrows, and a race left running in doing/review would otherwise have
                                 // no door back to it while its agents keep running and billing.
@@ -305,7 +345,14 @@ export function TaskBoard(): JSX.Element {
                                     >
                                         <div className="board-card-title">{t.title}</div>
                                         <div className="board-card-foot">
-                                            {status && <span className={"tab-dot claude status-" + status} />}
+                                            {status && (
+                                                <span
+                                                    className={"tab-dot claude status-" + status}
+                                                    role="img"
+                                                    aria-label={label}
+                                                    data-tip={label}
+                                                />
+                                            )}
                                             {t.cost !== undefined && t.cost > 0 && (
                                                 <span
                                                     className="board-card-cost"

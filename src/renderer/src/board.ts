@@ -118,3 +118,45 @@ export function parseChecklist(text: string): string[] {
         .map((l) => l.replace(/^\s*(?:[-*]|\d+[.)]|\[[ xX]?\])\s*/, "").trim())
         .filter(Boolean)
 }
+
+/**
+ * What a card's status dot means, in words. The dot's form (dim / pulse / ring /
+ * breathe) carries the state visually; this carries it for a tooltip, a screen
+ * reader, and anyone who has not memorised four dot shapes.
+ *
+ * Phrased around what the AGENT is doing, not what the card will do next: a card
+ * only advances to Review on evidence that files changed, so "went quiet" and
+ * "finished" are different facts and the copy must not blur them.
+ */
+const STATUS_WORDS: Record<string, string> = {
+    working: "Agent is producing output",
+    waiting: "Agent went quiet - your move",
+    attention: "Agent is asking for you",
+    idle: "Agent session is idle"
+}
+
+/**
+ * The dot's label, including why a card is still sitting in Doing.
+ *
+ * `quiet` is a pre-formatted duration ("3m") or "" when unknown. `checkFailed`
+ * separates "the agent has done nothing yet" from "we could not tell" - the
+ * second was previously silent, so a card could sit in Doing forever with no
+ * clue why.
+ */
+export function cardStatusLabel(
+    status: string,
+    column: BoardColumn,
+    quiet: string,
+    checkFailed: boolean
+): string {
+    const parts = [STATUS_WORDS[status] ?? status]
+    if (quiet && status !== "working") parts.push(`quiet ${quiet}`)
+    if (column === "doing" && status !== "working") {
+        parts.push(
+            checkFailed
+                ? "couldn't check for file changes - staying in Doing"
+                : "no file changes yet, so it stays in Doing"
+        )
+    }
+    return parts.join(" · ")
+}

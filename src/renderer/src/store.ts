@@ -32,7 +32,9 @@ import {
     adoptBaseline,
     forgetSignals,
     newPathsSince,
-    baselineOf
+    baselineOf,
+    markCheckFailed,
+    clearCheckFailed
 } from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
@@ -723,9 +725,17 @@ export const useStore = create<AppState>((set, get) => {
                                 let files: ChangeFile[]
                                 try {
                                     files = await window.api.git.changes(cwd)
+                                } catch (e) {
+                                    // Remember the failure so the board can say
+                                    // "couldn't check" rather than leaving a card
+                                    // in Doing looking indistinguishable from an
+                                    // agent that simply produced nothing.
+                                    markCheckFailed(id)
+                                    throw e
                                 } finally {
                                     evidenceInFlight.delete(id)
                                 }
+                                clearCheckFailed(id)
                                 const paths = files.map((f) => f.path)
                                 // An UNKNOWN baseline used to be permanent: this
                                 // read is armed only by onPtyData and runs once per

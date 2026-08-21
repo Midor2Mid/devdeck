@@ -1162,6 +1162,20 @@ button .ic,
     .deck-key.key-waiting {
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
     }
+    /* Without the breathe there is no form left here at all: measured, `waiting`
+       and `working` then differ by a 0.15 OPACITY step (1 vs 0.85) on the same
+       fill — worse than a hue difference, because there is nothing to name. Note
+       the `background: var(--accent)` on .status-attention/.status-waiting never
+       applies on these dots: `.tab-dot.claude` below sets --clay at equal
+       specificity and later in the file, so every state renders the same colour
+       and form is doing ALL the work.
+       A HOLLOW ring is a different shape from attention's filled dot + 3px halo,
+       not merely a smaller one. The dot is 6px, so the ring is 1.5px: 2px leaves
+       a ~2px hole that anti-aliasing fills in, reading as a dimmer filled dot. */
+    .tab-dot.status-waiting {
+        background: transparent;
+        box-shadow: inset 0 0 0 1.5px var(--accent);
+    }
 }
 @keyframes dot-pulse {
     0%,
