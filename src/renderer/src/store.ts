@@ -37,6 +37,7 @@ import {
     clearCheckFailed
 } from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
+import { recordExit, exitCodeOf, clearExit } from "./termExit"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
@@ -646,6 +647,9 @@ export const useStore = create<AppState>((set, get) => {
 
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
         if (!isAgentId(get().agentOf(id))) return
+        // Output after an exit means the pane was re-run in place. Guarded so the
+        // hot path does a Map delete only on the one chunk that follows a respawn.
+        if (exitCodeOf(id) !== undefined) clearExit(id)
         // Keep a cleaned tail of this agent's output for the Mission Control peek.
         recordTail(id, data)
         // …and its committed-output rate, for the tile's trace.
@@ -784,6 +788,7 @@ export const useStore = create<AppState>((set, get) => {
         evidenceInFlight.delete(termId)
         forgetTail(termId)
         forgetSignals(termId)
+        clearExit(termId)
         const closingAgent = get().termAgents[termId] ?? SHELL
         if (isAgentId(closingAgent)) {
             // Before logUsageEnd, which stamps the event this reads its start from.
@@ -1164,6 +1169,10 @@ export const useStore = create<AppState>((set, get) => {
         init: async () => {
             if (!dataSubscribed) {
                 window.api.pty.onData(onPtyData)
+                // App-global, not per-pane: TerminalPane's own onExit only fires while a
+                // pane is mounted, and Mission has to know about a process that died in a
+                // tab you were not looking at.
+                window.api.pty.onExit(({ id, exitCode }) => recordExit(id, exitCode))
                 window.api.triggers.onFired(({ triggerId }) => get().fireTrigger(triggerId))
                 dataSubscribed = true
             }
