@@ -252,6 +252,48 @@ them as precedent:
 - Menu/keyboard-cursor highlights (`.mention-item.active`) intentionally share
   their rule with `:hover` — a transient cursor, not a persisted selection.
 
+### Mission tile state chip
+
+A different axis from the table above — not a selected control but a tile
+*reporting its own status* — so none of the table's rows fit it and it isn't
+folded into that table. Recorded here for the reason the badge tiers below get
+their own listing too: a fixed vocabulary is only worth having if the next
+person can look it up instead of inventing a ninth glyph.
+
+One Mission tile carries exactly one chip, first-match-wins
+(`resolveTileState` in `tileState.ts`). Four tones, and a glyph fixed per
+state so the two axes read independently — tone says how loud, glyph says
+which:
+
+| Tone | Spends | States (chip · glyph) |
+| --- | --- | --- |
+| `attention` | the accent | `NEEDS YOU` · `●`, `ASKING` · `◆` |
+| `warn` | `--clay`, dashed border | `STALLED` · `⋯`, `EXITED n` · `□` |
+| `neutral` | `--text`, no color spend | `CHANGED` · `▤`, `WAITING` · `◇`, `WORKING` · `▶` |
+| `quiet` | `--faint` | `QUIET` · `–`, a clean `EXITED` · `□` |
+
+`--clay` and `--accent` sit within a hair of each other in both Sumi and
+Washi — the same collision `.mission-tile.stalled`'s dashed-vs-solid rule
+above already exists to route around — so `warn` never leans on hue to clear
+`attention`: it is the chip's only dashed tone (`.mtile-chip.tone-warn`), and
+`□` (`EXITED`) is the only glyph that spans two tones, because the
+process-exited fact is the same at any code and only the tone says whether it
+mattered.
+
+`attention`'s own two states share a tone, so `NEEDS YOU` and `ASKING` separate
+by the chip's *words*, not by `●` vs `◆` — at the chip's actual size (9px) a
+filled circle and a filled diamond are not reliably told apart at a glance.
+That pair is legible by text, not by form, and should not be read as a second
+instance of the dash trick above.
+
+Washi is the theme this file's own contrast math already flags (above: a
+100% accent fill over Washi's ground is 2.9:1): `tone-attention` and
+`tone-warn` chip text measure 2.9:1 and 3.4:1 against `--bg-2` there, under
+the 4.5:1 text floor. Consistent with why actives are told not to lean on
+tint alone in Washi — the chip is small set text, so it carries more of that
+shortfall than a fill would, and does so by word and by the warn tone's dash
+rather than by clearing the ratio.
+
 ### Badge tiers
 
 Distinguished by *treatment* rather than color, so urgency is never confused with

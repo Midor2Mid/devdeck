@@ -76,6 +76,16 @@ before they held up.
   questions." **No shortcut changed**: `Ctrl+1`–`Ctrl+8` keep meaning exactly
   what they meant before, since the views were already ordered
   supervision-first.
+- **Decide from Mission.** Every agent tile now carries one state chip — NEEDS
+  YOU, EXITED, ASKING, STALLED, CHANGED, WAITING, WORKING, QUIET — and only the
+  action that answers it: Approve/Deny on a detected permission prompt, Reply
+  on a question, a stall, or a session that finished a turn while you were
+  away (WAITING), Review on files the session changed. The chip replaces the
+  old `needs you` and `stalled` lines, so the two states that used to carry a
+  line break even; every other tile gains the one-line chip in exchange for a
+  state that used to take reading eight peeks to find, now readable as "which
+  pill is the amber one." The pty exit code is now recorded per session, so a
+  dead pane reads as dead instead of merely silent.
 
 ## 0.8.0 - 2026-08-18
 
