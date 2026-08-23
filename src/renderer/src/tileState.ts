@@ -203,13 +203,25 @@ export function resolveTileState(i: TileStateInput, now: number): TileState {
 }
 
 /**
- * Does this state want something from you?
+ * Does this session want something from you?
  *
- * Drives the Mission header's count, which used to read raw `attention` status
- * and so undercounted the states the tiles now say out loud. `changed` is
- * deliberately excluded: reviewable work is a queue, not a block, and the
- * Review Queue section below already reports it.
+ * The ONE predicate behind every "who wants you" count in the frame — the deck
+ * bar's flag and Mission's header both read it, because two numbers for one
+ * question, 200px apart, disagreeing by construction is a defect this app has
+ * already fixed once.
+ *
+ * Deliberately over the raw facts rather than the resolved chip kind. A
+ * `waiting` session that has also changed files resolves to CHANGED — the more
+ * useful single label for a tile — but it still wants you, and the deck bar has
+ * no changed count with which to agree. Counting off the kind could therefore
+ * never match; counting off the facts can.
  */
-export function asksForYou(kind: TileStateKind): boolean {
-    return kind === "needs-you" || kind === "asking" || kind === "waiting" || kind === "stalled"
+export function wantsYou(
+    i: Pick<TileStateInput, "status" | "exitCode" | "lastAt" | "awaited" | "alive">,
+    now: number
+): boolean {
+    // A dead process wants nothing.
+    if (i.exitCode !== undefined) return false
+    if (i.status === "attention" || i.status === "waiting") return true
+    return isStalled(i.lastAt, i.alive, i.awaited, now)
 }

@@ -179,14 +179,32 @@ function callSite(needle: string, from: string[], n = 12): string {
 describe("the stall marker is still gated on expectation", () => {
     const mission = codeLines(MISSION)
 
-    it("passes the awaited set into resolveTileState, not a constant", () => {
-        const call = callSite("resolveTileState(", mission, 10)
-        expect(call).toContain("awaited: awaited.has(s.termId)")
-        // A constant in that position is the whole regression, and it type-checks.
-        expect(call).not.toContain("awaited: true")
+    // The fields resolveTileState is given now live one level up, in the
+    // `input` object each resolved entry keeps (so the header's wantsYou count
+    // and the tile's own resolveTileState call agree on the same facts) - so
+    // the wiring pin has to anchor on that object, not on the resolveTileState
+    // call site itself, which now just reads `resolveTileState(input, now)`.
+    it("builds the tile-state input from the awaited set, the exit code and the changed count - not constants", () => {
+        const input = callSite("const input = {", mission, 8)
+        expect(input).toContain("awaited: awaited.has(s.termId)")
+        // A constant in any of these positions type-checks and leaves the
+        // suite green - the exact failure mode this file exists to catch.
+        // `awaited: true` restores I1's stalled-everything regression;
+        // `exitCode: undefined` makes every corpse read as its live state;
+        // `changedCount: 0` is I4's swallowed-git-error bug moved into the
+        // wiring itself.
+        expect(input).not.toContain("awaited: true")
+        expect(input).toContain("exitCode: exitCodeOf(s.termId)")
+        expect(input).not.toContain("exitCode: undefined")
+        expect(input).toContain("changedCount: changedBySession[s.termId] ?? 0")
+        expect(input).not.toContain("changedCount: 0")
     })
 
-    it("derives that set from the board and the pipeline run", () => {
+    it("passes that same input into resolveTileState, rather than rebuilding it", () => {
+        expect(callSite("resolveTileState(", mission, 1)).toContain("resolveTileState(input, now)")
+    })
+
+    it("derives the awaited set from the board and the pipeline run", () => {
         const derive = callSite("awaitedTermIds(", mission, 1)
         expect(derive).toContain("boardTasks")
         expect(derive).toContain("pipelineRun")

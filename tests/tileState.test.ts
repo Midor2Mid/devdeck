@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveTileState, asksForYou, type TileStateInput } from "../src/renderer/src/tileState"
+import { resolveTileState, wantsYou, type TileStateInput } from "../src/renderer/src/tileState"
 import { STALL_MS } from "../src/renderer/src/missionTail"
 import { FASTFAIL } from "../src/renderer/src/termExit"
 import type { ApprovalPrompt } from "../src/renderer/src/approval"
@@ -231,18 +231,75 @@ describe("form, not only colour", () => {
     })
 })
 
-describe("asksForYou", () => {
-    it("is true for the states that block on a decision", () => {
-        expect(asksForYou("needs-you")).toBe(true)
-        expect(asksForYou("asking")).toBe(true)
-        expect(asksForYou("waiting")).toBe(true)
-        expect(asksForYou("stalled")).toBe(true)
+describe("wantsYou", () => {
+    // The ONE predicate behind every "who wants you" count in the frame — the
+    // deck bar's flag and Mission's header both read this, so they cannot
+    // disagree on who wants the user's attention.
+
+    it("is false for an exited session, even when status still reads attention", () => {
+        // A dead process wants nothing: nothing is listening for a reply.
+        expect(
+            wantsYou({ status: "attention", exitCode: 0, lastAt: NOW, awaited: true, alive: false }, NOW)
+        ).toBe(false)
+        expect(
+            wantsYou({ status: "attention", exitCode: 1, lastAt: NOW, awaited: true, alive: true }, NOW)
+        ).toBe(false)
     })
 
-    it("is false for the states that do not — CHANGED is a queue, not a block", () => {
-        expect(asksForYou("changed")).toBe(false)
-        expect(asksForYou("working")).toBe(false)
-        expect(asksForYou("quiet")).toBe(false)
-        expect(asksForYou("exited")).toBe(false)
+    it("is true for attention", () => {
+        expect(
+            wantsYou(
+                { status: "attention", exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
+                NOW
+            )
+        ).toBe(true)
+    })
+
+    it("is true for waiting", () => {
+        expect(
+            wantsYou(
+                { status: "waiting", exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
+                NOW
+            )
+        ).toBe(true)
+    })
+
+    it("is true for a stalled session", () => {
+        expect(
+            wantsYou(
+                {
+                    status: "idle",
+                    exitCode: undefined,
+                    lastAt: NOW - STALL_MS - 1,
+                    awaited: true,
+                    alive: true
+                },
+                NOW
+            )
+        ).toBe(true)
+    })
+
+    it("is false for a quiet, unawaited, idle session", () => {
+        expect(
+            wantsYou(
+                {
+                    status: "idle",
+                    exitCode: undefined,
+                    lastAt: NOW - STALL_MS - 1,
+                    awaited: false,
+                    alive: true
+                },
+                NOW
+            )
+        ).toBe(false)
+    })
+
+    it("is false for working", () => {
+        expect(
+            wantsYou(
+                { status: "working", exitCode: undefined, lastAt: NOW, awaited: true, alive: true },
+                NOW
+            )
+        ).toBe(false)
     })
 })

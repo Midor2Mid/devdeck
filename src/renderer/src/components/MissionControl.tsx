@@ -14,7 +14,7 @@ import {
 import { buildOwnership, type OwnershipMap } from "../ownership"
 import { newCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
-import { resolveTileState, asksForYou } from "../tileState"
+import { resolveTileState, wantsYou } from "../tileState"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -189,26 +189,21 @@ export function MissionControl(): JSX.Element {
     const now = Date.now()
     const resolved = sessions.map((s) => {
         const prompt = promptFor(s)
-        return {
-            s,
+        const input = {
+            status: s.status,
             prompt,
-            st: resolveTileState(
-                {
-                    status: s.status,
-                    prompt,
-                    exitCode: exitCodeOf(s.termId),
-                    lastAt: getLastAt(s.termId),
-                    changedCount: changedBySession[s.termId] ?? 0,
-                    awaited: awaited.has(s.termId),
-                    alive: !!termAgents[s.termId]
-                },
-                now
-            )
+            exitCode: exitCodeOf(s.termId),
+            lastAt: getLastAt(s.termId),
+            changedCount: changedBySession[s.termId] ?? 0,
+            awaited: awaited.has(s.termId),
+            alive: !!termAgents[s.termId]
         }
+        return { s, prompt, input, st: resolveTileState(input, now) }
     })
-    // NEEDS-YOU, ASKING, WAITING, STALLED all want a decision; CHANGED is a
-    // queue (the Review Queue section already reports it), not a block.
-    const attention = resolved.filter((r) => asksForYou(r.st.kind)).length
+    // The same predicate the deck bar's flag reads (tileState's wantsYou) — see
+    // its doc comment for why this app cannot afford two counts for one
+    // question again.
+    const attention = resolved.filter((r) => wantsYou(r.input, now)).length
 
     return (
         <div className="mission">
