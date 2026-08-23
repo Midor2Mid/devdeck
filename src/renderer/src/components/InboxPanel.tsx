@@ -19,15 +19,18 @@ export function InboxPanel(): JSX.Element {
     )
     const close = useStore((s) => s.setInboxOpen)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
+    const replySession = useStore((s) => s.replySession)
     const [drafts, setDrafts] = useState<Record<string, string>>({})
 
     const sorted = [...sessions].sort((a, b) => ORDER[a.status] - ORDER[b.status])
     const attention = sessions.filter((s) => s.status === "attention" || s.status === "waiting").length
 
+    // The same store action Mission's tiles call, so the drawer and the tiles
+    // cannot drift on what "a reply" means again — the store action already
+    // trims and refuses an empty line, and logs the activity both surfaces now
+    // share.
     const send = (termId: string): void => {
-        const text = (drafts[termId] ?? "").trim()
-        if (!text) return
-        window.api.pty.input(termId, text + "\r")
+        replySession(termId, drafts[termId] ?? "")
         setDrafts((d) => ({ ...d, [termId]: "" }))
     }
 
