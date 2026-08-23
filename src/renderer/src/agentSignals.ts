@@ -156,3 +156,20 @@ export function forgetSignals(id: string): void {
     captures.delete(id)
     checkFailed.delete(id)
 }
+
+/**
+ * How many paths each session has made dirty since it started, from a batch of
+ * change reads the caller already has.
+ *
+ * Exists so Mission's tiles can show a changed count WITHOUT a second git poll:
+ * the ownership map already reads every agent session's directory every 8s, and
+ * this turns that same answer into per-session evidence. A session with an
+ * unknown baseline counts 0 — newPathsSince fails closed, and so does this.
+ */
+export function newCounts(
+    entries: readonly { termId: string; files: readonly string[] }[]
+): Record<string, number> {
+    const out: Record<string, number> = {}
+    for (const e of entries) out[e.termId] = newPathsSince(baselineOf(e.termId), e.files).length
+    return out
+}

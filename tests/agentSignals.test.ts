@@ -4,7 +4,8 @@ import {
     captureBaseline,
     adoptBaseline,
     baselineOf,
-    forgetSignals
+    forgetSignals,
+    newCounts
 } from "../src/renderer/src/agentSignals"
 
 describe("newPathsSince", () => {
@@ -267,5 +268,36 @@ describe("adoptBaseline", () => {
         adoptBaseline("s-adopt5", ["healed.ts"])
         expect(baselineOf("s-adopt5")).toEqual(new Set(["healed.ts"]))
         forgetSignals("s-adopt5")
+    })
+})
+
+describe("newCounts", () => {
+    afterEach(() => {
+        forgetSignals("a")
+        forgetSignals("b")
+    })
+
+    it("counts only paths that were not dirty when the session started", () => {
+        adoptBaseline("a", ["src/old.ts"])
+        const counts = newCounts([{ termId: "a", files: ["src/old.ts", "src/new.ts"] }])
+        expect(counts.a).toBe(1)
+    })
+
+    // Unknown baseline means NO EVIDENCE, never "everything is new" - the whole
+    // reason baselines exist is that a dirty repo would otherwise mark every
+    // agent as productive forever.
+    it("counts zero for a session with no baseline", () => {
+        const counts = newCounts([{ termId: "b", files: ["src/a.ts", "src/b.ts"] }])
+        expect(counts.b).toBe(0)
+    })
+
+    it("returns an entry per session, including empty ones", () => {
+        adoptBaseline("a", [])
+        adoptBaseline("b", [])
+        const counts = newCounts([
+            { termId: "a", files: ["x.ts"] },
+            { termId: "b", files: [] }
+        ])
+        expect(counts).toEqual({ a: 1, b: 0 })
     })
 })
