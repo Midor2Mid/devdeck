@@ -311,7 +311,7 @@ export function MissionControl(): JSX.Element {
                                         {st.chip}
                                     </div>
                                     {st.kind === "needs-you" && st.detail && (
-                                        <div className="mtile-q" title={st.detail}>
+                                        <div className="mtile-q" data-tip={st.detail}>
                                             {st.detail}
                                         </div>
                                     )}

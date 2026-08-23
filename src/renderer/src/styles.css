@@ -714,7 +714,12 @@ button .ic,
     letter-spacing: 0.04em;
     padding: 1px 7px;
     border-radius: 999px;
-    border: 1px solid var(--border-soft);
+    /* --border, not --border-soft: at rest (neutral/quiet) this is the same
+       token as .mission-tile's own border, so the chip's outline was
+       near-invisible against the tile and QUIET/WORKING read as bare text
+       instead of a pill - weakening the "which of these eight pills is the
+       amber one" scan. */
+    border: 1px solid var(--border);
     color: var(--muted);
 }
 .mtile-mark {
