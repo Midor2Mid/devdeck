@@ -229,22 +229,32 @@ export function MissionControl(): JSX.Element {
                                 <div
                                     key={s.termId}
                                     className={"mission-tile status-" + s.status + (stalled ? " stalled" : "")}
-                                    role="button"
-                                    tabIndex={0}
-                                    // The trace shows silence as a flatline, which a screen reader
-                                    // cannot see — so the sentence it replaces lives here. An
-                                    // aria-label overrides the tile's content entirely, so it has
-                                    // to carry everything a sighted user reads off the tile: the
-                                    // badge included, or the running model becomes unannounceable.
-                                    aria-label={[s.sessionName, s.projectName, s.badge, st.chip, st.detail]
-                                        .filter(Boolean)
-                                        .join(" · ")}
                                     data-tip={st.detail ?? (ago ? `Last output ${ago} ago` : undefined)}
                                     onClick={() => jumpToTerm(s.termId)}
                                 >
                                     <div className="mission-tile-head">
                                         <span className={"tab-dot claude status-" + s.status} />
-                                        <span className="mission-tile-name">{s.sessionName}</span>
+                                        {/* I3: the wrapper is no longer role="button", so this is the
+                                            one focusable, announced control for "jump to this session" -
+                                            without it, a screen-reader user would have no way to reach
+                                            what the mouse's onClick above still does. The trace shows
+                                            silence as a flatline, which a screen reader cannot see, so
+                                            the sentence it replaces lives in this label along with
+                                            everything else a sighted user reads off the tile (badge
+                                            included), since the chip and question below now read as
+                                            ordinary text rather than being swallowed by a wrapper label. */}
+                                        <button
+                                            className="mission-tile-name"
+                                            aria-label={[s.sessionName, s.projectName, s.badge, st.chip, st.detail]
+                                                .filter(Boolean)
+                                                .join(" · ")}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                jumpToTerm(s.termId)
+                                            }}
+                                        >
+                                            {s.sessionName}
+                                        </button>
                                         <span className="agent-badge sm">{s.badge}</span>
                                         <button
                                             className="mission-tile-expand"
