@@ -96,6 +96,34 @@ describe("resolveTileState precedence", () => {
         )
     })
 
+    // Branch 3 over branch 4. A session flagged attention that has also gone
+    // silent is asking, not stuck: the question is the more useful thing to say.
+    it("ASKING outranks STALLED", () => {
+        const s = resolveTileState(
+            input({ status: "attention", lastAt: NOW - STALL_MS - 1 }),
+            NOW
+        )
+        expect(s.kind).toBe("asking")
+    })
+
+    // Branch 4 over branch 5. Work already produced does not stop a stall being
+    // the thing to say about a session nothing has heard from.
+    it("STALLED outranks CHANGED", () => {
+        const s = resolveTileState(
+            input({ status: "idle", lastAt: NOW - STALL_MS - 1, changedCount: 3 }),
+            NOW
+        )
+        expect(s.kind).toBe("stalled")
+    })
+
+    // Branch 5 over branch 6, which tileState.ts calls out explicitly: work that
+    // exists is reviewable whether or not the agent has finished with it.
+    it("CHANGED outranks WORKING", () => {
+        const s = resolveTileState(input({ status: "working", changedCount: 2 }), NOW)
+        expect(s.kind).toBe("changed")
+        expect(s.actions).toEqual(["review"])
+    })
+
     it("a working session with nothing changed reads WORKING and offers nothing", () => {
         const s = resolveTileState(input(), NOW)
         expect(s.kind).toBe("working")
