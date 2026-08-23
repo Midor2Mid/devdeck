@@ -8,10 +8,13 @@ import {
     sortForFollow,
     getTrace,
     barsPath,
-    isStalled,
-    awaitedTermIds
+    awaitedTermIds,
+    promptFor
 } from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
+import { newCounts } from "../agentSignals"
+import { exitCodeOf } from "../termExit"
+import { resolveTileState } from "../tileState"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -29,6 +32,9 @@ export function MissionControl(): JSX.Element {
     const openChanges = useStore((s) => s.openChanges)
     const setReviewOpen = useStore((s) => s.setReviewOpen)
     const agentSessions = useStore((s) => s.agentSessions)
+    const respondApproval = useStore((s) => s.respondApproval)
+    const replySession = useStore((s) => s.replySession)
+    const sessionCwd = useStore((s) => s.sessionCwd)
     // Subscribe to the slices the session list derives from so tiles refresh.
     const tabsByProject = useStore((s) => s.tabsByProject)
     const agentStatus = useStore((s) => s.agentStatus)
@@ -56,6 +62,10 @@ export function MissionControl(): JSX.Element {
 
     // Tiles the user has expanded to see fuller recent output inline.
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    // Reply drafts per session. Local, and cleared on send: a half-typed reply is
+    // not worth persisting, and every tile holding one would be state churn on a
+    // component that re-renders once a second.
+    const [drafts, setDrafts] = useState<Record<string, string>>({})
     const toggleExpand = (id: string): void =>
         setExpanded((prev) => {
             const next = new Set(prev)
@@ -127,6 +137,9 @@ export function MissionControl(): JSX.Element {
 
     // File-ownership / conflict map: which agent is changing which files, across worktrees.
     const [ownership, setOwnership] = useState<OwnershipMap | null>(null)
+    // Paths each session has made dirty since it started, from the SAME read the
+    // ownership map makes below — the chip adds no git call of its own.
+    const [changedBySession, setChangedBySession] = useState<Record<string, number>>({})
     useEffect(() => {
         if (view !== "mission") return
         let on = true
@@ -150,7 +163,9 @@ export function MissionControl(): JSX.Element {
                     ).map((c) => c.path)
                 }))
             )
-            if (on) setOwnership(buildOwnership(entries))
+            if (!on) return
+            setOwnership(buildOwnership(entries))
+            setChangedBySession(newCounts(entries))
         }
         void fetchOwn()
         const iv = setInterval(() => void fetchOwn(), 8000)
@@ -183,15 +198,24 @@ export function MissionControl(): JSX.Element {
                 ) : (
                     <div className="mission-grid">
                         {sessions.map((s) => {
-                            const ago = relTime(Date.now(), getLastAt(s.termId))
+                            const now = Date.now()
+                            const ago = relTime(now, getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
                             const trace = getTrace(s.termId)
-                            const stalled = isStalled(
-                                getLastAt(s.termId),
-                                !!termAgents[s.termId],
-                                awaited.has(s.termId),
-                                Date.now()
+                            const prompt = promptFor(s)
+                            const st = resolveTileState(
+                                {
+                                    status: s.status,
+                                    prompt,
+                                    exitCode: exitCodeOf(s.termId),
+                                    lastAt: getLastAt(s.termId),
+                                    changedCount: changedBySession[s.termId] ?? 0,
+                                    awaited: awaited.has(s.termId),
+                                    alive: !!termAgents[s.termId]
+                                },
+                                now
                             )
+                            const stalled = st.kind === "stalled"
                             return (
                                 <div
                                     key={s.termId}
@@ -203,27 +227,10 @@ export function MissionControl(): JSX.Element {
                                     // aria-label overrides the tile's content entirely, so it has
                                     // to carry everything a sighted user reads off the tile: the
                                     // badge included, or the running model becomes unannounceable.
-                                    aria-label={[
-                                        s.sessionName,
-                                        s.projectName,
-                                        s.badge,
-                                        s.status === "attention"
-                                            ? "needs you"
-                                            : stalled
-                                              ? `stalled, no output ${ago}`
-                                              : ago
-                                                ? `last output ${ago} ago`
-                                                : s.status
-                                    ]
+                                    aria-label={[s.sessionName, s.projectName, s.badge, st.chip, st.detail]
                                         .filter(Boolean)
                                         .join(" · ")}
-                                    data-tip={
-                                        stalled
-                                            ? `Stalled — no output ${ago}`
-                                            : ago
-                                              ? `Last output ${ago} ago`
-                                              : undefined
-                                    }
+                                    data-tip={st.detail ?? (ago ? `Last output ${ago} ago` : undefined)}
                                     onClick={() => jumpToTerm(s.termId)}
                                 >
                                     <div className="mission-tile-head">
@@ -251,19 +258,61 @@ export function MissionControl(): JSX.Element {
                                             {getTail(s.termId) || <span className="muted">…</span>}
                                         </div>
                                     )}
-                                    {s.status === "attention" && (
-                                        <div className="mission-tile-attn">needs you</div>
+                                    <div className={"mtile-chip tone-" + st.tone}>
+                                        <span className="mtile-mark" aria-hidden="true">
+                                            {st.mark}
+                                        </span>
+                                        {st.chip}
+                                    </div>
+                                    {st.kind === "needs-you" && st.detail && (
+                                        <div className="mtile-q" title={st.detail}>
+                                            {st.detail}
+                                        </div>
                                     )}
-                                    {/* Stalled carried nothing but a 2px left border
-                                        whose colour is a shade off attention's — so a
-                                        dead agent read as a slightly different stripe,
-                                        and the state this view exists to surface was
-                                        its least visible one. The word is the fix; the
-                                        border also goes dashed so it differs in FORM
-                                        from attention's solid rule, not only in hue. */}
-                                    {stalled && s.status !== "attention" && (
-                                        <div className="mission-tile-stall">
-                                            stalled · silent {ago}
+                                    {st.actions.length > 0 && (
+                                        <div className="mtile-actions" onClick={(e) => e.stopPropagation()}>
+                                            {st.actions.includes("approve") && prompt && (
+                                                <>
+                                                    <button
+                                                        className="ov-approve-yes"
+                                                        data-tip="Send Yes to the agent"
+                                                        onClick={() => respondApproval(s.termId, prompt.approve)}
+                                                    >
+                                                        ✓ Approve
+                                                    </button>
+                                                    <button
+                                                        className="ov-approve-no"
+                                                        data-tip="Reject this action"
+                                                        onClick={() => respondApproval(s.termId, prompt.deny)}
+                                                    >
+                                                        ✕ Deny
+                                                    </button>
+                                                </>
+                                            )}
+                                            {st.actions.includes("review") && (
+                                                <button
+                                                    className="mtile-act"
+                                                    data-tip="Open this session's changes"
+                                                    onClick={() => openChanges(sessionCwd(s.termId), s.sessionName)}
+                                                >
+                                                    Review
+                                                </button>
+                                            )}
+                                            {st.actions.includes("reply") && (
+                                                <input
+                                                    className="mtile-reply"
+                                                    placeholder="Reply…"
+                                                    value={drafts[s.termId] ?? ""}
+                                                    onChange={(e) =>
+                                                        setDrafts((d) => ({ ...d, [s.termId]: e.target.value }))
+                                                    }
+                                                    onKeyDown={(e) => {
+                                                        if (e.key !== "Enter") return
+                                                        replySession(s.termId, drafts[s.termId] ?? "")
+                                                        setDrafts((d) => ({ ...d, [s.termId]: "" }))
+                                                    }}
+                                                />
+                                            )}
                                         </div>
                                     )}
                                     <svg

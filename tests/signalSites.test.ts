@@ -158,6 +158,13 @@ describe("the scanner itself", () => {
 // local harness, which says nothing about whether the component still calls
 // them. These are argument-level pins, in the same style as the launch scan
 // above, and they are the cheapest thing that fails when the wiring is undone.
+//
+// Mission's tile-decision task moved the direct `isStalled(` call out of this
+// component and into `resolveTileState` (tileState.ts), which is now the one
+// place isStalled is called from — tileState.test.ts pins that call at the
+// pure-function level. What remained a component-only risk, and still needs
+// this file's kind of scan, is the WIRING one level up: does the component
+// still pass the real awaited set into the resolver, or a constant.
 
 const MISSION = src("../src/renderer/src/components/MissionControl.tsx")
 const SETTINGS = src("../src/renderer/src/components/SettingsModal.tsx")
@@ -172,11 +179,11 @@ function callSite(needle: string, from: string[], n = 12): string {
 describe("the stall marker is still gated on expectation", () => {
     const mission = codeLines(MISSION)
 
-    it("passes the awaited set into isStalled, not a constant", () => {
-        const call = callSite("isStalled(", mission, 7)
-        expect(call).toContain("awaited.has(s.termId)")
+    it("passes the awaited set into resolveTileState, not a constant", () => {
+        const call = callSite("resolveTileState(", mission, 10)
+        expect(call).toContain("awaited: awaited.has(s.termId)")
         // A constant in that position is the whole regression, and it type-checks.
-        expect(call).not.toContain("true,")
+        expect(call).not.toContain("awaited: true")
     })
 
     it("derives that set from the board and the pipeline run", () => {
