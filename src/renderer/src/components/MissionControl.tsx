@@ -12,7 +12,7 @@ import {
     promptFor
 } from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
-import { newCounts } from "../agentSignals"
+import { nextChangedCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
 import { resolveTileState, wantsYou } from "../tileState"
 import type { SystemInfo } from "../../../preload/index"
@@ -150,21 +150,38 @@ export function MissionControl(): JSX.Element {
                     termId: s.termId,
                     sessionName: s.sessionName,
                     projectName: s.projectName,
-                    files: (
-                        await window.api.git
-                            // M6: through sessionCwd, not a second spelling of it.
-                            // `?? projectPath` and `|| projectPath` disagree for an
-                            // empty-string termCwd entry, so the conflict map could
-                            // read a different directory than the card evidence for
-                            // the same session - the mismatch b66a23e existed to end.
-                            .changes(st.sessionCwd(s.termId))
-                            .catch(() => [])
-                    ).map((c) => c.path)
+                    // null, not [] - a failed read is UNKNOWN, not "nothing changed".
+                    // git.changes rejects on purpose (a transient failure: a repo
+                    // mid-rebase, an index.lock another agent holds, the timeout) so
+                    // each caller can decide what unknown means; writing [] here made
+                    // this caller silently choose "nothing" for a user-visible
+                    // per-session claim, so a session with 12 changed files could
+                    // drop to CHANGED · 0 files (losing its Review button) for one
+                    // poll and flip back 8 seconds later.
+                    files: await window.api.git
+                        // M6: through sessionCwd, not a second spelling of it.
+                        // `?? projectPath` and `|| projectPath` disagree for an
+                        // empty-string termCwd entry, so the conflict map could
+                        // read a different directory than the card evidence for
+                        // the same session - the mismatch b66a23e existed to end.
+                        .changes(st.sessionCwd(s.termId))
+                        .then((cs) => cs.map((c) => c.path) as string[] | null)
+                        .catch(() => null)
                 }))
             )
             if (!on) return
-            setOwnership(buildOwnership(entries))
-            setChangedBySession(newCounts(entries))
+            // Ownership only reflects sessions whose read succeeded this tick -
+            // a failed one is simply absent from `ok` for this poll. The changed
+            // count is different: nextChangedCounts (agentSignals.ts) merges the
+            // successful reads into the PREVIOUS counts rather than replacing
+            // them, so a failed session keeps its last known count instead of
+            // reading 0.
+            const ok = entries.filter(
+                (e): e is { termId: string; sessionName: string; projectName: string; files: string[] } =>
+                    e.files !== null
+            )
+            setOwnership(buildOwnership(ok))
+            setChangedBySession((prev) => nextChangedCounts(prev, entries))
         }
         void fetchOwn()
         const iv = setInterval(() => void fetchOwn(), 8000)
@@ -225,6 +242,16 @@ export function MissionControl(): JSX.Element {
                             const isExpanded = expanded.has(s.termId)
                             const trace = getTrace(s.termId)
                             const stalled = st.kind === "stalled"
+                            // changedBySession starts {} on mount (and briefly holds a
+                            // stale count after a session's own reply while the next
+                            // poll is in flight), so a session that is really CHANGED
+                            // can read WAITING for one interval, show the reply box,
+                            // and then flip to CHANGED - removing the box out from
+                            // under a draft that was never sent. Keep the input (and
+                            // its own place in the actions row) reachable whenever a
+                            // draft exists, even once the resolved actions no longer
+                            // list "reply", so typed text is never stranded.
+                            const hasDraft = !!(drafts[s.termId] ?? "").trim()
                             return (
                                 <div
                                     key={s.termId}
@@ -288,7 +315,7 @@ export function MissionControl(): JSX.Element {
                                             {st.detail}
                                         </div>
                                     )}
-                                    {st.actions.length > 0 && (
+                                    {(st.actions.length > 0 || hasDraft) && (
                                         <div className="mtile-actions" onClick={(e) => e.stopPropagation()}>
                                             {st.actions.includes("approve") && prompt && (
                                                 <>
@@ -317,7 +344,7 @@ export function MissionControl(): JSX.Element {
                                                     Review
                                                 </button>
                                             )}
-                                            {st.actions.includes("reply") && (
+                                            {(st.actions.includes("reply") || hasDraft) && (
                                                 <input
                                                     className="mtile-reply"
                                                     placeholder="Reply…"

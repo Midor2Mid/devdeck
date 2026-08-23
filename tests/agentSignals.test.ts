@@ -5,7 +5,8 @@ import {
     adoptBaseline,
     baselineOf,
     forgetSignals,
-    newCounts
+    newCounts,
+    nextChangedCounts
 } from "../src/renderer/src/agentSignals"
 
 describe("newPathsSince", () => {
@@ -299,5 +300,49 @@ describe("newCounts", () => {
             { termId: "b", files: [] }
         ])
         expect(counts).toEqual({ a: 1, b: 0 })
+    })
+})
+
+describe("nextChangedCounts", () => {
+    afterEach(() => {
+        forgetSignals("a")
+        forgetSignals("b")
+    })
+
+    // I4: git.changes rejects on a transient failure (mid-rebase, an
+    // index.lock, the timeout). Mapping that straight to [] claimed "nothing
+    // changed" about a session that may still have a dozen changed files -
+    // this is the fix, and the regression it exists to catch is a caller
+    // that goes back to overwriting with the fresh (zeroed) reading.
+    it("keeps a failed session's previous count instead of zeroing it", () => {
+        adoptBaseline("a", [])
+        const next = nextChangedCounts({ a: 12 }, [{ termId: "a", files: null }])
+        expect(next.a).toBe(12)
+    })
+
+    it("updates a session whose read succeeded", () => {
+        adoptBaseline("a", [])
+        const next = nextChangedCounts({ a: 12 }, [{ termId: "a", files: ["x.ts", "y.ts"] }])
+        expect(next.a).toBe(2)
+    })
+
+    it("mixes a failed session with a successful one in the same poll", () => {
+        adoptBaseline("a", [])
+        adoptBaseline("b", [])
+        const next = nextChangedCounts(
+            { a: 12, b: 3 },
+            [
+                { termId: "a", files: null },
+                { termId: "b", files: ["x.ts"] }
+            ]
+        )
+        expect(next).toEqual({ a: 12, b: 1 })
+    })
+
+    it("has nothing to fall back to for a session never seen before - it is simply absent, not zeroed", () => {
+        // MissionControl reads a missing key as 0 via `?? 0`, which is the same
+        // "no evidence yet" reading a brand-new session gets regardless of this
+        // function - there is no false claim here, only an absent one.
+        expect(nextChangedCounts({}, [{ termId: "a", files: null }])).toEqual({})
     })
 })
