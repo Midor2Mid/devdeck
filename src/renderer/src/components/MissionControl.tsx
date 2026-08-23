@@ -247,11 +247,21 @@ export function MissionControl(): JSX.Element {
                             // poll is in flight), so a session that is really CHANGED
                             // can read WAITING for one interval, show the reply box,
                             // and then flip to CHANGED - removing the box out from
-                            // under a draft that was never sent. Keep the input (and
-                            // its own place in the actions row) reachable whenever a
-                            // draft exists, even once the resolved actions no longer
-                            // list "reply", so typed text is never stranded.
+                            // under a draft that was never sent. A draft keeps its
+                            // input reachable across a state change like that one -
+                            // but only where a reply still means something: nothing is
+                            // listening on a dead process (exited()'s own comment says
+                            // so), and NEEDS YOU is answered by the prompt's own two
+                            // buttons, not by free text beside them. Without this
+                            // narrowing, a half-typed reply on a WAITING/ASKING/STALLED
+                            // tile whose process then exits - or that resolves to a
+                            // parsed prompt - would keep rendering a control that
+                            // cannot do anything, which is exactly the class of lie
+                            // this feature exists to prevent.
                             const hasDraft = !!(drafts[s.termId] ?? "").trim()
+                            const canReply =
+                                st.actions.includes("reply") ||
+                                (hasDraft && st.kind !== "exited" && st.kind !== "needs-you")
                             return (
                                 <div
                                     key={s.termId}
@@ -315,7 +325,7 @@ export function MissionControl(): JSX.Element {
                                             {st.detail}
                                         </div>
                                     )}
-                                    {(st.actions.length > 0 || hasDraft) && (
+                                    {(st.actions.length > 0 || canReply) && (
                                         <div className="mtile-actions" onClick={(e) => e.stopPropagation()}>
                                             {st.actions.includes("approve") && prompt && (
                                                 <>
@@ -344,7 +354,7 @@ export function MissionControl(): JSX.Element {
                                                     Review
                                                 </button>
                                             )}
-                                            {(st.actions.includes("reply") || hasDraft) && (
+                                            {canReply && (
                                                 <input
                                                     className="mtile-reply"
                                                     placeholder="Reply…"

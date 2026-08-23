@@ -176,6 +176,33 @@ function callSite(needle: string, from: string[], n = 12): string {
     return from.slice(at[0] - 1, at[0] - 1 + n).join("\n")
 }
 
+/**
+ * Like `callSite`, but the window can start BEFORE the line containing
+ * `needle` too - some evidence (e.g. the `<button` opening a JSX element)
+ * sits above the attribute line a test wants to anchor on, and that
+ * attribute is the only substring specific enough to be a safe, single-match
+ * needle.
+ */
+function around(needle: string, from: string[], before: number, after: number): string {
+    const at = linesWith(needle, from)
+    expect(at, "expected exactly one " + needle + " call site").toHaveLength(1)
+    const start = Math.max(0, at[0] - 1 - before)
+    const end = at[0] - 1 + after
+    return from.slice(start, end).join("\n")
+}
+
+/**
+ * The file's lines with NOTHING blanked - codeLines() replaces every
+ * quoted string with "" (so a decoy string literal cannot spell a call),
+ * which also erases the exact thing a couple of these pins need to see:
+ * the LITERAL comparison values inside a real conditional. Only safe to
+ * use where the surrounding window is narrow and specific enough that a
+ * decoy comment landing inside it is not a realistic way to fool the scan.
+ */
+function rawLines(path: string): string[] {
+    return readFileSync(path, "utf8").split("\n")
+}
+
 describe("the stall marker is still gated on expectation", () => {
     const mission = codeLines(MISSION)
 
@@ -208,6 +235,66 @@ describe("the stall marker is still gated on expectation", () => {
         const derive = callSite("awaitedTermIds(", mission, 1)
         expect(derive).toContain("boardTasks")
         expect(derive).toContain("pipelineRun")
+    })
+})
+
+// I3, re-review round 2: nothing stops a future edit reintroducing
+// role="button" on the tile wrapper, which is the exact defect this feature
+// shipped to fix - every decision control (Approve/Deny/Review/Reply) becomes
+// a presentational child of a button, per ARIA, and a screen-reader user is
+// back to hearing one label for the whole tile and reaching none of them.
+describe("the tile wrapper stays out of the way of its own decision controls (I3)", () => {
+    const mission = codeLines(MISSION)
+
+    it('does not carry role="button" or tabIndex on the wrapper', () => {
+        // ARIA: `button` has presentational children, so role="button" here
+        // would silently swallow every Approve/Deny/Review button and the
+        // Reply input inside it again. tabIndex=0 on a non-interactive
+        // wrapper is the other half of the same regression - it makes the
+        // whole tile a stop with nothing individually announced at it.
+        const wrapper = callSite("key={s.termId}", mission, 6)
+        expect(wrapper).not.toContain('role="button"')
+        expect(wrapper).not.toContain("tabIndex")
+    })
+
+    it("gives the jump its own labelled, focusable <button> instead", () => {
+        // The control the wrapper's role="button" used to stand in for has to
+        // still exist SOMEWHERE reachable - this is it. Losing the <button>
+        // (back to a <span>) or the aria-label makes the jump mouse-only
+        // again, silently, while every other test in this file stays green.
+        // Anchored on the aria-label line itself (className="mission-tile-name"
+        // is a quoted value and codeLines blanks it) - the two lines above it
+        // are the <button> opening tag and that same className attribute.
+        const nameButton = around("aria-label={[s.sessionName", mission, 2, 1)
+        expect(nameButton).toContain("<button")
+        expect(nameButton).toContain("aria-label=")
+    })
+})
+
+// I4, re-review round 2: the first fix for "a poll can strand a half-typed
+// draft" widened the reply input's gate to ANY state once a draft exists,
+// which let the input survive onto EXITED (nothing is listening - exited()'s
+// own comment says so) and onto NEEDS-YOU (answered by the prompt's own two
+// buttons, not free text beside them). That is the same class of lie the
+// whole wave exists to close, just moved into the escape hatch meant to fix
+// a different one - so the narrowing gets its own pin.
+describe("a stranded draft cannot reopen the reply box on EXITED or NEEDS-YOU (I4)", () => {
+    const mission = codeLines(MISSION)
+
+    it("canReply's draft escape hatch excludes exited and needs-you", () => {
+        // Raw, not codeLines: the values being pinned ARE quoted string
+        // literals, which codeLines blanks to "" specifically so a decoy
+        // string cannot spell a stripped-out call - here that blanking
+        // would erase the very thing under test, so this one reads the
+        // file unstripped.
+        const canReply = callSite("const canReply =", rawLines(MISSION), 3)
+        expect(canReply).toContain('st.kind !== "exited"')
+        expect(canReply).toContain('st.kind !== "needs-you"')
+    })
+
+    it("canReply, not some looser condition, is what gates the reply input", () => {
+        const gate = callSite("{canReply && (", mission, 2)
+        expect(gate).toContain("<input")
     })
 })
 
