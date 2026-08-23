@@ -9,6 +9,9 @@ const TERM = "t-exit"
 let ptyData: (e: { id: string; data: string }) => void = () => undefined
 let ptyExit: (e: { id: string; exitCode: number }) => void = () => undefined
 
+// at the top of the file, beside the other module-level captures
+let sentInput: { id: string; data: string }[] = []
+
 /** Only the namespaces this path touches, as in tests/cardReview.test.ts. */
 function stubApi(): void {
     ;(globalThis as unknown as { window: unknown }).window = {
@@ -23,7 +26,9 @@ function stubApi(): void {
                     return (): void => undefined
                 },
                 kill: (): void => undefined,
-                input: (): void => undefined
+                input: (id: string, data: string): void => {
+                    sentInput.push({ id, data })
+                }
             },
             triggers: { onFired: (): (() => void) => (): void => undefined },
             projects: {
@@ -86,5 +91,28 @@ describe("the exit code reaching the store", () => {
         ptyExit({ id: TERM, exitCode: 0 })
         useStore.getState().closePane(TERM)
         expect(exitCodeOf(TERM)).toBeUndefined()
+    })
+})
+
+describe("replying to a session from a tile", () => {
+    it("sends the text plus one carriage return, once", () => {
+        seedSession()
+        sentInput = []
+        useStore.getState().replySession(TERM, "use the other branch")
+        expect(sentInput).toEqual([{ id: TERM, data: "use the other branch\r" }])
+    })
+
+    it("sends nothing for an empty or whitespace-only reply", () => {
+        seedSession()
+        sentInput = []
+        useStore.getState().replySession(TERM, "   ")
+        expect(sentInput).toEqual([])
+    })
+
+    it("trims the reply", () => {
+        seedSession()
+        sentInput = []
+        useStore.getState().replySession(TERM, "  ship it  ")
+        expect(sentInput).toEqual([{ id: TERM, data: "ship it\r" }])
     })
 })

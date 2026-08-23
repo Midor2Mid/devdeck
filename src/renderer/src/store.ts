@@ -320,6 +320,8 @@ interface AppState extends Persisted {
     broadcast: (termIds: string[], text: string) => void
     /** Send a raw keystroke sequence to one agent (e.g. answering a permission prompt). */
     respondApproval: (termId: string, keys: string) => void
+    /** Send a line of text to a session, as if typed into its terminal. */
+    replySession: (termId: string, text: string) => void
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
     /** Jump to the oldest agent session that wants you (waiting or attention). */
@@ -2499,6 +2501,21 @@ export const useStore = create<AppState>((set, get) => {
         respondApproval: (termId, keys) => {
             window.api.pty.input(termId, keys)
             pushActivity("attention", termId, "answered prompt")
+        },
+
+        /**
+         * Answer an agent in a sentence, from wherever you are.
+         *
+         * The same call the Inbox drawer's reply box makes, as a store action so
+         * Mission's tiles and the drawer cannot drift on what "a reply" means.
+         * Trims, and refuses to send an empty line: a bare carriage return into a
+         * live agent is a keystroke nobody asked for.
+         */
+        replySession: (termId, text) => {
+            const line = text.trim()
+            if (!line) return
+            window.api.pty.input(termId, line + "\r")
+            pushActivity("attention", termId, "replied")
         },
 
         setComposerDraft: (projectId, text) => {
