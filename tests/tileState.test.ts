@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveTileState, type TileStateInput } from "../src/renderer/src/tileState"
+import { resolveTileState, asksForYou, type TileStateInput } from "../src/renderer/src/tileState"
 import { STALL_MS } from "../src/renderer/src/missionTail"
 import { FASTFAIL } from "../src/renderer/src/termExit"
 import type { ApprovalPrompt } from "../src/renderer/src/approval"
@@ -131,6 +131,35 @@ describe("resolveTileState precedence", () => {
         expect(s.actions).toEqual([])
     })
 
+    it("a session waiting on you is not QUIET", () => {
+        const s = resolveTileState(input({ status: "waiting", awaited: false }), NOW)
+        expect(s.kind).toBe("waiting")
+        expect(s.actions).toEqual(["reply"])
+    })
+
+    it("says how long it has been waiting", () => {
+        const s = resolveTileState(
+            input({ status: "waiting", awaited: false, lastAt: NOW - 3 * 60_000 }),
+            NOW
+        )
+        expect(s.chip).toBe("WAITING 3m")
+    })
+
+    // The gate in promptFor covers attention AND waiting, so a waiting session
+    // holding a parsable prompt is still the blocking case.
+    it("a parsable prompt still outranks WAITING", () => {
+        const s = resolveTileState(input({ status: "waiting", prompt: PROMPT }), NOW)
+        expect(s.kind).toBe("needs-you")
+    })
+
+    it("CHANGED outranks WAITING", () => {
+        const s = resolveTileState(
+            input({ status: "waiting", awaited: false, changedCount: 2 }),
+            NOW
+        )
+        expect(s.kind).toBe("changed")
+    })
+
     // Unawaited: the same silence with a card waiting on it is a STALL, which
     // the case above already pins.
     it("everything else is QUIET, with how long", () => {
@@ -144,6 +173,16 @@ describe("resolveTileState precedence", () => {
 
     it("says QUIET without a duration when the session never spoke", () => {
         expect(resolveTileState(input({ status: "idle", lastAt: undefined }), NOW).chip).toBe("QUIET")
+    })
+
+    // relTime reads anything under 5s as "now" — "QUIET now" reads as an error
+    // message, not a status. Same fix as WAITING's chip above.
+    it("says QUIET without a duration for output seconds old, not \"QUIET now\"", () => {
+        const s = resolveTileState(
+            input({ status: "idle", awaited: false, lastAt: NOW - 1000 }),
+            NOW
+        )
+        expect(s.chip).toBe("QUIET")
     })
 })
 
@@ -184,9 +223,26 @@ describe("form, not only colour", () => {
             resolveTileState(input({ status: "attention" }), NOW),
             resolveTileState(input({ status: "idle", lastAt: NOW - STALL_MS - 1 }), NOW),
             resolveTileState(input({ status: "idle", changedCount: 2 }), NOW),
+            resolveTileState(input({ status: "waiting", awaited: false }), NOW),
             resolveTileState(input(), NOW),
             resolveTileState(input({ status: "idle" }), NOW)
         ].map((s) => s.mark)
         expect(new Set(marks).size).toBe(marks.length)
+    })
+})
+
+describe("asksForYou", () => {
+    it("is true for the states that block on a decision", () => {
+        expect(asksForYou("needs-you")).toBe(true)
+        expect(asksForYou("asking")).toBe(true)
+        expect(asksForYou("waiting")).toBe(true)
+        expect(asksForYou("stalled")).toBe(true)
+    })
+
+    it("is false for the states that do not — CHANGED is a queue, not a block", () => {
+        expect(asksForYou("changed")).toBe(false)
+        expect(asksForYou("working")).toBe(false)
+        expect(asksForYou("quiet")).toBe(false)
+        expect(asksForYou("exited")).toBe(false)
     })
 })

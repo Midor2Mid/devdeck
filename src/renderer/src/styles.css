@@ -5249,7 +5249,8 @@ button .ic,
 [data-style="minimal"] .chip,
 [data-style="minimal"] .work-type,
 [data-style="minimal"] .work-status,
-[data-style="minimal"] .agent-badge {
+[data-style="minimal"] .agent-badge,
+[data-style="minimal"] .mtile-chip {
     border-radius: 4px;
 }
 /* Denser tabs */
@@ -5699,7 +5700,8 @@ button .ic,
 [data-style="modern"] .tab-rename,
 [data-style="modern"] .chip,
 [data-style="modern"] .work-type,
-[data-style="modern"] .work-status {
+[data-style="modern"] .work-status,
+[data-style="modern"] .mtile-chip {
     border-radius: 7px;
     transition-duration: 0.12s;
 }

@@ -34,6 +34,7 @@ export type TileStateKind =
     | "asking"
     | "stalled"
     | "changed"
+    | "waiting"
     | "working"
     | "quiet"
 
@@ -169,17 +170,46 @@ export function resolveTileState(i: TileStateInput, now: number): TileState {
             actions: ["review"]
         }
     }
-    // 6. Mid-turn. Nothing to decide.
+    // 6. Finished a turn while you were looking elsewhere. Not a question and
+    //    not a stall — the app's own soft signal that it is your move. Below
+    //    CHANGED because reviewable work is the more useful thing to say, and
+    //    NOT accent-toned: a live question is what the accent is saved for, and
+    //    an accent on every agent that finished its turn is a light that never
+    //    goes off.
+    if (i.status === "waiting") {
+        const ago = relTime(now, i.lastAt)
+        return {
+            kind: "waiting",
+            chip: ago && ago !== "now" ? `WAITING ${ago}` : "WAITING",
+            mark: "◇",
+            tone: "neutral",
+            detail: "Finished a turn while you were away — it is your move.",
+            actions: ["reply"]
+        }
+    }
+    // 7. Mid-turn. Nothing to decide.
     if (i.status === "working") {
         return { kind: "working", chip: "WORKING", mark: "▶", tone: "neutral", actions: [] }
     }
-    // 7. The resting state of an agent that finished and handed back to you.
+    // 8. The resting state of an agent that finished and handed back to you.
     const ago = relTime(now, i.lastAt)
     return {
         kind: "quiet",
-        chip: ago ? `QUIET ${ago}` : "QUIET",
+        chip: ago && ago !== "now" ? `QUIET ${ago}` : "QUIET",
         mark: "–",
         tone: "quiet",
         actions: []
     }
+}
+
+/**
+ * Does this state want something from you?
+ *
+ * Drives the Mission header's count, which used to read raw `attention` status
+ * and so undercounted the states the tiles now say out loud. `changed` is
+ * deliberately excluded: reviewable work is a queue, not a block, and the
+ * Review Queue section below already reports it.
+ */
+export function asksForYou(kind: TileStateKind): boolean {
+    return kind === "needs-you" || kind === "asking" || kind === "waiting" || kind === "stalled"
 }

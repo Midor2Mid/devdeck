@@ -14,7 +14,7 @@ import {
 import { buildOwnership, type OwnershipMap } from "../ownership"
 import { newCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
-import { resolveTileState } from "../tileState"
+import { resolveTileState, asksForYou } from "../tileState"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -58,7 +58,6 @@ export function MissionControl(): JSX.Element {
     // A quiet agent is only stalled if something is actually waiting on it.
     const awaited = awaitedTermIds(boardTasks, pipelineRun)
     const totalAgents = sessions.length
-    const attention = sessions.filter((s) => s.status === "attention").length
 
     // Tiles the user has expanded to see fuller recent output inline.
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -182,6 +181,35 @@ export function MissionControl(): JSX.Element {
         setReviewOpen(true)
     }
 
+    // Resolve every tile's state ONCE per render, here, rather than inside the
+    // grid's map: the header's "N need attention" count and the grid itself
+    // must agree on what each tile is saying, and resolving twice (once for
+    // the count, once per tile) would double the per-tile work this component
+    // already does once a second for no reason.
+    const now = Date.now()
+    const resolved = sessions.map((s) => {
+        const prompt = promptFor(s)
+        return {
+            s,
+            prompt,
+            st: resolveTileState(
+                {
+                    status: s.status,
+                    prompt,
+                    exitCode: exitCodeOf(s.termId),
+                    lastAt: getLastAt(s.termId),
+                    changedCount: changedBySession[s.termId] ?? 0,
+                    awaited: awaited.has(s.termId),
+                    alive: !!termAgents[s.termId]
+                },
+                now
+            )
+        }
+    })
+    // NEEDS-YOU, ASKING, WAITING, STALLED all want a decision; CHANGED is a
+    // queue (the Review Queue section already reports it), not a block.
+    const attention = resolved.filter((r) => asksForYou(r.st.kind)).length
+
     return (
         <div className="mission">
             <div className="mission-section">
@@ -197,24 +225,10 @@ export function MissionControl(): JSX.Element {
                     </div>
                 ) : (
                     <div className="mission-grid">
-                        {sessions.map((s) => {
-                            const now = Date.now()
+                        {resolved.map(({ s, prompt, st }) => {
                             const ago = relTime(now, getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
                             const trace = getTrace(s.termId)
-                            const prompt = promptFor(s)
-                            const st = resolveTileState(
-                                {
-                                    status: s.status,
-                                    prompt,
-                                    exitCode: exitCodeOf(s.termId),
-                                    lastAt: getLastAt(s.termId),
-                                    changedCount: changedBySession[s.termId] ?? 0,
-                                    awaited: awaited.has(s.termId),
-                                    alive: !!termAgents[s.termId]
-                                },
-                                now
-                            )
                             const stalled = st.kind === "stalled"
                             return (
                                 <div
@@ -302,6 +316,7 @@ export function MissionControl(): JSX.Element {
                                                 <input
                                                     className="mtile-reply"
                                                     placeholder="Reply…"
+                                                    aria-label={`Reply to ${s.sessionName}`}
                                                     value={drafts[s.termId] ?? ""}
                                                     onChange={(e) =>
                                                         setDrafts((d) => ({ ...d, [s.termId]: e.target.value }))
