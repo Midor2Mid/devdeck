@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process"
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, lstatSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, basename } from "node:path"
+import { fileURLToPath } from "node:url"
 import {
     treesDir,
     branchFor,
@@ -268,5 +269,33 @@ describe("contract", () => {
     it("derives the trees folder from the repo folder name", () => {
         const repoRoot = "C:/x/my-app"
         expect(basename(treesDir(repoRoot))).toBe("my-app-trees")
+    })
+})
+
+// The helper addresses the repo root as "." internally. Printing that verbatim gave
+// "shared dependencies linked: .", which reads as noise rather than as a place.
+// Asserted at the CLI, because the string a person reads is what was wrong. The same
+// assertion was watched failing against the three sibling copies before each was
+// fixed, so it is known to catch the regression.
+const SCRIPT = fileURLToPath(new URL("../scripts/worktree.mjs", import.meta.url))
+
+describe("the CLI's own words", () => {
+    let repo: string
+    beforeEach(() => {
+        repo = makeRepo()
+    })
+    afterEach(() => cleanupRepo(repo))
+
+    it("names the repo root in words, not as a dot", () => {
+        mkdirSync(join(repo, "node_modules"))
+        const r = spawnSync(process.execPath, [SCRIPT, "new", "cli-root"], { cwd: repo, encoding: "utf8" })
+        expect(r.status).toBe(0)
+        expect(r.stdout).toMatch(/shared dependencies linked: the repo root/)
+    })
+
+    it("says plainly when there was nothing to share", () => {
+        const r = spawnSync(process.execPath, [SCRIPT, "new", "cli-bare"], { cwd: repo, encoding: "utf8" })
+        expect(r.status).toBe(0)
+        expect(r.stdout).toMatch(/no installed dependencies to share/)
     })
 })
