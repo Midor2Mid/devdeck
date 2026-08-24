@@ -260,6 +260,34 @@ A "more modern / creative / future" pass, all opt-in (calm default unchanged):
   - **Plan:** one coordinated bump — Node LTS → Electron latest → Vite / electron-builder — clears the shipped Electron CVEs and most of the rest. **Do not** `npm audit fix --force` (it forces breaking Electron 41 on Node 22.11, plus Vite 6 + electron-builder 26). **Followed as written**, and the no-force rule held: plain `npm audit fix` cleared the last four in-range advisories after the majors were chosen by hand.
   - For the record: `mssql`/`tedious` (M3.5 SQL Server) added **zero** advisories.
 
+### Artifact size: measured, and `npm dedupe` is not the lever (2026-08-24)
+
+The packaging log's `duplicate dependency references` list (react/react-dom, the
+`@azure/*` and `@peculiar/asn1-*` trees) looks like waste and is not: those are
+version-IDENTICAL packages referenced from several places in the tree, which is
+hoisting bookkeeping, not duplicated bytes. `npm dedupe` was run to test that:
+
+| | before | after |
+|---|---|---|
+| `node_modules` | 725 MB | 725 MB |
+| packages | 470 | 470 |
+| `release/win-unpacked` | 544 MB | 544 MB |
+| `app.asar` | 178 MB | 178 MB |
+
+Zero change on every measure, and the warning still prints. All it did was collapse
+`@types/node` 22.20.0/22.20.1 to one copy and drop a nested dev-only `ci-info`.
+Kept, since it is a real if tiny tidy, but do not reach for it to shrink the app.
+
+Where the 178 MB actually is, measured against `dependencies`:
+**`monaco-editor` 98 MB**, `@xterm/xterm` 7 MB, `react-dom` 5 MB, everything else
+under 2 MB, plus 26 MB of built app code in `out/`. Monaco is 55 percent of the
+payload on its own, and it ships every language grammar - the build log lists
+`abap`, `elixir`, `postiats`, `freemarker2` and dozens more as separate chunks.
+The real lever is a Monaco language subset (its `MonacoEditorWebpackPlugin`
+equivalent for Vite, or importing only the languages the editor panel offers),
+not dependency deduplication. Not scheduled: the app is not distributed by
+download size today, and lazy chunks mean unused grammars are never fetched.
+
 ## Decisions log
 
 | Date | Decision | Why |
