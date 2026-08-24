@@ -142,15 +142,22 @@ Main sends the replayed buffer through `pty:data`. The store's `onPtyData` calls
 its own exit record**, and the tile would flip from `EXITED` to `WORKING` because
 the pane was visited. The feature would break itself.
 
-The replay therefore arrives marked (`{ replay: true }`), and the store writes it
-to the terminal without treating it as liveness.
+The replay therefore arrives marked (`{ replay: true }`), and the marker gates
+**exactly one thing**: the `clearExit(id)` call. Everything else on that path —
+`recordTail`, `recordRate`, the status transitions — runs unchanged.
 
-**The same branch fixes a pre-existing lie.** Replay currently runs through
-`recordTail`, which stamps `lastAt` — so re-attaching to a long-quiet session
-makes it look like it just spoke, resetting stall detection for a session that
-has said nothing. Same mechanism, same rule: output the process did not just
-produce is not evidence that it is alive. This is adjacent scope, called out
-here so it can be cut deliberately rather than absorbed silently.
+### The `lastAt` stamp stays as it is — deliberately
+
+Replay runs through `recordTail`, which stamps `lastAt`, so re-attaching to a
+long-quiet session makes it look like it just spoke and resets stall detection
+for a session that has said nothing. That is a real pre-existing lie of the same
+family, and it was **considered and cut from this work**: it changes stall
+behaviour for every re-attach in the app, not only for dead panes, and it
+deserves its own change with its own review rather than riding in on this one.
+
+Implementers must therefore leave `recordTail` alone on the replay path. The
+temptation to "fix it while we're here" is the thing being refused; a test pins
+the current behaviour so the decision is visible rather than assumed.
 
 ## What clears a corpse
 
@@ -163,7 +170,7 @@ process it describes does not either.
 
 ## Out of scope
 
-- **No Restart button on the Mission tile.** The defect was that the jump was
+- **No Restart button on the Mission tile** (decided, not merely unbuilt). The defect was that the jump was
   destructive; once the jump is safe, the tile needs nothing new. The state-chip
   spec rejected a kill button on a dense one-click tile for the same reason a
   spawn button does not belong there either.
@@ -183,8 +190,11 @@ process it describes does not either.
 - **The hold decision** as a pure function over (exit code present, restore
   pending) → the reason, or none.
 - **A replay is not liveness**: through the existing store-stub pattern
-  (`tests/exitRecord.test.ts`), assert that a replayed chunk neither clears the
-  exit record nor stamps `lastAt`, and that a live chunk does both.
+  (`tests/exitRecord.test.ts`), assert that a replayed chunk does **not** clear
+  the exit record while a live chunk does — and, pinning the decision above,
+  that a replayed chunk **still stamps `lastAt`** exactly as today. That second
+  assertion exists so the cut is a recorded choice rather than an oversight
+  someone later "fixes" without noticing it was deliberate.
 - **Restart is accounted**: a restarted agent pane produces a usage-start event,
   pinned the way `tests/signalSites.test.ts` pins the launch sites today.
 - **In the running app** (there is no headless renderer): kill a process, switch
