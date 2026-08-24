@@ -142,9 +142,25 @@ Main sends the replayed buffer through `pty:data`. The store's `onPtyData` calls
 its own exit record**, and the tile would flip from `EXITED` to `WORKING` because
 the pane was visited. The feature would break itself.
 
-The replay therefore arrives marked (`{ replay: true }`), and the marker gates
-**exactly one thing**: the `clearExit(id)` call. Everything else on that path —
-`recordTail`, `recordRate`, the status transitions — runs unchanged.
+A held pane does not call `pty.create` — that is the entire point — and replay
+today happens *inside* the `pty:create` handler. So a marker on `pty:data` would
+never fire for a held dead pane: it would replay nothing at all.
+
+The corpse is therefore fetched, not pushed. A read-only IPC returns it for an
+id, and the held pane writes it into xterm itself:
+
+```ts
+ipcMain.handle("pty:buffer", (_e, id: string) => ptyMgr.bufferOf(id))
+// -> { buffer: string; exitCode: number | undefined }
+```
+
+Nothing on this path passes through `onPtyData`, so `clearExit` is never
+reached and no `{ replay: true }` flag has to be threaded through main, preload
+and the store. The ordering the pane needs — the output first, then the exit
+notice — becomes an ordinary `await` instead of a race against a pushed event.
+
+The live re-attach path (a still-running session whose pane remounts) keeps
+replaying through `pty:create` exactly as it does today, and is not touched.
 
 ### The `lastAt` stamp stays as it is — deliberately
 
