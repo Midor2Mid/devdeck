@@ -16,6 +16,14 @@ import {
 import type { PipelineRun, PipelineStepState } from "./pipeline"
 import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } from "./pipeline"
 import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses } from "./gate"
+import { undoToast } from "./toast"
+import { toggleZoom } from "./paneNav"
+import {
+    pushClosed,
+    restorePlan,
+    reopenCommand,
+    type ClosedSession
+} from "./closedSessions"
 import { diffPrompt, type DiffAiKind } from "./diffai"
 import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import {
@@ -338,6 +346,16 @@ interface AppState extends Persisted {
     splitActive: (dir: SplitDir, agentId: string) => void
     closePane: (termId: string) => void
     closeActivePane: () => void
+    /** The pane blown up to fill the stage, if any. Advisory: validZoom decides if it applies. */
+    zoomedPane: string | undefined
+    /** Zoom the given pane (default: the active one), or unzoom if it is already zoomed. */
+    toggleZoomPane: (paneId?: string) => void
+    /** Close a pane the USER closed: same as closePane, plus an undo toast. */
+    closePaneWithUndo: (termId: string) => void
+    /** Sessions closed this run, newest first, for undo. Not persisted: the ptys are gone. */
+    closedSessions: ClosedSession[]
+    /** Reopen the most recently closed session, resuming it where the agent supports it. */
+    reopenLastClosed: () => void
     renameTab: (projectId: string, tabId: string, name: string) => void
     setActiveTab: (projectId: string, tabId: string) => void
 
@@ -1157,6 +1175,8 @@ export const useStore = create<AppState>((set, get) => {
         pendingEditorOpen: null,
         agentStatus: {},
         lastAgentTermId: null,
+        closedSessions: [],
+        zoomedPane: undefined,
         notifications: [],
         dismissNotification: (id) =>
             set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
@@ -2706,6 +2726,27 @@ export const useStore = create<AppState>((set, get) => {
                     break
                 }
             }
+            // Record what would be needed to bring this back, BEFORE forget()
+            // below deletes the maps it reads (agent, cwd, shell, name).
+            if (ownerProject && ownerTab) {
+                const closingAgent = s.agentOf(termId)
+                set({
+                    closedSessions: pushClosed(s.closedSessions, {
+                        termId,
+                        projectId: ownerProject,
+                        tabId: ownerTab.id,
+                        tabName: ownerTab.name,
+                        name: s.termNames[termId] ?? ownerTab.name,
+                        agentId: closingAgent,
+                        isAgent: isAgentId(closingAgent),
+                        cwd: s.termCwd[termId],
+                        shellKind: s.termShells[termId],
+                        initialCommand: s.termInit[termId],
+                        closedAt: Date.now()
+                    })
+                })
+            }
+
             // If this pane was recording, persist the recording before it dies.
             if (s.recordingTermId === termId) {
                 const path = s.projects.find((p) => p.id === ownerProject)?.path
@@ -2748,7 +2789,87 @@ export const useStore = create<AppState>((set, get) => {
             const projectId = s.activeId
             if (!projectId) return
             const pane = s.activePane(projectId)
-            if (pane) s.closePane(pane)
+            if (pane) s.closePaneWithUndo(pane)
+        },
+
+        closePaneWithUndo: (termId) => {
+            // Only for closes a person asked for. The programmatic closers (a
+            // finished pipeline step, a race loser) must not offer to undo work
+            // the app itself tidied up, so they keep calling closePane.
+            const s = get()
+            const label = s.termNames[termId] ?? s.activeTab(s.activeId ?? "")?.name ?? "session"
+            s.closePane(termId)
+            undoToast(`Closed ${label}`, () => get().reopenLastClosed())
+        },
+
+        toggleZoomPane: (paneId) => {
+            const s = get()
+            const target = paneId ?? (s.activeId ? s.activePane(s.activeId) : undefined)
+            if (!target) return
+            set({ zoomedPane: toggleZoom(s.zoomedPane, target) })
+        },
+
+        reopenLastClosed: () => {
+            const s = get()
+            const entry = s.closedSessions[0]
+            if (!entry) return
+            const rest = s.closedSessions.slice(1)
+            const tabs = s.tabsByProject[entry.projectId] ?? []
+            const preset = entry.isAgent
+                ? useSettings.getState().agentById(entry.agentId)
+                : undefined
+            const command = reopenCommand(entry, preset)
+            const plan = restorePlan(entry, tabs)
+
+            // The entry is consumed either way: one undo, one reopen, so a second
+            // press cannot spawn a duplicate of the same session.
+            if (plan.kind === "new-tab") {
+                // newTab spawns into the ACTIVE project, so point that at the
+                // entry's project first - undo can be pressed after a switch.
+                set({ activeId: entry.projectId, closedSessions: rest })
+                get().newTab(entry.agentId, command, entry.name, entry.cwd, entry.shellKind)
+                return
+            }
+
+            const tab = tabs.find((t) => t.id === plan.tabId)
+            if (!tab) return
+            const termId = newId()
+            const root = splitLeaf(tab.root, firstLeaf(tab.root), "row", termId)
+            set({
+                closedSessions: rest,
+                activeId: entry.projectId,
+                view: "terminal",
+                termAgents: { ...s.termAgents, [termId]: entry.agentId },
+                termInit: command ? { ...s.termInit, [termId]: command } : s.termInit,
+                termCwd: entry.cwd ? { ...s.termCwd, [termId]: entry.cwd } : s.termCwd,
+                termNames: { ...s.termNames, [termId]: entry.name },
+                termShells: entry.shellKind
+                    ? { ...s.termShells, [termId]: entry.shellKind }
+                    : s.termShells,
+                agentStatus: entry.isAgent
+                    ? { ...s.agentStatus, [termId]: "working" }
+                    : s.agentStatus,
+                tabsByProject: {
+                    ...s.tabsByProject,
+                    [entry.projectId]: tabs.map((t) => (t.id === tab.id ? { ...t, root } : t))
+                },
+                activeTabByProject: { ...s.activeTabByProject, [entry.projectId]: tab.id },
+                activePaneByProject: { ...s.activePaneByProject, [entry.projectId]: termId },
+                lastAgentTermId: entry.isAgent ? termId : s.lastAgentTermId
+            })
+            if (entry.isAgent) {
+                markLaunched(termId)
+                pushActivity("start", termId, `${entry.name} · reopened`)
+                useSettings
+                    .getState()
+                    .logUsageStart(
+                        termId,
+                        entry.agentId,
+                        entry.projectId,
+                        entry.cwd || s.projects.find((p) => p.id === entry.projectId)?.path
+                    )
+            }
+            persist()
         },
 
         renameTab: (projectId, tabId, name) => {

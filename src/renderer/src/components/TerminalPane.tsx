@@ -111,6 +111,16 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         term.attachCustomKeyEventHandler((e) => {
             if (e.type !== "keydown") return true
             const mod = e.ctrlKey || e.metaKey
+            // Alt+digit (jump to session) and Alt+arrow (move between panes) are
+            // the app's. Without this xterm still ENCODES them, so Alt+Left would
+            // write \x1b[1;3D into the shell on its way to moving focus. Narrow on
+            // purpose: AltGr arrives as Ctrl+Alt on Windows layouts, so anything
+            // carrying Ctrl is left alone, as is every other Alt combination.
+            if (e.altKey && !mod) {
+                if (/^Digit[1-9]$/.test(e.code)) return false
+                if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.code)) return false
+                return true
+            }
             if (!mod || e.altKey) return true
             if (e.shiftKey) {
                 const k = e.key.toLowerCase()
@@ -258,6 +268,9 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     return (
         <div
             className={"term-pane" + (focused ? " focused" : "")}
+            // The handle directional navigation reads: only mounted panes carry
+            // it, so the geometry it measures is what is actually on screen.
+            data-term-id={termId}
             onMouseDown={() => onFocus(termId)}
         >
             <div ref={containerRef} className="term-mount" />

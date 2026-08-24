@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useStore, SHELL, type TermLayout } from "../store"
+import { useStore, SHELL, type TermLayout, type AnySession } from "../store"
 import { useSettings, sshCommand } from "../settings"
 import { THEMES, STYLES } from "../themes"
 import { DECK_VIEWS } from "./ViewKeys"
@@ -115,13 +115,32 @@ export function CommandPalette(): JSX.Element {
                 run: () => setAppearance({ style: s.id })
             })
 
-        for (const s of store.agentSessions())
+        // Every session, not only the agents: a shell running a dev server is
+        // exactly the kind of pane you lose track of. Ordered so the ones that
+        // want you float up, and titled with what distinguishes them - the
+        // session's own name, its project, and the worktree it sits in when that
+        // is not the project root - because a list of eight "claude" rows is not
+        // a way to find anything. All three are searchable, so typing a branch
+        // name reaches its session.
+        const rankSession = (x: AnySession): number =>
+            x.status === "attention" ? 0 : x.status === "waiting" ? 1 : x.status === "working" ? 2 : 3
+        const leaf = (path: string): string => path.split(/[\/]/).filter(Boolean).pop() ?? path
+        for (const s of [...store.sessions()].sort((a, b) => rankSession(a) - rankSession(b))) {
+            const cwd = store.termCwd[s.termId]
+            const where = cwd && cwd !== s.projectPath ? ` · ${leaf(cwd)}` : ""
+            const flag =
+                s.status === "attention"
+                    ? " - needs you"
+                    : s.status === "waiting"
+                      ? " - waiting"
+                      : ""
             cmds.push({
                 id: "go:" + s.termId,
                 section: "Sessions",
-                title: `Go to ${s.tabName} · ${s.projectName}`,
+                title: `Go to ${s.sessionName} · ${s.projectName}${where}${flag}`,
                 run: () => store.jumpToTerm(s.termId)
             })
+        }
 
         cmds.push({ id: "act:switcher", section: "Actions", title: "Switch project…", kbd: "Ctrl+K", run: () => store.openSwitcher() })
         // Searching "recent project" found nothing: the walk-back existed only as a
@@ -132,6 +151,8 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:tasks", section: "Actions", title: "Task board", kbd: "Ctrl+2", run: () => store.setView("tasks") })
         cmds.push({ id: "act:dotnet", section: "Actions", title: "Build / test (.NET)", kbd: "Ctrl+Shift+B", run: () => store.setDotnetOpen(true) })
         cmds.push({ id: "act:review-panel", section: "Actions", title: "Review changes — agent panel", kbd: "Ctrl+Shift+R", run: () => store.setReviewOpen(true) })
+        cmds.push({ id: "act:zoom", section: "Actions", title: "Zoom the focused pane", kbd: "Ctrl+Shift+Z", run: () => { store.setView("terminal"); store.toggleZoomPane() } })
+        cmds.push({ id: "act:reopen", section: "Actions", title: "Reopen the last closed session", run: () => store.reopenLastClosed() })
         cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", kbd: "Ctrl+Shift+I", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
         // These three panels existed only as unlabelled deck icons, so searching
         // "usage" / "cost" / "inbox" / "pipeline" in the palette found nothing.

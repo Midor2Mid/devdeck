@@ -1426,6 +1426,19 @@ button .ic,
     overflow-x: auto;
     flex: 1;
 }
+.tab-index {
+    font-family: var(--mono, monospace);
+    font-size: 10px;
+    line-height: 1;
+    color: var(--faint);
+    border: 1px solid var(--border-soft, var(--border));
+    border-radius: 3px;
+    padding: 2px 3px;
+    flex: none;
+}
+.term-tab.active .tab-index {
+    color: var(--muted);
+}
 .term-tab {
     display: flex;
     align-items: center;
@@ -6519,6 +6532,22 @@ kbd {
     position: relative;
     height: 100%;
     width: 100%;
+}
+/* Pane zoom. The zoomed pane stays exactly where it is in the layout tree - no
+   remount, so no pty detach and no buffer replay - and is lifted over the stage
+   instead. `position: fixed` would normally resolve against the viewport and
+   cover the tab bar with it; the transform on .stage-body.zooming below makes
+   .stage-body the containing block, so "fill everything" means the stage. The
+   transform is applied ONLY while zooming, to keep a compositing layer off the
+   terminals the rest of the time. */
+.stage-body.zooming {
+    transform: translateZ(0);
+}
+.pane-host.pane-zoomed {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: var(--bg-3);
 }
 .drop-zones {
     position: absolute;

@@ -11,6 +11,7 @@ import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
 import { NetworkPanel } from "./components/NetworkPanel"
+import { paneAtIndex, pickInDirection, type PaneDir, type PaneRect } from "./paneNav"
 import { DECK_VIEWS } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
@@ -43,6 +44,32 @@ import { ConfirmDialog } from "./components/ConfirmDialog"
 import { PromptDialog } from "./components/PromptDialog"
 import { TooltipLayer } from "./components/Tooltip"
 import { ContextMenuLayer } from "./components/ContextMenu"
+
+const PANE_DIRS: Record<string, PaneDir> = {
+    ArrowLeft: "left",
+    ArrowRight: "right",
+    ArrowUp: "up",
+    ArrowDown: "down"
+}
+
+/**
+ * Every mounted pane's box. Only panes actually on screen carry the attribute,
+ * so this answers "what can I see" rather than "what exists": in Tabs that is
+ * the active tab's panes, and in Grid it is every card, which is what makes
+ * directional movement work in both without a special case.
+ */
+function paneRects(): PaneRect[] {
+    return [...document.querySelectorAll<HTMLElement>("[data-term-id]")].map((el) => {
+        const r = el.getBoundingClientRect()
+        return {
+            termId: el.dataset.termId as string,
+            left: r.left,
+            top: r.top,
+            right: r.right,
+            bottom: r.bottom
+        }
+    })
+}
 
 export function App(): JSX.Element {
     // Slice selectors only — a whole-store subscription here would re-render
@@ -207,6 +234,44 @@ export function App(): JSX.Element {
                 useStore.getState().cycleProject()
                 return
             }
+            // Ctrl+Shift+Z — zoom the focused pane to fill the stage, and back.
+            if (mod && e.shiftKey && e.code === "KeyZ") {
+                const s = useStore.getState()
+                if (s.view !== "terminal") return
+                e.preventDefault()
+                e.stopPropagation()
+                s.toggleZoomPane()
+                return
+            }
+            // Alt+1..9 — jump straight to a session in this project, counted the
+            // way the tab bar reads. Alt is otherwise unbound here, and the
+            // window has no menu whose mnemonics could collide with digits.
+            if (e.altKey && !mod && /^Digit[1-9]$/.test(e.code)) {
+                const s = useStore.getState()
+                if (!s.activeId) return
+                const target = paneAtIndex(s.tabsFor(s.activeId), Number(e.code.slice(5)))
+                if (!target) return
+                e.preventDefault()
+                e.stopPropagation()
+                s.jumpToTerm(target)
+                return
+            }
+            // Alt+arrows — move focus to the pane in that direction, by what is
+            // on screen rather than by the layout tree (see paneNav). Ignored
+            // while a pane is zoomed: the other panes are behind the zoom, so
+            // "the one to the right" is not a question the screen can answer.
+            if (e.altKey && !mod && PANE_DIRS[e.code]) {
+                const s = useStore.getState()
+                if (s.view !== "terminal" || !s.activeId || s.zoomedPane) return
+                const from = s.activePane(s.activeId)
+                if (!from) return
+                const target = pickInDirection(paneRects(), from, PANE_DIRS[e.code])
+                if (!target) return
+                e.preventDefault()
+                e.stopPropagation()
+                s.focusPane(s.activeId, target)
+                return
+            }
             if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
                 e.preventDefault()
                 if (useStore.getState().switcherOpen) closeSwitcher()
@@ -226,7 +291,10 @@ export function App(): JSX.Element {
             // Ctrl+Tab / Ctrl+Shift+Tab — cycle agent sessions (deck alt-tab).
             if (mod && e.code === "Tab") {
                 const s = useStore.getState()
-                const target = nextSession(s.agentSessions(), s.lastAgentTermId, e.shiftKey ? -1 : 1)
+                // Every session, shells included: a cycle that silently skips half
+                // the panes is a cycle you cannot trust to reach the one you want.
+                const here = s.activeId ? s.activePane(s.activeId) ?? null : null
+                const target = nextSession(s.sessions(), here, e.shiftKey ? -1 : 1)
                 if (target) {
                     e.preventDefault()
                     s.jumpToTerm(target)
