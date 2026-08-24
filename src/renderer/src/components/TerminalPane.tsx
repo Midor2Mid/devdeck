@@ -11,6 +11,15 @@ import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
 
 const IS_WINDOWS = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
 
+/**
+ * The exit notice, ANSI-dimmed the same way on both call sites: the live
+ * `pty:exit` handler below, and the corpse replay for a pane that mounted
+ * onto an already-dead session. One string, one place it can drift.
+ */
+function writeExitNotice(term: Terminal, exitCode: number): void {
+    term.write("\r\n\x1b[90m" + exitNotice(exitCode, IS_WINDOWS) + "\x1b[0m\r\n")
+}
+
 interface Props {
     termId: string
     /** Command auto-run once the shell is ready (e.g. "claude"); undefined = plain shell. */
@@ -41,6 +50,15 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     // a resume/fresh choice, a dead one for a restart.
     const hold = useStore((s) => s.paneHold[termId])
     const releaseHold = useStore((s) => s.releaseHold)
+    // The replay effect below is only correct for a pane that MOUNTED onto an
+    // already-dead session (reached via another tab/project after the process
+    // died). If this pane instance was mounted and watching when the process
+    // exited, its terminal already holds every byte main kept - the live
+    // `pty:exit` handler in the attach effect wrote the notice already - so
+    // replaying would print the whole session twice, with two exit notices,
+    // under a bar that claims the output is above. Captured once, at the
+    // value `hold` already has at mount, not re-derived on every render.
+    const bornDead = useRef(useStore.getState().paneHold[termId] === "restart")
 
     const resumeAgentId = useStore.getState().agentOf(termId)
     const isAgentPane = resumeAgentId !== SHELL
@@ -165,7 +183,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             if (id === termId) term.write(data)
         })
         const offExit = window.api.pty.onExit(({ id, exitCode }) => {
-            if (id === termId) term.write("\r\n\x1b[90m" + exitNotice(exitCode, IS_WINDOWS) + "\x1b[0m\r\n")
+            if (id === termId) writeExitNotice(term, exitCode)
         })
         const inputSub = term.onData((data) => window.api.pty.input(termId, data))
 
@@ -297,8 +315,13 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     // exit record on any output - a pushed replay would erase the state the tile
     // is displaying. The notice is written AFTER the buffer because it is
     // rendered here, not by the process, so it is not part of what main kept.
+    //
+    // Gated on `bornDead`, not just `hold`: a pane that was mounted and watching
+    // when the process died already has every byte in its terminal (the live
+    // `pty:exit` handler above wrote the notice) - fetching and replaying the
+    // same corpse here would print the whole session, and the notice, twice.
     useEffect(() => {
-        if (hold !== "restart") return
+        if (hold !== "restart" || !bornDead.current) return
         let on = true
         void window.api.pty
             .buffer(termId)
@@ -306,9 +329,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 const term = termRef.current
                 if (!on || !term) return
                 if (buffer) term.write(buffer)
-                if (exitCode !== undefined) {
-                    term.write("\r\n\x1b[90m" + exitNotice(exitCode, IS_WINDOWS) + "\x1b[0m\r\n")
-                }
+                if (exitCode !== undefined) writeExitNotice(term, exitCode)
             })
             .catch(() => undefined) // unknown termId or a main-process throw - nothing to show
         return () => {
