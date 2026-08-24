@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest"
+import { describe, it, expect, beforeAll, vi } from "vitest"
 import { useStore, SHELL } from "../src/renderer/src/store"
+import { useSettings } from "../src/renderer/src/settings"
 import { leaf } from "../src/renderer/src/layout"
 import { getLastAt, forgetTail } from "../src/renderer/src/missionTail"
 
@@ -116,5 +117,43 @@ describe("a pane held after its process dies", () => {
         useStore.getState().releaseHold(TERM)
         expect(useStore.getState().paneHold[TERM]).toBeUndefined()
         expect(getLastAt(TERM)).toBeUndefined()
+    })
+})
+
+// I1: a resumed/restarted agent must close its crashed run's usage event
+// before opening a new one, or the dead gap between crash and resume gets
+// billed twice - once as part of the stale event (left open until the pane
+// eventually closes), once as part of the new event's own runtime.
+describe("releasing a hold accounts for exactly one run at a time", () => {
+    beforeAll(async () => {
+        stubApi()
+        await useStore.getState().init()
+    })
+
+    it("closes the crashed run's event before opening the resumed one", () => {
+        seedSession()
+        useSettings.setState({ usageLog: [] })
+        vi.useFakeTimers()
+        try {
+            vi.setSystemTime(1_000) // T0: original run starts
+            useSettings.getState().logUsageStart(TERM, "claude", "p1", "/repo")
+            vi.setSystemTime(5_000) // T1: crash
+            ptyExit({ id: TERM, exitCode: 1 })
+            vi.setSystemTime(9_000) // T2: user clicks Resume
+            useStore.getState().releaseHold(TERM)
+            vi.setSystemTime(20_000) // T3: pane finally closed
+            useStore.getState().closePane(TERM)
+        } finally {
+            vi.useRealTimers()
+        }
+        const events = useSettings
+            .getState()
+            .usageLog.filter((e) => e.id === TERM)
+            .sort((a, b) => a.startedAt - b.startedAt)
+        expect(events).toHaveLength(2)
+        // The crashed run ends when Resume is clicked (T2), not when the pane
+        // is finally closed (T3) - otherwise it would double-count T1..T2.
+        expect(events[0]).toMatchObject({ startedAt: 1_000, endedAt: 9_000 })
+        expect(events[1]).toMatchObject({ startedAt: 9_000, endedAt: 20_000 })
     })
 })

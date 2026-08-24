@@ -2711,6 +2711,17 @@ export const useStore = create<AppState>((set, get) => {
             // to the project path the same way newTab's logUsageStart call does,
             // rather than being kept as a cwd-less event.
             const cwd = get().termCwd[termId] || get().projects.find((p) => p.id === projectId)?.path
+            // Close the crashed run's event BEFORE opening this one. logUsageStart
+            // appends unconditionally and nothing else ends an event when a process
+            // dies, so without this a pane that crashed at T1 and got resumed at T2
+            // leaves its T0 event open until the pane is finally closed at T3 -
+            // stamping endedAt=T3 on both the stale event and the new one, and
+            // UsagePanel sums durationOf per event, so the dead gap T1-T2 gets
+            // billed twice: once as part of the stale event, once as part of the
+            // new one's own runtime. logUsageEnd is a no-op for an id with no open
+            // event, so this costs nothing on the ordinary "resume a restored
+            // session" path.
+            useSettings.getState().logUsageEnd(termId)
             markLaunched(termId)
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
