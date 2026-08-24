@@ -109,6 +109,20 @@ describe("against a real repo", () => {
         expect(existsSync(join(worktreePath(repo, "feature-c"), "node_modules"))).toBe(false)
     })
 
+    // `remove` keeps the branch by design, so reusing a name is a normal thing to
+    // try - and git answers it with "fatal: a branch named 'wt/x' already exists",
+    // which is true and no help. Backported from the dev-ai-tools copy, where this
+    // was hit within a minute of real use.
+    it("explains an existing branch instead of passing through git's fatal", () => {
+        expect(addWorktree(repo, "reused").ok).toBe(true)
+        expect(removeWorktree(repo, "reused").ok).toBe(true)
+
+        const again = addWorktree(repo, "reused")
+        expect(again.ok).toBe(false)
+        expect(again.detail).toMatch(/branch wt\/reused already exists/)
+        expect(again.detail).toMatch(/git branch -d wt\/reused/)
+    })
+
     it("refuses to reuse a name that already has a worktree", () => {
         expect(addWorktree(repo, "dup").ok).toBe(true)
         const again = addWorktree(repo, "dup")

@@ -81,9 +81,24 @@ export function parseArgs(argv) {
 export function addWorktree(repoRoot, name) {
     const path = worktreePath(repoRoot, name)
     if (existsSync(path)) return { ok: false, detail: `${path} already exists` }
+
+    // `remove` keeps the branch on purpose, so reusing a name is a normal thing to
+    // try. git refuses with "fatal: a branch named 'wt/x' already exists" - and
+    // because git prints its progress first, the raw output handed back to the user
+    // OPENED with "Preparing worktree (new branch ...)", which reads like success.
+    // Say what the two ways forward are instead.
+    const branch = branchFor(name)
+    if (git(["rev-parse", "--verify", "--quiet", branch], repoRoot).ok) {
+        return {
+            ok: false,
+            detail:
+                `branch ${branch} already exists (a previous worktree of this name kept it). ` +
+                `Pick another name, or reuse it after: git branch -d ${branch}`
+        }
+    }
     mkdirSync(treesDir(repoRoot), { recursive: true })
 
-    const add = git(["worktree", "add", "-b", branchFor(name), path], repoRoot)
+    const add = git(["worktree", "add", "-b", branch, path], repoRoot)
     if (!add.ok) return { ok: false, detail: add.out || `git worktree add exited ${add.code}` }
 
     // Share node_modules so the worktree builds without a reinstall. A junction on
@@ -95,7 +110,7 @@ export function addWorktree(repoRoot, name) {
         symlinkSync(src, dst, process.platform === "win32" ? "junction" : "dir")
         linked = true
     }
-    return { ok: true, path, branch: branchFor(name), linked }
+    return { ok: true, path, branch, linked }
 }
 
 export function removeWorktree(repoRoot, name) {
