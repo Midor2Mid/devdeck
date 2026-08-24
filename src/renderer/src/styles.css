@@ -2112,6 +2112,15 @@ button .ic,
     position: relative;
     height: 100%;
     width: 100%;
+    /* The dead bar's height, reserved from the terminal's usable area below.
+       One value, two consumers (.dead-bar's box and .term-mount's inset): if
+       these ever disagree, the bar covers the output it exists to preserve -
+       which is exactly what it used to do. 48px = a single row of the bar's
+       tallest child (a button: --fs-sm 12px * --lh-body 1.45 line box ≈
+       17.4px, + its 5px top/bottom padding, + its 1px top/bottom border ≈
+       29.4px) plus the bar's own 8px top/bottom padding and 1px top border
+       ≈ 46.4px, rounded up for a safety margin. */
+    --dead-bar-h: 48px;
 }
 .term-grid {
     position: absolute;
@@ -2363,6 +2372,13 @@ button .ic,
     inset: 0;
     padding: 8px 6px 6px 10px;
 }
+/* FitAddon sizes xterm's rows to THIS box, so the dead bar's space has to
+   come out of it before fit() runs - layering the bar on top only hides
+   rows xterm already decided to use. TerminalPane re-fits when `hold`
+   changes, after this class has landed. */
+.term-mount.with-dead-bar {
+    bottom: var(--dead-bar-h);
+}
 /* Overlay shown on a restored agent pane until you pick resume vs. fresh. */
 .resume-overlay {
     position: absolute;
@@ -2417,8 +2433,10 @@ button .ic,
     bottom: 0;
     z-index: 5;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
+    min-height: var(--dead-bar-h);
     padding: 8px 12px;
     background: var(--bg-2);
     border-top: 1px solid var(--border);
@@ -2426,7 +2444,7 @@ button .ic,
 .dead-bar-text {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--fs-sm);
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2437,11 +2455,16 @@ button .ic,
     gap: 6px;
     flex: none;
 }
-/* Subtle focus ring — only meaningful once panes are split, kept very quiet. */
+/* Subtle focus ring — only meaningful once panes are split, kept very quiet.
+   z-index above .dead-bar's 5: the ring traces the pane's full inset, so on a
+   focused dead pane it would otherwise be painted under the bar and lose its
+   bottom edge - the one form marker for "focused" would go missing exactly
+   where the bar sits. */
 .term-pane.focused::after {
     content: "";
     position: absolute;
     inset: 0;
+    z-index: 6;
     box-shadow: inset 0 0 0 1px var(--accent);
     opacity: 0.35;
     pointer-events: none;

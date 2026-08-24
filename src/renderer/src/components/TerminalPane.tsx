@@ -250,6 +250,17 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fontFamily, fontSize, termId])
 
+    // Reserve the dead bar's height out of the terminal's usable rows BEFORE
+    // fit() runs. FitAddon sizes rows to `.term-mount`'s box, so the row count
+    // has to shrink at the same moment the `with-dead-bar` class lands on it -
+    // otherwise xterm keeps sizing to the full pane and the bar just gets
+    // layered on top of rows it already decided to use. Ordered before the
+    // replay effect below so the rows are settled when the buffer is written.
+    useEffect(() => {
+        refit()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hold])
+
     // Show what the dead process printed, then say that it is dead.
     //
     // Fetched, not pushed: main replays a buffer through `pty:data` on create,
@@ -260,14 +271,17 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     useEffect(() => {
         if (hold !== "restart") return
         let on = true
-        void window.api.pty.buffer(termId).then(({ buffer, exitCode }) => {
-            const term = termRef.current
-            if (!on || !term) return
-            if (buffer) term.write(buffer)
-            if (exitCode !== undefined) {
-                term.write("\r\n\x1b[90m" + exitNotice(exitCode, IS_WINDOWS) + "\x1b[0m\r\n")
-            }
-        })
+        void window.api.pty
+            .buffer(termId)
+            .then(({ buffer, exitCode }) => {
+                const term = termRef.current
+                if (!on || !term) return
+                if (buffer) term.write(buffer)
+                if (exitCode !== undefined) {
+                    term.write("\r\n\x1b[90m" + exitNotice(exitCode, IS_WINDOWS) + "\x1b[0m\r\n")
+                }
+            })
+            .catch(() => undefined) // unknown termId or a main-process throw - nothing to show
         return () => {
             on = false
         }
@@ -297,7 +311,10 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             data-term-id={termId}
             onMouseDown={() => onFocus(termId)}
         >
-            <div ref={containerRef} className="term-mount" />
+            <div
+                ref={containerRef}
+                className={"term-mount" + (hold === "restart" ? " with-dead-bar" : "")}
+            />
             {hold === "resume" && (
                 <div className="resume-overlay">
                     <div className="resume-card">
