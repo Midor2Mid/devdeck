@@ -1,6 +1,6 @@
 # A dead pane keeps its evidence — and asks before it restarts
 
-**Status:** draft, awaiting review
+**Status:** shipped 2026-08-25
 **Date:** 2026-08-25
 
 ## The problem
