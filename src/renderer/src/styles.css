@@ -2426,15 +2426,24 @@ button .ic,
    The resume overlay above is a full-pane scrim with a blur, which is right for
    a session that has printed nothing yet and wrong here: the whole point of
    keeping a dead process's output is that you can read it.
-   z-index 4: above the plain terminal (.term-mount has none) but below the
-   focus ring and this pane's other overlays (.resume-overlay/.find-bar, both
-   5), so the bar never paints over a signal that outranks it. */
+   z-index: auto, not a positive number - deliberately, after getting this
+   wrong twice. A positive z-index (this used to be 6, then 4) puts the bar in
+   its own stacking layer above EVERYTHING at z-index:auto, which includes
+   `.term-pane.focused::after` (the ring), so any positive value here paints
+   over the ring along the bar's edges. `auto` keeps it in the plain document
+   order instead: `.term-mount` (no z-index) paints first, `.dead-bar` paints
+   after it (later in the DOM, same "auto" layer, so tree order decides), and
+   the ring - a pseudo-element of `.term-pane` itself, generated after all of
+   `.term-pane`'s real children including this one - paints last and on top.
+   `.resume-overlay` / `.find-bar` keep their own positive z-index (5): that
+   layer stacks above the whole auto layer regardless, so they are untouched
+   by any of this. */
 .dead-bar {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 4;
+    z-index: auto;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
