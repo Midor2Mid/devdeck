@@ -6,6 +6,7 @@ import { useStore } from "../store"
 import { useSettings } from "../settings"
 import { THEMES } from "../themes"
 import "../monaco-setup"
+import { langFor } from "../monacoLanguages"
 
 type MdMode = "edit" | "split" | "preview"
 function isMarkdown(name: string): boolean {
@@ -28,48 +29,7 @@ interface OpenFile {
 }
 
 // File extension → Monaco language id.
-const LANG: Record<string, string> = {
-    ts: "typescript",
-    tsx: "typescript",
-    js: "javascript",
-    jsx: "javascript",
-    mjs: "javascript",
-    cjs: "javascript",
-    json: "json",
-    css: "css",
-    scss: "scss",
-    less: "less",
-    html: "html",
-    htm: "html",
-    md: "markdown",
-    markdown: "markdown",
-    py: "python",
-    go: "go",
-    rs: "rust",
-    java: "java",
-    c: "c",
-    h: "cpp",
-    cpp: "cpp",
-    cc: "cpp",
-    cs: "csharp",
-    php: "php",
-    rb: "ruby",
-    sh: "shell",
-    bash: "shell",
-    ps1: "powershell",
-    yml: "yaml",
-    yaml: "yaml",
-    xml: "xml",
-    sql: "sql",
-    toml: "ini",
-    ini: "ini",
-    dockerfile: "dockerfile"
-}
 
-function langFor(name: string): string {
-    const ext = name.split(".").pop()?.toLowerCase() ?? ""
-    return LANG[ext] ?? "plaintext"
-}
 
 function FileTree({
     dir,
