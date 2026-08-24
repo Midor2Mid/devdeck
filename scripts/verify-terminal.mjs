@@ -43,7 +43,10 @@ writeFileSync(
         termInit: {},
         termCwd: {},
         termNames: { [A]: "left", [B]: "right" },
-        termShells: {},
+        // cmd, not the app's default of powershell: this environment cannot spawn
+        // powershell.exe at all (exit 3221226505), so the default left both panes
+        // blank while every check still passed. The shell only has to be a shell.
+        termShells: { [A]: "cmd", [B]: "cmd" },
         tabsByProject: {
             vp: [
                 {
@@ -134,11 +137,28 @@ try {
     const left = await focused()
     check("Alt+Left moves focus back", left === order[0], `focused=${left}`)
 
-    // 4. The shell must not have received the arrow's escape sequence. xterm
-    //    renders unprintable input as visible text, so junk would show up here.
-    const screen = await cdp.eval(
-        "return [...document.querySelectorAll('.xterm-rows')].map(r => r.innerText).join('\\n')"
+    // 4. A shell is actually RUNNING and printing. This must come BEFORE the
+    //    negative assertion below, because a blank screen satisfies that one
+    //    perfectly. Not hypothetical: on 2026-08-24 this harness reported 14/14
+    //    with both terminals empty, because the app's default shell (powershell)
+    //    cannot spawn in this environment. A negative assertion with no positive
+    //    one beside it proves nothing at all.
+    let screen = ""
+    for (let i = 0; i < 20; i++) {
+        screen = await cdp.eval(
+            "return [...document.querySelectorAll('.xterm-rows')].map(r => r.innerText).join('\\n')"
+        )
+        if (screen.trim().length) break
+        await sleep(1000)
+    }
+    check(
+        "a real shell is running and printing",
+        screen.trim().length > 0,
+        screen.replace(/\s+/g, " ").trim().slice(0, 50) || "TERMINALS ARE BLANK: no pty output at all"
     )
+
+    // 5. And it did not receive the arrow's escape sequence. xterm renders
+    //    unprintable input as visible text, so junk would show up here.
     const junk = /\[1;3[A-D]|\^\[/.test(screen)
     check("no escape sequence reached the shell", !junk, junk ? "found escape text on screen" : "")
 

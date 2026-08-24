@@ -21,23 +21,37 @@ it had not - including the security triage that called the shipped Electron CVEs
   the CVE clears without an unsupported combination. `@vitejs/plugin-react@5.2.0` is
   the single version whose peers span both 7 and 8, which is why plugin-react stops
   at 5.
-- **The risk that mattered was the pty native module, and it was settled by running
-  it.** `@lydell/node-pty`'s prebuilds are per-ABI, and a broken one under a new
-  Electron would take the terminals - the whole product - with it. `npm run
-  verify:terminal` drives the built app over CDP and reads real shell output back:
-  14/14 under Electron 43, including "two seeded panes mounted" and "no escape
-  sequence reached the shell". Inspecting the binary for napi symbols had been
-  inconclusive; executing it was not.
-- **Packaging is NOT verified, and that is not a version problem.**
-  `electron-builder` shells out to `powershell.exe` to enumerate code-signing certs,
-  and PowerShell cannot execute in this environment at all (exit 3221226505 - the
-  same wall that made `worktree.ps1` unrunnable this morning). Builder 26 fails
-  earlier still, at its node-module collector, with the same exit code, so whether
-  that one is environmental or a builder-26 bug is genuinely unsettled. `npm run
-  package:dir` in a working shell decides it; if the collector still crashes there,
-  pin `electron-builder@^25.1.8` - its advisories are build-time only.
+- **The risk that mattered was the pty native module, and it took two attempts to
+  actually settle.** `@lydell/node-pty`'s prebuilds are per-ABI, and a broken one
+  under a new Electron would take the terminals - the whole product - with it.
+  `npm run verify:terminal` reported 14/14 under Electron 43 and that was claimed
+  as proof. **It was not.** Every one of those checks reads the DOM or app state,
+  and the only one that touched the terminal contents was NEGATIVE ("no escape
+  sequence reached the shell"), which a blank screen satisfies perfectly. Both
+  terminals were in fact blank, because the app's default shell is powershell and
+  this environment cannot spawn powershell.exe at all. Re-run with `cmd` seeded, a
+  shell printed its banner, and the same harness passes 15/15 including a new
+  **positive** assertion that a shell is running. The packaged artifact was checked
+  the same way: it opens on Electron 43.4.1 and spawns a real pty from its
+  asar-unpacked native module. So the conclusion held - node-pty loads fine under
+  Electron 43 - but the evidence first offered for it did not, and the harness now
+  fails instead of passing when the terminals are empty.
+- **Packaging: both blockers found, both PowerShell, and it does complete once they
+  are worked around.** `electron-builder` needs PowerShell twice on Windows, and
+  this environment cannot run it at all (exit 3221226505, the same wall that made
+  `worktree.ps1` unrunnable). Builder 26 routes its whole npm invocation through
+  `powershell.exe` on purpose (`nodeModulesCollector.js:324`, avoiding `.cmd` shims
+  after CVE-2024-27980), so the "node module collector" crash was never a builder-26
+  bug - setting `"packageManager": "traversal"` selects a collector that walks
+  node_modules directly and gets past it. The second is the code-signing cert
+  lookup, which only `signAndEditExecutable: false` avoids - and that also skips the
+  icon and version resources, so it changes the artifact. With both, `package:dir`
+  completes and the result runs. **Neither workaround is committed**: traversal
+  reports optional dependencies as "missing" and losing the exe resources is not
+  something to ship for a headless check. A normal `npm run package:dir` in a shell
+  with working PowerShell needs no workarounds at all.
 
-Typecheck clean, 985 tests, `npm run build` clean.
+Typecheck clean, 985 tests, `npm run build` clean, `verify:terminal` 15/15.
 
 ### Terminal mechanics: switching, moving, zooming, and getting a session back
 
