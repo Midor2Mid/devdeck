@@ -296,12 +296,24 @@ payload on its own, and it ships every language grammar - the build log lists
   asar going 1,927 -> 0. The bundled code still ships as app chunks, all four workers
   included.
 
-So the subset was worth ~2 MB of bundle and the double-packing was worth ~96 MB. The
-same audit applies to the other renderer-only dependencies still in `dependencies`
-(react, react-dom, @xterm/*, zustand, allotment, marked, dompurify): all are bundled
-by Vite, and `@xterm/xterm` alone is 184 files in the asar. Not done here, because
-each needs checking that main/preload never import it - monaco was verified that way
-before moving.
+So the subset was worth ~2 MB of bundle and the double-packing was worth ~96 MB.
+
+**That audit is now done for all 20 production dependencies.** Eleven more were
+renderer-only and packed for nothing (react, react-dom, allotment, marked, dompurify,
+qrcode, zustand, both @xterm addons, both @fontsource-variable families): app.asar
+82 -> 70 MB, win-unpacked 447 -> 435 MB. Cumulative 178 -> 70 MB, a 61 percent cut.
+Nine dependencies remain and each is imported by `src/main`, which electron-vite
+externalizes rather than bundles: the native pty, four database drivers, `ws`,
+`selfsigned`, `electron-updater`.
+
+**`@xterm/xterm` stayed, and that is the lesson worth keeping.**
+`src/main/server.ts:89#xtermAsset` calls `require.resolve("@xterm/xterm")` at RUNTIME
+to serve `xterm.js` and `xterm.css` to the mobile web client. There is no import
+statement, so a grep for imports classifies it as renderer-only and moving it would
+have shipped a broken remote terminal, silently, with every test green. A looser grep
+for the bare package name is what caught it - and that same pass flagged `marked` as
+used in main, which turned out to be the word "bookmarked". Read the hits; do not
+trust the count.
 
 The risk this creates is guarded: `tests/monacoLanguages.test.ts` fails if an
 extension is added to `LANG` without bundling its language, which would otherwise
