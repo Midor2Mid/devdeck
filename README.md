@@ -45,6 +45,22 @@ unpacked from the asar archive automatically (see the `build` field in
 > `powershell.exe` for the code-signing cert lookup, and PowerShell cannot run in
 > the agent environment at all (see `ROADMAP.md` decisions log).
 
+## Checking a change actually works
+
+```bash
+npm test                  # 985 unit tests
+npm run verify:terminal    # drives the DEV build over CDP: 15 checks
+npm run build && npm run verify:packaged   # drives the PACKAGED app: 4 checks
+```
+
+`verify:terminal` and `verify:packaged` launch a real window on an isolated
+`--user-data-dir` and press real keys, because the things they cover cannot be
+reached from a unit test: keyboard chords, pane geometry, and whether a pty actually
+spawns. Both seed `cmd` rather than the default shell, since a shell that never
+starts leaves a blank pane that a negative assertion would happily pass - which is a
+mistake this harness has already made once. `verify:packaged` **skips** (exit 0)
+when there is no build in `release/`, so it is safe to chain.
+
 ## What works today
 
 - **Projects sidebar** — add a folder as a project, switch the active project with one click. Persisted across restarts.
