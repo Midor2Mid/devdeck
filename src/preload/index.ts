@@ -417,8 +417,13 @@ const api = {
             ipcRenderer.on("pty:data", handler)
             return () => ipcRenderer.removeListener("pty:data", handler)
         },
-        onExit: (cb: (p: { id: string; exitCode: number }) => void): (() => void) => {
-            const handler = (_e: unknown, p: { id: string; exitCode: number }): void => cb(p)
+        onExit: (
+            cb: (p: { id: string; exitCode: number; stale?: boolean }) => void
+        ): (() => void) => {
+            const handler = (
+                _e: unknown,
+                p: { id: string; exitCode: number; stale?: boolean }
+            ): void => cb(p)
             ipcRenderer.on("pty:exit", handler)
             return () => ipcRenderer.removeListener("pty:exit", handler)
         }

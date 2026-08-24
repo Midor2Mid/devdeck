@@ -669,10 +669,21 @@ export const useStore = create<AppState>((set, get) => {
     const evidenceInFlight = new Set<string>()
 
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
-        if (!isAgentId(get().agentOf(id))) return
-        // Output after an exit means the pane was re-run in place. Guarded so the
-        // hot path does a Map delete only on the one chunk that follows a respawn.
+        // Backstop, ahead of the agent-only gate below: any output at all means
+        // this id is alive right now, whether that's an ordinary respawn-in-place
+        // or a stale exit event for a session a restart already replaced (I3) -
+        // a plain shell has no agent id, so if this ran only for agents a shell
+        // pane would keep a "process exited" bar forever with a live pty behind
+        // it, and clicking Restart would spawn nothing.
         if (exitCodeOf(id) !== undefined) clearExit(id)
+        if (id in get().paneHold) {
+            set((s) => {
+                const paneHold = { ...s.paneHold }
+                delete paneHold[id]
+                return { paneHold }
+            })
+        }
+        if (!isAgentId(get().agentOf(id))) return
         // Keep a cleaned tail of this agent's output for the Mission Control peek.
         recordTail(id, data)
         // …and its committed-output rate, for the tile's trace.
@@ -1197,8 +1208,16 @@ export const useStore = create<AppState>((set, get) => {
                 // App-global, not per-pane: TerminalPane's own onExit only fires while a
                 // pane is mounted, and Mission has to know about a process that died in a
                 // tab you were not looking at.
-                window.api.pty.onExit(({ id, exitCode }) => {
+                window.api.pty.onExit(({ id, exitCode, stale }) => {
                     recordExit(id, exitCode)
+                    // A stale exit belongs to a process a restart already spawned
+                    // over (see pty.ts) - main skipped writing its corpse for the
+                    // same reason, and holding this pane would freeze a "process
+                    // exited" bar over a session that is actually live. recordExit
+                    // above still runs unconditionally: it is the pre-existing
+                    // self-healing lie (cleared by the next output, in onPtyData),
+                    // not the bug this guards.
+                    if (stale) return
                     // Hold the pane. Without this, the next remount spawns a fresh
                     // shell over the corpse - the pane is unmounted whenever its tab
                     // is not the active one, so with several terminals open that is

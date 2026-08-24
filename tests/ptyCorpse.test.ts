@@ -121,3 +121,42 @@ describe("a dead session leaves a corpse", () => {
         expect(() => pty.resizePty(ID, 80, 24)).not.toThrow()
     })
 })
+
+// I3: killPty deletes its map entry synchronously, but the real process's
+// onExit can still fire later (e.g. the OS hasn't actually reaped it yet) -
+// if a restart already spawned a new live entry under the same id by then,
+// that late exit describes a process that is no longer running under this id.
+describe("a late exit for an id that has been re-spawned", () => {
+    beforeEach(() => {
+        pty.killPty(ID)
+        fakes = []
+    })
+
+    it("does not overwrite the fresh session with the old one's corpse", () => {
+        pty.createPty({ id: ID }) // P1, live
+        const p1 = fakes[0]
+        pty.killPty(ID) // deletes the map entry; P1's real exit hasn't fired yet
+        pty.createPty({ id: ID }) // P2, live - spawns over the (now empty) slot
+        p1.onExitCb?.({ exitCode: 1 }) // P1's exit finally lands
+        // P2 is still live: no corpse, no exit code.
+        expect(pty.bufferOf(ID)).toEqual({ buffer: "", exitCode: undefined })
+    })
+
+    it("is still broadcast, flagged stale, for remote clients watching a deliberate kill", () => {
+        const events: { id: string; exitCode: number; stale: boolean }[] = []
+        pty.ptyEvents.on("exit", (e) => events.push(e))
+        pty.createPty({ id: ID })
+        const p1 = fakes[0]
+        pty.killPty(ID)
+        pty.createPty({ id: ID })
+        p1.onExitCb?.({ exitCode: 1 })
+        expect(events).toEqual([{ id: ID, exitCode: 1, stale: true }])
+    })
+
+    it("an ordinary (non-stale) exit is not flagged", () => {
+        const events: { id: string; exitCode: number; stale: boolean }[] = []
+        pty.ptyEvents.on("exit", (e) => events.push(e))
+        runAndDie(1)
+        expect(events).toEqual([{ id: ID, exitCode: 1, stale: false }])
+    })
+})

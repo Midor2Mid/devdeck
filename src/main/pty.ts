@@ -39,7 +39,16 @@ type Entry = Live | Corpse
 // behind, which lives until the pane is closed or deliberately restarted.
 const sessions = new Map<string, Entry>()
 
-/** Emits "data" {id,data} and "exit" {id,exitCode}. */
+/**
+ * Emits "data" {id,data} and "exit" {id,exitCode,stale}.
+ *
+ * `stale` is true when the id had already been re-spawned before this
+ * process's exit fired (a kill followed by a restart, or any other path that
+ * replaces a live entry before its predecessor's onExit lands) - the exit is
+ * still broadcast (server.ts's remote clients need the notice on a deliberate
+ * kill) but describes a process that is no longer the one running under this
+ * id.
+ */
 export const ptyEvents = new EventEmitter()
 ptyEvents.setMaxListeners(50)
 
@@ -145,13 +154,16 @@ export function createPty(opts: CreateOpts): void {
         ptyEvents.emit("data", { id, data })
     })
     proc.onExit(({ exitCode }) => {
-        // Only if this pty is still the one registered under this id: a restart
-        // that spawned over this corpse must not have its fresh session
-        // replaced by the late exit of the process it replaced.
-        if (sessions.get(id) === live) {
+        // Computed once, before anything below reads or changes the map: true
+        // when a restart already spawned over this corpse, so the late exit of
+        // the process it replaced must not overwrite the fresh session - and,
+        // per the doc comment above, must be flagged so a listener doesn't
+        // mistake a live id for a dead one either.
+        const stale = sessions.get(id) !== live
+        if (!stale) {
             sessions.set(id, { kind: "dead", buffer: live.buffer, exitCode, diedAt: Date.now() })
         }
-        ptyEvents.emit("exit", { id, exitCode })
+        ptyEvents.emit("exit", { id, exitCode, stale })
     })
 
     if (opts.initialCommand) {

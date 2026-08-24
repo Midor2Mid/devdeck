@@ -6,15 +6,21 @@ import { getLastAt, forgetTail } from "../src/renderer/src/missionTail"
 
 const TERM = "t-hold"
 
-let ptyExit: (e: { id: string; exitCode: number }) => void = () => undefined
+let ptyExit: (e: { id: string; exitCode: number; stale?: boolean }) => void = () => undefined
+let ptyData: (e: { id: string; data: string }) => void = () => undefined
 
 /** Only the namespaces this path touches, as in tests/exitRecord.test.ts. */
 function stubApi(): void {
     ;(globalThis as unknown as { window: unknown }).window = {
         api: {
             pty: {
-                onData: (): (() => void) => (): void => undefined,
-                onExit: (fn: (e: { id: string; exitCode: number }) => void): (() => void) => {
+                onData: (fn: (e: { id: string; data: string }) => void): (() => void) => {
+                    ptyData = fn
+                    return (): void => undefined
+                },
+                onExit: (
+                    fn: (e: { id: string; exitCode: number; stale?: boolean }) => void
+                ): (() => void) => {
                     ptyExit = fn
                     return (): void => undefined
                 },
@@ -117,6 +123,43 @@ describe("a pane held after its process dies", () => {
         useStore.getState().releaseHold(TERM)
         expect(useStore.getState().paneHold[TERM]).toBeUndefined()
         expect(getLastAt(TERM)).toBeUndefined()
+    })
+})
+
+// I3: main flags an exit "stale" when the id had already been re-spawned
+// before the dying process's exit landed - holding this pane would freeze a
+// "process exited" bar over a session that is actually live.
+describe("a stale exit for an id that has been re-spawned", () => {
+    beforeAll(async () => {
+        stubApi()
+        await useStore.getState().init()
+    })
+
+    it("does not hold the pane", () => {
+        seedSession()
+        ptyExit({ id: TERM, exitCode: 1, stale: true })
+        expect(useStore.getState().paneHold[TERM]).toBeUndefined()
+    })
+
+    // Backstop for whatever the main-side guard misses: any output at all
+    // means the id is alive right now, so the hold (and the exit record) must
+    // not survive the first byte - placed ahead of the agent-only gate in
+    // onPtyData, or a plain shell would never self-heal.
+    it("self-heals on the next output even if a hold was set", () => {
+        seedSession()
+        ptyExit({ id: TERM, exitCode: 1 })
+        expect(useStore.getState().paneHold[TERM]).toBe("restart")
+        ptyData({ id: TERM, data: "$ " })
+        expect(useStore.getState().paneHold[TERM]).toBeUndefined()
+    })
+
+    it("self-heals a plain shell too, not just an agent pane", () => {
+        seedSession()
+        useStore.setState({ termAgents: { [TERM]: SHELL } })
+        ptyExit({ id: TERM, exitCode: 1 })
+        expect(useStore.getState().paneHold[TERM]).toBe("restart")
+        ptyData({ id: TERM, data: "$ " })
+        expect(useStore.getState().paneHold[TERM]).toBeUndefined()
     })
 })
 
