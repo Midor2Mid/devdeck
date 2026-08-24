@@ -290,14 +290,19 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
 
     // A wrapped, two-line bar (narrow split, both agent buttons) is taller
     // than the 48px default declared on `.term-pane`, and a fixed constant
-    // can't follow a height that depends on the pane's width - so measure
-    // the bar and feed its real height back into the SAME custom property
-    // both CSS rules read, then refit.
+    // can't follow a height that depends on the pane's width - so measure the
+    // bar and feed its real height into `--dead-bar-h`, then refit.
     //
-    // No feedback loop: reserving space at the bottom of `.term-mount`
-    // changes its HEIGHT, not its WIDTH, and the bar's wrap (and therefore
-    // its own height) is driven only by width - so writing the measured
-    // height back never changes the input this observer is watching.
+    // No feedback loop, but only because `.dead-bar`'s own min-height in
+    // styles.css is a plain 48px constant, NOT this same property: this write
+    // only reaches `.term-mount.with-dead-bar`'s bottom inset, a sibling box
+    // this observer isn't watching. Reserving that space changes `.term-mount`'s
+    // HEIGHT, not its WIDTH, and the bar's wrap (and therefore its own height)
+    // is driven only by width, so even a width-only observer would be safe -
+    // but the write used to also set `.dead-bar`'s own min-height, which
+    // WOULD have changed the input this observer watches: once wrapped, the
+    // property pinned the box at that height, the box could never report a
+    // smaller size again, and the reserved space could grow but never shrink.
     useEffect(() => {
         if (hold !== "restart") return
         const bar = deadBarRef.current

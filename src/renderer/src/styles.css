@@ -2439,7 +2439,15 @@ button .ic,
     flex-wrap: wrap;
     align-items: center;
     gap: 12px;
-    min-height: var(--dead-bar-h);
+    /* Plain constant, NOT var(--dead-bar-h): that property also feeds
+       `.term-mount.with-dead-bar`'s reserved space, and is written from this
+       element's own measured offsetHeight (TerminalPane.tsx). Reading it back
+       here would let a one-time grow (a narrow split wrapping the actions
+       onto two lines) pin this min-height at the wrapped height forever - the
+       box could then never report a smaller natural size, so the
+       ResizeObserver watching it would never fire again and the extra space
+       would stay reserved even after widening back out. */
+    min-height: 48px;
     padding: 8px 12px;
     background: var(--bg-2);
     border-top: 1px solid var(--border);
