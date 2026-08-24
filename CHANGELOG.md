@@ -48,8 +48,15 @@ it had not - including the security triage that called the shipped Electron CVEs
   icon and version resources, so it changes the artifact. With both, `package:dir`
   completes and the result runs. **Neither workaround is committed**: traversal
   reports optional dependencies as "missing" and losing the exe resources is not
-  something to ship for a headless check. A normal `npm run package:dir` in a shell
-  with working PowerShell needs no workarounds at all.
+  something to ship for a headless check. **Settled later the same day:** the
+  PowerShell failure was Avast 26.7 injecting `ArPotEx64.dll` and tripping Control
+  Flow Guard (`0xC0000409`, fast-fail subcode `0xa`), not a property of the machine.
+  With Avast updated, `npm run package:dir` succeeded on the first attempt with
+  committed config - npm collection, asar integrity, and signtool signing with
+  `CN=DevDeck Dev`, including the pty's bundled `OpenConsole.exe` - and
+  `verify:packaged` passed 4/4 against that artifact. Neither workaround was ever
+  needed for anything but the antivirus bug, and neither is committed. Packaging on
+  Electron 43 + electron-builder 26 is verified end to end.
 
 Typecheck clean, 985 tests, `npm run build` clean, `verify:terminal` 15/15.
 
