@@ -27,6 +27,8 @@ interface Props {
  * on so it survives split/tab/project switches. Killing is explicit (close).
  */
 export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: Props): JSX.Element {
+    const paneRef = useRef<HTMLDivElement>(null)
+    const deadBarRef = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const termRef = useRef<Terminal | null>(null)
     const fitRef = useRef<FitAddon | null>(null)
@@ -261,6 +263,33 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hold])
 
+    // A wrapped, two-line bar (narrow split, both agent buttons) is taller
+    // than the 48px default declared on `.term-pane`, and a fixed constant
+    // can't follow a height that depends on the pane's width - so measure
+    // the bar and feed its real height back into the SAME custom property
+    // both CSS rules read, then refit.
+    //
+    // No feedback loop: reserving space at the bottom of `.term-mount`
+    // changes its HEIGHT, not its WIDTH, and the bar's wrap (and therefore
+    // its own height) is driven only by width - so writing the measured
+    // height back never changes the input this observer is watching.
+    useEffect(() => {
+        if (hold !== "restart") return
+        const bar = deadBarRef.current
+        const pane = paneRef.current
+        if (!bar || !pane) return
+        const ro = new ResizeObserver(() => {
+            pane.style.setProperty("--dead-bar-h", `${bar.offsetHeight}px`)
+            refit()
+        })
+        ro.observe(bar)
+        return () => {
+            ro.disconnect()
+            pane.style.removeProperty("--dead-bar-h")
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hold])
+
     // Show what the dead process printed, then say that it is dead.
     //
     // Fetched, not pushed: main replays a buffer through `pty:data` on create,
@@ -305,6 +334,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
 
     return (
         <div
+            ref={paneRef}
             className={"term-pane" + (focused ? " focused" : "")}
             // The handle directional navigation reads: only mounted panes carry
             // it, so the geometry it measures is what is actually on screen.
@@ -333,7 +363,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 </div>
             )}
             {hold === "restart" && (
-                <div className="dead-bar">
+                <div ref={deadBarRef} className="dead-bar">
                     <span className="dead-bar-text">
                         This process exited. Its output is above.
                     </span>

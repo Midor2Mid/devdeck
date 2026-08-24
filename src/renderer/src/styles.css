@@ -2425,13 +2425,16 @@ button .ic,
 /* A dead pane's prompt sits at the BOTTOM and does not cover the terminal.
    The resume overlay above is a full-pane scrim with a blur, which is right for
    a session that has printed nothing yet and wrong here: the whole point of
-   keeping a dead process's output is that you can read it. */
+   keeping a dead process's output is that you can read it.
+   z-index 4: above the plain terminal (.term-mount has none) but below the
+   focus ring and this pane's other overlays (.resume-overlay/.find-bar, both
+   5), so the bar never paints over a signal that outranks it. */
 .dead-bar {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 5;
+    z-index: 4;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -2455,16 +2458,11 @@ button .ic,
     gap: 6px;
     flex: none;
 }
-/* Subtle focus ring — only meaningful once panes are split, kept very quiet.
-   z-index above .dead-bar's 5: the ring traces the pane's full inset, so on a
-   focused dead pane it would otherwise be painted under the bar and lose its
-   bottom edge - the one form marker for "focused" would go missing exactly
-   where the bar sits. */
+/* Subtle focus ring — only meaningful once panes are split, kept very quiet. */
 .term-pane.focused::after {
     content: "";
     position: absolute;
     inset: 0;
-    z-index: 6;
     box-shadow: inset 0 0 0 1px var(--accent);
     opacity: 0.35;
     pointer-events: none;
