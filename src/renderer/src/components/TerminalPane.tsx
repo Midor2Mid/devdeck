@@ -360,10 +360,14 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [themeId, termId])
 
-    // Focus the xterm when this pane becomes the active one.
+    // Focus the xterm when this pane becomes the active one - but not while
+    // held: xterm's `attachCustomKeyEventHandler` returns true for a plain Tab,
+    // so a focused terminal swallows it into a corpse that discards it, and the
+    // dead bar's Resume/Fresh/Restart buttons become mouse-only. Leaving focus
+    // off the terminal lets Tab reach the bar instead.
     useEffect(() => {
-        if (focused) termRef.current?.focus()
-    }, [focused])
+        if (focused && !hold) termRef.current?.focus()
+    }, [focused, hold])
 
     return (
         <div
