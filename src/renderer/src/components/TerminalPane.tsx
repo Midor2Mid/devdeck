@@ -70,6 +70,13 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const resumeCmd = resumePreset?.resumeArgs
         ? `${resumePreset.command} ${resumePreset.resumeArgs}`
         : coldCmd
+    // Resume and Start fresh are only two different buttons when the preset has
+    // a resumeArgs to make Resume mean something else - several shipped presets
+    // (claude-yolo, gemini) and any user preset without one leave resumeCmd
+    // falling back to coldCmd, so both buttons would run the identical command.
+    // TerminalView.tsx's own resume affordance already gates on `a.resumeArgs`
+    // for the same reason.
+    const canResumeAgent = isAgentPane && !!resumePreset?.resumeArgs
     const resolveHold = (mode: "resume" | "fresh" | "restart"): void => {
         // Only mark the pane released if it actually started. The spawn closure
         // is set inside the attach effect's async tail, so a click landing in
@@ -389,7 +396,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                         This process exited. Its output is above.
                     </span>
                     <div className="dead-bar-actions">
-                        {isAgentPane ? (
+                        {canResumeAgent ? (
                             <>
                                 <button className="accent" onClick={() => resolveHold("resume")}>
                                     Resume
