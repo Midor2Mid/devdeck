@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Toolchain: Electron 43, Vite 7, and `npm audit` at zero
+
+The pin was never really about Electron. It was about Node: Electron 42 and Vite 7
+need `>=22.12`, the machine ran 22.11, so Electron 33 + Vite 5 were pinned in June
+with "revisit after a Node LTS bump" written beside them. The machine now runs
+**22.23.2**. The block had already lifted, and four separate doc claims still said
+it had not - including the security triage that called the shipped Electron CVEs
+"Node-blocked".
+
+- **Electron 33.3.1 -> 43.4.1**, electron-vite 3 -> 5, Vite 5.4 -> 7.3.6, vitest
+  2.1 -> 4.1, @vitejs/plugin-react 4.3 -> 5.2, electron-builder 25 -> 26.15.3, then
+  plain `npm audit fix` for the in-range remainder. `npm audit`: **25 advisories
+  (2 critical, 19 high) -> 0**. The ROADMAP's "do not `npm audit fix --force`" rule
+  held: every major was chosen by hand first.
+- **Vite stops at 7, not the 8 npm suggests**, because `electron-vite@5` peers on
+  `vite ^5 || ^6 || ^7`. Vite 7 is already outside the advisory's `<=6.4.2` range, so
+  the CVE clears without an unsupported combination. `@vitejs/plugin-react@5.2.0` is
+  the single version whose peers span both 7 and 8, which is why plugin-react stops
+  at 5.
+- **The risk that mattered was the pty native module, and it was settled by running
+  it.** `@lydell/node-pty`'s prebuilds are per-ABI, and a broken one under a new
+  Electron would take the terminals - the whole product - with it. `npm run
+  verify:terminal` drives the built app over CDP and reads real shell output back:
+  14/14 under Electron 43, including "two seeded panes mounted" and "no escape
+  sequence reached the shell". Inspecting the binary for napi symbols had been
+  inconclusive; executing it was not.
+- **Packaging is NOT verified, and that is not a version problem.**
+  `electron-builder` shells out to `powershell.exe` to enumerate code-signing certs,
+  and PowerShell cannot execute in this environment at all (exit 3221226505 - the
+  same wall that made `worktree.ps1` unrunnable this morning). Builder 26 fails
+  earlier still, at its node-module collector, with the same exit code, so whether
+  that one is environmental or a builder-26 bug is genuinely unsettled. `npm run
+  package:dir` in a working shell decides it; if the collector still crashes there,
+  pin `electron-builder@^25.1.8` - its advisories are build-time only.
+
+Typecheck clean, 985 tests, `npm run build` clean.
+
 ### Terminal mechanics: switching, moving, zooming, and getting a session back
 
 The awareness layer knew which agent wanted you; the mechanics for actually

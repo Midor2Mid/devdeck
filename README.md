@@ -10,7 +10,7 @@ See `PRODUCT.md` for the problem, target user, and value proposition, and `ROADM
 
 ## Getting started
 
-Requires Node 18+ on Windows. Built and verified on **Node 22.11**.
+Requires Node **^20.19 || >=22.12** on Windows (what Vite 7 and electron-vite 5 ask for). Built and verified on **Node 22.23.2**.
 
 ```bash
 cd devdeck
@@ -35,9 +35,15 @@ Native/WASM deps (`@lydell/node-pty`, `node-sqlite3-wasm`, `@xterm/xterm`) are
 unpacked from the asar archive automatically (see the `build` field in
 `package.json`). Builds are unsigned.
 
-> **Toolchain note:** pinned to Electron 33 + Vite 5 because Electron 42 / Vite 7
-> require Node ≥ 22.12, and this machine runs 22.11. Bump Node to the latest 22 LTS
-> to move up to the newest Electron later (see `ROADMAP.md` decisions log).
+> **Toolchain note (updated 2026-08-24):** the Electron 33 + Vite 5 pin is gone.
+> It existed because Electron 42 / Vite 7 need Node >= 22.12 while the machine ran
+> 22.11; the machine now runs 22.23.2, so the block had already lifted and no doc
+> had noticed. Now on **Electron 43 + Vite 7 + electron-vite 5 + vitest 4**, which
+> takes `npm audit` from 25 advisories (2 critical, 19 high) to **zero**.
+> Vite is capped at 7, not 8: `electron-vite@5` peers on `vite ^5 || ^6 || ^7`.
+> **Packaging is unverified here** - `electron-builder` shells out to
+> `powershell.exe` for the code-signing cert lookup, and PowerShell cannot run in
+> the agent environment at all (see `ROADMAP.md` decisions log).
 
 ## What works today
 
