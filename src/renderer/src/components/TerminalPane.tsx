@@ -36,8 +36,8 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const fontSize = useSettings((s) => s.terminal.fontSize)
     const themeId = useSettings((s) => s.appearance.theme)
     // A restored agent session waits for a resume/fresh choice before it launches.
-    const pending = useStore((s) => !!s.agentResumePending[termId])
-    const startResumedAgent = useStore((s) => s.startResumedAgent)
+    const pending = useStore((s) => !!s.paneHold[termId])
+    const releaseHold = useStore((s) => s.releaseHold)
 
     const resumeAgentId = useStore.getState().agentOf(termId)
     const resumePreset = useSettings.getState().agentById(resumeAgentId)
@@ -58,7 +58,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         const spawn = spawnRef.current
         if (!spawn) return
         spawn(mode === "resume" ? resumeCmd : coldCmd)
-        startResumedAgent(termId)
+        releaseHold(termId)
         termRef.current?.focus()
     }
 
@@ -208,7 +208,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             spawnRef.current = spawn
             // A restored agent session holds until the user chooses resume/fresh;
             // everything else launches immediately (or just re-attaches).
-            if (!useStore.getState().agentResumePending[termId]) spawn(initialCommand)
+            if (!useStore.getState().paneHold[termId]) spawn(initialCommand)
         })
 
         const ro = new ResizeObserver(() => safeFit())

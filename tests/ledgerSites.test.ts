@@ -92,7 +92,7 @@ beforeEach(() => {
         termCwd: {},
         termNames: {},
         agentStatus: {},
-        agentResumePending: {},
+        paneHold: {},
         races: {},
         raceCardId: null,
         pipelineRun: null,
@@ -373,17 +373,17 @@ describe("card records", () => {
     // that pane too, so the money appeared ONLY inside someone else's total.
     it("counts a resumed pane, whose session only exists because Resume was clicked", () => {
         useStore.setState({
-            agentResumePending: { "term-resumed": true },
+            paneHold: { "term-resumed": "resume" },
             termAgents: { "term-resumed": "claude" },
             tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-resumed") }] }
         })
 
-        useStore.getState().startResumedAgent("term-resumed")
+        useStore.getState().releaseHold("term-resumed")
 
         const ev = useSettings.getState().usageLog
         expect(ev).toHaveLength(1)
         expect(ev[0]).toMatchObject({ id: "term-resumed", agentId: "claude", projectId: "p1", cwd: "D:/p1" })
-        expect(useStore.getState().agentResumePending["term-resumed"]).toBeUndefined()
+        expect(useStore.getState().paneHold["term-resumed"]).toBeUndefined()
 
         // And the card that shared its directory is no longer a receipt.
         useStore.setState({ boardTasks: [{ ...dispatched, id: "t-vs-resumed" }] })
@@ -394,21 +394,21 @@ describe("card records", () => {
 
     it("logs a resumed pane's own worktree, not the project it branched from", () => {
         useStore.setState({
-            agentResumePending: { "term-wt": true },
+            paneHold: { "term-wt": "resume" },
             termAgents: { "term-wt": "claude" },
             termCwd: { "term-wt": "D:/p1.worktrees/x" },
             tabsByProject: { p1: [{ id: "tab1", name: "Tab", root: leaf("term-wt") }] }
         })
 
-        useStore.getState().startResumedAgent("term-wt")
+        useStore.getState().releaseHold("term-wt")
 
         expect(useSettings.getState().usageLog[0].cwd).toBe("D:/p1.worktrees/x")
     })
 
     it("logs nothing when the pane was not awaiting a resume", () => {
-        useStore.setState({ agentResumePending: {}, termAgents: { "term-x": "claude" } })
+        useStore.setState({ paneHold: {}, termAgents: { "term-x": "claude" } })
 
-        useStore.getState().startResumedAgent("term-x")
+        useStore.getState().releaseHold("term-x")
 
         expect(useSettings.getState().usageLog).toEqual([])
     })

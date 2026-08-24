@@ -408,7 +408,7 @@ export function isStalled(
  *
  * Invariant: every agent-launch path must call this beside its
  * `logUsageStart` call — that call is made on every path that spawns an agent
- * pty (currently `newTab`, `startResumedAgent`, `splitActive`, and
+ * pty (currently `newTab`, `releaseHold`, `splitActive`, and
  * `openWorkspacePreset` in store.ts), so it is where the next new launch path
  * should add this too rather than assume `newTab` covers it.
  *

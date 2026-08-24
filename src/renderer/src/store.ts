@@ -140,16 +140,19 @@ export interface CanvasPos {
 }
 
 interface AppState extends Persisted {
-    /** Agent terminals restored from a previous run, awaiting a resume/fresh choice (runtime-only). */
-    agentResumePending: Record<string, boolean>
     /**
-     * A restored agent pane has actually launched (the user picked resume or
-     * fresh): clear its pending flag and open its usage event. One action, not
-     * two, because those are one fact — an agent is now running in a directory,
-     * spending money — and splitting them is how the pty came to be spawned
-     * without anything recording that a session had started.
+     * Panes held un-spawned until the user says what to do, by reason.
+     *
+     * `"resume"` — a restored workspace: the agent's conversation is not live yet.
+     * `"restart"` — this pane's process exited; spawning over the corpse without
+     * asking is what used to destroy the evidence of why it died.
+     *
+     * One field rather than two, because the two cases want the same thing: hold
+     * the mount, show why, and route the relaunch through the accounting.
      */
-    startResumedAgent: (termId: string) => void
+    paneHold: Record<string, "resume" | "restart">
+    /** Release a held pane: clear the hold, and log the run if it is an agent. */
+    releaseHold: (termId: string) => void
     projects: Project[]
     activeId: string | null
     /** Project ids, most recently used first (persisted to localStorage). */
@@ -536,7 +539,7 @@ export const useStore = create<AppState>((set, get) => {
      *
      * `||`, not `??`: an empty-string termCwd entry falls through to the project
      * path, the same way logUsageStart resolves the same session. The activeId
-     * fallback came from startResumedAgent and is kept deliberately: a dispatch
+     * fallback came from releaseHold and is kept deliberately: a dispatch
      * into a project whose panes are not yet registered in tabsByProject would
      * otherwise resolve no directory at all.
      *
@@ -830,13 +833,13 @@ export const useStore = create<AppState>((set, get) => {
             delete termShells[termId]
             const canvasPos = { ...s.canvasPos }
             delete canvasPos[termId]
-            const agentResumePending = { ...s.agentResumePending }
-            delete agentResumePending[termId]
+            const paneHold = { ...s.paneHold }
+            delete paneHold[termId]
             return {
                 agentStatus,
                 termInit,
                 termAgents,
-                agentResumePending,
+                paneHold,
                 termCwd,
                 termNames,
                 termShells,
@@ -1135,7 +1138,7 @@ export const useStore = create<AppState>((set, get) => {
         projectCycle: null,
         termAgents: {},
         termInit: {},
-        agentResumePending: {},
+        paneHold: {},
         termCwd: {},
         termNames: {},
         termShells: {},
@@ -1194,7 +1197,14 @@ export const useStore = create<AppState>((set, get) => {
                 // App-global, not per-pane: TerminalPane's own onExit only fires while a
                 // pane is mounted, and Mission has to know about a process that died in a
                 // tab you were not looking at.
-                window.api.pty.onExit(({ id, exitCode }) => recordExit(id, exitCode))
+                window.api.pty.onExit(({ id, exitCode }) => {
+                    recordExit(id, exitCode)
+                    // Hold the pane. Without this, the next remount spawns a fresh
+                    // shell over the corpse - the pane is unmounted whenever its tab
+                    // is not the active one, so with several terminals open that is
+                    // the normal path, not an edge case.
+                    set((s) => ({ paneHold: { ...s.paneHold, [id]: "restart" as const } }))
+                })
                 window.api.triggers.onFired(({ triggerId }) => get().fireTrigger(triggerId))
                 dataSubscribed = true
             }
@@ -1220,11 +1230,11 @@ export const useStore = create<AppState>((set, get) => {
             // Agent sessions from the previous run come back needing a resume/fresh
             // choice — their ptys died with the old process, so cold-relaunching
             // would silently drop each conversation.
-            const agentResumePending: Record<string, boolean> = {}
+            const paneHold: Record<string, "resume" | "restart"> = {}
             for (const tabs of Object.values(tabsByProject) as Tab[][]) {
                 for (const tab of tabs) {
                     for (const id of collectLeaves(tab.root)) {
-                        if (isAgentId(termAgents[id])) agentResumePending[id] = true
+                        if (isAgentId(termAgents[id])) paneHold[id] = "resume"
                     }
                 }
             }
@@ -1234,7 +1244,7 @@ export const useStore = create<AppState>((set, get) => {
                 projectMru: seededMru,
                 termAgents,
                 termInit: w.termInit ?? {},
-                agentResumePending,
+                paneHold,
                 termCwd: w.termCwd ?? {},
                 termNames: w.termNames ?? {},
                 termShells: w.termShells ?? {},
@@ -2665,32 +2675,32 @@ export const useStore = create<AppState>((set, get) => {
             get().newTab(SHELL, command, label ?? command)
         },
 
-        startResumedAgent: (termId) => {
-            if (!(termId in get().agentResumePending)) return
-            // Checked before the pending flag is cleared below: if this pane were
-            // ever not an agent id, clearing the flag first would close the resume
-            // overlay with no usage event logged even though resolveResume has
-            // already spawned the process - an invariant resting on this bail
-            // running first, not on the set() happening to come after it.
+        releaseHold: (termId) => {
+            if (!(termId in get().paneHold)) return
+            // Checked before the hold is cleared below: if this pane were ever
+            // not an agent id, clearing first would close the overlay with no
+            // usage event logged even though the caller has already spawned the
+            // process - an invariant resting on this bail running first, not on
+            // the set() happening to come after it.
             const agentId = get().termAgents[termId]
-            if (!isAgentId(agentId)) return
             set((s) => {
-                const agentResumePending = { ...s.agentResumePending }
-                delete agentResumePending[termId]
-                return { agentResumePending }
+                const paneHold = { ...s.paneHold }
+                delete paneHold[termId]
+                return { paneHold }
             })
-            // Resume is the ONLY way a restored agent session ever starts (every
-            // restored agent term is marked pending at load), so without this the
-            // pane spends real money that no usage event has ever seen. It is not
-            // only its own missing record: exclusivity is answered from usageLog,
-            // so an unlogged session sitting in a project directory silently lets
-            // every card, pipeline and session whose window it overlaps be written
-            // as an exclusive receipt over money that was partly its.
+            if (!isAgentId(agentId)) return
+            // Resume and restart are the only two ways an agent pane starts
+            // without going through newTab, so without this the pane spends real
+            // money that no usage event has ever seen. It is not only its own
+            // missing record: exclusivity is answered from usageLog, so an
+            // unlogged session sitting in a project directory silently lets every
+            // card, pipeline and session whose window it overlaps be written as
+            // an exclusive receipt over money that was partly its.
             //
-            // Both modes log. "fresh" starts a brand-new conversation rather than
-            // continuing the old one, but it is the same agent in the same
-            // directory costing the same money - the distinction matters to the
-            // user's context, not to the accounting.
+            // Every mode logs. "fresh" starts a new conversation and "restart"
+            // follows a crash, but each is the same agent in the same directory
+            // costing the same money - the distinction matters to the user's
+            // context, not to the accounting.
             const projectId = get().projectIdOfTerm(termId) ?? get().activeId ?? ""
             // `||`, not `??`: an empty-string entry in termCwd must fall through
             // to the project path the same way newTab's logUsageStart call does,
