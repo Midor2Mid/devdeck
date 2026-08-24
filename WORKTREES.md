@@ -22,9 +22,10 @@ devdeck-trees/
 npm run worktree -- new api-polish
 ```
 
-or, invoking the script directly:
+or, invoking either entry point directly:
 
 ```powershell
+node scripts/worktree.mjs new api-polish
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/worktree.ps1 new api-polish
 ```
 
@@ -32,10 +33,14 @@ This creates `../devdeck-trees/api-polish` on branch `wt/api-polish` and **junct
 `node_modules`** from the main checkout so it builds immediately (no reinstall).
 Then **open a Claude Code session in that folder** and work there.
 
-> These used to read `pwsh -File`. `pwsh` is PowerShell 7 and is **not installed on
-> this machine**, so the documented command failed before it ever reached the script.
-> `powershell` is Windows PowerShell 5.1, which is always present, and is what the
-> repo's other scripts (`cert:make`, `package:signed`) already use.
+> **On the two entry points.** The implementation is `scripts/worktree.mjs` (Node),
+> covered by `tests/worktree.test.ts` against a real throwaway repo.
+> `scripts/worktree.ps1` is now a thin shim that calls it, kept because this doc and
+> muscle memory point at that path. It used to read `pwsh -File`, and `pwsh`
+> (PowerShell 7) is **not installed on this machine**, so the documented command
+> failed before it ever reached the script; `powershell` is 5.1 and always present.
+> Prefer the Node form: an agent session here cannot run PowerShell at all, which is
+> how the old script's bugs survived so long.
 
 ## List / remove
 

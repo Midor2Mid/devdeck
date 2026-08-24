@@ -18,7 +18,7 @@
     "cert:make": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-signing-cert.ps1",
     "package:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-signed.ps1",
     "verify:terminal": "node scripts/verify-terminal.mjs",
-    "worktree": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/worktree.ps1"
+    "worktree": "node scripts/worktree.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist-mono": "^5.2.8",
