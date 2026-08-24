@@ -1,0 +1,123 @@
+import { describe, it, expect, beforeEach, vi } from "vitest"
+
+/** The fake pty the mocked spawn hands back, with hooks to drive it. */
+interface Fake {
+    onDataCb?: (d: string) => void
+    onExitCb?: (e: { exitCode: number }) => void
+    killed: boolean
+    written: string[]
+}
+let fakes: Fake[] = []
+
+vi.mock("@lydell/node-pty", () => ({
+    spawn: (): unknown => {
+        const f: Fake = { killed: false, written: [] }
+        fakes.push(f)
+        return {
+            onData: (cb: (d: string) => void): void => {
+                f.onDataCb = cb
+            },
+            onExit: (cb: (e: { exitCode: number }) => void): void => {
+                f.onExitCb = cb
+            },
+            write: (d: string): void => {
+                f.written.push(d)
+            },
+            resize: (): void => undefined,
+            kill: (): void => {
+                f.killed = true
+            }
+        }
+    }
+}))
+
+const pty = await import("../src/main/pty")
+
+const ID = "t-1"
+/** Spawn, emit one chunk, then kill the process with `code`. */
+function runAndDie(code: number, out = "boom: could not find module\r\n"): void {
+    pty.createPty({ id: ID })
+    fakes[fakes.length - 1].onDataCb?.(out)
+    fakes[fakes.length - 1].onExitCb?.({ exitCode: code })
+}
+
+describe("a dead session leaves a corpse", () => {
+    beforeEach(() => {
+        pty.killPty(ID)
+        fakes = []
+    })
+
+    // The whole point: the output that explains the failure has to outlive the
+    // process, or a pane reached from another tab is an empty box with a code.
+    it("keeps the buffer after the process exits", () => {
+        runAndDie(1)
+        expect(pty.getBuffer(ID)).toContain("could not find module")
+    })
+
+    it("reports the exit code alongside the buffer", () => {
+        runAndDie(1)
+        expect(pty.bufferOf(ID)).toEqual({
+            buffer: expect.stringContaining("could not find module"),
+            exitCode: 1
+        })
+    })
+
+    // 0 is falsy: a clean exit is still an exit, and every consumer tests
+    // `!== undefined`.
+    it("treats a clean exit as an exit", () => {
+        runAndDie(0)
+        expect(pty.bufferOf(ID).exitCode).toBe(0)
+    })
+
+    it("reports no exit code for a live session", () => {
+        pty.createPty({ id: ID })
+        expect(pty.bufferOf(ID).exitCode).toBeUndefined()
+    })
+
+    it("reports nothing for an id it has never seen", () => {
+        expect(pty.bufferOf("never-existed")).toEqual({ buffer: "", exitCode: undefined })
+    })
+
+    // A corpse is NOT live, so a deliberate restart must spawn rather than
+    // silently no-op the way an attach to a running session does.
+    it("spawns again over a corpse", () => {
+        runAndDie(1)
+        const before = fakes.length
+        pty.createPty({ id: ID })
+        expect(fakes.length).toBe(before + 1)
+        expect(pty.bufferOf(ID).exitCode).toBeUndefined()
+    })
+
+    it("still refuses to spawn over a LIVE session", () => {
+        pty.createPty({ id: ID })
+        const before = fakes.length
+        pty.createPty({ id: ID })
+        expect(fakes.length).toBe(before)
+    })
+
+    it("drops a corpse when the pane is closed", () => {
+        runAndDie(1)
+        pty.killPty(ID)
+        expect(pty.bufferOf(ID)).toEqual({ buffer: "", exitCode: undefined })
+    })
+
+    // There is no process to kill; the old code called session.proc.kill() and
+    // was saved only by its try/catch.
+    it("closing a dead pane kills nothing", () => {
+        runAndDie(1)
+        const killedBefore = fakes.filter((f) => f.killed).length
+        pty.killPty(ID)
+        expect(fakes.filter((f) => f.killed).length).toBe(killedBefore)
+    })
+
+    it("writing to a corpse is a no-op, not a throw", () => {
+        runAndDie(1)
+        expect(() => pty.writePty(ID, "hello\r")).not.toThrow()
+        expect(fakes[0].written).toEqual([])
+    })
+
+    it("resizing a corpse is a no-op, not a throw", () => {
+        runAndDie(1)
+        expect(() => pty.resizePty(ID, 80, 24)).not.toThrow()
+    })
+})

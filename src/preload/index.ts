@@ -410,6 +410,8 @@ const api = {
         resize: (id: string, cols: number, rows: number): void =>
             ipcRenderer.send("pty:resize", { id, cols, rows }),
         kill: (id: string): void => ipcRenderer.send("pty:kill", { id }),
+        buffer: (id: string): Promise<{ buffer: string; exitCode: number | undefined }> =>
+            ipcRenderer.invoke("pty:buffer", id),
         onData: (cb: (p: { id: string; data: string }) => void): (() => void) => {
             const handler = (_e: unknown, p: { id: string; data: string }): void => cb(p)
             ipcRenderer.on("pty:data", handler)

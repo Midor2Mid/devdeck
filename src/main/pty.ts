@@ -1,17 +1,43 @@
 import * as nodePty from "@lydell/node-pty"
 import { EventEmitter } from "events"
 
-interface Session {
+/**
+ * A running pty and the tail of what it has printed.
+ */
+interface Live {
+    kind: "live"
     proc: nodePty.IPty
     /** Rolling tail of output, replayed when a client attaches to this id. */
     buffer: string
 }
 
-// One live pty per terminal id, in the main process. Output is broadcast via
+/**
+ * What is left when the process exits: the output, and why it went.
+ *
+ * A corpse deliberately has NO `proc` field. The alternative — one type with a
+ * `dead: true` flag — leaves every `session.proc.write(...)` compiling and
+ * failing at runtime on whichever call site was missed. As a separate shape,
+ * the compiler enumerates them instead.
+ *
+ * It exists because deleting the entry at exit threw away the only record of
+ * why a process died: a pane reached from another tab replayed nothing, spawned
+ * a fresh shell over the evidence, and looked like it had simply been idle.
+ */
+interface Corpse {
+    kind: "dead"
+    buffer: string
+    exitCode: number
+    diedAt: number
+}
+
+type Entry = Live | Corpse
+
+// One entry per terminal id, in the main process. Output is broadcast via
 // `ptyEvents` so multiple transports (the Electron window AND remote/mobile
 // WebSocket clients) can stream the same session. Each transport replays the
-// buffer itself on attach via getBuffer(). Sessions end only on explicit kill.
-const sessions = new Map<string, Session>()
+// buffer itself on attach via getBuffer(). A session that exits leaves a corpse
+// behind, which lives until the pane is closed or deliberately restarted.
+const sessions = new Map<string, Entry>()
 
 /** Emits "data" {id,data} and "exit" {id,exitCode}. */
 export const ptyEvents = new EventEmitter()
@@ -66,17 +92,31 @@ export function terminalEnv(extra?: Record<string, string>): Record<string, stri
     return { ...env, ...(extra ?? {}) }
 }
 
-export function hasSession(id: string): boolean {
-    return sessions.has(id)
-}
-
 export function getBuffer(id: string): string {
     return sessions.get(id)?.buffer ?? ""
 }
 
+/**
+ * A session's output and, if its process has exited, the code it exited with.
+ *
+ * The read behind `pty:buffer`: a held pane fetches its corpse and writes it
+ * into the terminal itself. It must NOT arrive through the `pty:data` stream —
+ * the renderer's handler there clears the exit record on any output, so a
+ * pushed replay would erase the very thing the pane is displaying.
+ *
+ * `exitCode` is undefined for a live session and for an id nothing knows about.
+ */
+export function bufferOf(id: string): { buffer: string; exitCode: number | undefined } {
+    const e = sessions.get(id)
+    if (!e) return { buffer: "", exitCode: undefined }
+    return { buffer: e.buffer, exitCode: e.kind === "dead" ? e.exitCode : undefined }
+}
+
 export function createPty(opts: CreateOpts): void {
     const { id } = opts
-    if (sessions.has(id)) return
+    // Attaching to a RUNNING session is a no-op; spawning over a corpse is a
+    // deliberate restart and must go ahead.
+    if (sessions.get(id)?.kind === "live") return
 
     const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
     const proc = nodePty.spawn(file, args, {
@@ -90,22 +130,27 @@ export function createPty(opts: CreateOpts): void {
         rows: opts.rows ?? 24,
         env: terminalEnv(opts.env)
     })
-    const session: Session = { proc, buffer: "" }
-    sessions.set(id, session)
+    const live: Live = { kind: "live", proc, buffer: "" }
+    sessions.set(id, live)
 
     proc.onData((data) => {
-        session.buffer += data
-        if (session.buffer.length > BUFFER_CAP) {
+        live.buffer += data
+        if (live.buffer.length > BUFFER_CAP) {
             // Trim to the next line break so replay doesn't start mid escape-sequence.
-            let trimmed = session.buffer.slice(-BUFFER_CAP)
+            let trimmed = live.buffer.slice(-BUFFER_CAP)
             const nl = trimmed.indexOf("\n")
             if (nl > -1 && nl < 8192) trimmed = trimmed.slice(nl + 1)
-            session.buffer = trimmed
+            live.buffer = trimmed
         }
         ptyEvents.emit("data", { id, data })
     })
     proc.onExit(({ exitCode }) => {
-        sessions.delete(id)
+        // Only if this pty is still the one registered under this id: a restart
+        // that spawned over this corpse must not have its fresh session
+        // replaced by the late exit of the process it replaced.
+        if (sessions.get(id) === live) {
+            sessions.set(id, { kind: "dead", buffer: live.buffer, exitCode, diedAt: Date.now() })
+        }
         ptyEvents.emit("exit", { id, exitCode })
     })
 
@@ -121,33 +166,42 @@ export function createPty(opts: CreateOpts): void {
 }
 
 export function writePty(id: string, data: string): void {
-    sessions.get(id)?.proc.write(data)
+    const e = sessions.get(id)
+    // Nothing is listening on a corpse. Previously this was a throw caught by
+    // the caller; now it cannot be written at all.
+    if (e?.kind === "live") e.proc.write(data)
 }
 
 export function resizePty(id: string, cols: number, rows: number): void {
     if (cols < 1 || rows < 1) return
+    const e = sessions.get(id)
+    if (e?.kind !== "live") return
     try {
-        sessions.get(id)?.proc.resize(cols, rows)
+        e.proc.resize(cols, rows)
     } catch {
         /* resize can race with exit */
     }
 }
 
 export function killPty(id: string): void {
-    const session = sessions.get(id)
-    if (!session) return
-    try {
-        session.proc.kill()
-    } catch {
-        /* already dead */
+    const e = sessions.get(id)
+    if (!e) return
+    if (e.kind === "live") {
+        try {
+            e.proc.kill()
+        } catch {
+            /* already dead */
+        }
     }
+    // A corpse is dropped the same way: this is the pane closing for good.
     sessions.delete(id)
 }
 
 export function killAll(): void {
-    for (const session of sessions.values()) {
+    for (const e of sessions.values()) {
+        if (e.kind !== "live") continue
         try {
-            session.proc.kill()
+            e.proc.kill()
         } catch {
             /* ignore */
         }
