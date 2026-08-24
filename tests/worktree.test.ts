@@ -10,8 +10,33 @@ import {
     linkKind,
     addWorktree,
     removeWorktree,
-    parseArgs
+    parseArgs,
+    sharedModules
 } from "../scripts/worktree.mjs"
+
+const git = (args: string[], cwd: string) => spawnSync("git", args, { cwd, encoding: "utf8" })
+
+/** A throwaway repo inside its own temp parent, so the sibling trees dir lands in temp. */
+function makeRepo(): string {
+    const parent = mkdtempSync(join(tmpdir(), "wt-"))
+    const repo = join(parent, "sample")
+    mkdirSync(repo)
+    git(["init", "--quiet", "-b", "main"], repo)
+    git(["config", "user.email", "t@t"], repo)
+    git(["config", "user.name", "t"], repo)
+    writeFileSync(join(repo, "README.md"), "sample\n")
+    git(["add", "-A"], repo)
+    git(["commit", "-qm", "init"], repo)
+    return repo
+}
+
+function cleanupRepo(repo: string): void {
+    try {
+        rmSync(join(repo, ".."), { recursive: true, force: true })
+    } catch {
+        /* windows can hold a handle briefly; a temp dir left behind is harmless */
+    }
+}
 
 describe("paths and names", () => {
     it("puts worktrees in a sibling folder named after the repo", () => {
@@ -26,6 +51,39 @@ describe("paths and names", () => {
         expect(worktreePath("D:/work/devdeck", "api-polish")).toBe(
             join("D:/work", "devdeck-trees", "api-polish")
         )
+    })
+})
+
+describe("sharedModules", () => {
+    // Discovered, not configured: this helper is copied between products that keep
+    // their dependencies in different places (root here, app/ in dev-cockpit,
+    // guarded-ops-mcp/ in dev-ai-tools). A version that assumed one of those links
+    // nothing at all in the others.
+    let repo: string
+    beforeEach(() => {
+        repo = makeRepo()
+    })
+    afterEach(() => cleanupRepo(repo))
+
+    it("finds nothing when nothing is installed", () => {
+        expect(sharedModules(repo)).toEqual([])
+    })
+
+    it("finds a root install", () => {
+        mkdirSync(join(repo, "node_modules"))
+        expect(sharedModules(repo)).toEqual(["."])
+    })
+
+    it("finds a per-package install", () => {
+        mkdirSync(join(repo, "app", "node_modules"), { recursive: true })
+        expect(sharedModules(repo)).toEqual(["app"])
+    })
+
+    it("finds both, and ignores directories with nothing installed", () => {
+        mkdirSync(join(repo, "node_modules"))
+        mkdirSync(join(repo, "app", "node_modules"), { recursive: true })
+        mkdirSync(join(repo, "docs"), { recursive: true })
+        expect(sharedModules(repo).sort()).toEqual([".", "app"])
     })
 })
 
@@ -57,30 +115,12 @@ describe("parseArgs", () => {
 
 describe("against a real repo", () => {
     let repo: string
-    const git = (args: string[], cwd: string) =>
-        spawnSync("git", args, { cwd, encoding: "utf8" })
 
     beforeEach(() => {
-        // A repo inside its own temp parent, so the sibling trees dir lands in the
-        // temp area rather than beside the real checkout.
-        const parent = mkdtempSync(join(tmpdir(), "wt-"))
-        repo = join(parent, "sample")
-        mkdirSync(repo)
-        git(["init", "--quiet", "-b", "main"], repo)
-        git(["config", "user.email", "t@t"], repo)
-        git(["config", "user.name", "t"], repo)
-        writeFileSync(join(repo, "README.md"), "sample\n")
-        git(["add", "-A"], repo)
-        git(["commit", "-qm", "init"], repo)
+        repo = makeRepo()
     })
 
-    afterEach(() => {
-        try {
-            rmSync(join(repo, ".."), { recursive: true, force: true })
-        } catch {
-            /* windows can hold a handle briefly; a temp dir left behind is harmless */
-        }
-    })
+    afterEach(() => cleanupRepo(repo))
 
     it("creates the worktree on its own branch", () => {
         const r = addWorktree(repo, "feature-a")
@@ -101,6 +141,31 @@ describe("against a real repo", () => {
         expect(lstatSync(linked).isSymbolicLink()).toBe(true)
         // Reachable through the link: that is the whole point of sharing it.
         expect(existsSync(join(linked, "marker.txt"))).toBe(true)
+    })
+
+    // Per package, not just the root. devdeck installs at the root today, so this
+    // is the case that would silently not work if it ever grew a second package -
+    // and it is how the other three copies of this helper already behave.
+    it("links a package's node_modules, not only the root's", () => {
+        writeFileSync(join(repo, ".gitignore"), "node_modules/\n")
+        mkdirSync(join(repo, "app"))
+        writeFileSync(join(repo, "app", "package.json"), '{ "name": "app" }\n')
+        git(["add", "-A"], repo)
+        git(["commit", "-qm", "add app"], repo)
+        mkdirSync(join(repo, "app", "node_modules"))
+        writeFileSync(join(repo, "app", "node_modules", "marker.txt"), "shared\n")
+
+        const r = addWorktree(repo, "feature-pkg")
+        expect(r.ok).toBe(true)
+        expect(r.linked).toEqual(["app"])
+        const linked = join(r.path as string, "app", "node_modules")
+        expect(lstatSync(linked).isSymbolicLink()).toBe(true)
+        expect(existsSync(join(linked, "marker.txt"))).toBe(true)
+    })
+
+    it("reports each place it linked, so nothing is claimed that did not happen", () => {
+        mkdirSync(join(repo, "node_modules"))
+        expect(addWorktree(repo, "feature-root").linked).toEqual(["."])
     })
 
     it("does not invent a link when the main checkout has no node_modules", () => {

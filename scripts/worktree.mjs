@@ -21,7 +21,7 @@
  * Exit: 0 = done - 1 = failed - 2 = usage error. Zero dependencies.
  */
 import { spawnSync } from "node:child_process"
-import { existsSync, lstatSync, mkdirSync, rmSync, symlinkSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs"
 import { dirname, join, basename, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -52,6 +52,29 @@ export function linkKind(p) {
     } catch {
         return "missing"
     }
+}
+
+/**
+ * Every place in the repo with dependencies installed, relative to the root ("."
+ * for the root itself). Discovered rather than assumed: this helper is copied
+ * between products that install in different places (the root here, `app/` in
+ * dev-cockpit, `guarded-ops-mcp/` in dev-ai-tools), and a version that assumed one
+ * of those linked nothing at all in the others - so every worktree there started
+ * with a reinstall.
+ */
+export function sharedModules(repoRoot) {
+    const found = []
+    if (existsSync(join(repoRoot, "node_modules"))) found.push(".")
+    for (const entry of readdirSync(repoRoot)) {
+        if (entry === "node_modules" || entry.startsWith(".")) continue
+        try {
+            if (!statSync(join(repoRoot, entry)).isDirectory()) continue
+        } catch {
+            continue
+        }
+        if (existsSync(join(repoRoot, entry, "node_modules"))) found.push(entry)
+    }
+    return found
 }
 
 /** Run git and report by EXIT CODE. git writes progress to stderr on success. */
@@ -101,14 +124,17 @@ export function addWorktree(repoRoot, name) {
     const add = git(["worktree", "add", "-b", branch, path], repoRoot)
     if (!add.ok) return { ok: false, detail: add.out || `git worktree add exited ${add.code}` }
 
-    // Share node_modules so the worktree builds without a reinstall. A junction on
-    // Windows: it needs no elevation, unlike a symlink.
-    const src = join(repoRoot, "node_modules")
-    const dst = join(path, "node_modules")
-    let linked = false
-    if (existsSync(src) && linkKind(dst) === "missing") {
-        symlinkSync(src, dst, process.platform === "win32" ? "junction" : "dir")
-        linked = true
+    // Share dependencies so the worktree builds without a reinstall, per package.
+    // A junction on Windows: it needs no elevation, unlike a symlink.
+    const kind = process.platform === "win32" ? "junction" : "dir"
+    const linked = []
+    for (const pkg of sharedModules(repoRoot)) {
+        const dst = join(path, pkg, "node_modules")
+        if (linkKind(dst) !== "missing") continue
+        // The package directory exists in the worktree only if it is tracked.
+        if (!existsSync(dirname(dst))) continue
+        symlinkSync(join(repoRoot, pkg, "node_modules"), dst, kind)
+        linked.push(pkg)
     }
     return { ok: true, path, branch, linked }
 }
@@ -120,14 +146,26 @@ export function removeWorktree(repoRoot, name) {
     // Unlink first, so neither git nor the filesystem walks into the shared tree.
     // Only when it IS a link - a real directory belongs to this worktree and goes
     // with it.
-    const dst = join(path, "node_modules")
-    const kind = linkKind(dst)
-    if (kind === "link") rmSync(dst, { recursive: false, force: true })
+    const unlinked = []
+    const owned = []
+    for (const pkg of [".", ...readdirSync(path).filter((e) => !e.startsWith("."))]) {
+        const dst = join(path, pkg, "node_modules")
+        const kind = linkKind(dst)
+        if (kind === "link") {
+            rmSync(dst, { recursive: false, force: true })
+            unlinked.push(pkg)
+        } else if (kind === "dir") {
+            owned.push(pkg)
+        }
+    }
 
     const rm = git(["worktree", "remove", path, "--force"], repoRoot)
     if (!rm.ok) return { ok: false, detail: rm.out || `git worktree remove exited ${rm.code}` }
-    return { ok: true, path, unlinked: kind === "link", ownModules: kind === "dir" }
+    return { ok: true, path, unlinked, owned }
 }
+
+/** "." addresses the repo root internally; it is not how you say it to a person. */
+const place = (pkg) => (pkg === "." ? "the repo root" : pkg)
 
 function main(argv) {
     const repo = git(["rev-parse", "--show-toplevel"], process.cwd())
@@ -153,11 +191,15 @@ function main(argv) {
             console.error(r.detail)
             return 1
         }
-        if (r.linked) console.log("Linked node_modules from the main checkout.")
         console.log("")
         console.log("Worktree ready:")
         console.log(`  folder: ${r.path}`)
         console.log(`  branch: ${r.branch}`)
+        console.log(
+            r.linked.length
+                ? `  shared dependencies linked: ${r.linked.map(place).join(", ")}`
+                : "  no installed dependencies to share (run npm install where you need them)"
+        )
         console.log("Open a session in that folder. When done:")
         console.log(`  git push -u origin ${r.branch}   (then open a PR), or merge into main.`)
         return 0
@@ -168,8 +210,8 @@ function main(argv) {
         console.error(r.detail)
         return 1
     }
-    if (r.unlinked) console.log("Unlinked the shared node_modules.")
-    if (r.ownModules) console.log("That worktree had its own node_modules; it went with the folder.")
+    if (r.unlinked.length) console.log(`Unlinked shared dependencies: ${r.unlinked.map(place).join(", ")}`)
+    if (r.owned.length) console.log(`That worktree owned its dependencies in: ${r.owned.map(place).join(", ")}`)
     console.log(`Removed ${r.path} (branch ${branchFor(name)} kept; delete with: git branch -d ${branchFor(name)})`)
     return 0
 }
