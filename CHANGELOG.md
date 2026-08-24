@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### The app is 97 MB smaller, and Monaco was being packed twice
+
+- **`app.asar` 178 MB -> 82 MB**, `release/win-unpacked` 544 -> 447 MB. Most of that
+  is one thing: Vite bundles monaco-editor into `out/renderer`, and electron-builder
+  *also* packed the entire `node_modules/monaco-editor` copy because it sat in
+  `dependencies` - 1,927 files, all 83 language grammars, never resolved at runtime.
+  It and `@monaco-editor/react` are devDependencies now. Monaco package files in the
+  asar: 1,927 -> 0, with the bundled code and all four language workers still
+  shipping as app chunks.
+- **The language subset that started this** is the smaller half: `monaco-setup`
+  imports `editor.api` plus the 4 rich services and 16 basic languages this app can
+  actually request, rather than the package entry that pulls all 83. Main renderer
+  chunk 8,089 kB -> 6,141 kB. The grammars nothing here can open (abap, elixir,
+  postiats, freemarker2, solidity, powerquery) are gone from the build.
+- The language data moved to `src/renderer/src/monacoLanguages.ts`, deliberately free
+  of any monaco import so it can be tested in node. Nine tests guard the hazard the
+  subset creates: adding an extension to `LANG` without bundling its language
+  degrades that file type to plaintext with no error at all. They also fail if the
+  entry ever reverts to `from "monaco-editor"`, which would silently restore all 83.
+- Editor colours confirmed by hand before merging. The automated harness could not
+  reach a mounted Monaco instance - the Editor view needs a file opened through its
+  tree - so that one check is a human's, and the commit says so rather than implying
+  otherwise.
+
 ### Toolchain: Electron 43, Vite 7, and `npm audit` at zero
 
 The pin was never really about Electron. It was about Node: Electron 42 and Vite 7

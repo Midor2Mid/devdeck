@@ -283,10 +283,29 @@ Where the 178 MB actually is, measured against `dependencies`:
 under 2 MB, plus 26 MB of built app code in `out/`. Monaco is 55 percent of the
 payload on its own, and it ships every language grammar - the build log lists
 `abap`, `elixir`, `postiats`, `freemarker2` and dozens more as separate chunks.
-The real lever is a Monaco language subset (its `MonacoEditorWebpackPlugin`
-equivalent for Vite, or importing only the languages the editor panel offers),
-not dependency deduplication. Not scheduled: the app is not distributed by
-download size today, and lazy chunks mean unused grammars are never fetched.
+**DONE the same day, and the bigger half was not the subset.** Two changes:
+
+- **Language subset.** `monaco-setup` imports `editor.api` plus exactly the 4 rich
+  services and 16 basic languages this app can request, instead of the package entry
+  that pulls all 83. Main renderer chunk 8,089 kB -> 6,141 kB, `out/` 26 -> 23 MB.
+- **Monaco was packed TWICE.** Vite bundles it into `out/renderer`, and
+  electron-builder also packed the whole `node_modules` copy as a production
+  dependency: 1,927 files, every grammar, never resolved at runtime. Moving
+  `monaco-editor` and `@monaco-editor/react` to devDependencies took **app.asar from
+  178 MB to 82 MB** and win-unpacked 544 -> 447 MB, with monaco package files in the
+  asar going 1,927 -> 0. The bundled code still ships as app chunks, all four workers
+  included.
+
+So the subset was worth ~2 MB of bundle and the double-packing was worth ~96 MB. The
+same audit applies to the other renderer-only dependencies still in `dependencies`
+(react, react-dom, @xterm/*, zustand, allotment, marked, dompurify): all are bundled
+by Vite, and `@xterm/xterm` alone is 184 files in the asar. Not done here, because
+each needs checking that main/preload never import it - monaco was verified that way
+before moving.
+
+The risk this creates is guarded: `tests/monacoLanguages.test.ts` fails if an
+extension is added to `LANG` without bundling its language, which would otherwise
+degrade that file type to plaintext with no error anywhere.
 
 ## Decisions log
 
