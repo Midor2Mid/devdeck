@@ -16,7 +16,8 @@
     "package": "electron-vite build && electron-builder",
     "package:dir": "electron-vite build && electron-builder --dir",
     "cert:make": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-signing-cert.ps1",
-    "package:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-signed.ps1"
+    "package:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-signed.ps1",
+    "verify:terminal": "node scripts/verify-terminal.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist-mono": "^5.2.8",

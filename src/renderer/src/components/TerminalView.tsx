@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
 import { useSettings, sshCommand, isUnsafeAgent, type ShellKind } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
+import { sessionIndexOrder, validZoom } from "../paneNav"
 import { isRunnable } from "../pipeline"
 import { confirm } from "../confirm"
 import { contextMenu } from "../contextmenu"
@@ -85,6 +86,12 @@ export function TerminalView(): JSX.Element {
     const openChanges = useStore((s) => s.openChanges)
     const noteRecording = useStore((s) => s.noteRecording)
     const activePaneId = useStore((s) => (s.activeId ? s.activePaneByProject[s.activeId] : undefined))
+    const zoomedPane = useStore((s) => s.zoomedPane)
+    const toggleZoomPane = useStore((s) => s.toggleZoomPane)
+    const closePaneWithUndo = useStore((s) => s.closePaneWithUndo)
+    // Holding Alt reveals each tab's jump number, so Alt+N teaches itself
+    // instead of living only in the shortcuts sheet.
+    const [altHeld, setAltHeld] = useState(false)
     const findInputRef = useRef<HTMLInputElement>(null)
 
     const activeProject = projects.find((p) => p.id === activeId)
@@ -146,6 +153,26 @@ export function TerminalView(): JSX.Element {
         if (findOpen) findInputRef.current?.focus()
     }, [findOpen])
 
+    // Alt down/up only - blur clears it too, or the numbers would stay up after
+    // an Alt+Tab away from the window.
+    useEffect(() => {
+        const down = (e: KeyboardEvent): void => {
+            if (e.key === "Alt" && !e.ctrlKey) setAltHeld(true)
+        }
+        const up = (e: KeyboardEvent): void => {
+            if (e.key === "Alt") setAltHeld(false)
+        }
+        const clear = (): void => setAltHeld(false)
+        window.addEventListener("keydown", down)
+        window.addEventListener("keyup", up)
+        window.addEventListener("blur", clear)
+        return () => {
+            window.removeEventListener("keydown", down)
+            window.removeEventListener("keyup", up)
+            window.removeEventListener("blur", clear)
+        }
+    }, [])
+
     if (!activeProject) {
         return (
             <div className="empty-state">
@@ -181,20 +208,33 @@ export function TerminalView(): JSX.Element {
         setEditingId(null)
     }
 
-    // Close a whole tab (confirm only when it holds multiple panes).
+    // Close a whole tab. One session closes straight away and offers Undo, which
+    // is a better answer than a dialog: nothing to read, and it survives the
+    // mis-click. Several panes still ask first, because undo restores ONE
+    // session and an Undo that quietly brought back one of three would lie.
     const closeTab = async (tab: Tab): Promise<void> => {
         const panes = [...new Set(collectLeaves(tab.root))]
-        if (panes.length > 1) {
-            const ok = await confirm({
-                title: "Close tab",
-                message: `Close "${tab.name}" and its ${panes.length} panes?`,
-                confirmLabel: "Close",
-                danger: true
-            })
-            if (!ok) return
+        if (panes.length === 1) {
+            closePaneWithUndo(panes[0])
+            return
         }
+        const ok = await confirm({
+            title: "Close tab",
+            message: `Close "${tab.name}" and its ${panes.length} panes?`,
+            confirmLabel: "Close",
+            danger: true
+        })
+        if (!ok) return
         panes.forEach(closePane)
     }
+
+    // The Alt+1..9 order, and the zoom that survives the current stage.
+    const indexOrder = sessionIndexOrder(tabs)
+    const effectiveZoom = validZoom(
+        zoomedPane,
+        termLayout,
+        activeTab ? collectLeaves(activeTab.root) : []
+    )
 
     // All terminals across the project's tabs - used by Grid + Canvas layouts.
     const allPanes = tabs.flatMap((tab) =>
@@ -207,6 +247,10 @@ export function TerminalView(): JSX.Element {
                 <div className="term-tabs" role="tablist">
                     {tabs.map((tab) => {
                         const isActive = tab.id === activeTab?.id
+                        // Where this tab's first pane sits in the Alt+N order. A
+                        // tab past the ninth shows nothing rather than a number
+                        // that would jump somewhere else.
+                        const jumpIndex = indexOrder.indexOf(firstLeaf(tab.root)) + 1
                         const agentLeaves = collectLeaves(tab.root).filter(
                             (id) => agentOf(id) !== SHELL
                         )
@@ -227,6 +271,18 @@ export function TerminalView(): JSX.Element {
                                     (draggingTabId === tab.id ? " tab-dragging" : "")
                                 }
                                 onClick={() => setActiveTab(activeProject.id, tab.id)}
+                                // Middle-click closes, as it does on the Overview
+                                // rail. preventDefault on mousedown stops the
+                                // browser's autoscroll cursor appearing first.
+                                onMouseDown={(e) => {
+                                    if (e.button === 1) e.preventDefault()
+                                }}
+                                onAuxClick={(e) => {
+                                    if (e.button === 1) {
+                                        e.stopPropagation()
+                                        void closeTab(tab)
+                                    }
+                                }}
                                 onDoubleClick={() => {
                                     setEditingId(tab.id)
                                     setDraft(tab.name)
@@ -284,6 +340,9 @@ export function TerminalView(): JSX.Element {
                                     setOverTabId(null)
                                 }}
                             >
+                                {altHeld && jumpIndex >= 1 && jumpIndex <= 9 && (
+                                    <span className="tab-index">{jumpIndex}</span>
+                                )}
                                 <span
                                     className={
                                         "tab-dot " +
@@ -533,6 +592,18 @@ export function TerminalView(): JSX.Element {
                         <Icon name="splitV" />
                     </button>
                     <button
+                        className={"icon-action" + (effectiveZoom ? " on" : "")}
+                        onClick={() => toggleZoomPane()}
+                        data-tip={
+                            effectiveZoom
+                                ? "Back to the split (Ctrl+Shift+Z)"
+                                : "Zoom this pane (Ctrl+Shift+Z)"
+                        }
+                        disabled={termLayout !== "tabs" || !activeTab || collectLeaves(activeTab.root).length < 2}
+                    >
+                        <Icon name={effectiveZoom ? "collapse" : "expand"} />
+                    </button>
+                    <button
                         className="icon-action"
                         onClick={() => setFindOpen((v) => !v)}
                         data-tip="Find in terminal (Ctrl+Shift+F)"
@@ -637,7 +708,7 @@ export function TerminalView(): JSX.Element {
                         </button>
                     </div>
                 )}
-                <div className="stage-body">
+                <div className={"stage-body" + (effectiveZoom ? " zooming" : "")}>
                     {termLayout === "overview" ? (
                         <OverviewView />
                     ) : tabs.length === 0 || !activeTab ? (
@@ -673,7 +744,7 @@ export function TerminalView(): JSX.Element {
                                             <span
                                                 className="tab-close"
                                                 data-tip="Close"
-                                                onClick={() => closePane(termId)}
+                                                onClick={() => closePaneWithUndo(termId)}
                                             >
                                                 ×
                                             </span>
@@ -701,6 +772,7 @@ export function TerminalView(): JSX.Element {
                             projectId={activeProject.id}
                             cwd={activeProject.path}
                             tabId={activeTab.id}
+                            zoomedPane={effectiveZoom}
                         />
                     )}
                 </div>

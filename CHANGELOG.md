@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+### Terminal mechanics: switching, moving, zooming, and getting a session back
+
+The awareness layer knew which agent wanted you; the mechanics for actually
+getting around did not keep up. Five gaps, each one a missing verb rather than a
+missing feature.
+
+- **`Alt+1..9` jumps straight to a session**, counted the way the tab bar reads:
+  tab order, then panes within a tab. `Alt+9` is "the last one" whatever the
+  count, so the key at the end of the row is never dead; any other index past the
+  end does nothing rather than clamping, because `Alt+5` quietly meaning `Alt+3`
+  turns positions into guesses. Holding `Alt` reveals each tab's number, so the
+  shortcut teaches itself instead of living in the F1 sheet.
+- **`Ctrl+Tab` now covers every session, shells included.** It walked
+  `agentSessions()`, so a shell running a dev server could not be reached by the
+  one key that exists for reaching sessions. It also anchors on the pane you are
+  in rather than the last agent touched, so the cycle starts where you are.
+- **`Alt+arrows` move focus between split panes.** Decided by geometry, not by
+  walking the layout tree: in a nested split those two disagree, and "the pane to
+  the right" is a question about pixels. A candidate has to share more than a seam
+  of the facing edge, so a pane touching only at a corner is not to the right of
+  anything.
+- **`Ctrl+Shift+Z` zooms the focused pane** to fill the stage, and back. The pane
+  never leaves the layout tree, so nothing detaches from its pty and no buffer
+  replays; it is lifted over the stage in CSS. The zoom is derived at render from
+  what is on screen rather than cleared on every event, because there are three
+  ways to orphan one (close the pane, switch tab, switch layout) and a zoom
+  pointing at a pane the stage is not showing would blank the stage.
+- **Closing one session offers Undo instead of asking first.** A single-pane tab
+  used to die silently on a mis-clicked `x`; it now closes and leaves an Undo
+  toast, which beats a dialog (nothing to read, and it survives the mis-click).
+  An agent comes back resumed where its preset knows how, a shell re-runs whatever
+  it was started with, and the reopened pane goes into the tab it came from. Said
+  plainly: it is a reopen, not a resurrection, which is also why a multi-pane tab
+  still asks - undo restores one session, and an Undo that silently brought back
+  one of three would lie. Middle-click closes a tab, as it already did on the
+  Overview rail.
+- **The palette finds a session by what distinguishes it.** Shells included,
+  ordered so the ones that want you float up, and titled with the session's own
+  name, its project, and the worktree it sits in when that is not the project
+  root - so typing a branch name reaches its session. Eight rows reading "claude"
+  was not a way to find anything.
+
+Alt chords are swallowed before xterm encodes them, or `Alt+Left` would write
+`[1;3D` into the shell on its way to moving focus. Narrowed on purpose:
+AltGr arrives as Ctrl+Alt on Windows layouts, so anything carrying Ctrl is left
+alone. 44 new tests (`tests/paneNav.test.ts`, `tests/closedSessions.test.ts`,
+`tests/reopenClosed.test.ts`); the ordering, the direction-picking, the zoom
+validity rule and the undo ring are all pure functions.
+
 Four signals DevDeck uses to tell you an agent needs you, and one of them was
 wrong three different ways. Six tasks, several needing more than one fix round
 before they held up.

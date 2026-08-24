@@ -21,6 +21,8 @@ export type IconName =
     | "chevronDown"
     | "chevronRight"
     | "splitH"
+    | "expand"
+    | "collapse"
     | "splitV"
     | "tabs"
     | "grid"
@@ -107,6 +109,22 @@ const P: Record<IconName, JSX.Element> = {
     check: <polyline points="20 6 9 17 4 12" />,
     chevronDown: <polyline points="6 9 12 15 18 9" />,
     chevronRight: <polyline points="9 18 15 12 9 6" />,
+    expand: (
+        <>
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+        </>
+    ),
+    collapse: (
+        <>
+            <polyline points="4 14 10 14 10 20" />
+            <polyline points="20 10 14 10 14 4" />
+            <line x1="14" y1="10" x2="21" y2="3" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+        </>
+    ),
     splitH: (
         <>
             <rect x="3" y="3" width="18" height="18" rx="2" />

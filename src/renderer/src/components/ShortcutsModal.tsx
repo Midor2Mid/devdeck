@@ -20,8 +20,8 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
             ["Ctrl + Shift + B", "Build / test (.NET)"],
             ["Ctrl + Shift + R", "Review changes"],
             ["Ctrl + Shift + J", "Agents inbox"],
-            ["Ctrl + Tab", "Next agent session"],
-            ["Ctrl + Shift + Tab", "Previous agent session"],
+            ["Ctrl + Tab", "Next session (shells included)"],
+            ["Ctrl + Shift + Tab", "Previous session"],
             ["F1", "This shortcuts list"]
         ]
     },
@@ -36,7 +36,10 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
             ["Ctrl + Shift + ]", "Next tab"],
             ["Ctrl + Shift + [", "Previous tab"],
             ["Ctrl + Shift + F", "Find in terminal"],
-            ["Ctrl + Shift + I", "Prompt composer"]
+            ["Ctrl + Shift + I", "Prompt composer"],
+            ["Alt + 1 … 9", "Jump to a session in this project (9 = the last)"],
+            ["Alt + arrows", "Move focus to the pane in that direction"],
+            ["Ctrl + Shift + Z", "Zoom the focused pane, and back"]
         ]
     },
     {

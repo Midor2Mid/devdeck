@@ -48,10 +48,12 @@ interface Props {
     cwd: string
     /** The tab this tree belongs to (set only for the Tabs layout) - enables drag-to-split. */
     tabId?: string
+    /** The pane blown up over the stage, already validated by the caller. */
+    zoomedPane?: string
 }
 
 /** Recursively renders a tab's layout tree: leaves are terminals, splits nest Allotment. */
-export function SplitView({ node, projectId, cwd, tabId }: Props): JSX.Element {
+export function SplitView({ node, projectId, cwd, tabId, zoomedPane }: Props): JSX.Element {
     const activePane = useStore((s) => s.activePaneByProject[projectId])
     const initialCommand = useStore((s) =>
         node.kind === "leaf" ? s.termInit[node.termId] : undefined
@@ -65,7 +67,7 @@ export function SplitView({ node, projectId, cwd, tabId }: Props): JSX.Element {
         const showZones = !!draggingTabId && !!tabId && draggingTabId !== tabId
         const termId = node.termId
         return (
-            <div className="pane-host">
+            <div className={"pane-host" + (zoomedPane === termId ? " pane-zoomed" : "")}>
                 {/* key={termId} is load-bearing: TerminalPane's xterm/pty attach
                     effect is mount-once, so without it React reuses the instance
                     across a project switch and the pane keeps rendering (and
@@ -93,7 +95,13 @@ export function SplitView({ node, projectId, cwd, tabId }: Props): JSX.Element {
         <Allotment vertical={node.dir === "col"} proportionalLayout>
             {node.children.map((child) => (
                 <Allotment.Pane key={nodeKey(child)} minSize={120}>
-                    <SplitView node={child} projectId={projectId} cwd={cwd} tabId={tabId} />
+                    <SplitView
+                        node={child}
+                        projectId={projectId}
+                        cwd={cwd}
+                        tabId={tabId}
+                        zoomedPane={zoomedPane}
+                    />
                 </Allotment.Pane>
             ))}
         </Allotment>
