@@ -2406,6 +2406,37 @@ button .ic,
     color: var(--faint);
     word-break: break-all;
 }
+/* A dead pane's prompt sits at the BOTTOM and does not cover the terminal.
+   The resume overlay above is a full-pane scrim with a blur, which is right for
+   a session that has printed nothing yet and wrong here: the whole point of
+   keeping a dead process's output is that you can read it. */
+.dead-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+}
+.dead-bar-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dead-bar-actions {
+    display: flex;
+    gap: 6px;
+    flex: none;
+}
 /* Subtle focus ring — only meaningful once panes are split, kept very quiet. */
 .term-pane.focused::after {
     content: "";

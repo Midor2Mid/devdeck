@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { SearchAddon } from "@xterm/addon-search"
 import { paneRegistry } from "../paneRegistry"
 import { useSettings } from "../settings"
-import { useStore } from "../store"
+import { SHELL, useStore } from "../store"
 import { THEMES } from "../themes"
 import { exitNotice } from "../termExit"
 import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
@@ -35,11 +35,13 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const fontFamily = useSettings((s) => s.terminal.fontFamily)
     const fontSize = useSettings((s) => s.terminal.fontSize)
     const themeId = useSettings((s) => s.appearance.theme)
-    // A restored agent session waits for a resume/fresh choice before it launches.
-    const pending = useStore((s) => !!s.paneHold[termId])
+    // A held pane waits for the user before it launches: a restored session for
+    // a resume/fresh choice, a dead one for a restart.
+    const hold = useStore((s) => s.paneHold[termId])
     const releaseHold = useStore((s) => s.releaseHold)
 
     const resumeAgentId = useStore.getState().agentOf(termId)
+    const isAgentPane = resumeAgentId !== SHELL
     const resumePreset = useSettings.getState().agentById(resumeAgentId)
     // Never resolve to an empty command (which would open a bare shell for a
     // restored agent whose preset was deleted): fall back to the launch command,
@@ -48,16 +50,14 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     const resumeCmd = resumePreset?.resumeArgs
         ? `${resumePreset.command} ${resumePreset.resumeArgs}`
         : coldCmd
-    const resolveResume = (mode: "resume" | "fresh"): void => {
-        // Only mark the session started if it actually started. The spawn closure
-        // is set inside the attach effect's async tail, so a click landing in that
-        // gap used to clear the pending flag without ever launching a pty, leaving
-        // a dead pane with no way back; now the buttons stay up. It also keeps the
-        // invariant the accounting depends on: a usage event exists iff an agent
-        // was started.
+    const resolveHold = (mode: "resume" | "fresh" | "restart"): void => {
+        // Only mark the pane released if it actually started. The spawn closure
+        // is set inside the attach effect's async tail, so a click landing in
+        // that gap used to clear the flag without ever launching a pty, leaving
+        // a dead pane with no way back; now the buttons stay up.
         const spawn = spawnRef.current
         if (!spawn) return
-        spawn(mode === "resume" ? resumeCmd : coldCmd)
+        spawn(mode === "resume" ? resumeCmd : mode === "fresh" ? coldCmd : initialCommand)
         releaseHold(termId)
         termRef.current?.focus()
     }
@@ -206,8 +206,8 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 })
             }
             spawnRef.current = spawn
-            // A restored agent session holds until the user chooses resume/fresh;
-            // everything else launches immediately (or just re-attaches).
+            // A held pane holds for BOTH reasons. Spawning over a corpse is what
+            // destroyed the record of why the process died.
             if (!useStore.getState().paneHold[termId]) spawn(initialCommand)
         })
 
@@ -250,6 +250,30 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fontFamily, fontSize, termId])
 
+    // Show what the dead process printed, then say that it is dead.
+    //
+    // Fetched, not pushed: main replays a buffer through `pty:data` on create,
+    // but a held pane never calls create, and that stream's handler clears the
+    // exit record on any output - a pushed replay would erase the state the tile
+    // is displaying. The notice is written AFTER the buffer because it is
+    // rendered here, not by the process, so it is not part of what main kept.
+    useEffect(() => {
+        if (hold !== "restart") return
+        let on = true
+        void window.api.pty.buffer(termId).then(({ buffer, exitCode }) => {
+            const term = termRef.current
+            if (!on || !term) return
+            if (buffer) term.write(buffer)
+            if (exitCode !== undefined) {
+                term.write("\r\n\x1b[90m" + exitNotice(exitCode, IS_WINDOWS) + "\x1b[0m\r\n")
+            }
+        })
+        return () => {
+            on = false
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hold, termId])
+
     // Re-theme the terminal when the app theme changes.
     useEffect(() => {
         const term = termRef.current
@@ -274,7 +298,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             onMouseDown={() => onFocus(termId)}
         >
             <div ref={containerRef} className="term-mount" />
-            {pending && (
+            {hold === "resume" && (
                 <div className="resume-overlay">
                     <div className="resume-card">
                         <div className="resume-title">Resume this agent session?</div>
@@ -282,12 +306,33 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                             Restored from your last run — its conversation isn&apos;t live yet.
                         </div>
                         <div className="resume-actions">
-                            <button className="accent" onClick={() => resolveResume("resume")}>
+                            <button className="accent" onClick={() => resolveHold("resume")}>
                                 Resume
                             </button>
-                            <button onClick={() => resolveResume("fresh")}>Start fresh</button>
+                            <button onClick={() => resolveHold("fresh")}>Start fresh</button>
                         </div>
                         {resumeCmd && <code className="resume-cmd">{resumeCmd}</code>}
+                    </div>
+                </div>
+            )}
+            {hold === "restart" && (
+                <div className="dead-bar">
+                    <span className="dead-bar-text">
+                        This process exited. Its output is above.
+                    </span>
+                    <div className="dead-bar-actions">
+                        {isAgentPane ? (
+                            <>
+                                <button className="accent" onClick={() => resolveHold("resume")}>
+                                    Resume
+                                </button>
+                                <button onClick={() => resolveHold("fresh")}>Start fresh</button>
+                            </>
+                        ) : (
+                            <button className="accent" onClick={() => resolveHold("restart")}>
+                                Restart
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
