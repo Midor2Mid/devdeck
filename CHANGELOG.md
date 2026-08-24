@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-### The app is 97 MB smaller, and Monaco was being packed twice
+### The app is 109 MB smaller, and half the dependencies were packed twice
 
-- **`app.asar` 178 MB -> 82 MB**, `release/win-unpacked` 544 -> 447 MB. Most of that
+- **`app.asar` 178 MB -> 70 MB**, `release/win-unpacked` 544 -> 435 MB. Most of that
   is one thing: Vite bundles monaco-editor into `out/renderer`, and electron-builder
   *also* packed the entire `node_modules/monaco-editor` copy because it sat in
   `dependencies` - 1,927 files, all 83 language grammars, never resolved at runtime.
@@ -21,6 +21,19 @@
   subset creates: adding an extension to `LANG` without bundling its language
   degrades that file type to plaintext with no error at all. They also fail if the
   entry ever reverts to `from "monaco-editor"`, which would silently restore all 83.
+- **The same audit, run across every production dependency.** Eleven more were
+  renderer-only and bundled by Vite, so they were being packed into the asar for
+  nothing: `react`, `react-dom`, `allotment`, `marked`, `dompurify`, `qrcode`,
+  `zustand`, both `@xterm` addons and both `@fontsource-variable` families. Another
+  12 MB off the asar. Nine dependencies remain, and every one earns it: the native
+  pty, the four database drivers, `ws`, `selfsigned`, `electron-updater` - all
+  imported by `src/main`, which electron-vite externalizes rather than bundles.
+- **`@xterm/xterm` deliberately stayed**, and finding out why is the reason this was
+  done by audit rather than by pattern. `src/main/server.ts:89#xtermAsset` does
+  `require.resolve("@xterm/xterm")` at runtime to serve `xterm.js` and `xterm.css` to
+  the mobile web client. A grep for import statements misses that entirely; moving it
+  would have shipped a broken remote terminal, silently, with every test green. Its
+  two served files are confirmed present in the packaged asar.
 - Editor colours confirmed by hand before merging. The automated harness could not
   reach a mounted Monaco instance - the Editor view needs a file opened through its
   tree - so that one check is a human's, and the commit says so rather than implying

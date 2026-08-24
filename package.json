@@ -22,26 +22,15 @@
     "verify:packaged": "node scripts/verify-packaged.mjs"
   },
   "dependencies": {
-    "@fontsource-variable/geist-mono": "^5.2.8",
-    "@fontsource-variable/inter": "^5.2.8",
     "@lydell/node-pty": "1.2.0-beta.12",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/addon-search": "^0.16.0",
     "@xterm/xterm": "^6.0.0",
-    "allotment": "^1.20.5",
-    "dompurify": "^3.4.11",
     "electron-updater": "^6.8.9",
-    "marked": "^15.0.12",
     "mssql": "^12.6.0",
     "mysql2": "^3.22.5",
     "node-sqlite3-wasm": "^0.8.58",
     "pg": "^8.22.0",
-    "qrcode": "^1.5.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "selfsigned": "^5.5.0",
-    "ws": "^8.21.0",
-    "zustand": "^5.0.2"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/mssql": "^12.3.0",
@@ -59,7 +48,18 @@
     "vite": "^7.3.6",
     "vitest": "^4.1.11",
     "monaco-editor": "^0.52.2",
-    "@monaco-editor/react": "^4.7.0"
+    "@monaco-editor/react": "^4.7.0",
+    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "allotment": "^1.20.5",
+    "dompurify": "^3.4.11",
+    "marked": "^15.0.12",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2"
   },
   "build": {
     "appId": "com.devdeck.app",
