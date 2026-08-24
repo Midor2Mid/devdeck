@@ -2677,17 +2677,22 @@ export const useStore = create<AppState>((set, get) => {
 
         releaseHold: (termId) => {
             if (!(termId in get().paneHold)) return
-            // Checked before the hold is cleared below: if this pane were ever
-            // not an agent id, clearing first would close the overlay with no
-            // usage event logged even though the caller has already spawned the
-            // process - an invariant resting on this bail running first, not on
-            // the set() happening to come after it.
+            // agentId is read here, before the clearing set() below: this set()
+            // does not touch termAgents, but the read still has to stay on this
+            // side of it, because the whole point is to decide accounting from
+            // the pane's state as the caller found it, not from state a clear
+            // just changed underneath the decision.
             const agentId = get().termAgents[termId]
             set((s) => {
                 const paneHold = { ...s.paneHold }
                 delete paneHold[termId]
                 return { paneHold }
             })
+            // The bail runs AFTER the clear above, not before: a plain shell's
+            // hold must be released on restart the same as an agent pane's, even
+            // though a plain shell gets no accounting. It still runs before
+            // markLaunched/logUsageStart below, so a plain shell - which has no
+            // agent id and costs nothing - never gets a usage event logged for it.
             if (!isAgentId(agentId)) return
             // Resume and restart are the only two ways an agent pane starts
             // without going through newTab, so without this the pane spends real

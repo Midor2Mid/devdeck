@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest"
-import { useStore } from "../src/renderer/src/store"
+import { useStore, SHELL } from "../src/renderer/src/store"
 import { leaf } from "../src/renderer/src/layout"
 import { getLastAt, forgetTail } from "../src/renderer/src/missionTail"
 
@@ -103,5 +103,18 @@ describe("a pane held after its process dies", () => {
         seedSession()
         expect(() => useStore.getState().releaseHold(TERM)).not.toThrow()
         expect(useStore.getState().paneHold[TERM]).toBeUndefined()
+    })
+
+    // The reordered bail: a plain shell must be RELEASED like any other pane,
+    // but must never be accounted for - it costs nothing and has no agent id.
+    it("releases a plain shell without stamping a launch", () => {
+        seedSession()
+        useStore.setState({ termAgents: { [TERM]: SHELL } })
+        forgetTail(TERM)
+        ptyExit({ id: TERM, exitCode: 1 })
+        expect(useStore.getState().paneHold[TERM]).toBe("restart")
+        useStore.getState().releaseHold(TERM)
+        expect(useStore.getState().paneHold[TERM]).toBeUndefined()
+        expect(getLastAt(TERM)).toBeUndefined()
     })
 })
