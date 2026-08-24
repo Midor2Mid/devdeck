@@ -2453,10 +2453,21 @@ button .ic,
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* At the split's allowed minimum (Allotment's minSize 120 in SplitView.tsx),
+   "Resume" + "Start fresh" together are wider than the bar's remaining content
+   box even after `.dead-bar-text` above has shrunk to 0. `flex: none` kept
+   this row at its natural (unshrinkable) width, so wrapping it onto its own
+   line in `.dead-bar` was not enough - the row itself still overflowed the
+   pane. `flex: 0 1 auto` + `min-width: 0` let it shrink to fit, at which
+   point its own `flex-wrap` drops "Start fresh" onto a second line instead of
+   past the pane's edge. */
 .dead-bar-actions {
     display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
-    flex: none;
 }
 /* Subtle focus ring — only meaningful once panes are split, kept very quiet. */
 .term-pane.focused::after {
