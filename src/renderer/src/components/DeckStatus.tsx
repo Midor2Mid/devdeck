@@ -4,6 +4,9 @@ import { useSettings } from "../settings"
 import { toast } from "../toast"
 import type { GitStatus, GitIdentity, PullResult } from "../../../preload/index"
 import { Icon } from "./Icon"
+import { awaitedTermIds, getLastAt } from "../missionTail"
+import { exitCodeOf } from "../termExit"
+import { wantsYou } from "../tileState"
 
 export function DeckStatus(): JSX.Element {
     const project = useStore((s) => s.activeProject())
@@ -12,6 +15,12 @@ export function DeckStatus(): JSX.Element {
     const setReleaseOpen = useStore((s) => s.setReleaseOpen)
     const openChanges = useStore((s) => s.openChanges)
     const gitAccounts = useSettings((s) => s.gitAccounts)
+    // Stable slices only — the awaited Set below is derived in the component
+    // body, not inside a useStore selector, to avoid the getSnapshot trap (a
+    // selector returning a fresh object/array every call blanks the component).
+    const boardTasks = useStore((s) => s.boardTasks)
+    const pipelineRun = useStore((s) => s.pipelineRun)
+    const termAgents = useStore((s) => s.termAgents)
     const [git, setGit] = useState<GitStatus | null>(null)
     const [identity, setIdentity] = useState<GitIdentity | null>(null)
     const [pickerOpen, setPickerOpen] = useState(false)
@@ -79,9 +88,22 @@ export function DeckStatus(): JSX.Element {
     // "does anything need me", not "which mechanism raised it". The inbox used
     // to render a second, filled-accent badge on this same bar counting exactly
     // this set while the flag here counted only attention - two numbers for one
-    // question, 200px apart, disagreeing by construction.
-    const attention = sessions().filter(
-        (s) => s.status === "attention" || s.status === "waiting"
+    // question, 200px apart, disagreeing by construction. Now both this flag and
+    // Mission's header count read the same `wantsYou` predicate (tileState.ts),
+    // so they cannot drift apart again.
+    const now = Date.now()
+    const awaited = awaitedTermIds(boardTasks, pipelineRun)
+    const attention = sessions().filter((s) =>
+        wantsYou(
+            {
+                status: s.status,
+                exitCode: exitCodeOf(s.termId),
+                lastAt: getLastAt(s.termId),
+                awaited: awaited.has(s.termId),
+                alive: !!termAgents[s.termId]
+            },
+            now
+        )
     ).length
 
     return (

@@ -158,6 +158,13 @@ describe("the scanner itself", () => {
 // local harness, which says nothing about whether the component still calls
 // them. These are argument-level pins, in the same style as the launch scan
 // above, and they are the cheapest thing that fails when the wiring is undone.
+//
+// Mission's tile-decision task moved the direct `isStalled(` call out of this
+// component and into `resolveTileState` (tileState.ts), which is now the one
+// place isStalled is called from — tileState.test.ts pins that call at the
+// pure-function level. What remained a component-only risk, and still needs
+// this file's kind of scan, is the WIRING one level up: does the component
+// still pass the real awaited set into the resolver, or a constant.
 
 const MISSION = src("../src/renderer/src/components/MissionControl.tsx")
 const SETTINGS = src("../src/renderer/src/components/SettingsModal.tsx")
@@ -169,20 +176,125 @@ function callSite(needle: string, from: string[], n = 12): string {
     return from.slice(at[0] - 1, at[0] - 1 + n).join("\n")
 }
 
+/**
+ * Like `callSite`, but the window can start BEFORE the line containing
+ * `needle` too - some evidence (e.g. the `<button` opening a JSX element)
+ * sits above the attribute line a test wants to anchor on, and that
+ * attribute is the only substring specific enough to be a safe, single-match
+ * needle.
+ */
+function around(needle: string, from: string[], before: number, after: number): string {
+    const at = linesWith(needle, from)
+    expect(at, "expected exactly one " + needle + " call site").toHaveLength(1)
+    const start = Math.max(0, at[0] - 1 - before)
+    const end = at[0] - 1 + after
+    return from.slice(start, end).join("\n")
+}
+
+/**
+ * The file's lines with NOTHING blanked - codeLines() replaces every
+ * quoted string with "" (so a decoy string literal cannot spell a call),
+ * which also erases the exact thing a couple of these pins need to see:
+ * the LITERAL comparison values inside a real conditional. Only safe to
+ * use where the surrounding window is narrow and specific enough that a
+ * decoy comment landing inside it is not a realistic way to fool the scan.
+ */
+function rawLines(path: string): string[] {
+    return readFileSync(path, "utf8").split("\n")
+}
+
 describe("the stall marker is still gated on expectation", () => {
     const mission = codeLines(MISSION)
 
-    it("passes the awaited set into isStalled, not a constant", () => {
-        const call = callSite("isStalled(", mission, 7)
-        expect(call).toContain("awaited.has(s.termId)")
-        // A constant in that position is the whole regression, and it type-checks.
-        expect(call).not.toContain("true,")
+    // The fields resolveTileState is given now live one level up, in the
+    // `input` object each resolved entry keeps (so the header's wantsYou count
+    // and the tile's own resolveTileState call agree on the same facts) - so
+    // the wiring pin has to anchor on that object, not on the resolveTileState
+    // call site itself, which now just reads `resolveTileState(input, now)`.
+    it("builds the tile-state input from the awaited set, the exit code and the changed count - not constants", () => {
+        const input = callSite("const input = {", mission, 8)
+        expect(input).toContain("awaited: awaited.has(s.termId)")
+        // A constant in any of these positions type-checks and leaves the
+        // suite green - the exact failure mode this file exists to catch.
+        // `awaited: true` restores I1's stalled-everything regression;
+        // `exitCode: undefined` makes every corpse read as its live state;
+        // `changedCount: 0` is I4's swallowed-git-error bug moved into the
+        // wiring itself.
+        expect(input).not.toContain("awaited: true")
+        expect(input).toContain("exitCode: exitCodeOf(s.termId)")
+        expect(input).not.toContain("exitCode: undefined")
+        expect(input).toContain("changedCount: changedBySession[s.termId] ?? 0")
+        expect(input).not.toContain("changedCount: 0")
     })
 
-    it("derives that set from the board and the pipeline run", () => {
+    it("passes that same input into resolveTileState, rather than rebuilding it", () => {
+        expect(callSite("resolveTileState(", mission, 1)).toContain("resolveTileState(input, now)")
+    })
+
+    it("derives the awaited set from the board and the pipeline run", () => {
         const derive = callSite("awaitedTermIds(", mission, 1)
         expect(derive).toContain("boardTasks")
         expect(derive).toContain("pipelineRun")
+    })
+})
+
+// I3, re-review round 2: nothing stops a future edit reintroducing
+// role="button" on the tile wrapper, which is the exact defect this feature
+// shipped to fix - every decision control (Approve/Deny/Review/Reply) becomes
+// a presentational child of a button, per ARIA, and a screen-reader user is
+// back to hearing one label for the whole tile and reaching none of them.
+describe("the tile wrapper stays out of the way of its own decision controls (I3)", () => {
+    const mission = codeLines(MISSION)
+
+    it('does not carry role="button" or tabIndex on the wrapper', () => {
+        // ARIA: `button` has presentational children, so role="button" here
+        // would silently swallow every Approve/Deny/Review button and the
+        // Reply input inside it again. tabIndex=0 on a non-interactive
+        // wrapper is the other half of the same regression - it makes the
+        // whole tile a stop with nothing individually announced at it.
+        const wrapper = callSite("key={s.termId}", mission, 6)
+        expect(wrapper).not.toContain('role="button"')
+        expect(wrapper).not.toContain("tabIndex")
+    })
+
+    it("gives the jump its own labelled, focusable <button> instead", () => {
+        // The control the wrapper's role="button" used to stand in for has to
+        // still exist SOMEWHERE reachable - this is it. Losing the <button>
+        // (back to a <span>) or the aria-label makes the jump mouse-only
+        // again, silently, while every other test in this file stays green.
+        // Anchored on the aria-label line itself (className="mission-tile-name"
+        // is a quoted value and codeLines blanks it) - the two lines above it
+        // are the <button> opening tag and that same className attribute.
+        const nameButton = around("aria-label={[s.sessionName", mission, 2, 1)
+        expect(nameButton).toContain("<button")
+        expect(nameButton).toContain("aria-label=")
+    })
+})
+
+// I4, re-review round 2: the first fix for "a poll can strand a half-typed
+// draft" widened the reply input's gate to ANY state once a draft exists,
+// which let the input survive onto EXITED (nothing is listening - exited()'s
+// own comment says so) and onto NEEDS-YOU (answered by the prompt's own two
+// buttons, not free text beside them). That is the same class of lie the
+// whole wave exists to close, just moved into the escape hatch meant to fix
+// a different one - so the narrowing gets its own pin.
+describe("a stranded draft cannot reopen the reply box on EXITED or NEEDS-YOU (I4)", () => {
+    const mission = codeLines(MISSION)
+
+    it("canReply's draft escape hatch excludes exited and needs-you", () => {
+        // Raw, not codeLines: the values being pinned ARE quoted string
+        // literals, which codeLines blanks to "" specifically so a decoy
+        // string cannot spell a stripped-out call - here that blanking
+        // would erase the very thing under test, so this one reads the
+        // file unstripped.
+        const canReply = callSite("const canReply =", rawLines(MISSION), 3)
+        expect(canReply).toContain('st.kind !== "exited"')
+        expect(canReply).toContain('st.kind !== "needs-you"')
+    })
+
+    it("canReply, not some looser condition, is what gates the reply input", () => {
+        const gate = callSite("{canReply && (", mission, 2)
+        expect(gate).toContain("<input")
     })
 })
 

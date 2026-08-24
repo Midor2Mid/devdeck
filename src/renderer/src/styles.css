@@ -620,7 +620,20 @@ button .ic,
     align-items: center;
     gap: 8px;
 }
+/* A real <button> (I3: the tile wrapper is no longer role="button", so the
+   jump needs its own reachable control) reset to read exactly like the plain
+   text label it replaces — same unstyled-button treatment as
+   .mission-tile-expand and .mission-own-chip. */
 .mission-tile-name {
+    display: block;
+    background: transparent;
+    border: none;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
     font-size: 13px;
     font-weight: 600;
     flex: 1;
@@ -654,20 +667,12 @@ button .ic,
 .mission-trace path {
     fill: currentColor;
 }
-.mission-tile-attn {
-    font-size: 11px;
-    color: var(--accent);
-}
 /* DASHED, where attention is solid: the two were both 2px left rules separated
    only by hue (--clay vs --danger), which in Sumi and Washi are a shade apart
    and indistinguishable at 2px. A broken rule reads as "interrupted" and is
    still a form difference in every one of the 84 skins. */
 .mission-tile.stalled {
     border-left: 2px dashed var(--clay);
-}
-.mission-tile-stall {
-    font-size: 11px;
-    color: var(--muted);
 }
 .mission-tile-expand {
     margin-left: auto;
@@ -692,6 +697,96 @@ button .ic,
     max-height: 180px;
     overflow-y: auto;
 }
+
+/* ---------- Mission tile state chip ----------
+   One chip per tile, replacing the `needs you` and `stalled · silent 7m` lines.
+   Tone is carried by a TOKEN plus a per-state glyph, never by hue alone: --clay
+   and --danger sit a shade apart in Sumi and Washi, and this has to separate in
+   all 84 skins. --ok and --danger stay semantic (success, destructive) and are
+   deliberately unused here. */
+.mtile-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    align-self: flex-start;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 1px 7px;
+    border-radius: 999px;
+    /* --border, not --border-soft: at rest (neutral/quiet) this is the same
+       token as .mission-tile's own border, so the chip's outline was
+       near-invisible against the tile and QUIET/WORKING read as bare text
+       instead of a pill - weakening the "which of these eight pills is the
+       amber one" scan. */
+    border: 1px solid var(--border);
+    color: var(--muted);
+}
+.mtile-mark {
+    font-size: 9px;
+    line-height: 1;
+}
+.mtile-chip.tone-attention {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.mtile-chip.tone-warn {
+    color: var(--clay);
+    border-color: color-mix(in srgb, var(--clay) 45%, var(--border));
+    border-style: dashed;
+}
+.mtile-chip.tone-neutral {
+    color: var(--text);
+}
+.mtile-chip.tone-quiet {
+    color: var(--faint);
+}
+/* The question, under NEEDS YOU. One line: the tile is already dense, and the
+   full text is in the tooltip and the terminal. */
+.mtile-q {
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mtile-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}
+.mtile-act {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    background: transparent;
+    cursor: pointer;
+}
+.mtile-act:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.mtile-reply {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    font-family: inherit;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    /* --bg-1 does not exist in this app's token set; --bg-3 ("deepest: terminal
+       / inputs") is the real token every other input already sits on. */
+    background: var(--bg-3);
+    color: var(--text);
+}
+.mtile-reply:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 .mission-review {
     display: flex;
     flex-direction: column;
@@ -5185,7 +5280,8 @@ button .ic,
 [data-style="minimal"] .chip,
 [data-style="minimal"] .work-type,
 [data-style="minimal"] .work-status,
-[data-style="minimal"] .agent-badge {
+[data-style="minimal"] .agent-badge,
+[data-style="minimal"] .mtile-chip {
     border-radius: 4px;
 }
 /* Denser tabs */
@@ -5635,7 +5731,8 @@ button .ic,
 [data-style="modern"] .tab-rename,
 [data-style="modern"] .chip,
 [data-style="modern"] .work-type,
-[data-style="modern"] .work-status {
+[data-style="modern"] .work-status,
+[data-style="modern"] .mtile-chip {
     border-radius: 7px;
     transition-duration: 0.12s;
 }

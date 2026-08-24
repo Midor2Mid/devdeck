@@ -3,8 +3,8 @@ import { useStore } from "../store"
 import type { AnySession } from "../store"
 import { SplitView } from "./SplitView"
 import { Icon } from "./Icon"
-import { getTail, getFullTail, peekLine, sortForFollow } from "../missionTail"
-import { detectApproval, type ApprovalPrompt } from "../approval"
+import { getTail, peekLine, sortForFollow, promptFor } from "../missionTail"
+import { type ApprovalPrompt } from "../approval"
 
 /**
  * Cross-project live-terminal Overview. Two modes:
@@ -71,13 +71,6 @@ function EditableName({
             {name}
         </span>
     )
-}
-
-/** A permission prompt detected in a session's output an agent already ran, if
- *  any — only computed for sessions flagged attention/waiting to avoid noise. */
-function approvalFor(s: AnySession): ApprovalPrompt | null {
-    if (!s.isAgent || (s.status !== "attention" && s.status !== "waiting")) return null
-    return detectApproval(getFullTail(s.termId, 16))
 }
 
 /** One-click Approve / Deny for a detected prompt — answers the agent without
@@ -284,7 +277,7 @@ export function OverviewView(): JSX.Element {
                         <div className="ov-rail-title">Other sessions · {rest.length}</div>
                         {rest.map((s) => {
                             const peek = peekLine(getTail(s.termId))
-                            const approval = approvalFor(s)
+                            const approval = promptFor(s)
                             return (
                                 <div
                                     key={s.termId}
@@ -389,7 +382,7 @@ export function OverviewView(): JSX.Element {
                             </div>
                             <div className="ov-grid">
                                 {g.sessions.map((s) => {
-                                    const approval = approvalFor(s)
+                                    const approval = promptFor(s)
                                     return (
                                     <div key={s.termId} className="ov-card">
                                         <div className="ov-card-head">

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, afterEach } from "vitest"
 import {
     cleanTail,
     peekLine,
@@ -17,7 +17,8 @@ import {
     barsPath,
     STALL_MS,
     hasBell,
-    forgetTail
+    forgetTail,
+    promptFor
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 import type { DeltaState } from "../src/renderer/src/missionTail"
@@ -497,5 +498,44 @@ describe("barsPath", () => {
 
     it("returns an empty string for an empty trace", () => {
         expect(barsPath([])).toBe("")
+    })
+})
+
+describe("promptFor", () => {
+    const TAIL =
+        "Do you want to make this edit to store.ts?\n" +
+        "❯ 1. Yes\n" +
+        "  2. No, and tell Claude what to do differently (esc)\n"
+
+    afterEach(() => forgetTail("p-1"))
+
+    it("returns the detected prompt for an agent flagged attention", () => {
+        recordTail("p-1", TAIL)
+        const p = promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))
+        expect(p?.kind).toBe("menu")
+        expect(p?.approve).toBe("1")
+    })
+
+    it("returns the detected prompt for an agent flagged waiting", () => {
+        recordTail("p-1", TAIL)
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "waiting" }))).not.toBeNull()
+    })
+
+    // The gate, not the detector: the same tail on a working or idle session is
+    // mid-stream output, and answering it sends a keystroke nobody asked for.
+    it("returns null for a session that is not flagged attention or waiting", () => {
+        recordTail("p-1", TAIL)
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "working" }))).toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "idle" }))).toBeNull()
+    })
+
+    it("returns null for a plain shell", () => {
+        recordTail("p-1", TAIL)
+        expect(promptFor(sess({ termId: "p-1", isAgent: false, status: "attention" }))).toBeNull()
+    })
+
+    it("returns null when the tail holds no prompt", () => {
+        recordTail("p-1", "compiling…\ndone\n")
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))).toBeNull()
     })
 })

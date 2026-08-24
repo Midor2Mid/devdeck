@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { exitNotice, FASTFAIL } from "../src/renderer/src/termExit"
+import { exitNotice, FASTFAIL, recordExit, exitCodeOf, clearExit } from "../src/renderer/src/termExit"
 
 describe("exitNotice", () => {
     it("shows a plain notice on clean exit (code 0)", () => {
@@ -30,5 +30,33 @@ describe("exitNotice", () => {
     it("FASTFAIL is the 0xC0000409 fast-fail code as an int32", () => {
         expect(FASTFAIL).toBe(-1073740791)
         expect((FASTFAIL >>> 0).toString(16).toUpperCase()).toBe("C0000409")
+    })
+})
+
+describe("the per-session exit record", () => {
+    it("reads undefined for a session that has not exited", () => {
+        clearExit("t-none")
+        expect(exitCodeOf("t-none")).toBeUndefined()
+    })
+
+    it("records a code and reads it back", () => {
+        recordExit("t-1", 1)
+        expect(exitCodeOf("t-1")).toBe(1)
+        clearExit("t-1")
+    })
+
+    // 0 is falsy: every consumer must test `!== undefined`, never truthiness,
+    // or a clean exit reads as a running process.
+    it("distinguishes a clean exit from no exit at all", () => {
+        recordExit("t-0", 0)
+        expect(exitCodeOf("t-0")).toBe(0)
+        expect(exitCodeOf("t-0")).not.toBeUndefined()
+        clearExit("t-0")
+    })
+
+    it("clears a session's code", () => {
+        recordExit("t-2", FASTFAIL)
+        clearExit("t-2")
+        expect(exitCodeOf("t-2")).toBeUndefined()
     })
 })

@@ -43,6 +43,7 @@ function stubApi(): void {
                     ptyData = fn
                     return (): void => undefined
                 },
+                onExit: (): (() => void) => (): void => undefined,
                 kill: (): void => undefined,
                 input: (): void => undefined
             },

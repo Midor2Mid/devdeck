@@ -109,6 +109,7 @@ export function printableDelta(
 }
 
 import type { AgentStatus, AnySession } from "./store"
+import { detectApproval, type ApprovalPrompt } from "./approval"
 
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
@@ -429,4 +430,20 @@ export function sortForFollow(sessions: AnySession[]): AnySession[] {
         .map((s, i) => [s, i] as const)
         .sort((a, b) => RANK[a[0].status] - RANK[b[0].status] || a[1] - b[1])
         .map(([s]) => s)
+}
+
+/**
+ * The permission prompt this session is blocked on, or null.
+ *
+ * The gate, not the detector. `approval.ts` is deliberately conservative but
+ * still asks its callers to run it only for sessions already flagged
+ * attention/waiting, because a surface that ACTS on a match sends a keystroke
+ * to a live agent. Mission and Overview are both such surfaces, so the rule
+ * lives here once instead of being copied into each of them.
+ *
+ * 16 lines is the same window Overview has always read.
+ */
+export function promptFor(s: AnySession): ApprovalPrompt | null {
+    if (!s.isAgent || (s.status !== "attention" && s.status !== "waiting")) return null
+    return detectApproval(getFullTail(s.termId, 16))
 }

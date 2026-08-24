@@ -1,6 +1,6 @@
 # Decide from Mission — a state per agent, and the action that answers it
 
-**Status:** draft, awaiting review
+**Status:** shipped 2026-08-24
 **Date:** 2026-08-21
 
 ## The problem
@@ -63,13 +63,20 @@ the only state where the agent is blocked on you.
 | 3 | `ASKING` | `agentStatus === "attention"` with no parsable prompt | **Reply** |
 | 4 | `STALLED · silent 21m` | `isStalled(getLastAt, alive, awaited, now)` | **Reply** |
 | 5 | `CHANGED · 4 files` | `newPathsSince(baselineOf(id), paths)` | **Review** |
-| 6 | `WORKING` | `agentStatus === "working"` | none |
-| 7 | `QUIET 8m` | silence with no changes | none |
+| 6 | `WAITING 12m` | `agentStatus === "waiting"` | **Reply** |
+| 7 | `WORKING` | `agentStatus === "working"` | none |
+| 8 | `QUIET 8m` | silence with no changes | none |
 
 `EXITED` above `STALLED` matters concretely: `isStalled`'s `alive` argument is
 `!!termAgents[id]`, which stays true for a pane whose process has died but whose
 tab is still open. Without the precedence, every dead pane would also read as
 stalled.
+
+`WAITING` sits below `CHANGED` and above `WORKING` — `agentStatus`'s own name
+for "finished a turn while you were away" — so that reviewable work still
+outranks it and no earlier precedence pair moves: a session that both changed
+files and is waiting on you reads `CHANGED`, not `WAITING`, the same way a
+session that is both waiting and holds a live prompt still reads `NEEDS YOU`.
 
 ### The exit code needs to be recorded first
 
@@ -101,14 +108,29 @@ mechanism and no new surface.
 ## Density: what it replaces
 
 A mission tile is already near the ceiling — dot, name, badge, expand, project,
-peek, `needs you`, stall line, sparkline. So this is a net reduction on most
-tiles:
+peek, `needs you`, stall line, sparkline. **This is not a net reduction on most
+tiles, and it was not shipped as one.** The chip renders unconditionally, so
+the quiet majority — `working`, `waiting`, `changed`, `quiet`, a clean
+`exited` — each **gain one line** they did not carry before. Only the two
+states that already had a conditional line (`needs you`, `stalled`) break even
+against the chip alone, and `needs you` grows further once its question line
+and Approve/Deny row are counted.
 
-- The chip **replaces** the `needs you` line and the `stalled · silent 7m` line.
-  Two conditional lines become one always-present chip.
-- Actions are **conditional on the state**. States 6 and 7 — the common case —
-  gain nothing at all. A tile only grows a button row when there is a decision to
-  make, which is also what keeps it honest.
+The chip stayed unconditional anyway, on review, because the honest argument
+for it beats the density one: a fixed slot turns "is this tile one line taller
+than that one" — a weak visual query across eight tiles — into "which of these
+eight pills is the amber one," a strong one. That trade only pays off because
+every tile's chip sits in the same place whether or not it has anything to
+say; scoping it to only the states that used to carry a line would put it back
+to a query that needs reading, not scanning. The tone system (four tones, one
+glyph per state — see DESIGN.md's "Mission tile state chip") is what the
+unconditional slot buys, and it is what pays the chip's rent.
+
+What did stay conditional:
+
+- Actions are **conditional on the state**. `working` and `quiet` gain no
+  button row at all — a tile only grows one when there is a decision to make,
+  which is also what keeps it honest.
 - The reply input is **not** always rendered: it appears on the states that can
   use it, and only one tile can hold focus at a time.
 

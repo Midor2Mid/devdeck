@@ -45,6 +45,7 @@ import {
     clearCheckFailed
 } from "./agentSignals"
 import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
+import { recordExit, exitCodeOf, clearExit } from "./termExit"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
@@ -327,6 +328,8 @@ interface AppState extends Persisted {
     broadcast: (termIds: string[], text: string) => void
     /** Send a raw keystroke sequence to one agent (e.g. answering a permission prompt). */
     respondApproval: (termId: string, keys: string) => void
+    /** Send a line of text to a session, as if typed into its terminal. */
+    replySession: (termId: string, text: string) => void
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
     /** Jump to the oldest agent session that wants you (waiting or attention). */
@@ -664,6 +667,9 @@ export const useStore = create<AppState>((set, get) => {
 
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
         if (!isAgentId(get().agentOf(id))) return
+        // Output after an exit means the pane was re-run in place. Guarded so the
+        // hot path does a Map delete only on the one chunk that follows a respawn.
+        if (exitCodeOf(id) !== undefined) clearExit(id)
         // Keep a cleaned tail of this agent's output for the Mission Control peek.
         recordTail(id, data)
         // …and its committed-output rate, for the tile's trace.
@@ -802,6 +808,7 @@ export const useStore = create<AppState>((set, get) => {
         evidenceInFlight.delete(termId)
         forgetTail(termId)
         forgetSignals(termId)
+        clearExit(termId)
         const closingAgent = get().termAgents[termId] ?? SHELL
         if (isAgentId(closingAgent)) {
             // Before logUsageEnd, which stamps the event this reads its start from.
@@ -1184,6 +1191,10 @@ export const useStore = create<AppState>((set, get) => {
         init: async () => {
             if (!dataSubscribed) {
                 window.api.pty.onData(onPtyData)
+                // App-global, not per-pane: TerminalPane's own onExit only fires while a
+                // pane is mounted, and Mission has to know about a process that died in a
+                // tab you were not looking at.
+                window.api.pty.onExit(({ id, exitCode }) => recordExit(id, exitCode))
                 window.api.triggers.onFired(({ triggerId }) => get().fireTrigger(triggerId))
                 dataSubscribed = true
             }
@@ -2510,6 +2521,21 @@ export const useStore = create<AppState>((set, get) => {
         respondApproval: (termId, keys) => {
             window.api.pty.input(termId, keys)
             pushActivity("attention", termId, "answered prompt")
+        },
+
+        /**
+         * Answer an agent in a sentence, from wherever you are.
+         *
+         * The same call the Inbox drawer's reply box makes, as a store action so
+         * Mission's tiles and the drawer cannot drift on what "a reply" means.
+         * Trims, and refuses to send an empty line: a bare carriage return into a
+         * live agent is a keystroke nobody asked for.
+         */
+        replySession: (termId, text) => {
+            const line = text.trim()
+            if (!line) return
+            window.api.pty.input(termId, line + "\r")
+            pushActivity("attention", termId, "replied")
         },
 
         setComposerDraft: (projectId, text) => {

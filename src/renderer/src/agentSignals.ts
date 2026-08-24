@@ -156,3 +156,44 @@ export function forgetSignals(id: string): void {
     captures.delete(id)
     checkFailed.delete(id)
 }
+
+/**
+ * How many paths each session has made dirty since it started, from a batch of
+ * change reads the caller already has.
+ *
+ * Exists so Mission's tiles can show a changed count WITHOUT a second git poll:
+ * the ownership map already reads every agent session's directory every 8s, and
+ * this turns that same answer into per-session evidence. A session with an
+ * unknown baseline counts 0 — newPathsSince fails closed, and so does this.
+ */
+export function newCounts(
+    entries: readonly { termId: string; files: readonly string[] }[]
+): Record<string, number> {
+    const out: Record<string, number> = {}
+    for (const e of entries) out[e.termId] = newPathsSince(baselineOf(e.termId), e.files).length
+    return out
+}
+
+/**
+ * The next `changedBySession` map after one poll, without letting a FAILED
+ * read for one session zero out its count.
+ *
+ * `entries` carry `files: string[] | null` — null means this session's
+ * `git.changes` read rejected this tick (a repo mid-rebase, an `index.lock`
+ * another agent holds, the timeout). git.changes rejects on purpose so each
+ * caller can decide what "unknown" means; a caller that mapped that straight
+ * to `[]` would be claiming "nothing changed" about a session that may still
+ * have 12 changed files, which is exactly the swallowed-error bug this
+ * function exists to close. A failed session is left out of the merge
+ * entirely, so `prev`'s count for it survives untouched — unknown is not
+ * zero.
+ */
+export function nextChangedCounts(
+    prev: Readonly<Record<string, number>>,
+    entries: readonly { termId: string; files: readonly string[] | null }[]
+): Record<string, number> {
+    const ok = entries.filter(
+        (e): e is { termId: string; files: readonly string[] } => e.files !== null
+    )
+    return { ...prev, ...newCounts(ok) }
+}

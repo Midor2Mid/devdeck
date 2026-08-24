@@ -30,3 +30,40 @@ export function exitNotice(exitCode: number, isWindows: boolean): string {
     }
     return `[process exited: ${exitCode} (${hex})]`
 }
+
+/**
+ * The code each session's process exited with, if it has exited.
+ *
+ * The notice above is written into the dead pane and then gone — nothing stored
+ * it, so no surface outside that terminal could tell a dead session from a
+ * silent one. `isStalled`'s `alive` argument is `!!termAgents[id]`, which stays
+ * true for a pane whose process died but whose tab is still open, so without
+ * this every corpse also read as stalled.
+ *
+ * A module Map, like missionTail's tails: written from the pty stream, read by
+ * a polling consumer, never React state.
+ */
+const exitCodes = new Map<string, number>()
+
+/** Record the code a session's process exited with. */
+export function recordExit(id: string, exitCode: number): void {
+    exitCodes.set(id, exitCode)
+}
+
+/**
+ * The code this session's process exited with, or undefined if it is running.
+ *
+ * Callers must test `!== undefined`: a clean exit is 0, which is falsy.
+ */
+export function exitCodeOf(id: string): number | undefined {
+    return exitCodes.get(id)
+}
+
+/**
+ * Forget a session's exit. Called by the store's `forget()` on close, like
+ * every other per-session record, and on the first output after a respawn — a
+ * pane re-run in place would otherwise read EXITED for the rest of its life.
+ */
+export function clearExit(id: string): void {
+    exitCodes.delete(id)
+}

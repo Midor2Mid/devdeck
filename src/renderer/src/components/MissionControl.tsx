@@ -8,10 +8,13 @@ import {
     sortForFollow,
     getTrace,
     barsPath,
-    isStalled,
-    awaitedTermIds
+    awaitedTermIds,
+    promptFor
 } from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
+import { nextChangedCounts } from "../agentSignals"
+import { exitCodeOf } from "../termExit"
+import { resolveTileState, wantsYou } from "../tileState"
 import type { SystemInfo } from "../../../preload/index"
 
 /**
@@ -29,6 +32,9 @@ export function MissionControl(): JSX.Element {
     const openChanges = useStore((s) => s.openChanges)
     const setReviewOpen = useStore((s) => s.setReviewOpen)
     const agentSessions = useStore((s) => s.agentSessions)
+    const respondApproval = useStore((s) => s.respondApproval)
+    const replySession = useStore((s) => s.replySession)
+    const sessionCwd = useStore((s) => s.sessionCwd)
     // Subscribe to the slices the session list derives from so tiles refresh.
     const tabsByProject = useStore((s) => s.tabsByProject)
     const agentStatus = useStore((s) => s.agentStatus)
@@ -52,10 +58,13 @@ export function MissionControl(): JSX.Element {
     // A quiet agent is only stalled if something is actually waiting on it.
     const awaited = awaitedTermIds(boardTasks, pipelineRun)
     const totalAgents = sessions.length
-    const attention = sessions.filter((s) => s.status === "attention").length
 
     // Tiles the user has expanded to see fuller recent output inline.
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    // Reply drafts per session. Local, and cleared on send: a half-typed reply is
+    // not worth persisting, and every tile holding one would be state churn on a
+    // component that re-renders once a second.
+    const [drafts, setDrafts] = useState<Record<string, string>>({})
     const toggleExpand = (id: string): void =>
         setExpanded((prev) => {
             const next = new Set(prev)
@@ -127,6 +136,9 @@ export function MissionControl(): JSX.Element {
 
     // File-ownership / conflict map: which agent is changing which files, across worktrees.
     const [ownership, setOwnership] = useState<OwnershipMap | null>(null)
+    // Paths each session has made dirty since it started, from the SAME read the
+    // ownership map makes below — the chip adds no git call of its own.
+    const [changedBySession, setChangedBySession] = useState<Record<string, number>>({})
     useEffect(() => {
         if (view !== "mission") return
         let on = true
@@ -138,19 +150,38 @@ export function MissionControl(): JSX.Element {
                     termId: s.termId,
                     sessionName: s.sessionName,
                     projectName: s.projectName,
-                    files: (
-                        await window.api.git
-                            // M6: through sessionCwd, not a second spelling of it.
-                            // `?? projectPath` and `|| projectPath` disagree for an
-                            // empty-string termCwd entry, so the conflict map could
-                            // read a different directory than the card evidence for
-                            // the same session - the mismatch b66a23e existed to end.
-                            .changes(st.sessionCwd(s.termId))
-                            .catch(() => [])
-                    ).map((c) => c.path)
+                    // null, not [] - a failed read is UNKNOWN, not "nothing changed".
+                    // git.changes rejects on purpose (a transient failure: a repo
+                    // mid-rebase, an index.lock another agent holds, the timeout) so
+                    // each caller can decide what unknown means; writing [] here made
+                    // this caller silently choose "nothing" for a user-visible
+                    // per-session claim, so a session with 12 changed files could
+                    // drop to CHANGED · 0 files (losing its Review button) for one
+                    // poll and flip back 8 seconds later.
+                    files: await window.api.git
+                        // M6: through sessionCwd, not a second spelling of it.
+                        // `?? projectPath` and `|| projectPath` disagree for an
+                        // empty-string termCwd entry, so the conflict map could
+                        // read a different directory than the card evidence for
+                        // the same session - the mismatch b66a23e existed to end.
+                        .changes(st.sessionCwd(s.termId))
+                        .then((cs) => cs.map((c) => c.path) as string[] | null)
+                        .catch(() => null)
                 }))
             )
-            if (on) setOwnership(buildOwnership(entries))
+            if (!on) return
+            // Ownership only reflects sessions whose read succeeded this tick -
+            // a failed one is simply absent from `ok` for this poll. The changed
+            // count is different: nextChangedCounts (agentSignals.ts) merges the
+            // successful reads into the PREVIOUS counts rather than replacing
+            // them, so a failed session keeps its last known count instead of
+            // reading 0.
+            const ok = entries.filter(
+                (e): e is { termId: string; sessionName: string; projectName: string; files: string[] } =>
+                    e.files !== null
+            )
+            setOwnership(buildOwnership(ok))
+            setChangedBySession((prev) => nextChangedCounts(prev, entries))
         }
         void fetchOwn()
         const iv = setInterval(() => void fetchOwn(), 8000)
@@ -167,6 +198,30 @@ export function MissionControl(): JSX.Element {
         setReviewOpen(true)
     }
 
+    // Resolve every tile's state ONCE per render, here, rather than inside the
+    // grid's map: the header's "N need attention" count and the grid itself
+    // must agree on what each tile is saying, and resolving twice (once for
+    // the count, once per tile) would double the per-tile work this component
+    // already does once a second for no reason.
+    const now = Date.now()
+    const resolved = sessions.map((s) => {
+        const prompt = promptFor(s)
+        const input = {
+            status: s.status,
+            prompt,
+            exitCode: exitCodeOf(s.termId),
+            lastAt: getLastAt(s.termId),
+            changedCount: changedBySession[s.termId] ?? 0,
+            awaited: awaited.has(s.termId),
+            alive: !!termAgents[s.termId]
+        }
+        return { s, prompt, input, st: resolveTileState(input, now) }
+    })
+    // The same predicate the deck bar's flag reads (tileState's wantsYou) — see
+    // its doc comment for why this app cannot afford two counts for one
+    // question again.
+    const attention = resolved.filter((r) => wantsYou(r.input, now)).length
+
     return (
         <div className="mission">
             <div className="mission-section">
@@ -182,53 +237,61 @@ export function MissionControl(): JSX.Element {
                     </div>
                 ) : (
                     <div className="mission-grid">
-                        {sessions.map((s) => {
-                            const ago = relTime(Date.now(), getLastAt(s.termId))
+                        {resolved.map(({ s, prompt, st }) => {
+                            const ago = relTime(now, getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
                             const trace = getTrace(s.termId)
-                            const stalled = isStalled(
-                                getLastAt(s.termId),
-                                !!termAgents[s.termId],
-                                awaited.has(s.termId),
-                                Date.now()
-                            )
+                            const stalled = st.kind === "stalled"
+                            // changedBySession starts {} on mount (and briefly holds a
+                            // stale count after a session's own reply while the next
+                            // poll is in flight), so a session that is really CHANGED
+                            // can read WAITING for one interval, show the reply box,
+                            // and then flip to CHANGED - removing the box out from
+                            // under a draft that was never sent. A draft keeps its
+                            // input reachable across a state change like that one -
+                            // but only where a reply still means something: nothing is
+                            // listening on a dead process (exited()'s own comment says
+                            // so), and NEEDS YOU is answered by the prompt's own two
+                            // buttons, not by free text beside them. Without this
+                            // narrowing, a half-typed reply on a WAITING/ASKING/STALLED
+                            // tile whose process then exits - or that resolves to a
+                            // parsed prompt - would keep rendering a control that
+                            // cannot do anything, which is exactly the class of lie
+                            // this feature exists to prevent.
+                            const hasDraft = !!(drafts[s.termId] ?? "").trim()
+                            const canReply =
+                                st.actions.includes("reply") ||
+                                (hasDraft && st.kind !== "exited" && st.kind !== "needs-you")
                             return (
                                 <div
                                     key={s.termId}
                                     className={"mission-tile status-" + s.status + (stalled ? " stalled" : "")}
-                                    role="button"
-                                    tabIndex={0}
-                                    // The trace shows silence as a flatline, which a screen reader
-                                    // cannot see — so the sentence it replaces lives here. An
-                                    // aria-label overrides the tile's content entirely, so it has
-                                    // to carry everything a sighted user reads off the tile: the
-                                    // badge included, or the running model becomes unannounceable.
-                                    aria-label={[
-                                        s.sessionName,
-                                        s.projectName,
-                                        s.badge,
-                                        s.status === "attention"
-                                            ? "needs you"
-                                            : stalled
-                                              ? `stalled, no output ${ago}`
-                                              : ago
-                                                ? `last output ${ago} ago`
-                                                : s.status
-                                    ]
-                                        .filter(Boolean)
-                                        .join(" · ")}
-                                    data-tip={
-                                        stalled
-                                            ? `Stalled — no output ${ago}`
-                                            : ago
-                                              ? `Last output ${ago} ago`
-                                              : undefined
-                                    }
+                                    data-tip={st.detail ?? (ago ? `Last output ${ago} ago` : undefined)}
                                     onClick={() => jumpToTerm(s.termId)}
                                 >
                                     <div className="mission-tile-head">
                                         <span className={"tab-dot claude status-" + s.status} />
-                                        <span className="mission-tile-name">{s.sessionName}</span>
+                                        {/* I3: the wrapper is no longer role="button", so this is the
+                                            one focusable, announced control for "jump to this session" -
+                                            without it, a screen-reader user would have no way to reach
+                                            what the mouse's onClick above still does. The trace shows
+                                            silence as a flatline, which a screen reader cannot see, so
+                                            the sentence it replaces lives in this label along with
+                                            everything else a sighted user reads off the tile (badge
+                                            included), since the chip and question below now read as
+                                            ordinary text rather than being swallowed by a wrapper label. */}
+                                        <button
+                                            className="mission-tile-name"
+                                            aria-label={[s.sessionName, s.projectName, s.badge, st.chip, st.detail]
+                                                .filter(Boolean)
+                                                .join(" · ")}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                jumpToTerm(s.termId)
+                                            }}
+                                        >
+                                            {s.sessionName}
+                                        </button>
                                         <span className="agent-badge sm">{s.badge}</span>
                                         <button
                                             className="mission-tile-expand"
@@ -251,19 +314,62 @@ export function MissionControl(): JSX.Element {
                                             {getTail(s.termId) || <span className="muted">…</span>}
                                         </div>
                                     )}
-                                    {s.status === "attention" && (
-                                        <div className="mission-tile-attn">needs you</div>
+                                    <div className={"mtile-chip tone-" + st.tone}>
+                                        <span className="mtile-mark" aria-hidden="true">
+                                            {st.mark}
+                                        </span>
+                                        {st.chip}
+                                    </div>
+                                    {st.kind === "needs-you" && st.detail && (
+                                        <div className="mtile-q" data-tip={st.detail}>
+                                            {st.detail}
+                                        </div>
                                     )}
-                                    {/* Stalled carried nothing but a 2px left border
-                                        whose colour is a shade off attention's — so a
-                                        dead agent read as a slightly different stripe,
-                                        and the state this view exists to surface was
-                                        its least visible one. The word is the fix; the
-                                        border also goes dashed so it differs in FORM
-                                        from attention's solid rule, not only in hue. */}
-                                    {stalled && s.status !== "attention" && (
-                                        <div className="mission-tile-stall">
-                                            stalled · silent {ago}
+                                    {(st.actions.length > 0 || canReply) && (
+                                        <div className="mtile-actions" onClick={(e) => e.stopPropagation()}>
+                                            {st.actions.includes("approve") && prompt && (
+                                                <>
+                                                    <button
+                                                        className="ov-approve-yes"
+                                                        data-tip="Send Yes to the agent"
+                                                        onClick={() => respondApproval(s.termId, prompt.approve)}
+                                                    >
+                                                        ✓ Approve
+                                                    </button>
+                                                    <button
+                                                        className="ov-approve-no"
+                                                        data-tip="Reject this action"
+                                                        onClick={() => respondApproval(s.termId, prompt.deny)}
+                                                    >
+                                                        ✕ Deny
+                                                    </button>
+                                                </>
+                                            )}
+                                            {st.actions.includes("review") && (
+                                                <button
+                                                    className="mtile-act"
+                                                    data-tip="Open this session's changes"
+                                                    onClick={() => openChanges(sessionCwd(s.termId), s.sessionName)}
+                                                >
+                                                    Review
+                                                </button>
+                                            )}
+                                            {canReply && (
+                                                <input
+                                                    className="mtile-reply"
+                                                    placeholder="Reply…"
+                                                    aria-label={`Reply to ${s.sessionName}`}
+                                                    value={drafts[s.termId] ?? ""}
+                                                    onChange={(e) =>
+                                                        setDrafts((d) => ({ ...d, [s.termId]: e.target.value }))
+                                                    }
+                                                    onKeyDown={(e) => {
+                                                        if (e.key !== "Enter") return
+                                                        replySession(s.termId, drafts[s.termId] ?? "")
+                                                        setDrafts((d) => ({ ...d, [s.termId]: "" }))
+                                                    }}
+                                                />
+                                            )}
                                         </div>
                                     )}
                                     <svg
