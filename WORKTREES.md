@@ -19,19 +19,35 @@ devdeck-trees/
 ## Create a worktree for a session
 
 ```powershell
-pwsh -File scripts/worktree.ps1 new api-polish
+npm run worktree -- new api-polish
+```
+
+or, invoking the script directly:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/worktree.ps1 new api-polish
 ```
 
 This creates `../devdeck-trees/api-polish` on branch `wt/api-polish` and **junctions
 `node_modules`** from the main checkout so it builds immediately (no reinstall).
 Then **open a Claude Code session in that folder** and work there.
 
+> These used to read `pwsh -File`. `pwsh` is PowerShell 7 and is **not installed on
+> this machine**, so the documented command failed before it ever reached the script.
+> `powershell` is Windows PowerShell 5.1, which is always present, and is what the
+> repo's other scripts (`cert:make`, `package:signed`) already use.
+
 ## List / remove
 
 ```powershell
-pwsh -File scripts/worktree.ps1 list
-pwsh -File scripts/worktree.ps1 remove api-polish   # removes the folder; keeps the branch
+npm run worktree -- list
+npm run worktree -- remove api-polish   # removes the folder; keeps the branch
 ```
+
+`remove` unlinks the shared `node_modules` before it removes the folder, so nothing
+ever walks into the main checkout's dependency tree. A worktree that has its own
+real `node_modules` (one pinning a different Electron, say) is left for git to take
+with the rest, rather than being deleted file by file.
 
 ## Finishing up
 
