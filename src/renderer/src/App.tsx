@@ -223,6 +223,15 @@ export function App(): JSX.Element {
                 useStore.getState().cycleProject()
                 return
             }
+            // Ctrl+Shift+J — jump to the agent that has been waiting on you
+            // longest. Nothing to do with the Inbox drawer this chord was once
+            // mislabelled as opening: the drawer is gone, this is not.
+            if (mod && e.shiftKey && e.code === "KeyJ") {
+                e.preventDefault()
+                e.stopPropagation()
+                useStore.getState().jumpToPending()
+                return
+            }
             // Ctrl+Shift+Z — zoom the focused pane to fill the stage, and back.
             if (mod && e.shiftKey && e.code === "KeyZ") {
                 const s = useStore.getState()
