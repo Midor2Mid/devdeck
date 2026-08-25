@@ -17,10 +17,13 @@
   touched, not a feature waiting for its lucky run.
 - `samePath` — the Windows-aware path comparison the race poll relied on — was
   rescued first, in its own commit, since cost attribution in `runRecorder.ts`
-  and two worktree-head lookups in `store.ts` depend on it and are very much
-  alive. It now lives in `paths.ts` with its tests intact.
-- Nothing here needed a migration: races were runtime-only and never reached
-  `workspace.json`.
+  in `runRecorder.ts` depend on it and are very much alive. It now lives in
+  `paths.ts` with its tests intact. (The two `store.ts` lookups that also called
+  it turned out to be race code themselves, and went with the feature.)
+- Nothing here needed a migration. Races were runtime-only and never reached
+  `workspace.json`, and the run ledger keeps what it already had: a historical
+  `kind: "race"` row in `runs.jsonl` still loads, still renders, and still
+  counts its money in the totals — it just loses the "Races" filter chip.
 
 ### The Inbox drawer is gone
 

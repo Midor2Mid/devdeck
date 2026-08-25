@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Project, WorkItem, CheckResult, ChangeFile } from "../../preload/index"
+import type { Project, WorkItem, ChangeFile } from "../../preload/index"
 import { useSettings, aiModeAgents } from "./settings"
 import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
 import {
@@ -50,7 +50,6 @@ import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
 import { routeAgent } from "./routing"
-import { samePath } from "./paths"
 import { createRunRecorder } from "./runRecorder"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
