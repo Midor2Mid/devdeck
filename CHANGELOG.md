@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 - 2026-08-25
 
 ### The agent bake-off is gone
 
@@ -17,9 +17,9 @@
   touched, not a feature waiting for its lucky run.
 - `samePath` — the Windows-aware path comparison the race poll relied on — was
   rescued first, in its own commit, since cost attribution in `runRecorder.ts`
-  in `runRecorder.ts` depend on it and are very much alive. It now lives in
-  `paths.ts` with its tests intact. (The two `store.ts` lookups that also called
-  it turned out to be race code themselves, and went with the feature.)
+  depends on it and is very much alive. It now lives in `paths.ts` with its
+  tests intact. (The two `store.ts` lookups that also called it turned out to
+  be race code themselves, and went with the feature.)
 - Nothing here needed a migration. Races were runtime-only and never reached
   `workspace.json`, and the run ledger keeps what it already had: a historical
   `kind: "race"` row in `runs.jsonl` still loads, still renders, and still
