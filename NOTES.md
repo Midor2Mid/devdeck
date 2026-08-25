@@ -895,4 +895,4 @@ silent — no card advances and nothing in the UI says a check failed.
 
 ## Things learned
 
-- User's machine has Node 22.11, npm 10.9, git, Python 3.13. VS 2019 Community is installed but the **MSVC C++ compiler binaries are not** → native `node-pty` build would fail. Using `@lydell/node-pty` (prebuilt) sidesteps this entirely.
+- User's machine has **Node 22.23.2** (was 22.11 until 2026-08; the older figure gated the Electron/Vite pin and outlived it), npm 10.9, git, Python 3.13. VS 2019 Community is installed but the **MSVC C++ compiler binaries are not** → native `node-pty` build would fail. Using `@lydell/node-pty` (prebuilt) sidesteps this entirely.
