@@ -76,7 +76,7 @@ describe("filterRuns", () => {
     it("filters by kind and by project independently and together", () => {
         const runs = [
             rec({ id: "a", kind: "card", projectId: "p1" }),
-            rec({ id: "b", kind: "race", projectId: "p1" }),
+            rec({ id: "b", kind: "pipeline", projectId: "p1" }),
             rec({ id: "c", kind: "card", projectId: "p2" })
         ]
         expect(filterRuns(runs, "card").map((r) => r.id)).toEqual(["a", "c"])

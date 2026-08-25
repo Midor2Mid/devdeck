@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { parseWorktreeList, safeBranch, worktreeBase } from "../src/main/worktrees"
 import { parseStatus } from "../src/main/changes"
-import { parseBranchLine, isCommitSha } from "../src/main/git"
+import { parseBranchLine } from "../src/main/git"
 
 describe("safeBranch", () => {
     it("slugs spaces and strips unsafe chars", () => {
@@ -98,30 +98,5 @@ describe("parseStatus", () => {
     it("keeps the new path for renames", () => {
         const out = parseStatus(["R  old.ts -> new.ts"].join("\n"))
         expect(out[0]).toMatchObject({ path: "new.ts", label: "Renamed" })
-    })
-})
-
-describe("isCommitSha", () => {
-    it("accepts the short and full shas git actually produces", () => {
-        expect(isCommitSha("1a2b3c4")).toBe(true)
-        expect(isCommitSha("0e375ccbc867f1e52fe81d169b211d7b08ccc655")).toBe(true)
-        expect(isCommitSha("ABCDEF1")).toBe(true)
-    })
-
-    it("rejects anything git could read as an option", () => {
-        // "--output=<file>" is a real git diff flag. Interpolated into
-        // `${ref}..HEAD` it becomes "--output=/tmp/x..HEAD" and writes a file of
-        // the caller's choosing — argument injection without a shell in sight.
-        expect(isCommitSha("--output=/tmp/pwned")).toBe(false)
-        expect(isCommitSha("-n")).toBe(false)
-        expect(isCommitSha("--upload-pack=touch /tmp/x")).toBe(false)
-    })
-
-    it("rejects refs that are not shas at all", () => {
-        expect(isCommitSha("HEAD")).toBe(false)
-        expect(isCommitSha("main")).toBe(false)
-        expect(isCommitSha("")).toBe(false)
-        expect(isCommitSha("1a2b3c")).toBe(false) // too short to be a git short sha
-        expect(isCommitSha("1a2b3c4z")).toBe(false)
     })
 })

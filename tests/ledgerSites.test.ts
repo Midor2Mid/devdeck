@@ -4,7 +4,6 @@ import { useSettings } from "../src/renderer/src/settings"
 import { useConfirm } from "../src/renderer/src/confirm"
 import { leaf } from "../src/renderer/src/layout"
 import type { RunRecord } from "../src/main/ledger"
-import type { Entrant, Race } from "../src/renderer/src/race"
 
 // The four write sites of the run ledger. These are money paths: every
 // assertion here is about a number a user could later add up, so the tests
@@ -39,40 +38,10 @@ function stubApi(over: Record<string, unknown> = {}): void {
             pty: { kill: (): void => undefined, input: (): void => undefined },
             git: {
                 status: async (): Promise<{ changes: number }> => ({ changes: 0 }),
-                changes: async (): Promise<{ path: string }[]> => [],
-                landFrom: async (): Promise<{ ok: boolean }> => ({ ok: true }),
-                worktreeRemove: async (): Promise<{ ok: boolean }> => ({ ok: true })
+                changes: async (): Promise<{ path: string }[]> => []
             },
             ...over
         }
-    }
-}
-
-function entrant(over: Partial<Entrant> = {}): Entrant {
-    return {
-        agentId: "claude",
-        agentName: "Claude",
-        worktree: "D:/p1.worktrees/claude",
-        branch: "race/claude",
-        baseHead: "abc",
-        status: "passed",
-        ...over
-    }
-}
-
-function race(over: Partial<Race> = {}): Race {
-    return {
-        cardId: "c1",
-        projectId: "p1",
-        projectPath: "D:/p1",
-        title: "Fix the login redirect",
-        gateCommand: "npm test",
-        startedAt: 1000,
-        entrants: [
-            entrant({ cost: 1, costTokens: 10, added: 5, removed: 2 }),
-            entrant({ agentId: "codex", agentName: "Codex", status: "failed", cost: 0.5, costTokens: 5 })
-        ],
-        ...over
     }
 }
 
@@ -93,8 +62,6 @@ beforeEach(() => {
         termNames: {},
         agentStatus: {},
         paneHold: {},
-        races: {},
-        raceCardId: null,
         pipelineRun: null,
         activity: []
     })
@@ -513,171 +480,6 @@ describe("card records", () => {
     })
 })
 
-describe("race records", () => {
-    it("records one landed run before the race is deleted", async () => {
-        useStore.setState({ races: { c1: race() } })
-
-        await useStore.getState().landRaceWinner("c1", "claude")
-
-        expect(useStore.getState().races.c1).toBeUndefined()
-        expect(appended).toHaveLength(1)
-        expect(appended[0]).toMatchObject({
-            kind: "race",
-            projectId: "p1",
-            projectName: "P1",
-            label: "Fix the login redirect",
-            startedAt: 1000,
-            agentIds: ["claude", "codex"],
-            // Summed entrant costs: each entrant is priced from its own worktree.
-            cost: 1.5,
-            tokens: 15,
-            exclusive: true,
-            outcome: "landed",
-            winner: "claude",
-            eliminated: 1,
-            added: 5,
-            removed: 2
-        })
-    })
-
-    it("records an abandoned run with every entrant eliminated", async () => {
-        useStore.setState({ races: { c1: race() } })
-
-        const done = useStore.getState().abandonRace("c1")
-        await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
-        useConfirm.getState().answer(true)
-        await done
-
-        expect(appended).toHaveLength(1)
-        expect(appended[0]).toMatchObject({
-            kind: "race",
-            cost: 1.5,
-            exclusive: true,
-            outcome: "abandoned",
-            eliminated: 2
-        })
-        expect(appended[0].winner).toBeUndefined()
-    })
-
-    it("records nothing when the user cancels the abandon confirm", async () => {
-        useStore.setState({ races: { c1: race() } })
-
-        const done = useStore.getState().abandonRace("c1")
-        await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
-        useConfirm.getState().answer(false)
-        await done
-
-        expect(appended).toEqual([])
-        expect(useStore.getState().races.c1).toBeDefined()
-    })
-
-    // Landing closes every entrant's pane before deleting the race, so the race
-    // is still in state when those panes close - which is what lets the session
-    // site recognise them as owned. One record for the race, not one per entrant.
-    it("writes one record for the race, not one per entrant pane it closes", async () => {
-        useSettings.setState({
-            usageLog: [
-                { id: "e-claude", agentId: "claude", projectId: "p1", startedAt: 1000 },
-                { id: "e-codex", agentId: "codex", projectId: "p1", startedAt: 1000 }
-            ]
-        })
-        useStore.setState({
-            races: {
-                c1: race({
-                    entrants: [
-                        entrant({ termId: "e-claude", cost: 1, costTokens: 10 }),
-                        entrant({
-                            agentId: "codex",
-                            agentName: "Codex",
-                            status: "failed",
-                            termId: "e-codex",
-                            cost: 0.5,
-                            costTokens: 5
-                        })
-                    ]
-                })
-            }
-        })
-
-        await useStore.getState().landRaceWinner("c1", "claude")
-        await new Promise((r) => setTimeout(r, 20))
-
-        expect(appended.map((r) => r.kind)).toEqual(["race"])
-        expect(appended[0].cost).toBe(1.5)
-    })
-
-    // The same ordering as landing, asserted separately because it is a different
-    // teardown path: abandon also closes every entrant's pane before deleting the
-    // race, which is what lets the session site see those panes as owned.
-    it("writes one record when abandoning a race with live entrant panes", async () => {
-        useSettings.setState({
-            usageLog: [{ id: "a-claude", agentId: "claude", projectId: "p1", startedAt: 1000 }]
-        })
-        useStore.setState({
-            races: { c1: race({ entrants: [entrant({ termId: "a-claude", cost: 1, costTokens: 10 })] }) }
-        })
-
-        const done = useStore.getState().abandonRace("c1")
-        await vi.waitFor(() => expect(useConfirm.getState().current).not.toBeNull())
-        useConfirm.getState().answer(true)
-        await done
-        await new Promise((r) => setTimeout(r, 20))
-
-        expect(appended.map((r) => r.kind)).toEqual(["race"])
-        expect(appended[0]).toMatchObject({ outcome: "abandoned", cost: 1 })
-    })
-
-    // An entrant that never dispatched spends nothing, so counting it as
-    // eliminated overstates what the race threw away - the one thing this number
-    // is for. Two of the three startfailed paths (unreadable head, session that
-    // would not spawn) leave the worktree populated for cleanup, so the status is
-    // what has to be read, not the presence of a directory.
-    it("counts only entrants that actually started as eliminated", async () => {
-        useStore.setState({
-            races: {
-                c1: race({
-                    entrants: [
-                        entrant({ cost: 1 }),
-                        entrant({ agentId: "codex", agentName: "Codex", cost: 0.5 }),
-                        entrant({
-                            agentId: "gemini",
-                            agentName: "Gemini",
-                            status: "startfailed",
-                            worktree: ""
-                        }),
-                        // Worktree created, then the head read failed: never
-                        // dispatched, but there is still a directory to tidy.
-                        entrant({
-                            agentId: "aider",
-                            agentName: "Aider",
-                            status: "startfailed",
-                            worktree: "D:/p1.worktrees/aider"
-                        })
-                    ]
-                })
-            }
-        })
-
-        await useStore.getState().landRaceWinner("c1", "claude")
-
-        expect(appended[0].eliminated).toBe(1)
-    })
-
-    it("does not break landing when the ledger throws", async () => {
-        stubApi({
-            ledger: {
-                append: (): void => {
-                    throw new Error("bridge gone")
-                }
-            }
-        })
-        useStore.setState({ races: { c1: race() } })
-
-        await expect(useStore.getState().landRaceWinner("c1", "claude")).resolves.toBeUndefined()
-        expect(useStore.getState().races.c1).toBeUndefined()
-    })
-})
-
 describe("pipeline records", () => {
     const run = {
         pipelineId: "pl1",
@@ -862,24 +664,6 @@ describe("session records", () => {
     it("records nothing for a session whose window cannot be bounded", async () => {
         // No usageLog entry (e.g. a pane restored from a previous launch): there
         // is no start instant, so there is no window to price.
-        useStore.getState().closePane("term-9")
-
-        await new Promise((r) => setTimeout(r, 20))
-        expect(appended).toEqual([])
-    })
-
-    // A session record for an owned pane describes the same money as its parent's
-    // record, and both would be honestly exclusive - so a total that summed them
-    // would double count a race. The parent's record is the better one (it has an
-    // outcome, a winner, a diffstat), so the session record is the one to drop.
-    it("records nothing for a race entrant's pane, whose race records it instead", async () => {
-        useSettings.setState({
-            usageLog: [{ id: "term-9", agentId: "claude", projectId: "p1", startedAt: 4000 }]
-        })
-        useStore.setState({
-            races: { c1: race({ entrants: [entrant({ termId: "term-9", cost: 1 })] }) }
-        })
-
         useStore.getState().closePane("term-9")
 
         await new Promise((r) => setTimeout(r, 20))

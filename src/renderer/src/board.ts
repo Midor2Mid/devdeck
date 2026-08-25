@@ -88,8 +88,8 @@ export function costFloor(usd: number): string | null {
 }
 
 /**
- * Compact USD for a dense row — a board card's cost pill, a race entrant, the
- * pipeline bar. Whole dollars above $10, because the reader of a pill wants a
+ * Compact USD for a dense row — a board card's cost pill, the pipeline bar.
+ * Whole dollars above $10, because the reader of a pill wants a
  * magnitude at a glance and the extra two characters cost more than they buy.
  *
  * Not for a headline total: see `ledgerView.formatCostExact`, which keeps cents

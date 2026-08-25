@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard } from "electron"
-import { join, resolve } from "path"
+import { join } from "path"
 import { mkdirSync, writeFileSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
 import * as projects from "./projects"
@@ -17,9 +17,7 @@ import {
     setIdentity,
     cacheCredential,
     verifyGitHubToken,
-    pullLatest,
-    shortstat,
-    landFrom
+    pullLatest
 } from "./git"
 import { readMcp, writeMcp, registerDevdeck, unregisterDevdeck, type McpServer } from "./mcp"
 import * as mcpserver from "./mcpserver"
@@ -444,8 +442,8 @@ function registerIpc(): void {
 
     // --- Run ledger (durable record of what each run cost) ---
     // Append is `on`, not `handle`: the renderer writes a record at the moment a
-    // race lands or a pipeline finishes, and must not have to await - or handle
-    // a rejection from - the thing that only records what already happened.
+    // card completes or a pipeline finishes, and must not have to await - or
+    // handle a rejection from - the thing that only records what already happened.
     // appendRun swallows and logs its own failures.
     // Validated on the way in with the same predicate readRuns applies on the way
     // out: this store is append-only, so a malformed line is permanent, and a
@@ -489,30 +487,6 @@ function registerIpc(): void {
         guardRepo(cwd)
         return pullLatest(cwd)
     })
-
-    ipcMain.handle("git:shortstat", (_e, { cwd, fromRef }: { cwd: string; fromRef: string }) => {
-        guardRepo(cwd)
-        return shortstat(cwd, fromRef)
-    })
-    ipcMain.handle(
-        "git:landFrom",
-        (_e, { worktree, baseHead, target }: { worktree: string; baseHead: string; target: string }) => {
-            // guardRepo alone is too weak here. It is pure string containment (see
-            // files.isWithinRoots), so "both are inside some open project" would
-            // still allow landing a patch into a DIFFERENT project, or into a
-            // subdirectory — and git apply resolves patch paths relative to cwd, so
-            // a subdirectory target silently nests the whole change one level down.
-            // Require the target to BE a project root, and the worktree to belong to
-            // that same project.
-            const norm = (p: string): string => resolve(p).replace(/[\\/]+$/, "").toLowerCase()
-            const roots = projects.listProjects().projects.map((p) => p.path)
-            if (!roots.some((r) => norm(r) === norm(target)))
-                throw new Error("Land target must be an open project root.")
-            if (!files.isWithinRoots(worktree, [worktrees.worktreeBase(target)]))
-                throw new Error("That worktree does not belong to this project.")
-            return landFrom(worktree, baseHead, target)
-        }
-    )
 
     // --- Git worktrees ---
     ipcMain.handle("git:worktrees", (_e, repoPath: string) => {

@@ -210,8 +210,6 @@ export function TaskBoard(): JSX.Element {
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const openChanges = useStore((s) => s.openChanges)
     const refreshTaskCost = useStore((s) => s.refreshTaskCost)
-    const openRace = useStore((s) => s.openRace)
-    const races = useStore((s) => s.races)
 
     // Select the stable slices and derive in the render body — filtering or
     // routing *inside* a useSettings/useStore selector returns a fresh array or
@@ -332,10 +330,6 @@ export function TaskBoard(): JSX.Element {
                                           !!t.termId && checkFailedFor(t.termId)
                                       )
                                     : ""
-                                // A race outlives the todo column — cards are draggable and have move
-                                // arrows, and a race left running in doing/review would otherwise have
-                                // no door back to it while its agents keep running and billing.
-                                const isRacing = !!races[t.id]
                                 return (
                                     <div
                                         key={t.id}
@@ -377,19 +371,6 @@ export function TaskBoard(): JSX.Element {
                                                     worktree={worktree}
                                                     dispatchBoardTask={dispatchBoardTask}
                                                 />
-                                            )}
-                                            {(t.column === "todo" || isRacing) && (
-                                                <button
-                                                    className="board-btn"
-                                                    data-tip={
-                                                        isRacing
-                                                            ? "Open the race running on this card"
-                                                            : "Race two or three agents on this card"
-                                                    }
-                                                    onClick={() => openRace(t.id)}
-                                                >
-                                                    {isRacing ? "Race · live" : "Race"}
-                                                </button>
                                             )}
                                             {t.termId && (t.column === "doing" || t.column === "review") && (
                                                 <button className="board-btn" onClick={() => jumpToTerm(t.termId!)}>
