@@ -6,7 +6,6 @@ import {
     survivors,
     raceSettled,
     raceSpend,
-    samePath,
     type Entrant,
     type Race
 } from "../src/renderer/src/race"
@@ -130,22 +129,6 @@ describe("raceSettled", () => {
     it("is false for a race with no entrants", () => {
         // Nothing has finished because nothing started; "settled" would be a lie.
         expect(raceSettled(race([]))).toBe(false)
-    })
-})
-
-describe("samePath", () => {
-    it("matches across separator styles, which is the bug it exists for", () => {
-        expect(samePath("D:\\repo.worktrees\\br", "D:/repo.worktrees/br")).toBe(true)
-    })
-    it("ignores a trailing separator and case", () => {
-        expect(samePath("D:/A/b/", "d:/a/B")).toBe(true)
-    })
-    it("does not match different directories", () => {
-        expect(samePath("D:/a/b", "D:/a/c")).toBe(false)
-    })
-    it("is false for an empty path on either side", () => {
-        expect(samePath("", "D:/a")).toBe(false)
-        expect(samePath("D:/a", "")).toBe(false)
     })
 })
 

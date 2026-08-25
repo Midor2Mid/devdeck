@@ -57,10 +57,10 @@ import {
     entrantBranch,
     raceSettled,
     raceSpend,
-    samePath,
     type Entrant,
     type Race
 } from "./race"
+import { samePath } from "./paths"
 import { createRunRecorder } from "./runRecorder"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
