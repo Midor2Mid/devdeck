@@ -23,7 +23,6 @@ import { ReviewPanel } from "./components/ReviewPanel"
 import { MissionControl } from "./components/MissionControl"
 import { TaskBoard } from "./components/TaskBoard"
 import { ActivityPanel } from "./components/ActivityPanel"
-import { InboxPanel } from "./components/InboxPanel"
 import { UsagePanel } from "./components/UsagePanel"
 import { ProjectEnvModal } from "./components/ProjectEnvModal"
 import { CommandsModal } from "./components/CommandsModal"
@@ -88,7 +87,6 @@ export function App(): JSX.Element {
     const shortcutsOpen = useStore((s) => s.shortcutsOpen)
     const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
     const activityOpen = useStore((s) => s.activityOpen)
-    const inboxOpen = useStore((s) => s.inboxOpen)
     const usageOpen = useStore((s) => s.usageOpen)
     const envEditorProject = useStore((s) => s.envEditorProject)
     const commandsEditorProject = useStore((s) => s.commandsEditorProject)
@@ -214,13 +212,6 @@ export function App(): JSX.Element {
                 const open = !s.composerOpen
                 if (open) s.setView("terminal")
                 s.setComposerOpen(open)
-                return
-            }
-            // Ctrl+Shift+J — jump to the oldest agent that's waiting on you.
-            if (mod && e.shiftKey && e.code === "KeyJ") {
-                e.preventDefault()
-                e.stopPropagation()
-                useStore.getState().jumpToPending()
                 return
             }
             // Ctrl+Shift+K — recent projects, alt-tab style. One tap is the old
@@ -363,7 +354,6 @@ export function App(): JSX.Element {
             {reviewOpen && <ReviewPanel />}
             {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
             {activityOpen && <ActivityPanel />}
-            {inboxOpen && <InboxPanel />}
             {usageOpen && <UsagePanel />}
             {envEditorProject && <ProjectEnvModal />}
             {commandsEditorProject && <CommandsModal />}

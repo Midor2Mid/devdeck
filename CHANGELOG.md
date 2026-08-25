@@ -22,6 +22,22 @@
 - Nothing here needed a migration: races were runtime-only and never reached
   `workspace.json`.
 
+### The Inbox drawer is gone
+
+- **Removed the agent triage drawer** — `InboxPanel.tsx`, the `inboxOpen` store
+  state and its toggle, the deck's inbox icon, and the palette's "Agents inbox"
+  entry. It was a fifth attention-list carrying its own "N need you" count,
+  divergent from the others, in an app whose worst documented problem was
+  eleven surfaces answering that one question. Mission Control's tiles now
+  carry Approve / Deny / Reply, which was the drawer's only capability the
+  tiles didn't already have — nothing replaces it, because nothing needs to.
+- `Ctrl+Shift+J` is unbound. The global handler that used it to jump to the
+  oldest waiting agent is removed along with the palette entry that advertised
+  it; the chord is free but deliberately not repurposed here — that's its own
+  decision, not a side effect of this one.
+- Nothing here needed a migration: `inboxOpen` was runtime-only and never
+  reached `workspace.json`.
+
 ### A dead pane keeps its evidence
 
 - **A dead pane keeps its evidence.** A terminal whose process exited now holds

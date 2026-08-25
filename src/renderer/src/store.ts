@@ -202,10 +202,6 @@ interface AppState extends Persisted {
     setActivityOpen: (open: boolean) => void
     clearActivity: () => void
 
-    // Agent inbox / triage drawer
-    inboxOpen: boolean
-    setInboxOpen: (open: boolean) => void
-
     // AI usage / activity dashboard
     usageOpen: boolean
     setUsageOpen: (open: boolean) => void
@@ -840,7 +836,6 @@ export const useStore = create<AppState>((set, get) => {
         boardTasks: [],
         activity: [],
         activityOpen: false,
-        inboxOpen: false,
         usageOpen: false,
         envEditorProject: null,
         commandsEditorProject: null,
@@ -1328,7 +1323,6 @@ export const useStore = create<AppState>((set, get) => {
         },
         setActivityOpen: (activityOpen) => set({ activityOpen }),
         clearActivity: () => set({ activity: [] }),
-        setInboxOpen: (inboxOpen) => set({ inboxOpen }),
         setUsageOpen: (usageOpen) => set({ usageOpen }),
         setEnvEditorProject: (envEditorProject) => set({ envEditorProject }),
         setCommandsEditorProject: (commandsEditorProject) => set({ commandsEditorProject }),
@@ -1841,10 +1835,10 @@ export const useStore = create<AppState>((set, get) => {
         /**
          * Answer an agent in a sentence, from wherever you are.
          *
-         * The same call the Inbox drawer's reply box makes, as a store action so
-         * Mission's tiles and the drawer cannot drift on what "a reply" means.
-         * Trims, and refuses to send an empty line: a bare carriage return into a
-         * live agent is a keystroke nobody asked for.
+         * A store action so every surface that can reply — Mission's tiles
+         * included — shares what "a reply" means. Trims, and refuses to send an
+         * empty line: a bare carriage return into a live agent is a keystroke
+         * nobody asked for.
          */
         replySession: (termId, text) => {
             const line = text.trim()

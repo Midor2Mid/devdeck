@@ -154,10 +154,9 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:zoom", section: "Actions", title: "Zoom the focused pane", kbd: "Ctrl+Shift+Z", run: () => { store.setView("terminal"); store.toggleZoomPane() } })
         cmds.push({ id: "act:reopen", section: "Actions", title: "Reopen the last closed session", run: () => store.reopenLastClosed() })
         cmds.push({ id: "act:composer", section: "Actions", title: "Open prompt composer", kbd: "Ctrl+Shift+I", run: () => { store.setView("terminal"); store.setComposerOpen(true) } })
-        // These three panels existed only as unlabelled deck icons, so searching
-        // "usage" / "cost" / "inbox" / "pipeline" in the palette found nothing.
+        // These panels existed only as unlabelled deck icons, so searching
+        // "usage" / "cost" / "pipeline" in the palette found nothing.
         cmds.push({ id: "act:usage", section: "Actions", title: "AI usage — tokens & cost", run: () => store.setUsageOpen(true) })
-        cmds.push({ id: "act:inbox", section: "Actions", title: "Agents inbox — triage what needs you", kbd: "Ctrl+Shift+J", run: () => store.setInboxOpen(true) })
         cmds.push({ id: "act:pipelines", section: "Actions", title: "Edit pipelines…", run: () => openSettings("pipelines") })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
         cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })

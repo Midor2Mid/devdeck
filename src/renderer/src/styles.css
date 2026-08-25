@@ -6857,51 +6857,6 @@ kbd {
     color: var(--accent-soft);
 }
 
-/* ---------- Agents inbox / triage drawer ---------- */
-.rail-inbox {
-    position: relative;
-}
-.inbox-row {
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius, 10px);
-    padding: 9px 10px;
-    margin-bottom: 8px;
-    background: var(--bg);
-}
-.inbox-row.status-attention {
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-    box-shadow: inset 2px 0 0 var(--accent);
-}
-.inbox-row-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.inbox-tab {
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.inbox-project {
-    color: var(--muted);
-    font-size: 11px;
-}
-.inbox-reply {
-    display: flex;
-    gap: 6px;
-    margin-top: 8px;
-}
-.inbox-reply input {
-    flex: 1;
-    background: var(--bg-3);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 6px;
-    padding: 6px 9px;
-    font-size: 12px;
-}
-
 /* ---------- AI usage / activity dashboard ---------- */
 .usage-modal {
     width: 540px;
