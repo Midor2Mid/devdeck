@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### A dead pane keeps its evidence
+
+- **A dead pane keeps its evidence.** A terminal whose process exited now holds
+  what it printed and offers a restart, instead of silently spawning a fresh
+  shell over it the next time the pane is mounted — which, since only the active
+  tab's panes stay mounted, was the normal path with several terminals open.
+  Agent panes offer Resume or Start fresh; a restart is logged to the cost ledger
+  like any other run. Remote and mobile clients get the dead session's output on
+  attach too.
+
 ### The app is 109 MB smaller, and half the dependencies were packed twice
 
 - **`app.asar` 178 MB -> 70 MB**, `release/win-unpacked` 544 -> 435 MB. Most of that

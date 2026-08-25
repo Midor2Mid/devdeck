@@ -183,6 +183,9 @@ function registerIpc(): void {
     ipcMain.on("pty:input", (_e, { id, data }) => ptyMgr.writePty(id, data))
     ipcMain.on("pty:resize", (_e, { id, cols, rows }) => ptyMgr.resizePty(id, cols, rows))
     ipcMain.on("pty:kill", (_e, { id }) => ptyMgr.killPty(id))
+    // Read-only: a held pane fetches its own corpse rather than being pushed it
+    // through pty:data, which the renderer treats as proof of life.
+    ipcMain.handle("pty:buffer", (_e, id: string) => ptyMgr.bufferOf(id))
 
     // --- Projects ---
     ipcMain.handle("projects:list", () => projects.listProjects())

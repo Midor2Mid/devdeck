@@ -2112,6 +2112,15 @@ button .ic,
     position: relative;
     height: 100%;
     width: 100%;
+    /* The dead bar's height, reserved from the terminal's usable area below.
+       One value, two consumers (.dead-bar's box and .term-mount's inset): if
+       these ever disagree, the bar covers the output it exists to preserve -
+       which is exactly what it used to do. 48px = a single row of the bar's
+       tallest child (a button: --fs-sm 12px * --lh-body 1.45 line box ≈
+       17.4px, + its 5px top/bottom padding, + its 1px top/bottom border ≈
+       29.4px) plus the bar's own 8px top/bottom padding and 1px top border
+       ≈ 46.4px, rounded up for a safety margin. */
+    --dead-bar-h: 48px;
 }
 .term-grid {
     position: absolute;
@@ -2363,6 +2372,13 @@ button .ic,
     inset: 0;
     padding: 8px 6px 6px 10px;
 }
+/* FitAddon sizes xterm's rows to THIS box, so the dead bar's space has to
+   come out of it before fit() runs - layering the bar on top only hides
+   rows xterm already decided to use. TerminalPane re-fits when `hold`
+   changes, after this class has landed. */
+.term-mount.with-dead-bar {
+    bottom: var(--dead-bar-h);
+}
 /* Overlay shown on a restored agent pane until you pick resume vs. fresh. */
 .resume-overlay {
     position: absolute;
@@ -2405,6 +2421,70 @@ button .ic,
     font-size: 11px;
     color: var(--faint);
     word-break: break-all;
+}
+/* A dead pane's prompt sits at the BOTTOM and does not cover the terminal.
+   The resume overlay above is a full-pane scrim with a blur, which is right for
+   a session that has printed nothing yet and wrong here: the whole point of
+   keeping a dead process's output is that you can read it.
+   z-index: auto, not a positive number - deliberately, after getting this
+   wrong twice. A positive z-index (this used to be 6, then 4) puts the bar in
+   its own stacking layer above EVERYTHING at z-index:auto, which includes
+   `.term-pane.focused::after` (the ring), so any positive value here paints
+   over the ring along the bar's edges. `auto` keeps it in the plain document
+   order instead: `.term-mount` (no z-index) paints first, `.dead-bar` paints
+   after it (later in the DOM, same "auto" layer, so tree order decides), and
+   the ring - a pseudo-element of `.term-pane` itself, generated after all of
+   `.term-pane`'s real children including this one - paints last and on top.
+   `.resume-overlay` / `.find-bar` keep their own positive z-index (5): that
+   layer stacks above the whole auto layer regardless, so they are untouched
+   by any of this. */
+.dead-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    /* Plain constant, NOT var(--dead-bar-h): that property also feeds
+       `.term-mount.with-dead-bar`'s reserved space, and is written from this
+       element's own measured offsetHeight (TerminalPane.tsx). Reading it back
+       here would let a one-time grow (a narrow split wrapping the actions
+       onto two lines) pin this min-height at the wrapped height forever - the
+       box could then never report a smaller natural size, so the
+       ResizeObserver watching it would never fire again and the extra space
+       would stay reserved even after widening back out. */
+    min-height: 48px;
+    padding: 8px 12px;
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+}
+.dead-bar-text {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* At the split's allowed minimum (Allotment's minSize 120 in SplitView.tsx),
+   "Resume" + "Start fresh" together are wider than the bar's remaining content
+   box even after `.dead-bar-text` above has shrunk to 0. `flex: none` kept
+   this row at its natural (unshrinkable) width, so wrapping it onto its own
+   line in `.dead-bar` was not enough - the row itself still overflowed the
+   pane. `flex: 0 1 auto` + `min-width: 0` let it shrink to fit, at which
+   point its own `flex-wrap` drops "Start fresh" onto a second line instead of
+   past the pane's edge. */
+.dead-bar-actions {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
 }
 /* Subtle focus ring — only meaningful once panes are split, kept very quiet. */
 .term-pane.focused::after {
