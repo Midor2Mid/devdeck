@@ -887,6 +887,33 @@ polling git off-Mission actually asks for, and this branch introduced an
 uncached off-Mission git path without it. Also: a read that fails is still
 silent — no card advances and nothing in the UI says a check failed.
 
+## Decisions
+
+**2026-08-25 - the agent bake-off is removed; the inbox is NOT.**
+
+The race feature is gone: about 2,100 lines, the full reasoning in `CHANGELOG.md`.
+The short version is that it never completed a race. Three live attempts died
+before any agent committed, and a feature that costs four rounds of concurrency
+fixes to keep correct, with zero confirmed successful runs, is a liability every
+time `store.ts` is touched.
+
+The branch was called `chore/remove-bakeoff-and-inbox` and the inbox half was
+deliberately not done. Recording that here because otherwise the intent vanishes
+with the branch name:
+
+- The bake-off removal earned its way in on evidence. Nothing comparable has been
+  written down against the **agent triage inbox**, which `ROADMAP.md` records as a
+  shipped and wanted feature ("every session across projects, attention-first,
+  with quick reply + jump").
+- It is also small: a 104-line `InboxPanel.tsx` and five references in `store.ts`.
+  Cheap to keep, cheap to remove later if a reason appears.
+- So the reason to remove it would have been that a branch name said so, which is
+  not a reason. If the inbox should go, it needs the case the bake-off got.
+
+The removal was verified in two steps, which is the part worth copying: `samePath`
+was rescued into `paths.ts` and the whole suite run green BEFORE a single race file
+was deleted, so the rescue could not be blamed for a later failure.
+
 ## Ideas
 
 - Project switch should restore the exact terminal layout I had (which tabs, which were Claude sessions).

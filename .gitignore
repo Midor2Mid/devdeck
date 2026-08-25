@@ -11,3 +11,8 @@ release/
 
 # git-bash crash dumps
 *.stackdump
+
+# agent plugin working state (analyses, spike notes), like .gstack/ above.
+# 4.7M of session scratch. Anything durable from it belongs in CHANGELOG.md or
+# NOTES.md, which is where the bake-off removal's reasoning ended up.
+.superpowers/
