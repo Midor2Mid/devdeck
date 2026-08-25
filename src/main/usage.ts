@@ -13,12 +13,60 @@ export interface UsageRec {
     ts: string
 }
 
-/** Extract token usage from a Claude Code transcript (.jsonl) — one rec per assistant message. */
+/** One transcript row, as far as this parser cares about it. */
+interface TranscriptRow {
+    timestamp?: string
+    requestId?: string
+    /** Stable row id; survives the history copy a fork makes. */
+    uuid?: string
+    message?: { id?: string; model?: string; usage?: Record<string, number> }
+}
+
+/**
+ * The strongest stable identity a row carries, or null if it carries none.
+ *
+ * A fork rewrites `sessionId` but keeps the message and request ids, so those
+ * are preferred over anything session-scoped. `uuid` is the last resort for
+ * older rows written before `requestId` was present.
+ */
+function dedupeKey(row: TranscriptRow): string | null {
+    const messageId = row.message?.id?.trim()
+    const requestId = row.requestId?.trim()
+    if (messageId && requestId) return `${messageId}:${requestId}`
+    if (messageId) return `msg:${messageId}`
+    const uuid = row.uuid?.trim()
+    if (uuid) return `uuid:${uuid}`
+    return null
+}
+
+/**
+ * Extract token usage from a Claude Code transcript (.jsonl) — one rec per
+ * assistant **message**, which is not the same as one per line.
+ *
+ * Claude Code writes a line per content block of a streamed assistant message,
+ * and every one of those lines repeats the *same cumulative* `usage` object.
+ * Counting lines therefore counted most messages twice: measured over a real
+ * 7-day window on this machine, 18,248 usage-bearing lines carried only 9,215
+ * distinct messages, inflating both the token total and the cost by 1.9x. That
+ * figure reached `runs.jsonl` and the cost chips on task cards, so this was
+ * never only a dashboard problem.
+ *
+ * Rows are folded on `dedupeKey`, and a fold takes the **max** of each token
+ * class rather than the first value seen — a later row of the same message can
+ * carry a more complete count than an earlier one, and the earlier one is not
+ * wrong so much as unfinished.
+ *
+ * Folding is per file, because that is where the duplication happens. A global
+ * fold would additionally risk merging two genuine sessions that share a
+ * message id through a fork; measured here, per-file and global folds agree to
+ * the token, so the wider one buys nothing and only costs safety.
+ */
 export function parseUsageLines(content: string): UsageRec[] {
     const out: UsageRec[] = []
+    const indexByKey = new Map<string, number>()
     for (const line of content.split("\n")) {
         if (!line.trim()) continue
-        let obj: { message?: { model?: string; usage?: Record<string, number> }; timestamp?: string }
+        let obj: TranscriptRow
         try {
             obj = JSON.parse(line)
         } catch {
@@ -26,14 +74,26 @@ export function parseUsageLines(content: string): UsageRec[] {
         }
         const u = obj?.message?.usage
         if (!u || typeof u.output_tokens !== "number") continue
-        out.push({
+        const rec: UsageRec = {
             model: obj.message?.model ?? "unknown",
             input: u.input_tokens ?? 0,
             output: u.output_tokens ?? 0,
             cacheRead: u.cache_read_input_tokens ?? 0,
             cacheCreate: u.cache_creation_input_tokens ?? 0,
             ts: obj.timestamp ?? ""
-        })
+        }
+        const key = dedupeKey(obj)
+        const seen = key === null ? undefined : indexByKey.get(key)
+        if (seen === undefined) {
+            out.push(rec)
+            if (key !== null) indexByKey.set(key, out.length - 1)
+            continue
+        }
+        const prev = out[seen]
+        prev.input = Math.max(prev.input, rec.input)
+        prev.output = Math.max(prev.output, rec.output)
+        prev.cacheRead = Math.max(prev.cacheRead, rec.cacheRead)
+        prev.cacheCreate = Math.max(prev.cacheCreate, rec.cacheCreate)
     }
     return out
 }
@@ -44,19 +104,85 @@ interface Rate {
     cacheRead: number
     cacheCreate: number
 }
-// USD per million tokens (approximate list pricing; cache read ~0.1×, cache write ~1.25×).
-const RATES: Record<string, Rate> = {
-    opus: { input: 15, output: 75, cacheRead: 1.5, cacheCreate: 18.75 },
-    sonnet: { input: 3, output: 15, cacheRead: 0.3, cacheCreate: 3.75 },
-    haiku: { input: 0.8, output: 4, cacheRead: 0.08, cacheCreate: 1 }
+
+/** USD per million tokens: list pricing, cache read at 0.1x input, cache write at 1.25x. */
+function rate(input: number, output: number): Rate {
+    return { input, output, cacheRead: input * 0.1, cacheCreate: input * 1.25 }
 }
 
-/** Pick the pricing family from a model id (defaults to sonnet for unknowns). */
+/**
+ * List pricing per model id, not per family.
+ *
+ * Pricing is not a property of the word "opus" — Opus 4 and 4.1 billed at
+ * $15/$75, and every Opus from 4.5 on bills at $5/$25. A family-wide table
+ * priced this machine's week at $14,672 when the correct list figure was
+ * $2,484: three times over on rates, on top of the 1.9x from counting stream
+ * rows twice (see `parseUsageLines`). Keyed by id, an old model keeps its old
+ * price and a new one cannot silently inherit it.
+ */
+const MODEL_RATES: Record<string, Rate> = {
+    "fable-5": rate(10, 50),
+    "opus-5": rate(5, 25),
+    "opus-4-8": rate(5, 25),
+    "opus-4-7": rate(5, 25),
+    "opus-4-6": rate(5, 25),
+    "opus-4-5": rate(5, 25),
+    // Opus 4 and 4.1 are the expensive generation, and stay that way.
+    "opus-4-1": rate(15, 75),
+    "opus-4": rate(15, 75),
+    // Sonnet 5's $2/$10 is an introductory rate that ends 2026-08-31. This table
+    // has no date dimension, so it carries the standard rate: wrong for a few
+    // more days, then right indefinitely, which is the better way round.
+    "sonnet-5": rate(3, 15),
+    "sonnet-4-6": rate(3, 15),
+    "sonnet-4-5": rate(3, 15),
+    "sonnet-4": rate(3, 15),
+    "sonnet-3-7": rate(3, 15),
+    "sonnet-3-5": rate(3, 15),
+    "haiku-4-5": rate(1, 5),
+    "haiku-3-5": rate(0.8, 4),
+    "haiku-3": rate(0.25, 1.25)
+}
+
+/** Does `model` name this family at this version — and not a longer version? */
+function isVersion(model: string, family: string, version: string): boolean {
+    return new RegExp(`${family}-${version}(?:$|[^0-9])`).test(model)
+}
+
+/**
+ * Resolve a model id to a pricing key.
+ *
+ * Order matters: the longest version is tested first, so `opus-4-8` is never
+ * matched by the bare `opus-4` rule. An unrecognised member of a known family
+ * resolves to that family's **current** generation rather than its oldest —
+ * guessing cheap for an unknown future model understates a little, where
+ * guessing expensive overstated by 3x and did so silently for weeks.
+ */
+function pricingKey(model: string): string {
+    const m = model.toLowerCase().trim().replace(/^anthropic[/:]/, "").replace(/\./g, "-")
+    if (isVersion(m, "fable", "5")) return "fable-5"
+    for (const v of ["5", "4-8", "4-7", "4-6", "4-5", "4-1"]) {
+        if (isVersion(m, "opus", v)) return `opus-${v}`
+    }
+    // Bare `opus-4`, or `opus-4-20250514`: the legacy generation.
+    if (/opus-4(?:$|-thinking$|-20\d{6}|@20\d{6})/.test(m)) return "opus-4"
+    if (m.includes("opus")) return "opus-5"
+    for (const v of ["5", "4-6", "4-5", "3-7", "3-5"]) {
+        if (isVersion(m, "sonnet", v)) return `sonnet-${v}`
+    }
+    if (m.includes("sonnet")) return "sonnet-5"
+    if (isVersion(m, "haiku", "4-5")) return "haiku-4-5"
+    if (isVersion(m, "haiku", "3-5")) return "haiku-3-5"
+    if (isVersion(m, "haiku", "3")) return "haiku-3"
+    if (m.includes("haiku")) return "haiku-4-5"
+    // Nothing recognisable. Sonnet is the middle of the range, so a wrong guess
+    // here is wrong by the least in either direction.
+    return "sonnet-5"
+}
+
+/** Pick the rate for a model id. */
 export function priceFor(model: string): Rate {
-    const m = model.toLowerCase()
-    if (m.includes("opus")) return RATES.opus
-    if (m.includes("haiku")) return RATES.haiku
-    return RATES.sonnet
+    return MODEL_RATES[pricingKey(model)]
 }
 
 /** Estimated USD cost of one usage record. */
