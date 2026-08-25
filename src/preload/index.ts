@@ -590,8 +590,9 @@ const api = {
     ledger: {
         /**
          * Record one finished run. Deliberately fire-and-forget: this is called
-         * from inside landRaceWinner and friends, where an awaited (and therefore
-         * rejectable) call would put the ledger between the user and their work.
+         * from inside a card/pipeline/session's own completion path, where an
+         * awaited (and therefore rejectable) call would put the ledger between
+         * the user and their work.
          */
         append: (rec: RunRecord): void => ipcRenderer.send("ledger:append", rec),
         /** Stored runs, newest first. */
@@ -626,16 +627,6 @@ const api = {
             ipcRenderer.invoke("git:setIdentity", { cwd, identity }),
         /** Fast-forward the current branch from its upstream (`git pull --ff-only`). */
         pull: (cwd: string): Promise<PullResult> => ipcRenderer.invoke("git:pull", cwd),
-        /** Raw `git diff --shortstat <fromRef>..HEAD`; parse it in the renderer. */
-        shortstat: (cwd: string, fromRef: string): Promise<string> =>
-            ipcRenderer.invoke("git:shortstat", { cwd, fromRef }),
-        /** Apply everything committed in `worktree` since `baseHead` onto `target`. */
-        landFrom: (
-            worktree: string,
-            baseHead: string,
-            target: string
-        ): Promise<{ ok: boolean; error?: string }> =>
-            ipcRenderer.invoke("git:landFrom", { worktree, baseHead, target }),
         // Worktrees
         worktrees: (repoPath: string): Promise<Worktree[]> =>
             ipcRenderer.invoke("git:worktrees", repoPath),

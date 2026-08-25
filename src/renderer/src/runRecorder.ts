@@ -2,8 +2,8 @@
  * The run ledger's four write sites, lifted out of the store.
  *
  * A record is written once, when a run ends, and never updated. Every builder
- * here is wrapped: recording that a race landed must never be what stops it
- * landing. Nothing below throws, blocks, or is awaited by its caller.
+ * here is wrapped: recording a run must never be what stops it ending.
+ * Nothing below throws, blocks, or is awaited by its caller.
  *
  * It lives in its own module for one concrete reason — the interesting question
  * this code asks ("may this cost be summed?") is about a *window in the past*,
@@ -17,7 +17,7 @@ import type { Project } from "../../preload/index"
 import type { AnySession } from "./store"
 import type { BoardTask } from "./board"
 import type { PipelineRun } from "./pipeline"
-import { raceSpend, samePath, type Race } from "./race"
+import { samePath } from "./paths"
 import { useSettings, type UsageEvent } from "./settings"
 import type { RunExclusionReason, RunRecord } from "../../main/ledger"
 
@@ -28,7 +28,6 @@ import type { RunExclusionReason, RunRecord } from "../../main/ledger"
 export interface RecorderState {
     projects: Project[]
     boardTasks: BoardTask[]
-    races: Record<string, Race>
     pipelineRun: PipelineRun | null
     termAgents: Record<string, string>
     termCwd: Record<string, string>
@@ -54,13 +53,6 @@ export interface RecorderDeps {
 export interface RunRecorder {
     /** A dispatched card reached done. */
     recordCardRun: (task: BoardTask, endedAt: number) => void
-    /** A race landed or was abandoned. Called before the race object is deleted. */
-    recordRaceRun: (
-        cardId: string,
-        fallback: Race,
-        outcome: "landed" | "abandoned",
-        winnerId?: string
-    ) => void
     /** A pipeline run reached a terminal status. */
     recordPipelineRun: (run: PipelineRun | null, outcome: "done" | "failed" | "stopped") => void
     /** An agent pane closed. Writes a record only for a genuinely ad-hoc pane. */
@@ -267,69 +259,6 @@ export function createRunRecorder(
         }
     }
 
-    /**
-     * A race ended. One record for the whole race, written before the race object
-     * is deleted — it is the only place the entrant costs still exist.
-     *
-     * `exclusive: true` is asserted, not computed: every entrant works in its own
-     * git worktree, which is its own directory, so each entrant's figure is a real
-     * receipt and their sum is too. No entrant is ever dispatched into the shared
-     * project tree — a worktree that fails to be created means that entrant is
-     * never dispatched at all (status "startfailed"), so it spends nothing.
-     */
-    const recordRaceRun = (
-        cardId: string,
-        fallback: Race,
-        outcome: "landed" | "abandoned",
-        winnerId?: string
-    ): void => {
-        try {
-            // Read the race back out of state rather than trusting the snapshot
-            // the caller took: teardown parks on a confirm, on settlePoll and on
-            // landFrom, and the poll writes entrant costs and diffstats into the
-            // store throughout. The snapshot is minutes stale by the time this runs.
-            const r = get().races[cardId] ?? fallback
-            const winner = winnerId ? r.entrants.find((e) => e.agentId === winnerId) : undefined
-            const project = projectById(r.projectId)
-            writeRun({
-                id: newId(),
-                kind: "race",
-                projectId: r.projectId,
-                projectName: project?.name || REMOVED_PROJECT,
-                label: r.title,
-                startedAt: r.startedAt,
-                endedAt: Date.now(),
-                agentIds: r.entrants.map((e) => e.agentId),
-                cost: raceSpend(r),
-                tokens: r.entrants.reduce((sum, e) => sum + (e.costTokens ?? 0), 0),
-                exclusive: true,
-                outcome,
-                // Abandoning eliminates every entrant; landing eliminates the rest.
-                // Counted over entrants that actually dispatched: one that never
-                // did spent nothing, so calling it "eliminated" overstates what
-                // the race threw away — the number this field exists to report.
-                //
-                // Keyed on the status, NOT on `worktree`: two of the four paths
-                // that mark an entrant "startfailed" (a head that could not be
-                // read, and a session that would not spawn) happen *after* the
-                // worktree was created, so it is left populated for land/abandon
-                // to clean up. `worktree` answers "is there a directory to tidy",
-                // which is a different question from "did this entrant run".
-                eliminated: (() => {
-                    const started = r.entrants.filter((e) => e.status !== "startfailed").length
-                    return outcome === "landed" ? Math.max(0, started - 1) : started
-                })(),
-                // The agent id, not the name: names are user-editable and two
-                // presets called "Claude" are entirely plausible.
-                winner: winner?.agentId,
-                added: winner?.added,
-                removed: winner?.removed
-            })
-        } catch (err) {
-            console.error("[ledger] failed to build a race record:", err)
-        }
-    }
-
     // A pipeline run can reach a terminal status more than once (an errored run
     // is left on screen and can still be Stopped), and it must be recorded once.
     // Keyed by pipeline + start instant rather than by the run token, which
@@ -412,13 +341,8 @@ export function createRunRecorder(
     // it would write a session record for money the pipeline record already
     // counted. Entries are removed as those panes close.
     //
-    // Deliberately NOT needed for the other two owners: a card keeps `termId` on
-    // the card itself, which is persisted to workspace.json, and a race closes
-    // every entrant's pane BEFORE deleting the race object (both in
-    // landRaceWinner and in abandonRace — a live process cwd'd into a worktree
-    // blocks its removal on Windows), so the race is always still in state when
-    // its panes close. If that ordering is ever inverted, the suppression below
-    // stops working for races and entrant sessions start double-counting a race.
+    // Deliberately NOT needed for the other owner: a card keeps `termId` on the
+    // card itself, which is persisted to workspace.json.
     //
     // Deliberately NOT persisted, unlike BoardTask.recordedFor: a renderer reload
     // landing between a pipeline run ending and its step pane closing would drop
@@ -432,17 +356,15 @@ export function createRunRecorder(
     /**
      * Is this pane's spend already recorded by the run that owns it?
      *
-     * A race entrant, a pipeline step and a dispatched card each close their own
-     * run with a record carrying better facts than a session ever could — an
-     * outcome, a diffstat, a winner — over the same money. Only a genuinely
-     * ad-hoc pane is a run in its own right. Ownership is read from the term-id
-     * links the store already keeps, not from a second notion of who owns what.
+     * A pipeline step and a dispatched card each close their own run with a
+     * record carrying better facts than a session ever could — an outcome
+     * over the same money. Only a genuinely ad-hoc pane is a run in its own
+     * right. Ownership is read from the term-id links the store already
+     * keeps, not from a second notion of who owns what.
      */
     const isOwnedPane = (termId: string): boolean => {
         if (claimedTerms.has(termId)) return true
         const st = get()
-        if (Object.values(st.races).some((r) => r.entrants.some((e) => e.termId === termId)))
-            return true
         if (st.pipelineRun?.steps.some((s) => s.termId === termId)) return true
         return st.boardTasks.some((t) => t.termId === termId && !!t.dispatchedAt)
     }
@@ -453,8 +375,8 @@ export function createRunRecorder(
      * window in its own directory — which is an attribution, not a receipt,
      * whenever another session shared that directory.
      *
-     * Only an ad-hoc pane gets one. A pane owned by a race entrant, a pipeline
-     * step or a dispatched card describes the same money as its parent's record,
+     * Only an ad-hoc pane gets one. A pane owned by a pipeline step or a
+     * dispatched card describes the same money as its parent's record,
      * and both would be honestly exclusive — so summing them double counts. That
      * is a subsumption problem, not an exclusivity one, and it is fixed here at
      * the source rather than by a filter downstream that could not tell an
@@ -521,7 +443,6 @@ export function createRunRecorder(
 
     return {
         recordCardRun,
-        recordRaceRun,
         recordPipelineRun,
         recordSessionRun,
         claimTerm: (termId: string): void => {

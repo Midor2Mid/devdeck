@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### The agent bake-off is gone
+
+- **Removed the race feature entirely** — the task-board Race button, the
+  race modal, `store.ts`'s `races`/`startingRaceIds`/`raceCardId` state and its
+  `openRace`/`closeRace`/`startRace`/`landRaceWinner`/`abandonRace` actions, the
+  poll/generation-counter machinery four rounds of concurrency fixes were spent
+  keeping honest, the `race` kind in the run ledger, and the git-side
+  `landFrom`/`shortstat` plumbing that existed only to serve it. About 2,100
+  lines net. The honest reason: **it never completed a race.** Three live
+  attempts died before any agent committed, and nothing since gave it a fourth.
+  A feature that costs this much to keep correct and has zero confirmed
+  successful runs in the field is a liability every time `store.ts` is
+  touched, not a feature waiting for its lucky run.
+- `samePath` — the Windows-aware path comparison the race poll relied on — was
+  rescued first, in its own commit, since cost attribution in `runRecorder.ts`
+  and two worktree-head lookups in `store.ts` depend on it and are very much
+  alive. It now lives in `paths.ts` with its tests intact.
+- Nothing here needed a migration: races were runtime-only and never reached
+  `workspace.json`.
+
 ### A dead pane keeps its evidence
 
 - **A dead pane keeps its evidence.** A terminal whose process exited now holds

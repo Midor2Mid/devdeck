@@ -42,7 +42,6 @@ function state(over: Partial<RecorderState> = {}): RecorderState {
     return {
         projects: [{ id: "p1", name: "P1", path: "D:/p1", addedAt: 1 }],
         boardTasks: [],
-        races: {},
         pipelineRun: null,
         termAgents: {},
         termCwd: {},

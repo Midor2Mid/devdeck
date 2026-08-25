@@ -29,11 +29,10 @@ function fmtWhen(ms: number): string {
 
 // Every kind, in the order a run tends to be thought about, so the filter's
 // options don't reshuffle as history arrives. Labelled properly for the control
-// they sit in - "card"/"race" are record values, and printing them raw put
+// they sit in - "card"/"pipeline" are record values, and printing them raw put
 // lowercase chrome beside "All kinds" and "All projects".
 const RUN_KINDS: { kind: RunKind; label: string }[] = [
     { kind: "card", label: "Cards" },
-    { kind: "race", label: "Races" },
     { kind: "pipeline", label: "Pipelines" },
     { kind: "session", label: "Sessions" }
 ]
@@ -415,8 +414,8 @@ export function UsagePanel(): JSX.Element {
                                             {/* Every card record is "done" by construction, and a
                                                 pipeline's "done" is the unremarkable case - showing
                                                 it would put a word on nearly every row that says
-                                                nothing. The outcomes that carry information (landed
-                                                vs abandoned, failed, stopped) are the ones shown. */}
+                                                nothing. The outcomes that carry information (failed
+                                                vs stopped) are the ones shown. */}
                                             {r.outcome && r.outcome !== "done" && (
                                                 <span className={"usage-run-outcome " + r.outcome}>
                                                     {r.outcome}

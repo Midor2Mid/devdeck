@@ -33,7 +33,6 @@ import { PipelineBar } from "./components/PipelineBar"
 import { WorktreesModal } from "./components/WorktreesModal"
 import { ChangesModal } from "./components/ChangesModal"
 import { PrModal } from "./components/PrModal"
-import { RaceModal } from "./components/RaceModal"
 import { WorkPanel } from "./components/WorkPanel"
 import { ReleaseBoard } from "./components/ReleaseBoard"
 import { StandupModal } from "./components/StandupModal"
@@ -98,7 +97,6 @@ export function App(): JSX.Element {
     const worktreesOpen = useStore((s) => s.worktreesOpen)
     const changesTarget = useStore((s) => s.changesTarget)
     const prTarget = useStore((s) => s.prTarget)
-    const raceCardId = useStore((s) => s.raceCardId)
     const workOpen = useStore((s) => s.workOpen)
     const releaseOpen = useStore((s) => s.releaseOpen)
     const standupOpen = useStore((s) => s.standupOpen)
@@ -374,7 +372,6 @@ export function App(): JSX.Element {
             {worktreesOpen && <WorktreesModal />}
             {changesTarget && <ChangesModal />}
             {prTarget && <PrModal />}
-            {raceCardId && <RaceModal />}
             {workOpen && <WorkPanel />}
             {releaseOpen && <ReleaseBoard />}
             {standupOpen && <StandupModal />}

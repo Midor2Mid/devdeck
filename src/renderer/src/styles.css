@@ -157,27 +157,15 @@ select:focus {
 .small {
     font-size: var(--fs-label);
 }
-/* .mono and .section-label are referenced by several OTHER components too
-   (TaskBoard, MissionControl, SettingsModal, UsagePanel, ContextIndex) that
-   predate the race modal - those call sites were always no-ops (neither class
-   was ever defined app-wide) and are left that way here. A global definition
-   was tried and reverted: .section-label's text-transform: uppercase silently
-   uppercased ContextIndex's "Context · {project.name}" - the user's own
-   project name - the moment it stopped being a no-op, and none of those nine
-   pre-existing sites had been checked against the new rule. Scoped to the
-   race modal, which is the only place that has actually been verified against
-   it; making these global again requires checking every one of those sites in
-   the running app first. */
-.race-modal .mono {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-}
-.race-modal .section-label {
-    color: var(--muted);
-    font-size: var(--fs-label);
-    text-transform: uppercase;
-    letter-spacing: var(--ls-label);
-}
+/* .mono and .section-label are referenced by several components (TaskBoard,
+   MissionControl, SettingsModal, UsagePanel, ContextIndex) but deliberately
+   never defined app-wide - those call sites are all no-ops. A global
+   definition was tried and reverted: .section-label's text-transform:
+   uppercase silently uppercased ContextIndex's "Context · {project.name}" -
+   the user's own project name - the moment it stopped being a no-op, and none
+   of those pre-existing sites had been checked against the new rule. Making
+   these global requires checking every one of those sites in the running app
+   first. */
 
 .app {
     height: 100vh;
@@ -4205,9 +4193,9 @@ button .ic,
 }
 
 /* ---------- Remote: bind chooser, expiry chooser, device list ---------- */
-/* .section-label is a deliberate app-wide no-op (scoped only to .race-modal -
-   see that rule's comment on why it isn't global), so this section needs its
-   own real label styling rather than relying on it. */
+/* .section-label is a deliberate app-wide no-op (see that class's comment
+   near the top of this file for why), so this section needs its own real
+   label styling rather than relying on it. */
 .remote-subhead {
     margin-top: var(--sp-lg);
     margin-bottom: var(--sp-sm);
@@ -7153,7 +7141,7 @@ kbd {
     text-transform: uppercase;
     color: var(--faint);
 }
-/* The outcome sits with the kind, not with the money: "race · abandoned" is the
+/* The outcome sits with the kind, not with the money: "pipeline · failed" is the
    difference between money that bought something and money that bought nothing,
    which is the first thing to know about the row. The word carries the whole
    meaning on its own — color only reinforces it, never replaces it. */
@@ -7165,10 +7153,6 @@ kbd {
     text-transform: uppercase;
     color: var(--muted);
 }
-.usage-run-outcome.landed {
-    color: var(--ok);
-}
-.usage-run-outcome.abandoned,
 .usage-run-outcome.failed {
     color: var(--danger);
 }
@@ -7990,217 +7974,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     position: fixed;
     top: 0;
     right: auto;
-}
-
-/* ---------- Agent bake-off (race modal) ---------- */
-.race-modal {
-    width: 640px;
-    max-width: 94vw;
-    max-height: 82vh;
-    display: flex;
-    flex-direction: column;
-}
-/* Gate command + live running total - visible for the whole race, since a
-   race spends several times what one card normally costs. */
-.race-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 2px 12px;
-    border-bottom: 1px solid var(--border-soft);
-    margin-bottom: 10px;
-}
-.race-gate {
-    /* Without this a flex item never shrinks below its max-content width, so
-       a long gate command pushes the spend figure clean off the header
-       instead of eliding - `.race-detail` already gets this right. Deliberately
-       no flex-grow here: the adjacent .spacer (flex: 1) is the only element
-       that should compete for leftover space, so the gate command shrinks
-       to fit rather than splitting the row with an invisible spacer. */
-    min-width: 0;
-    font-family: var(--font-mono);
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.race-spend-total {
-    font-family: var(--font-mono);
-    font-size: var(--fs-sm);
-    font-variant-numeric: tabular-nums;
-    color: var(--text);
-    flex: none;
-}
-
-/* Setup state */
-.race-setup {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-.race-agent-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.race-agent-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--fs-body);
-    cursor: pointer;
-}
-.race-agent-row input {
-    accent-color: var(--accent);
-}
-.race-gate-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.race-gate-input {
-    background: var(--bg-3);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: var(--radius, 6px);
-    padding: 7px 9px;
-    font-family: var(--font-mono);
-    font-size: var(--fs-sm);
-}
-
-/* Running state - one row per entrant */
-.race-body {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    overflow-y: auto;
-    min-height: 0;
-}
-.race-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 9px;
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius, 7px);
-    background: var(--bg-3);
-}
-.race-row.selectable {
-    cursor: pointer;
-}
-/* Selection reads as a focused pane: an accent border, never a fill alone. */
-.race-row.sel {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 6%, var(--bg-3));
-}
-.race-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex: none;
-}
-.race-dot.in.st-starting,
-.race-dot.in.st-working,
-.race-dot.in.st-gating {
-    background: var(--accent);
-    animation: dot-pulse 1.2s ease-in-out infinite;
-}
-.race-dot.in.st-passed {
-    background: var(--ok);
-}
-.race-dot.out {
-    background: transparent;
-}
-.race-dot.out.st-failed {
-    border: 1.5px solid var(--danger);
-}
-.race-dot.out.st-nocommit,
-.race-dot.out.st-startfailed {
-    border: 1.5px solid var(--faint);
-}
-@media (prefers-reduced-motion: reduce) {
-    .race-dot.in.st-starting,
-    .race-dot.in.st-working,
-    .race-dot.in.st-gating {
-        animation: none;
-    }
-}
-.race-agent-name {
-    flex: none;
-    width: 84px;
-    font-weight: 600;
-    font-size: var(--fs-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.race-status-word {
-    flex: none;
-    width: 68px;
-    font-size: var(--fs-sm);
-    color: var(--muted);
-}
-.race-detail {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--fs-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.race-detail-ok {
-    color: var(--ok);
-}
-.race-detail-bad {
-    color: var(--danger);
-}
-.race-cost,
-.race-diffstat {
-    flex: none;
-    font-family: var(--font-mono);
-    font-size: var(--fs-label);
-    font-variant-numeric: tabular-nums;
-    color: var(--faint);
-    min-width: 44px;
-    text-align: right;
-}
-.race-action {
-    flex: none;
-}
-.race-output {
-    margin: 0 0 0 18px;
-    padding: 8px 10px;
-    background: var(--bg-3);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius, 6px);
-    font-family: var(--font-mono);
-    font-size: var(--fs-label);
-    color: var(--muted);
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 160px;
-    overflow-y: auto;
-}
-
-/* Footer: Abandon (neutral) plus, at most, one accent Land button. Layout
-   (flex row, gap) comes from the shared .modal-actions class - .race-foot
-   exists only for the rule below, kept as a distinct class in case the
-   footer ever needs its own tweak again. */
-.race-allfailed {
-    font-size: var(--fs-sm);
-    color: var(--muted);
-}
-/* Inline reason text next to a disabled button (Land while the tree is
-   dirty) or a busy state (a placeholder row for "dispatching entrants…"
-   while startRace's loop is still appending them) - a data-tip on a
-   disabled control is invisible, since Chromium never fires mouseover/
-   focusin for it. Plain text is the only thing that actually reads. */
-.race-note {
-    white-space: nowrap;
 }
 
 /* ---------- MCP catalog ---------- */

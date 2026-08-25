@@ -10,7 +10,7 @@ import { atomicWrite } from "./atomic"
 // more expensive exactly as the history becomes more valuable, and a crash
 // mid-rewrite would risk the entire file instead of one line.
 
-export type RunKind = "card" | "race" | "pipeline" | "session"
+export type RunKind = "card" | "pipeline" | "session"
 
 /**
  * Why a record's cost may not be summed. `exclusive: false` alone used to mean
@@ -46,11 +46,7 @@ export interface RunRecord {
     exclusive: boolean
     /** Why `exclusive` is false. Absent on an exclusive run, and on records written before this existed. */
     reason?: RunExclusionReason
-    outcome?: "landed" | "abandoned" | "done" | "failed" | "stopped"
-    added?: number
-    removed?: number
-    winner?: string
-    eliminated?: number
+    outcome?: "done" | "failed" | "stopped"
 }
 
 // Above this many lines, appendRun rewrites the file once, keeping the most
