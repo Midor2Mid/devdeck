@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync, writeFileSync, statSync, type Dirent } from "fs"
+import { readdirSync, readFileSync, statSync, type Dirent } from "fs"
 import { join, resolve, sep } from "path"
 import { CHANGED_ON_DISK } from "../shared/fsErrors"
+import { atomicWrite } from "./atomic"
 
 /** True if `target` resolves to a path inside one of the allowed roots. */
 export function isWithinRoots(target: string, roots: string[]): boolean {
@@ -122,5 +123,9 @@ export function writeFileText(path: string, content: string, baseMtimeMs = 0): v
             throw new Error(CHANGED_ON_DISK)
         }
     }
-    writeFileSync(path, content, "utf8")
+    // Through atomicWrite, like every bookkeeping file. The doctrine used to be
+    // inverted: workspace.json got the crash-safe write and the user's source
+    // code got a bare writeFileSync, so an interrupted save truncated the file
+    // being edited while an interrupted layout save did not.
+    atomicWrite(path, content)
 }

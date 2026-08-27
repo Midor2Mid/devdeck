@@ -1,10 +1,11 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard } from "electron"
 import { join } from "path"
-import { mkdirSync, writeFileSync, readFileSync } from "fs"
+import { mkdirSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
 import * as projects from "./projects"
 import { httpSend } from "./http"
 import * as files from "./files"
+import { atomicWrite } from "./atomic"
 import { loadWorkspace, saveWorkspace } from "./workspace"
 import { loadSettings, saveSettings } from "./settings"
 import * as db from "./db"
@@ -658,7 +659,7 @@ function registerIpc(): void {
             mkdirSync(dir, { recursive: true })
             const file = join(dir, "shot-" + Date.now() + ".png")
             const b64 = String(dataUrl).replace(/^data:image\/png;base64,/, "")
-            writeFileSync(file, Buffer.from(b64, "base64"))
+            atomicWrite(file, Buffer.from(b64, "base64"))
             return file
         } catch {
             return ""
@@ -681,7 +682,7 @@ function registerIpc(): void {
                     .replace(/[^\w.-]/g, "_")
                     .slice(0, 40) || "image"
             const file = join(dir, Date.now() + "-" + stem + (extFromName || extFromMime))
-            writeFileSync(file, Buffer.from(m[2], "base64"))
+            atomicWrite(file, Buffer.from(m[2], "base64"))
             return file
         } catch {
             return ""
@@ -746,10 +747,36 @@ function registerIpc(): void {
                 filters: filters ?? [{ name: "All files", extensions: ["*"] }]
             })
             if (res.canceled || !res.filePath) return ""
-            writeFileSync(res.filePath, content, "utf8")
+            // The user chose this path in a Save dialog: a half-written export is
+            // worse here than anywhere, because they will not look at it again.
+            atomicWrite(res.filePath, content)
             return res.filePath
         }
     )
+}
+
+/**
+ * One DevDeck per machine.
+ *
+ * Every store in this app is `load(); mutate; save()` from the main process, so
+ * a second launch is a second writer to all of them - two instances interleave
+ * reads and writes and the loser's changes vanish, silently. The unique temp
+ * name in atomicWrite stops them renaming over each other mid-write; this stops
+ * them existing at the same time.
+ *
+ * A second launch raises the window you already have, which is also what
+ * double-clicking the icon should do. If two instances are ever wanted
+ * deliberately, this is the one line to remove.
+ */
+if (!app.requestSingleInstanceLock()) {
+    app.quit()
+} else {
+    app.on("second-instance", () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+    })
 }
 
 app.whenReady().then(() => {
