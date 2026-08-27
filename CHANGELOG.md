@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.9.1 - 2026-08-27
+
+### The stores stop destroying themselves
+
+Five fixes from an audit of the persistence layer. One mechanism sat under most
+of them: **every JSON loader turned an unreadable file into an empty value**, and
+an empty value means "you have nothing configured" - so the next save committed
+that emptiness over the user's real data. No click was required. An antivirus
+lock, a truncated write, or an agent writing the same file mid-read was enough.
+
+- **A store that cannot be read is no longer overwritten.** A new `Loaded<T>`
+  keeps "the file isn't there" (a legitimate first run) distinct from "it's there
+  and I couldn't read it", so a writer can refuse. `projects.json` latches the
+  failure and all six mutators return early; `workspace.json`, `aikeys.json` and
+  `gitpats.json` do the same. A damaged `aikeys.json` used to delete every stored
+  API key.
+- **`.mcp.json` keeps its other servers.** `writeMcp` opened with
+  `// preserve any other top-level keys` and that comment was false on exactly the
+  path that mattered: a malformed or mid-write file read as `{}`, and the write
+  deleted every other MCP server and every other top-level key. It now refuses,
+  and pressing Save tells you so instead of reporting success.
+- **The workspace survives a file that parses but is wrong.** One tab whose split
+  tree was missing or written by an older schema threw during load; the throw was
+  swallowed, the store kept its module-load defaults, and closing the window wrote
+  those defaults out. Layout is now validated at the one door it comes through
+  (the bad tab is dropped, never the project), and nothing is saved at all until
+  the load has actually completed. When it can't, a bar says so for as long as it
+  is true - rather than a toast that fades while the condition doesn't.
+- **The editor refuses to save over a file that moved.** This app's premise is
+  agents editing your files while you watch, and the editor was holding a string
+  with no idea which version it came from. Saves now carry the mtime the file was
+  read at; a conflicting save offers Reload or Overwrite instead of silently
+  winning. Compared on mtime only, so a formatter rewriting identical bytes can't
+  make the editor unusable.
+- **Pasting into a terminal can't execute your clipboard.** Paste went straight to
+  the pty, bypassing the bracketed-paste support the terminal already had, so a
+  trailing newline in whatever you copied ran on arrival. It now goes through
+  xterm, which brackets the payload when the shell asked for it. A shell that
+  doesn't (cmd.exe) receives exactly the same bytes as before.
+- **`atomicWrite`'s promise is now true.** A rename is atomic against a process
+  crash but not a machine crash - it can reach the disk before the data it points
+  at, leaving a zero-length file where your workspace was. It now flushes before
+  renaming, uses a temp name no second writer can collide with, and cleans up
+  after itself on failure.
+- **Your own files get that same write.** The doctrine was inverted: fifteen
+  bookkeeping files got the crash-safe write while your source code, exports and
+  uploads got a bare one, so an interrupted editor save truncated the file being
+  edited and an interrupted layout save did not. Five sites now share one path.
+- **One DevDeck at a time.** Every store is read-modify-write from the main
+  process, so a second launch was a second writer to all of them and the loser's
+  changes vanished silently. A second launch now raises the window you already
+  have. (This does mean two instances side by side is no longer possible.)
+
+Tests went from 1013 to 1036. Four existing suites had hand-written IPC stubs
+that had drifted from the real preload types and were passing against a boundary
+the app no longer has; they now match. `atomic.ts` had no test at all despite
+sitting under fifteen modules - it has five.
+
 ## 0.9.0 - 2026-08-25
 
 ### The agent bake-off is gone
