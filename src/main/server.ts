@@ -3,7 +3,7 @@ import { createServer as createHttpsServer } from "https"
 import { WebSocketServer, WebSocket } from "ws"
 import { getCert } from "./tlscert"
 import { app } from "electron"
-import { readFileSync, writeFileSync, mkdirSync } from "fs"
+import { readFileSync, mkdirSync } from "fs"
 import { join, dirname, basename } from "path"
 import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
@@ -20,6 +20,7 @@ import {
     type BindMode
 } from "./guards"
 import { readDir, readFileText, writeFileText, allFiles, isWithinRoots } from "./files"
+import { atomicWrite } from "./atomic"
 import { listProjects } from "./projects"
 import { authenticate, type AuthResult } from "./devices"
 import { exitNotice } from "../renderer/src/termExit"
@@ -442,7 +443,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         break
                     }
                     try {
-                        send(ws, { t: "fs:read", path: p, content: readFileText(p) })
+                        send(ws, { t: "fs:read", path: p, content: readFileText(p).content })
                     } catch (e) {
                         send(ws, { t: "fs:read", path: p, error: String((e as Error)?.message ?? e) })
                     }
@@ -460,7 +461,10 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         break
                     }
                     try {
-                        writeFileText(p, content)
+                        // No base version: the remote client does not track one, so
+                        // this stays a force-write, exactly as before. Narrowing it
+                        // needs the mobile client to round-trip the mtime first.
+                        writeFileText(p, content, 0)
                         send(ws, { t: "fs:write", path: p, ok: true })
                     } catch (e) {
                         send(ws, { t: "fs:write", path: p, error: String((e as Error)?.message ?? e) })
@@ -490,7 +494,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         mkdirSync(dir, { recursive: true })
                         const safe = basename(String(msg.name || "file")).replace(/[^\w.\-]/g, "_")
                         const dest = join(dir, Date.now() + "-" + safe)
-                        writeFileSync(dest, Buffer.from(String(msg.data || ""), "base64"))
+                        atomicWrite(dest, Buffer.from(String(msg.data || ""), "base64"))
                         writePty(id, dest + " ")
                         send(ws, { t: "upload:done", path: dest })
                     } catch (e) {

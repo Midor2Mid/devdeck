@@ -343,6 +343,26 @@ under a *static figure* rather than a control — deliberately distinct from the
 2px solid accent underline that marks an active document tab. A dashed rule says
 "this number is qualified"; a solid accent rule says "this thing is selected".
 
+### Notice bar
+
+A condition that outlives a toast gets a **notice bar** (`.notice-bar`), not a
+toast: full width under the topbar or at the top of a panel, a 1px
+`--border-strong` left stripe, an `Icon` glyph, the sentence, and its action(s)
+on the right. Two exist today — persistence is off for the session
+(`PersistBlockedBar`), and a save was refused because the file changed on disk
+(the editor's conflict bar).
+
+The rule that makes it work: **there is no warning color in this system**, so the
+bar's *form* carries the state — width, stripe, glyph — and the frame's single
+accent is spent on the one action worth taking. Where a bar offers two actions,
+only the non-destructive one is accent; the other takes `.secondary` and stays
+`--muted`. A bar that fades, or that colors itself red, is the wrong answer: the
+first hides a condition that is still true, the second re-introduces the
+attention color the accent already owns.
+
+A machine-readable value inside the sentence (a filename, a path) is set in
+`--font-mono` via `<code>`, per the sans-for-names/mono-for-values rule.
+
 ## Do's and Don'ts
 
 **Do**

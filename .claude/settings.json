@@ -1,0 +1,15 @@
+{
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "f=\"${CLAUDE_PROJECT_DIR:-.}/.superpowers/HANDOFF.md\"; [ -f \"$f\" ] && { echo \"=== HANDOFF (resume state — read before planning) ===\"; cat \"$f\"; } || true",
+                        "statusMessage": "Loading handoff state"
+                    }
+                ]
+            }
+        ]
+    }
+}

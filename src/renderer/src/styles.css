@@ -8361,3 +8361,67 @@ button.swatch {
     outline: 2px solid var(--text);
     outline-offset: 1px;
 }
+
+/* Notice bar — a full-width sentence with one or two actions, used where a
+   condition lasts longer than a toast should (persistence off for the session,
+   a save refused because the file moved). There is no warning colour token on
+   purpose (the accent is amber, so an attention colour would collide with it),
+   so the state is carried in form: full width, a left stripe, and a glyph. The
+   stripe uses --border-strong rather than the accent, which leaves the frame's
+   single accent on the one action worth taking. A second action, where there is
+   one, is deliberately quieter. */
+.notice-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-sm);
+    padding: var(--sp-sm) var(--sp-lg);
+    border-bottom: 1px solid var(--border-soft);
+    border-left: 2px solid var(--border-strong);
+    background: var(--bg-2);
+    color: var(--text);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-body);
+}
+.notice-bar > svg {
+    color: var(--muted);
+    flex: none;
+}
+.notice-bar-text {
+    min-width: 0;
+    flex: 1;
+}
+.notice-bar-text code {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+}
+.notice-bar-action {
+    flex: none;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    padding: var(--sp-xs) var(--sp-sm);
+    cursor: pointer;
+    border-radius: var(--radius, 7px);
+    transition: background var(--dur-fast) var(--ease);
+}
+.notice-bar-action:hover {
+    background: var(--bg-hover);
+}
+/* The non-recommended action in a two-action bar: same shape, no accent, so the
+   accent keeps meaning "this is the one to take". */
+.notice-bar-action.secondary {
+    color: var(--muted);
+    font-weight: 500;
+}
+.notice-bar-action.secondary:hover {
+    color: var(--text);
+}
+@media (prefers-reduced-motion: reduce) {
+    .notice-bar-action {
+        transition: none;
+    }
+}

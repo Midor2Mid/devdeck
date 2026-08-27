@@ -1,5 +1,7 @@
-import { readdirSync, readFileSync, writeFileSync, statSync, type Dirent } from "fs"
+import { readdirSync, readFileSync, statSync, type Dirent } from "fs"
 import { join, resolve, sep } from "path"
+import { CHANGED_ON_DISK } from "../shared/fsErrors"
+import { atomicWrite } from "./atomic"
 
 /** True if `target` resolves to a path inside one of the allowed roots. */
 export function isWithinRoots(target: string, roots: string[]): boolean {
@@ -79,19 +81,51 @@ export function allFiles(root: string, max = 4000): string[] {
     return out
 }
 
-export function readFileText(path: string): string {
-    const size = statSync(path).size
-    if (size > MAX_BYTES) {
-        throw new Error(`File too large to open (${Math.round(size / 1024)} KB).`)
+/**
+ * Read a text file along with the version it was read at.
+ *
+ * The `mtimeMs` is not extra work - the `statSync` below already ran for the
+ * size check, and throwing its result away is what let the editor hold a string
+ * with no idea which version of the file it came from. This app's whole premise
+ * is agents editing your files while you watch, so the version has to travel
+ * with the content.
+ */
+export function readFileText(path: string): { content: string; mtimeMs: number } {
+    const st = statSync(path)
+    if (st.size > MAX_BYTES) {
+        throw new Error(`File too large to open (${Math.round(st.size / 1024)} KB).`)
     }
     const buf = readFileSync(path)
     // Refuse binary files - opening them as text would corrupt them on save.
     if (buf.subarray(0, 8000).includes(0)) {
         throw new Error("Binary file - not opened in the text editor.")
     }
-    return buf.toString("utf8")
+    return { content: buf.toString("utf8"), mtimeMs: st.mtimeMs }
 }
 
-export function writeFileText(path: string, content: string): void {
-    writeFileSync(path, content, "utf8")
+/**
+ * Write a text file, refusing when it has changed since `baseMtimeMs`.
+ *
+ * Pass `0` to create a new file or to force an overwrite the user has explicitly
+ * confirmed. The comparison is on mtime only, never content: a formatter or a
+ * `git checkout` rewriting identical bytes must not make the editor unusable,
+ * and the caller always gets an Overwrite path out.
+ */
+export function writeFileText(path: string, content: string, baseMtimeMs = 0): void {
+    if (baseMtimeMs) {
+        let current: number | null = null
+        try {
+            current = statSync(path).mtimeMs
+        } catch {
+            current = null // gone - treat as a create rather than blocking the save
+        }
+        if (current !== null && current !== baseMtimeMs) {
+            throw new Error(CHANGED_ON_DISK)
+        }
+    }
+    // Through atomicWrite, like every bookkeeping file. The doctrine used to be
+    // inverted: workspace.json got the crash-safe write and the user's source
+    // code got a bare writeFileSync, so an interrupted save truncated the file
+    // being edited while an interrupted layout save did not.
+    atomicWrite(path, content)
 }

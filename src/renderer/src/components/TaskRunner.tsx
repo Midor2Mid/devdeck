@@ -30,10 +30,10 @@ export function TaskRunner(): JSX.Element | null {
         }
         window.api.fs
             .read(path + "/package.json")
-            .then((txt) => {
+            .then(({ content }) => {
                 if (!alive) return
                 try {
-                    const s = (JSON.parse(txt) as { scripts?: Record<string, string> }).scripts
+                    const s = (JSON.parse(content) as { scripts?: Record<string, string> }).scripts
                     setScripts(s ? Object.keys(s).filter((n) => SAFE_SCRIPT.test(n)) : [])
                 } catch {
                     setScripts([])

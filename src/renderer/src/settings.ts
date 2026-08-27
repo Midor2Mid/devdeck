@@ -826,8 +826,13 @@ export const useSettings = create<SettingsState>((set, get) => {
                     // Fresh process → no pty is actually running, so any event left
                     // open by a previous run is stale. Close it at its start time so
                     // it counts as a launch without inflating "running now".
-                    usageLog: (raw.usageLog ?? DEFAULTS.usageLog).map((e) =>
-                        e.endedAt ? e : { ...e, endedAt: e.startedAt }
+                    // Array.isArray, not `??`: a truthy non-array usageLog threw
+                    // here, before `loaded = true` below - which meant every save
+                    // for the rest of the session was silently dropped, every
+                    // launch, with the only evidence a console.warn nobody sees in
+                    // a packaged build. Same mechanism as the workspace loader.
+                    usageLog: (Array.isArray(raw.usageLog) ? raw.usageLog : DEFAULTS.usageLog).map(
+                        (e) => (e.endedAt ? e : { ...e, endedAt: e.startedAt })
                     ),
                     dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory,
                     projectCommands: raw.projectCommands ?? DEFAULTS.projectCommands,
