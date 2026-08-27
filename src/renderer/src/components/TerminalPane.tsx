@@ -115,9 +115,15 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         // (SIGINT), and plain Ctrl+V still hits xterm's native paste. Clipboard
         // goes through Electron's module (the renderer's deny-all permission
         // handler blocks the async Clipboard API).
+        // `term.paste()`, not a raw `pty.input()`: xterm wraps the payload in
+        // DECSET 2004 brackets when the shell has asked for bracketed paste, so a
+        // newline in the clipboard lands on the prompt instead of executing. The
+        // raw write bypassed the capability the terminal already had — and it was
+        // reached from the documented Ctrl+Shift+V chord, not just right-click.
+        // A shell that never enabled 2004 receives exactly the same bytes as before.
         const pasteFromClipboard = (): void => {
             window.api.clipboard.readText().then((t) => {
-                if (t) window.api.pty.input(termId, t)
+                if (t) term.paste(t)
             })
         }
         // App-reserved chords must not reach the pty. App.tsx preventDefaults them
