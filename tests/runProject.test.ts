@@ -8,10 +8,13 @@ function stubFs(files: Record<string, string>): void {
         api: {
             fs: {
                 readDir: async () => names,
+                // `fs.read` returns content plus the mtime it was read at, so the
+                // editor can refuse a write onto a file that moved. The stub has to
+                // match, or it is testing a boundary the app no longer has.
                 read: async (p: string) => {
                     const hit = Object.entries(files).find(([n]) => p.endsWith(n))
                     if (!hit) throw new Error("ENOENT")
-                    return hit[1]
+                    return { content: hit[1], mtimeMs: 1 }
                 },
                 allFiles: async () => Object.keys(files)
             }

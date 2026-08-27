@@ -2,7 +2,8 @@ import { useEffect } from "react"
 import { useStore } from "./store"
 import { nextSession } from "./deck"
 import { useSettings } from "./settings"
-import { useToasts } from "./toast"
+import { useToasts, toast } from "./toast"
+import { PersistBlockedBar } from "./components/PersistBlockedBar"
 import { Topbar } from "./components/Topbar"
 import { Deck } from "./components/Deck"
 import { TerminalView } from "./components/TerminalView"
@@ -108,7 +109,13 @@ export function App(): JSX.Element {
     const newTabIn = useStore((s) => s.newTabIn)
 
     useEffect(() => {
-        init()
+        // Bare `init()` swallowed every rejection: there is no unhandledrejection
+        // handler, so a failed load left the store on module-load defaults and
+        // the beforeunload flush below wrote them over the real workspace.
+        void init().catch((err) => {
+            console.error("[app] workspace init failed:", err)
+            toast("Could not load your workspace - nothing will be saved this session.")
+        })
         loadSettings()
         // Flush any pending debounced writes before the window tears down.
         const flush = (): void => {
@@ -324,6 +331,7 @@ export function App(): JSX.Element {
             <div className="app-body">
                 <div className="main">
                     <Topbar />
+                    <PersistBlockedBar />
                     <div className="panels">
                         {/* All panels stay mounted; visibility toggled so terminals keep running. */}
                         <div className="panel" style={{ display: view === "mission" ? "flex" : "none" }}>

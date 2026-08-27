@@ -37,7 +37,13 @@ function stubApi(): void {
                     activeId: null
                 })
             },
-            workspace: { load: async (): Promise<null> => null, save: (): void => undefined },
+            workspace: {
+                // `Loaded<unknown>`: "missing" is a fresh install, which is what
+                // these suites want. Returning null here would now leave the store
+                // gated and silently non-persisting.
+                load: async () => ({ ok: false as const, reason: "missing" as const }),
+                save: (): void => undefined
+            },
             settings: { save: (): void => undefined },
             ledger: { append: (): void => undefined, read: async (): Promise<unknown[]> => [] },
             git: { changes: async (): Promise<{ path: string }[]> => [] }

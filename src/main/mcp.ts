@@ -1,6 +1,7 @@
-import { readFileSync } from "fs"
 import { join } from "path"
 import { atomicWrite } from "./atomic"
+import { readJson } from "./readJson"
+import type { Loaded } from "../shared/loaded"
 import { DEVDECK_AUTH_HEADER } from "../shared/mcpEnv"
 
 // Reads/writes a project's .mcp.json (the standard Claude Code project MCP config).
@@ -22,16 +23,13 @@ function file(projectPath: string): string {
     return join(projectPath, ".mcp.json")
 }
 
-function loadRaw(projectPath: string): Record<string, unknown> {
-    try {
-        return JSON.parse(readFileSync(file(projectPath), "utf8")) as Record<string, unknown>
-    } catch {
-        return {}
-    }
+function loadRaw(projectPath: string): Loaded<Record<string, unknown>> {
+    return readJson<Record<string, unknown>>(file(projectPath))
 }
 
 export function readMcp(projectPath: string): McpServer[] {
-    const raw = loadRaw(projectPath)
+    const res = loadRaw(projectPath)
+    const raw = res.ok ? res.data : {}
     const servers = (raw.mcpServers ?? {}) as Record<string, Partial<McpServer> & { type?: string }>
     return Object.entries(servers).map(([name, v]) => ({
         name,
@@ -43,8 +41,21 @@ export function readMcp(projectPath: string): McpServer[] {
     }))
 }
 
-export function writeMcp(projectPath: string, servers: McpServer[]): void {
-    const raw = loadRaw(projectPath) // preserve any other top-level keys
+/**
+ * Rewrite this project's `.mcp.json` server list, preserving every other
+ * top-level key. Returns false without writing when the file exists but could
+ * not be read - the "preserve" above is only possible for keys we actually saw,
+ * so writing a store we failed to parse would delete every other server and
+ * every other key in it. `.mcp.json` is a file agents write too, so catching it
+ * mid-write is not hypothetical.
+ */
+export function writeMcp(projectPath: string, servers: McpServer[]): boolean {
+    const res = loadRaw(projectPath)
+    if (!res.ok && res.reason === "unreadable") {
+        console.error("[mcp] refusing to save: %s exists but could not be read", file(projectPath))
+        return false
+    }
+    const raw = res.ok ? res.data : {}
     const mcpServers: Record<string, unknown> = {}
     for (const s of servers) {
         const name = s.name.trim()
@@ -63,6 +74,7 @@ export function writeMcp(projectPath: string, servers: McpServer[]): void {
     }
     raw.mcpServers = mcpServers
     atomicWrite(file(projectPath), JSON.stringify(raw, null, 2))
+    return true
 }
 
 /** The `.mcp.json` entry name DevDeck registers itself under. */
@@ -81,9 +93,9 @@ export const DEVDECK_SERVER_NAME = "devdeck"
  * and DevDeck injects that var into the agent sessions it starts — so the file
  * stays safe to commit and share with a teammate, who supplies their own token.
  */
-export function registerDevdeck(projectPath: string, port: number): void {
+export function registerDevdeck(projectPath: string, port: number): boolean {
     const others = readMcp(projectPath).filter((s) => s.name !== DEVDECK_SERVER_NAME)
-    writeMcp(projectPath, [
+    return writeMcp(projectPath, [
         ...others,
         {
             name: DEVDECK_SERVER_NAME,
@@ -97,8 +109,8 @@ export function registerDevdeck(projectPath: string, port: number): void {
 }
 
 /** Remove DevDeck's entry, leaving other servers in place. */
-export function unregisterDevdeck(projectPath: string): void {
-    writeMcp(
+export function unregisterDevdeck(projectPath: string): boolean {
+    return writeMcp(
         projectPath,
         readMcp(projectPath).filter((s) => s.name !== DEVDECK_SERVER_NAME)
     )

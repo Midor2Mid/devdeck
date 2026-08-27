@@ -589,7 +589,14 @@ function registerIpc(): void {
     })
     ipcMain.handle("mcp:save", (_e, { projectPath, servers }: { projectPath: string; servers: McpServer[] }) => {
         guardPath(projectPath)
-        writeMcp(projectPath, servers)
+        // The user pressed Save. A refusal here has to reach them - writing
+        // nothing and reporting success is the failure this guard exists to stop.
+        if (!writeMcp(projectPath, servers)) {
+            throw new Error(
+                ".mcp.json in this project could not be read, so it was not overwritten. " +
+                    "Fix or move the file, then save again."
+            )
+        }
     })
 
     // --- Extend Agent (skills/agents catalog: fetch, install, list, remove) ---
@@ -713,9 +720,12 @@ function registerIpc(): void {
         const mime = IMG_MIME[ext] ?? "application/octet-stream"
         return `data:${mime};base64,${buf.toString("base64")}`
     })
-    ipcMain.handle("fs:write", (_e, { path, content }) => {
+    // `baseMtimeMs` is the version the caller read; 0 means create-or-force.
+    // Without it the editor wrote a stale in-memory string over whatever an
+    // agent had since written to the same file.
+    ipcMain.handle("fs:write", (_e, { path, content, baseMtimeMs }) => {
         guardPath(path)
-        return files.writeFileText(path, content)
+        return files.writeFileText(path, content, baseMtimeMs ?? 0)
     })
 
     // "Save As" export: the user picks the destination via the OS dialog (so no

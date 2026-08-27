@@ -10,12 +10,17 @@ import type { BindMode } from "../main/guards"
 import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
+import type { Loaded } from "../shared/loaded"
 
 // Re-exported as `RemoteDevice`: the renderer never sees (and never needs to
 // know about) the internal `RemoteDevice` shape that also carries
 // `userAgent` - `PublicRemoteDevice` (what every IPC call below actually
 // returns) is the only shape that should exist on this side of the bridge.
 export type { BindMode, PublicRemoteDevice as RemoteDevice }
+// `Loaded<T>` crosses the bridge intact: the renderer has to distinguish "no
+// workspace yet" from "there is one and we could not read it" to know whether
+// saving over it is safe. Collapsing the two is what destroyed workspaces.
+export type { Loaded }
 // The ledger's record shape is defined once, in main, and travels across the
 // bridge unchanged - restating it here is exactly how a renamed field stops
 // being an error anywhere.
@@ -442,7 +447,7 @@ const api = {
             ipcRenderer.invoke("projects:addPath", path)
     },
     workspace: {
-        load: (): Promise<unknown> => ipcRenderer.invoke("workspace:load"),
+        load: (): Promise<Loaded<unknown>> => ipcRenderer.invoke("workspace:load"),
         save: (data: unknown): void => ipcRenderer.send("workspace:save", data)
     },
     settings: {
@@ -601,10 +606,17 @@ const api = {
     fs: {
         readDir: (dir: string): Promise<DirEntry[]> => ipcRenderer.invoke("fs:readDir", dir),
         allFiles: (root: string): Promise<string[]> => ipcRenderer.invoke("fs:allFiles", root),
-        read: (path: string): Promise<string> => ipcRenderer.invoke("fs:read", path),
+        /** Content plus the mtime it was read at - pass that back to `write`. */
+        read: (path: string): Promise<{ content: string; mtimeMs: number }> =>
+            ipcRenderer.invoke("fs:read", path),
         readDataUrl: (path: string): Promise<string> => ipcRenderer.invoke("fs:readDataUrl", path),
-        write: (path: string, content: string): Promise<void> =>
-            ipcRenderer.invoke("fs:write", { path, content }),
+        /**
+         * Write a file, refusing if it changed since `baseMtimeMs` (from `read`).
+         * Omit or pass 0 to create a new file, or to force an overwrite the user
+         * has explicitly confirmed.
+         */
+        write: (path: string, content: string, baseMtimeMs = 0): Promise<void> =>
+            ipcRenderer.invoke("fs:write", { path, content, baseMtimeMs }),
         /** Save an image (data URL) into the project's uploads dir; returns its path. */
         saveUpload: (projectPath: string, name: string, dataUrl: string): Promise<string> =>
             ipcRenderer.invoke("fs:saveUpload", { projectPath, name, dataUrl }),

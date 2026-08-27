@@ -11,6 +11,27 @@ export function leaf(termId: string): LayoutNode {
     return { kind: "leaf", termId }
 }
 
+/**
+ * Validate a value read off disk as a real layout tree.
+ *
+ * This belongs at the one door persisted layout comes through (store `init()`),
+ * NOT inside the walkers. `collectLeaves` and `firstLeaf` recurse without null
+ * checks, so a tab whose `root` is missing or written by an older schema throws
+ * on the walk - and that throw used to escape `init()`, leaving the store on its
+ * module-load defaults which the next `flush()` wrote over the real workspace.
+ * Guarding here drops the one bad tab; guarding in the walkers would spread the
+ * check to every future caller and still let the bad value in.
+ */
+export function isLayoutNode(x: unknown): x is LayoutNode {
+    if (!x || typeof x !== "object") return false
+    const n = x as { kind?: unknown; termId?: unknown; children?: unknown }
+    if (n.kind === "leaf") return typeof n.termId === "string"
+    if (n.kind === "split") {
+        return Array.isArray(n.children) && n.children.length > 0 && n.children.every(isLayoutNode)
+    }
+    return false
+}
+
 /** Replace the leaf for `targetId` with a split containing it plus a new leaf. */
 export function splitLeaf(
     node: LayoutNode,

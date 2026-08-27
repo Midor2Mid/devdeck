@@ -71,7 +71,7 @@ export async function detectRun(path: string): Promise<RunConfig | null> {
     let pkgUnparsed = false
     if (hasPkg) {
         try {
-            const txt = await window.api.fs.read(path + "/package.json")
+            const { content: txt } = await window.api.fs.read(path + "/package.json")
             const scripts = (JSON.parse(txt) as { scripts?: Record<string, string> }).scripts ?? {}
             return { command: scripts.dev ? "npm run dev" : "npm start", type: "node" }
         } catch {

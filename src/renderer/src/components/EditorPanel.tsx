@@ -18,12 +18,21 @@ function isImage(name: string): boolean {
     return IMAGE_EXTS.has(name.split(".").pop()?.toLowerCase() ?? "")
 }
 import type { DirEntry } from "../../../preload/index"
+import { CHANGED_ON_DISK } from "../../../shared/fsErrors"
+import { Icon } from "./Icon"
 
 interface OpenFile {
     path: string
     name: string
     content: string
     dirty: boolean
+    /**
+     * The mtime this buffer was read at. Saving sends it back so main can refuse
+     * a write onto a file something else has since changed - the agents this app
+     * exists to run are editing these same files while the tab sits open. 0 means
+     * "no base": a new file, or an overwrite the user has confirmed.
+     */
+    baseMtimeMs: number
     /** Data URL for image files, rendered as a preview instead of in Monaco. */
     image?: string
 }
@@ -120,6 +129,8 @@ export function EditorPanel(): JSX.Element {
     const [files, setFiles] = useState<OpenFile[]>([])
     const [activePath, setActivePath] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
+    /** Path whose last save was refused because the file changed on disk. */
+    const [conflict, setConflict] = useState<string | null>(null)
     const [sent, setSent] = useState(false)
     const [mdMode, setMdMode] = useState<MdMode>("split")
 
@@ -192,10 +203,16 @@ export function EditorPanel(): JSX.Element {
         try {
             if (isImage(entry.name)) {
                 const image = await window.api.fs.readDataUrl(entry.path)
-                setFiles((prev) => [...prev, { path: entry.path, name: entry.name, content: "", dirty: false, image }])
+                setFiles((prev) => [
+                    ...prev,
+                    { path: entry.path, name: entry.name, content: "", dirty: false, baseMtimeMs: 0, image }
+                ])
             } else {
-                const content = await window.api.fs.read(entry.path)
-                setFiles((prev) => [...prev, { path: entry.path, name: entry.name, content, dirty: false }])
+                const { content, mtimeMs } = await window.api.fs.read(entry.path)
+                setFiles((prev) => [
+                    ...prev,
+                    { path: entry.path, name: entry.name, content, dirty: false, baseMtimeMs: mtimeMs }
+                ])
             }
             setActivePath(entry.path)
         } catch (e) {
@@ -225,11 +242,56 @@ export function EditorPanel(): JSX.Element {
         )
     }
 
-    const save = async (path: string): Promise<void> => {
+    /**
+     * Save, refusing to overwrite a file that changed underneath the buffer.
+     *
+     * `force` re-runs the write with no base version and is only reachable from
+     * the Overwrite button in the conflict bar - the user has then been told what
+     * they are discarding. Reload is the other way out; both are offered in the
+     * same bar, because a save that can only fail makes the editor unusable the
+     * moment a formatter touches the file.
+     */
+    const save = async (path: string, force = false): Promise<void> => {
         const file = files.find((f) => f.path === path)
-        if (!file || !file.dirty) return
-        await window.api.fs.write(file.path, file.content)
-        setFiles((prev) => prev.map((f) => (f.path === path ? { ...f, dirty: false } : f)))
+        if (!file || (!file.dirty && !force)) return
+        try {
+            await window.api.fs.write(file.path, file.content, force ? 0 : file.baseMtimeMs)
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            if (msg.includes(CHANGED_ON_DISK)) {
+                setConflict(path)
+            } else {
+                setError(msg)
+            }
+            return
+        }
+        setConflict(null)
+        // Re-stat through a read so the next save is versioned against what we
+        // just wrote, not against the version this buffer was opened at.
+        let mtimeMs = 0
+        try {
+            mtimeMs = (await window.api.fs.read(file.path)).mtimeMs
+        } catch {
+            /* saved fine; a failed re-stat just means the next save is unversioned */
+        }
+        setFiles((prev) =>
+            prev.map((f) => (f.path === path ? { ...f, dirty: false, baseMtimeMs: mtimeMs } : f))
+        )
+    }
+
+    /** Discard the buffer and reopen the file as it now is on disk. */
+    const reloadFromDisk = async (path: string): Promise<void> => {
+        try {
+            const { content, mtimeMs } = await window.api.fs.read(path)
+            setFiles((prev) =>
+                prev.map((f) =>
+                    f.path === path ? { ...f, content, dirty: false, baseMtimeMs: mtimeMs } : f
+                )
+            )
+            setConflict(null)
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e))
+        }
     }
 
     const closeFile = (path: string): void => {
@@ -262,6 +324,29 @@ export function EditorPanel(): JSX.Element {
             </div>
             <div className="editor-main">
                 {error && <div className="resp-error">{error}</div>}
+                {conflict && (
+                    <div className="notice-bar" role="status">
+                        <Icon name="restart" size={14} />
+                        <span className="notice-bar-text">
+                            <code>{conflict.split(/[\/]/).pop()}</code> changed on disk since you
+                            opened it. Reloading discards your edits; overwriting discards theirs.
+                        </span>
+                        <button
+                            type="button"
+                            className="notice-bar-action"
+                            onClick={() => void reloadFromDisk(conflict)}
+                        >
+                            Reload
+                        </button>
+                        <button
+                            type="button"
+                            className="notice-bar-action secondary"
+                            onClick={() => void save(conflict, true)}
+                        >
+                            Overwrite
+                        </button>
+                    </div>
+                )}
                 {files.length > 0 && (
                     <div className="editor-tabs">
                         <div className="editor-tabs-scroll">

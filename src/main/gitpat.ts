@@ -1,7 +1,7 @@
 import { app, safeStorage } from "electron"
 import { join } from "path"
-import { readFileSync } from "fs"
 import { atomicWrite } from "./atomic"
+import { readJson } from "./readJson"
 
 // Per-account Git personal access tokens, encrypted at rest (DPAPI via
 // safeStorage, base64 fallback) - same scheme as DB passwords and AI keys.
@@ -16,15 +16,29 @@ interface Store {
 function storeFile(): string {
     return join(app.getPath("userData"), "gitpats.json")
 }
+// Latched by a read that failed on a file that exists. `save()` refuses while
+// it is set: an unreadable store used to read back as "no token configured",
+// and the next save committed that emptiness - silently destroying every stored
+// token while `status()` still reported them as present.
+let readFailed = false
+
 function load(): Store {
-    try {
-        const s = JSON.parse(readFileSync(storeFile(), "utf8")) as Store
-        return { pats: s.pats ?? {} }
-    } catch {
-        return { pats: {} }
+    const res = readJson<Store>(storeFile())
+    if (res.ok) {
+        readFailed = false
+        return { pats: res.data?.pats ?? {} }
     }
+    readFailed = res.reason === "unreadable"
+    return { pats: {} }
 }
 function save(store: Store): void {
+    if (readFailed) {
+        console.error(
+            "[gitpat] refusing to save: the store exists but could not be read;" +
+                " writing now would delete every stored token"
+        )
+        return
+    }
     try {
         atomicWrite(storeFile(), JSON.stringify(store, null, 2))
     } catch (err) {

@@ -442,7 +442,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         break
                     }
                     try {
-                        send(ws, { t: "fs:read", path: p, content: readFileText(p) })
+                        send(ws, { t: "fs:read", path: p, content: readFileText(p).content })
                     } catch (e) {
                         send(ws, { t: "fs:read", path: p, error: String((e as Error)?.message ?? e) })
                     }
@@ -460,7 +460,10 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         break
                     }
                     try {
-                        writeFileText(p, content)
+                        // No base version: the remote client does not track one, so
+                        // this stays a force-write, exactly as before. Narrowing it
+                        // needs the mobile client to round-trip the mtime first.
+                        writeFileText(p, content, 0)
                         send(ws, { t: "fs:write", path: p, ok: true })
                     } catch (e) {
                         send(ws, { t: "fs:write", path: p, error: String((e as Error)?.message ?? e) })

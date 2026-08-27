@@ -11,7 +11,8 @@ import {
     removeLeaf,
     collectLeaves,
     firstLeaf,
-    hasLeaf
+    hasLeaf,
+    isLayoutNode
 } from "./layout"
 import type { PipelineRun, PipelineStepState } from "./pipeline"
 import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } from "./pipeline"
@@ -152,6 +153,13 @@ interface AppState extends Persisted {
     cycleProject: () => void
     commitProjectCycle: () => void
     init: () => Promise<void>
+    /**
+     * Non-null when workspace.json exists but could not be read, so nothing is
+     * being persisted this session. Held in state (not a toast) because the
+     * consequence lasts as long as the session does: a message that fades leaves
+     * the user working for hours against a store that will never be written.
+     */
+    persistBlocked: { file: string; message: string } | null
     addProject: () => Promise<void>
     removeProject: (id: string) => Promise<void>
     setActiveProject: (id: string) => Promise<void>
@@ -400,10 +408,45 @@ function badgeFor(agentId: string): string {
     return useSettings.getState().agentById(agentId)?.badge ?? agentId.toUpperCase()
 }
 
+/**
+ * Keep only tabs whose persisted `root` is a real layout tree.
+ *
+ * One tab written by an older schema (or truncated mid-write) used to throw out
+ * of `init()` on the `collectLeaves` walk. `init()` is called bare from App's
+ * mount effect and there is no `unhandledrejection` handler, so the throw was
+ * swallowed, `set()` never ran, and the store kept its module-load defaults -
+ * which `beforeunload -> flush()` then wrote over the real workspace. Dropping
+ * one tab loses one tab; letting it throw lost everything.
+ */
+function validateTabs(raw: Record<string, Tab[]> | undefined): Record<string, Tab[]> {
+    const out: Record<string, Tab[]> = {}
+    for (const [projectId, tabs] of Object.entries(raw ?? {})) {
+        if (!Array.isArray(tabs)) continue
+        const kept = tabs.filter((t) => t && typeof t === "object" && isLayoutNode(t.root))
+        if (kept.length !== tabs.length) {
+            console.warn(
+                "[store] dropped %d tab(s) with an unreadable layout in project %s",
+                tabs.length - kept.length,
+                projectId
+            )
+        }
+        if (kept.length) out[projectId] = kept
+    }
+    return out
+}
+
 export const useStore = create<AppState>((set, get) => {
+    // No save may run until `init()` has applied whatever workspace.json holds
+    // (or confirmed there is none, on a fresh install). Same guard as
+    // settings.ts' `loaded`, and for the same reason: `beforeunload -> flush()`
+    // calls writeNow() unconditionally, so without this, closing the window
+    // during the load round-trip - or after a load that failed - writes the
+    // module-load defaults over a real workspace. No click required.
+    let loaded = false
     // Debounced disk persistence - coalesces bursts (e.g. composer keystrokes).
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
+        if (!loaded) return
         const s = get()
         window.api.workspace.save({
             termAgents: s.termAgents,
@@ -866,6 +909,7 @@ export const useStore = create<AppState>((set, get) => {
         closedSessions: [],
         zoomedPane: undefined,
         notifications: [],
+        persistBlocked: null,
         dismissNotification: (id) =>
             set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 
@@ -898,7 +942,25 @@ export const useStore = create<AppState>((set, get) => {
                 window.api.projects.list(),
                 window.api.workspace.load()
             ])
-            const w = (ws as (Partial<Persisted> & { termKinds?: Record<string, string> }) | null) ?? {}
+            // "Not there yet" is a fresh install and safe to save over. "There
+            // but unreadable" is not: persisting now would replace a workspace
+            // we could not read with the defaults this module started on. Only
+            // the first of those unlocks writeNow().
+            if (!ws.ok && ws.reason === "unreadable") {
+                set({
+                    persistBlocked: {
+                        file: "workspace.json",
+                        message:
+                            "could not be read, so your tabs and layout are not being saved this session."
+                    }
+                })
+                console.error("[store] workspace.json unreadable - persistence disabled")
+                return
+            }
+            const w =
+                (ws.ok
+                    ? (ws.data as (Partial<Persisted> & { termKinds?: Record<string, string> }) | null)
+                    : null) ?? {}
             // Seed the MRU with the restored active project so "previous project"
             // (Ctrl+Shift+K / switcher preselect) works from launch, using the
             // persisted history with the active project moved to the front.
@@ -912,7 +974,10 @@ export const useStore = create<AppState>((set, get) => {
             }
             // Migrate the old termKinds → termAgents if present.
             const termAgents = w.termAgents ?? w.termKinds ?? {}
-            const tabsByProject = w.tabsByProject ?? {}
+            // Validate the persisted layout at this one door. A tab whose `root`
+            // is absent or from an older schema would throw in collectLeaves
+            // below; drop that tab, never the project it belongs to.
+            const tabsByProject = validateTabs(w.tabsByProject)
             // Agent sessions from the previous run come back needing a resume/fresh
             // choice — their ptys died with the old process, so cold-relaunching
             // would silently drop each conversation.
@@ -944,6 +1009,11 @@ export const useStore = create<AppState>((set, get) => {
                 canvasLinks: w.canvasLinks ?? [],
                 boardTasks: w.boardTasks ?? []
             })
+            // Only from here on does in-memory state reflect what is on disk, so
+            // only from here on may a save run. Set AFTER the set() above and on
+            // both the ok and the "missing" paths - a fresh install must still be
+            // able to persist.
+            loaded = true
         },
 
         addProject: async () => {
