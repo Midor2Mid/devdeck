@@ -199,7 +199,8 @@ export interface UpdateStatus {
 export interface GitStatus {
     isRepo: boolean
     branch: string
-    changes: number
+    /** Uncommitted entries, or **null when the count could not be read**. Unknown is not zero. */
+    changes: number | null
     /** Tracking branch (e.g. "origin/main"), empty when the branch has no upstream. */
     upstream: string
     /** Commits the local branch is ahead / behind its upstream (0 when unknown). */
@@ -322,7 +323,8 @@ export interface WorklogRepo {
     name: string
     path: string
     branch: string
-    changes: number
+    /** Uncommitted entries, or null when `git status` failed. Unknown is not zero. */
+    changes: number | null
     commits: WorklogCommit[]
 }
 

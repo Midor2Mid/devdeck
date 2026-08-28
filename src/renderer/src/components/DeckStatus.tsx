@@ -27,10 +27,20 @@ export function DeckStatus(): JSX.Element {
     const [pulling, setPulling] = useState(false)
     const path = project?.path
 
+    /**
+     * Drop the change count while keeping the branch, for an IPC read that
+     * failed outright.
+     *
+     * `gitStatus` never rejects, so this is the bridge itself going - and
+     * swallowing it left the last count on screen indefinitely, presented as
+     * current. The branch is still the branch; only the number is now unknown.
+     */
+    const forgetChanges = (): void => setGit((prev) => (prev ? { ...prev, changes: null } : prev))
+
     /** Re-read branch/divergence now (after a pull), outside the poll cadence. */
     const refreshGit = useCallback(() => {
         if (!path) return
-        window.api.git.status(path).then(setGit).catch(() => undefined)
+        window.api.git.status(path).then(setGit).catch(forgetChanges)
     }, [path])
 
     useEffect(() => {
@@ -39,13 +49,17 @@ export function DeckStatus(): JSX.Element {
             setIdentity(null)
             return
         }
+        // Clear first: without this, switching projects showed the PREVIOUS
+        // project's branch and count until the new read landed.
+        setGit(null)
+        setIdentity(null)
         let on = true
         // Each tick spawns two `git` child processes; skip entirely while the
         // window is hidden (nothing to show), and refresh on focus so it's fresh
         // the moment you come back. Cheaper than a fixed always-on 5s poll.
         const tick = (): void => {
             if (document.hidden) return
-            window.api.git.status(path).then((g) => on && setGit(g)).catch(() => undefined)
+            window.api.git.status(path).then((g) => on && setGit(g)).catch(() => on && forgetChanges())
             window.api.git.getIdentity(path).then((i) => on && setIdentity(i)).catch(() => undefined)
         }
         tick()
@@ -140,7 +154,23 @@ export function DeckStatus(): JSX.Element {
                             {git.behind > 0 && ` ${git.behind}`}
                         </button>
                     )}
-                    {git.changes > 0 && project && (
+                    {/* Three cases, not two. A null count is "couldn't check",
+                        and it keeps a chip: the chip disappearing is itself a
+                        statement — "nothing to review" — and it was being made
+                        on a `git status` that never came back. The unknown chip
+                        carries its own glyph (?) as well as its own tone, per
+                        DESIGN.md: state must read in form, not colour alone. */}
+                    {git.changes === null && project && (
+                        <span
+                            className="sb-item sb-changes unknown"
+                            data-tip="Couldn't read the working tree — click to try the diff"
+                            data-tip-pos="top"
+                            onClick={() => openChanges(project.path, project.name)}
+                        >
+                            ? changes
+                        </span>
+                    )}
+                    {git.changes !== null && git.changes > 0 && project && (
                         <span
                             className="sb-item sb-changes"
                             data-tip="Uncommitted changes — click to review the diff"

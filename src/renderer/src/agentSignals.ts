@@ -175,25 +175,26 @@ export function newCounts(
 }
 
 /**
- * The next `changedBySession` map after one poll, without letting a FAILED
- * read for one session zero out its count.
+ * The next `changedBySession` map after one poll.
  *
  * `entries` carry `files: string[] | null` — null means this session's
  * `git.changes` read rejected this tick (a repo mid-rebase, an `index.lock`
- * another agent holds, the timeout). git.changes rejects on purpose so each
- * caller can decide what "unknown" means; a caller that mapped that straight
- * to `[]` would be claiming "nothing changed" about a session that may still
- * have 12 changed files, which is exactly the swallowed-error bug this
- * function exists to close. A failed session is left out of the merge
- * entirely, so `prev`'s count for it survives untouched — unknown is not
- * zero.
+ * another agent holds, the timeout). That failure is now carried **in the
+ * value**, as a null count, rather than by leaving the session out of the merge
+ * so its previous number survived. The carry-forward was a side channel built
+ * because `changedCount: number` could not say "unknown"; it kept a count that
+ * was true eight seconds ago and presented it as current, and every consumer
+ * below still read a plain number and believed it. One nullable value replaces
+ * both halves.
  */
 export function nextChangedCounts(
-    prev: Readonly<Record<string, number>>,
+    prev: Readonly<Record<string, number | null>>,
     entries: readonly { termId: string; files: readonly string[] | null }[]
-): Record<string, number> {
-    const ok = entries.filter(
-        (e): e is { termId: string; files: readonly string[] } => e.files !== null
-    )
-    return { ...prev, ...newCounts(ok) }
+): Record<string, number | null> {
+    const out: Record<string, number | null> = { ...prev }
+    for (const e of entries) {
+        out[e.termId] =
+            e.files === null ? null : newPathsSince(baselineOf(e.termId), e.files).length
+    }
+    return out
 }

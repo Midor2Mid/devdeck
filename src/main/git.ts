@@ -4,7 +4,16 @@ import { request as httpsRequest } from "https"
 export interface GitStatus {
     isRepo: boolean
     branch: string
-    changes: number
+    /**
+     * Uncommitted entries, or **null when the count could not be read**.
+     *
+     * `null` is the whole point of this type. A failed `git status` - a held
+     * `.git/index.lock`, a repo mid-rebase, the 4s timeout - used to resolve
+     * `0`, and every surface above renders `0` as the sentence "no uncommitted
+     * changes". A number here is a claim about the working tree; when there is
+     * no claim to make, say so rather than picking the reassuring number.
+     */
+    changes: number | null
     /** Tracking branch (e.g. "origin/main"), empty when the branch has no upstream. */
     upstream: string
     /** Commits the local branch is ahead / behind its upstream (0 when unknown). */
@@ -19,7 +28,11 @@ export interface PullResult {
     error?: string
 }
 
-const OPTS = { timeout: 4000, windowsHide: true } as const
+// `maxBuffer` matches changes.ts and worklog.ts. execFile defaults to 1 MB, and
+// `-uall` prints every untracked path where `-unormal` printed one line per
+// directory - so a project with a large unignored tree could now overflow it,
+// land on the failure path, and wear a permanent "couldn't check" chip.
+const OPTS = { timeout: 4000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 } as const
 /** Pull talks to the network, so it gets a far longer leash than the status polls. */
 const NET_OPTS = { timeout: 120000, windowsHide: true } as const
 
@@ -173,8 +186,18 @@ export function gitStatus(cwd: string): Promise<GitStatus> {
             const branch = stdout.trim()
             // `-b` adds the tracking header for free - same process, no extra poll
             // cost, and it's what tells the deck whether a pull has anything to do.
-            execFile("git", ["status", "--porcelain", "-b"], { cwd, ...OPTS }, (e2, out2) => {
-                const lines = e2 ? [] : out2.split("\n")
+            // `-uall` because git's default `-unormal` collapses a wholly untracked
+            // directory into ONE entry: an agent that scaffolded forty new files
+            // contributed `1` to the number the whole review queue is sorted by.
+            execFile("git", ["status", "--porcelain", "-b", "-uall"], { cwd, ...OPTS }, (e2, out2) => {
+                if (e2) {
+                    // The count is unknown, and unknown is not zero. This path had
+                    // no discriminator at all: a held index.lock and a clean tree
+                    // resolved to the same value.
+                    resolve({ isRepo: true, branch, changes: null, upstream: "", ahead: 0, behind: 0 })
+                    return
+                }
+                const lines = out2.split("\n")
                 const changes = lines.filter((l) => l.trim() && !l.startsWith("## ")).length
                 const track = parseBranchLine(lines.find((l) => l.startsWith("## ")) ?? "")
                 resolve({ isRepo: true, branch, changes, ...track })

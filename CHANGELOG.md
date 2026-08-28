@@ -65,6 +65,62 @@ happened to live in.
   restoring one pane of three would lie - says so explicitly with
   `closePaneSilent`.
 
+### "Couldn't check" stops being spelled "nothing to review"
+
+Remedy item 9. A failed `git status` - a held `.git/index.lock`, a repo
+mid-rebase, a corrupt index, the timeout - resolved to `0`, and every surface in
+DevDeck renders `0` as a sentence: *"No uncommitted changes across your
+projects."*, *"Working tree clean - nothing to review."*, *"Its own checkout, so
+it can't collide with an agent already working in this project."* Each of those
+was a claim about a working tree the app had just failed to read.
+
+- **The count is now `number | null` end to end**, and each surface says which
+  one it has. The review queue keeps the project and says "couldn't check for
+  changes"; the deck shows a muted `? changes` chip where it used to show
+  nothing at all; the diff panel names git's own error instead of declaring the
+  tree clean; the launch popover warns that a session it couldn't read may still
+  collide; the standup names the repo rather than omitting it.
+- **A failed read no longer disables acting on it.** The review panel's Start
+  button used to grey out, the diff panel's Review / Explain / Commit-msg /
+  PR-description buttons went with it, and a dead session's tile dropped its
+  Review action - all on the strength of a `git status` that never returned.
+- **A Mission tile whose file check failed says so.** It cannot read CHANGED,
+  and where it would have read QUIET - which a user reads as "nothing happened
+  here" - it now reads `COULDN'T CHECK` and keeps a Review button. A session
+  nobody has polled yet stays silent: not asked and asked-and-failed are
+  different facts and are now spelled differently.
+- **Untracked files are counted individually** (`-uall`). Git's default collapses
+  a wholly untracked directory into one entry, so an agent that scaffolded forty
+  files contributed `1` to the number the review queue is sorted by.
+- Two side channels invented to work around the old type are gone: the
+  carry-forward that presented a count from eight seconds ago as current, and
+  the run ledger's catch-to-empty that told someone with months of history
+  "nothing recorded yet".
+
+### No assertion passes on an observation that was never made
+
+Remedy item 10. DevDeck already diagnosed this once, in its own test harness -
+*"the only one that touched the terminal contents was NEGATIVE ... which a blank
+screen satisfies perfectly"* - fixed the harness, and left the same mistake in
+three engines in the shipped product.
+
+- **An `absent` pipeline gate now fails on empty output.** `!"".includes(pattern)`
+  is `true`, so a step whose shell never spawned printed "✓ gate passed" for a
+  check with nothing to check. **This is a behaviour change:** a gate that was
+  passing vacuously will start failing, which is the point, but it will look like
+  a regression to whoever meets it first.
+- **An API test whose value could not be read now fails instead of passing.**
+  `actualFor` folded "could not be read" into `""`, and an empty string compares
+  as a value: an unreadable body made `neq` true and `lt` true for any positive
+  threshold, so every row showed a green tick and the tab said "Tests ✓". The row
+  now reads `got: (nothing to read)`, which is distinct from `(empty)`.
+- **A pipeline step whose agent session disappears is no longer marked done.**
+  `waitForIdle` named three outcomes and the caller handled two, so "the session
+  left the grid" - killed, crashed, closed - fell into the success branch and the
+  whole run finished green on work that never happened. The result is now a
+  discriminated `ok`, so falling through on an unhandled outcome is impossible
+  rather than merely wrong.
+
 ## 0.9.1 - 2026-08-27
 
 ### The stores stop destroying themselves

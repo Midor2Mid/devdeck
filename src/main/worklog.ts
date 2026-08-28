@@ -18,7 +18,8 @@ export interface RepoLog {
     name: string
     path: string
     branch: string
-    changes: number
+    /** Uncommitted entries, or null when `git status` failed. Unknown is not zero. */
+    changes: number | null
     commits: WCommit[]
 }
 
@@ -43,16 +44,24 @@ export function parseLog(stdout: string): WCommit[] {
 
 async function oneRepo(name: string, path: string, sinceISO: string): Promise<RepoLog> {
     const branchR = await git(path, ["rev-parse", "--abbrev-ref", "HEAD"])
+    // Not a repo at all: 0 is the honest answer here, not "unknown".
     if (!branchR.ok) return { name, path, branch: "", changes: 0, commits: [] }
     const email = (await git(path, ["config", "user.email"])).stdout.trim()
     const logArgs = ["log", `--since=${sinceISO}`, `--format=%h${SEP}%s${SEP}%cr`]
     if (email) logArgs.push(`--author=${email}`)
-    const [log, status] = await Promise.all([git(path, logArgs), git(path, ["status", "--porcelain"])])
+    // `-uall` so a wholly untracked directory counts its files instead of
+    // collapsing to one entry, and `status.ok` is READ: discarding it made a
+    // failed `git status` report 0, which the worklog renders by leaving the repo
+    // out of "In progress" entirely - the day's actual work, silently missing.
+    const [log, status] = await Promise.all([
+        git(path, logArgs),
+        git(path, ["status", "--porcelain", "-uall"])
+    ])
     return {
         name,
         path,
         branch: branchR.stdout.trim(),
-        changes: status.stdout.split("\n").filter((l) => l.trim()).length,
+        changes: status.ok ? status.stdout.split("\n").filter((l) => l.trim()).length : null,
         commits: parseLog(log.stdout)
     }
 }

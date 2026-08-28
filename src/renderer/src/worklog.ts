@@ -28,11 +28,18 @@ export function buildWorklog({ title, repos, sessions }: WorklogInput): string {
     out.push("")
 
     // In progress - uncommitted work + live agent sessions.
-    const dirty = repos.filter((r) => r.changes > 0)
+    // A repo whose status could not be read belongs here too. Filtering on
+    // `> 0` alone dropped it, and this document is a standup someone reads as
+    // complete - a silently missing repo is the day's work going unmentioned.
+    const dirty = repos.filter((r) => r.changes === null || r.changes > 0)
     if (dirty.length > 0 || sessions.length > 0) {
         out.push("## In progress")
         for (const r of dirty)
-            out.push(`- **${r.name}** (${r.branch || "?"}): ${r.changes} uncommitted change${r.changes === 1 ? "" : "s"}`)
+            out.push(
+                r.changes === null
+                    ? `- **${r.name}** (${r.branch || "?"}): couldn't check for uncommitted changes`
+                    : `- **${r.name}** (${r.branch || "?"}): ${r.changes} uncommitted change${r.changes === 1 ? "" : "s"}`
+            )
         for (const s of sessions) out.push(`- ${s}`)
         out.push("")
     }

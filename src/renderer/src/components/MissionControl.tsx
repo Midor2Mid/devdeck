@@ -82,8 +82,10 @@ export function MissionControl(): JSX.Element {
         return () => clearInterval(iv)
     }, [view])
 
-    // Per-project uncommitted-change counts for the review queue.
-    const [changes, setChanges] = useState<Record<string, number>>({})
+    // Per-project uncommitted-change counts for the review queue. `null` for a
+    // project whose count could not be read — the queue says so instead of
+    // dropping the row, which read as "this one is clean".
+    const [changes, setChanges] = useState<Record<string, number | null>>({})
     useEffect(() => {
         if (view !== "mission") return
         let on = true
@@ -93,7 +95,10 @@ export function MissionControl(): JSX.Element {
                 window.api.git
                     .status(p.path)
                     .then((g) => on && setChanges((prev) => ({ ...prev, [p.id]: g.isRepo ? g.changes : 0 })))
-                    .catch(() => undefined)
+                    // The IPC itself failing is the same unknown as a failed
+                    // `git status` inside it — record it, don't leave the row
+                    // showing the last number as though it were current.
+                    .catch(() => on && setChanges((prev) => ({ ...prev, [p.id]: null })))
             }
         }
         fetchAll()
@@ -138,7 +143,7 @@ export function MissionControl(): JSX.Element {
     const [ownership, setOwnership] = useState<OwnershipMap | null>(null)
     // Paths each session has made dirty since it started, from the SAME read the
     // ownership map makes below — the chip adds no git call of its own.
-    const [changedBySession, setChangedBySession] = useState<Record<string, number>>({})
+    const [changedBySession, setChangedBySession] = useState<Record<string, number | null>>({})
     useEffect(() => {
         if (view !== "mission") return
         let on = true
@@ -172,10 +177,9 @@ export function MissionControl(): JSX.Element {
             if (!on) return
             // Ownership only reflects sessions whose read succeeded this tick -
             // a failed one is simply absent from `ok` for this poll. The changed
-            // count is different: nextChangedCounts (agentSignals.ts) merges the
-            // successful reads into the PREVIOUS counts rather than replacing
-            // them, so a failed session keeps its last known count instead of
-            // reading 0.
+            // count carries the failure instead: nextChangedCounts writes null
+            // for that session, so the tile declines to make a file claim rather
+            // than reading 0 or a count that was true eight seconds ago.
             const ok = entries.filter(
                 (e): e is { termId: string; sessionName: string; projectName: string; files: string[] } =>
                     e.files !== null
@@ -191,7 +195,12 @@ export function MissionControl(): JSX.Element {
         }
     }, [view])
 
-    const reviewRows = projects.filter((p) => (changes[p.id] ?? 0) > 0)
+    // A project belongs in the queue when it has changes AND when nobody could
+    // find out whether it has any. `?? 0` used to drop the second case, so a
+    // repo mid-rebase or holding an index.lock was reported as reviewed.
+    // `undefined` (not polled yet) is still excluded: that is a gap of one
+    // interval on mount, not an answer.
+    const reviewRows = projects.filter((p) => p.id in changes && changes[p.id] !== 0)
 
     const openReviewFor = (projectId: string): void => {
         setActiveProject(projectId)
@@ -211,7 +220,10 @@ export function MissionControl(): JSX.Element {
             prompt,
             exitCode: exitCodeOf(s.termId),
             lastAt: getLastAt(s.termId),
-            changedCount: changedBySession[s.termId] ?? 0,
+            // Passed through as-is, never `?? 0` and never `?? null`. An absent
+            // entry is `undefined` - a session nobody has polled yet - and that
+            // is a quieter fact than `null`, which means a poll ran and failed.
+            changedCount: changedBySession[s.termId],
             awaited: awaited.has(s.termId),
             alive: !!termAgents[s.termId]
         }
@@ -403,7 +415,9 @@ export function MissionControl(): JSX.Element {
                             <div key={p.id} className="mission-review-row">
                                 <span className="mission-review-proj">{p.name}</span>
                                 <span className="muted small">
-                                    {changes[p.id]} changed file{changes[p.id] === 1 ? "" : "s"}
+                                    {changes[p.id] === null
+                                        ? "couldn't check for changes"
+                                        : `${changes[p.id]} changed file${changes[p.id] === 1 ? "" : "s"}`}
                                 </span>
                                 <div className="mission-review-actions">
                                     <button onClick={() => openChanges(p.path, p.name)}>Diff</button>

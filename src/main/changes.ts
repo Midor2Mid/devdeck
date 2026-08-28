@@ -67,7 +67,9 @@ export function parseStatus(porcelain: string): ChangeFile[] {
 }
 
 export async function listChanges(cwd: string): Promise<ChangeFile[]> {
-    const r = await git(cwd, ["status", "--porcelain=v1", "-z"])
+    // `-uall` because the default `-unormal` collapses a wholly untracked
+    // directory into one entry - an agent that scaffolds forty files listed as 1.
+    const r = await git(cwd, ["status", "--porcelain=v1", "-z", "-uall"])
     // A failed `git status` is not "no changes" — it is "we don't know". Resolving
     // empty here made a transient failure (a missing git binary, a non-repo
     // directory, the 8s timeout, a `.git/index.lock` held by another agent or

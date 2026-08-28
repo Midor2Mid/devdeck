@@ -50,3 +50,49 @@ describe("evalTests", () => {
         expect(opsFor("body")).not.toContain("lt")
     })
 })
+
+// M7, second engine: `actualFor` used to fold "could not be read" into "", and
+// compare() reads "" as a value. An unreadable body made `neq` true and `lt`
+// true for any positive threshold — a green tick per row and "Tests ✓" at the
+// tab, for a request whose body never parsed.
+describe("a test whose observation could not be made", () => {
+    it("fails a neq against a body that is not JSON, instead of passing", () => {
+        const [r] = evalTests([t({ source: "json", target: "a.b", op: "neq", value: "1" })], {
+            body: "not json"
+        })
+        expect(r.pass).toBe(false)
+        expect(r.actual).toBeNull()
+    })
+
+    it("fails an lt when there was no timing to compare", () => {
+        const [r] = evalTests([t({ source: "time", op: "lt", value: "500" })], {
+            body: ""
+        })
+        expect(r.pass).toBe(false)
+        expect(r.actual).toBeNull()
+    })
+
+    it("fails a neq on a header the response never sent", () => {
+        const [r] = evalTests([t({ source: "header", target: "x-trace", op: "neq", value: "1" })], {
+            body: "",
+            headers: {}
+        })
+        expect(r.pass).toBe(false)
+    })
+
+    it("keeps an EMPTY value distinct from an unreadable one", () => {
+        // An empty body is a real observation: "" !== "1", so neq genuinely holds.
+        const [r] = evalTests([t({ source: "body", op: "neq", value: "1" })], { body: "" })
+        expect(r.actual).toBe("")
+        expect(r.pass).toBe(true)
+    })
+
+    it("still passes a test that really was observed", () => {
+        const [r] = evalTests([t({ source: "status", op: "eq", value: "200" })], {
+            body: "",
+            status: 200
+        })
+        expect(r.pass).toBe(true)
+        expect(r.actual).toBe("200")
+    })
+})

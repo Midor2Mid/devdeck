@@ -34,6 +34,8 @@ export type TileStateKind =
     | "asking"
     | "stalled"
     | "changed"
+    /** The file check failed: not CHANGED, and explicitly not clean either. */
+    | "unchecked"
     | "waiting"
     | "working"
     | "quiet"
@@ -47,8 +49,19 @@ export interface TileStateInput {
     exitCode: number | undefined
     /** When it last produced output (ms epoch), stamped at launch if never. */
     lastAt: number | undefined
-    /** Paths dirty now that were not dirty when the session started. */
-    changedCount: number
+    /**
+     * Paths dirty now that were not dirty when the session started.
+     *
+     * Three values, because there are three facts. A `number` is a claim about
+     * the tree. `null` is "we asked and could not find out" — the read failed —
+     * and the tile must then neither say CHANGED nor let any chip read as
+     * "nothing happened here". `undefined` is "nobody has asked yet", the gap of
+     * one poll interval after mount, which is not a failure and must stay quiet.
+     *
+     * `0` used to absorb all three, which is why the board needed a module-level
+     * `checkFailed` Set to say the second one out of band.
+     */
+    changedCount: number | null | undefined
     /** Is a board card or pipeline step actually waiting on this session? */
     awaited: boolean
     /** Is the session still on the grid (`!!termAgents[id]`)? */
@@ -75,11 +88,15 @@ export interface TileState {
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`
 
 /** The exit chip: clean, fast-fail, or a code. */
-function exited(code: number, changedCount: number): TileState {
+function exited(code: number, changedCount: number | null | undefined): TileState {
     const hex = "0x" + (code >>> 0).toString(16).toUpperCase()
     // Review is the only action a dead process can still be given, and only if
     // it left something behind. Reply is meaningless: nothing is listening.
-    const actions: TileActionKind[] = changedCount > 0 ? ["review"] : []
+    //
+    // `null` — we could not find out — offers it too. Withholding the only
+    // remaining action because a `git status` failed is the app deciding there
+    // is nothing to see on evidence it does not have.
+    const actions: TileActionKind[] = changedCount == null || changedCount > 0 ? ["review"] : []
     if (code === 0) {
         return {
             kind: "exited",
@@ -117,8 +134,36 @@ function exited(code: number, changedCount: number): TileState {
 
 /**
  * Resolve one tile's state. Order is the contract — see the spec's table.
+ *
+ * Wraps `baseTileState` with one rule that cuts across all of it: when the file
+ * check FAILED (`changedCount === null`, as opposed to `undefined` for "not
+ * asked yet"), no chip may read as "nothing happened here" and Review must stay
+ * reachable. QUIET is the chip that reads that way, so it is replaced outright;
+ * every other state keeps its more useful headline and gains the sentence and
+ * the action. NEEDS YOU and ASKING are left alone: the tile is relaying a
+ * question, and files are not what is being asked about.
  */
 export function resolveTileState(i: TileStateInput, now: number): TileState {
+    const st = baseTileState(i, now)
+    if (i.changedCount !== null || st.kind === "needs-you" || st.kind === "asking") return st
+    if (st.kind === "quiet") {
+        return {
+            kind: "unchecked",
+            chip: "COULDN'T CHECK",
+            mark: "?",
+            tone: "quiet",
+            detail: "Couldn't check for file changes since this session started.",
+            actions: ["review"]
+        }
+    }
+    return {
+        ...st,
+        detail: `${st.detail ? st.detail + " " : ""}Couldn't check for file changes.`,
+        actions: st.actions.includes("review") ? st.actions : [...st.actions, "review"]
+    }
+}
+
+function baseTileState(i: TileStateInput, now: number): TileState {
     // 1. Blocked on you, and we know exactly what it asked.
     if (i.prompt) {
         return {
@@ -160,7 +205,10 @@ export function resolveTileState(i: TileStateInput, now: number): TileState {
     }
     // 5. It produced something you have not looked at. Above WORKING on
     //    purpose: work that exists is reviewable whether or not it is finished.
-    if (i.changedCount > 0) {
+    //    A null count skips this rule rather than being read as 0: the tile
+    //    makes no file claim at all when the read failed, instead of quietly
+    //    asserting the tree is clean.
+    if (typeof i.changedCount === "number" && i.changedCount > 0) {
         return {
             kind: "changed",
             chip: `CHANGED · ${plural(i.changedCount, "file")}`,

@@ -13,16 +13,27 @@ export function ReviewPanel(): JSX.Element {
     const startReview = useStore((s) => s.startReview)
 
     const [selected, setSelected] = useState<Set<string>>(() => new Set(DEFAULT_LENSES))
+    // `null` means "we do not know" — no project, or a read that failed. The
+    // nullable type was already here and then collapsed at both ends: the
+    // producer caught to 0 and the consumer read `?? 0`, so an unreadable tree
+    // rendered "No uncommitted changes to review" and greyed out the button.
     const [changes, setChanges] = useState<number | null>(null)
+    // Loading is NOT failure. Without this the panel claims "couldn't check" for
+    // the moment before the first read resolves - which is the same conflation
+    // this whole change exists to remove, reintroduced one line lower down.
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
         if (activeProject) {
+            setLoading(true)
             window.api.git
                 .status(activeProject.path)
                 .then((g) => setChanges(g.isRepo ? g.changes : 0))
-                .catch(() => setChanges(0))
+                .catch(() => setChanges(null))
+                .finally(() => setLoading(false))
         } else {
             setChanges(null)
+            setLoading(false)
         }
         const h = (e: KeyboardEvent): void => {
             if (e.key === "Escape") close(false)
@@ -39,8 +50,13 @@ export function ReviewPanel(): JSX.Element {
             return next
         })
 
-    const hasChanges = (changes ?? 0) > 0
-    const canStart = !!activeProject && hasChanges && selected.size > 0
+    const unknown = !!activeProject && !loading && changes === null
+    const hasChanges = changes !== null && changes > 0
+    // An unknown count must NOT disable the button. Acting is precisely what the
+    // user should still be allowed to do when the app does not know — the
+    // reviewers read the tree themselves, and refusing to start on the strength
+    // of a failed `git status` is the app blocking work on evidence it lacks.
+    const canStart = !!activeProject && (hasChanges || unknown) && selected.size > 0
 
     return (
         <div className="switcher-backdrop" onMouseDown={() => close(false)}>
@@ -52,12 +68,16 @@ export function ReviewPanel(): JSX.Element {
                 <div className="review-body">
                     {!activeProject ? (
                         <div className="muted switcher-empty">No project selected.</div>
-                    ) : !hasChanges ? (
+                    ) : loading ? (
+                        <div className="muted switcher-empty">Reading the working tree…</div>
+                    ) : !hasChanges && !unknown ? (
                         <div className="muted switcher-empty">No uncommitted changes to review.</div>
                     ) : (
                         <>
                             <div className="review-sub muted small">
-                                {changes} changed file{changes === 1 ? "" : "s"} · one agent session per lens
+                                {unknown
+                                    ? "Couldn't check for uncommitted changes · the reviewers will read the tree themselves"
+                                    : `${changes} changed file${changes === 1 ? "" : "s"} · one agent session per lens`}
                             </div>
                             {LENSES.map((l) => (
                                 <label key={l.id} className="review-lens">

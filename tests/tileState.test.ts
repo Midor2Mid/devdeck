@@ -303,3 +303,78 @@ describe("wantsYou", () => {
         ).toBe(false)
     })
 })
+
+// Remedy item 9: `changedCount` can be null - the read failed, or has not
+// happened yet. `0` used to absorb both, and a tile is one of the surfaces that
+// turns 0 into a claim about the working tree.
+describe("a changed count that could not be established", () => {
+    it("does not claim CHANGED", () => {
+        expect(resolveTileState(input({ status: "idle", changedCount: null }), NOW).kind).not.toBe(
+            "changed"
+        )
+    })
+
+    it("keeps the more useful headline but says the file check failed", () => {
+        // WAITING is the better thing to put on the chip; the unknown rides in
+        // the detail, and Review is added so the state is actually actionable.
+        const s = resolveTileState(input({ status: "waiting", changedCount: null }), NOW)
+        expect(s.kind).toBe("waiting")
+        expect(s.chip).toMatch(/WAITING/)
+        expect(s.detail).toContain("Couldn't check for file changes")
+        expect(s.actions).toContain("review")
+    })
+
+    it("replaces QUIET outright, because QUIET reads as nothing happened here", () => {
+        const s = resolveTileState(
+            input({ status: "idle", awaited: false, changedCount: null }),
+            NOW
+        )
+        expect(s.kind).toBe("unchecked")
+        expect(s.chip).toBe("COULDN'T CHECK")
+        expect(s.actions).toEqual(["review"])
+    })
+
+    it("leaves a session that is asking you something alone", () => {
+        // The tile is relaying a question; files are not what is being asked.
+        const s = resolveTileState(input({ status: "attention", changedCount: null }), NOW)
+        expect(s.kind).toBe("asking")
+        expect(s.detail).not.toContain("Couldn't check")
+        expect(s.actions).toEqual(["reply"])
+    })
+
+    it("stays completely quiet for a session nobody has polled yet", () => {
+        // `undefined` is the gap of one poll interval after mount - not a
+        // failure, and it must not be dressed as one.
+        const s = resolveTileState(input({ status: "idle", awaited: false, changedCount: undefined }), NOW)
+        expect(s.kind).toBe("quiet")
+        expect(s.detail ?? "").not.toContain("Couldn't check")
+    })
+
+    it("says why the Review button is there, instead of leaving it unexplained", () => {
+        // A Review button beside "The process exited cleanly." with nothing
+        // explaining it is the affordance making a claim the text does not.
+        const s = resolveTileState(input({ exitCode: 0, changedCount: null }), NOW)
+        expect(s.detail).toContain("exited cleanly")
+        expect(s.detail).toContain("Couldn't check for file changes")
+        expect(s.actions).toContain("review")
+        expect(resolveTileState(input({ exitCode: 0, changedCount: 0 }), NOW).detail).not.toContain(
+            "Couldn't check"
+        )
+    })
+
+    it("still offers Review on a dead session, because nobody knows there is nothing there", () => {
+        // `changedCount: 0` correctly withholds it - the tree was checked and is
+        // clean. Withholding it on a FAILED check is the app deciding there is
+        // nothing to see on evidence it does not have.
+        expect(resolveTileState(input({ exitCode: 1, changedCount: null }), NOW).actions).toEqual([
+            "review"
+        ])
+        expect(resolveTileState(input({ exitCode: 1, changedCount: 0 }), NOW).actions).toEqual([])
+    })
+
+    it("leaves a real count saying exactly what it said before", () => {
+        const s = resolveTileState(input({ status: "idle", changedCount: 4 }), NOW)
+        expect(s.kind).toBe("changed")
+        expect(s.chip).toContain("4 files")
+    })
+})

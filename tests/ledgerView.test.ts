@@ -126,7 +126,7 @@ describe("runsSentence", () => {
         const s = runsSentence(
             totals({ cost: 4.18, counted: 12, excluded: 3, excludedShared: 3 }),
             15,
-            true
+            "some"
         )
         expect(s.count).toBe(15)
         expect(s.unit).toBe("runs")
@@ -135,7 +135,7 @@ describe("runsSentence", () => {
     })
 
     it("says $0 and why when every row on screen is an attribution", () => {
-        const s = runsSentence(totals({ excluded: 3, excludedShared: 3 }), 3, true)
+        const s = runsSentence(totals({ excluded: 3, excludedShared: 3 }), 3, "some")
         expect(s.count).toBe(3)
         expect(s.cost).toBe("$0")
         expect(s.why).toBe("3 excluded from the total (shared a project with another session)")
@@ -148,7 +148,7 @@ describe("runsSentence", () => {
         const s = runsSentence(
             totals({ excluded: 4, excludedShared: 1, excludedUnpriced: 3 }),
             4,
-            true
+            "some"
         )
         expect(s.why).toBe(
             "4 excluded from the total (1 shared a project with another session, " +
@@ -157,7 +157,7 @@ describe("runsSentence", () => {
     })
 
     it("says only that a reasonless exclusion cannot be vouched for", () => {
-        expect(runsSentence(totals({ excluded: 2 }), 2, true).why).toBe(
+        expect(runsSentence(totals({ excluded: 2 }), 2, "some").why).toBe(
             "2 excluded from the total (could not be vouched for)"
         )
     })
@@ -166,7 +166,7 @@ describe("runsSentence", () => {
         const s = runsSentence(
             totals({ excluded: 3, excludedShared: 1, excludedUnpriced: 1 }),
             4,
-            true
+            "some"
         )
         expect(s.why).toBe(
             "3 excluded from the total (1 shared a project with another session, " +
@@ -175,28 +175,28 @@ describe("runsSentence", () => {
     })
 
     it("uses the whole-clause phrasing when one reason covers every exclusion", () => {
-        expect(runsSentence(totals({ excluded: 2, excludedUnpriced: 2 }), 2, true).why).toBe(
+        expect(runsSentence(totals({ excluded: 2, excludedUnpriced: 2 }), 2, "some").why).toBe(
             "2 excluded from the total (had no cost to vouch for)"
         )
     })
 
     it("distinguishes an empty ledger from a filter that matched nothing", () => {
-        expect(runsSentence(totals(), 0, false).why).toBe("nothing recorded yet")
-        expect(runsSentence(totals(), 0, true).why).toBe("no runs match this filter")
+        expect(runsSentence(totals(), 0, "none").why).toBe("nothing recorded yet")
+        expect(runsSentence(totals(), 0, "some").why).toBe("no runs match this filter")
     })
 
     // The sentence is where the headline figure is actually built, so pin it
     // here too: a formatter that keeps cents is no use if the total reaches the
     // screen through something that rounds.
     it("states the headline total in exact cents, however large it gets", () => {
-        expect(runsSentence(totals({ cost: 12.5, counted: 3 }), 3, true).cost).toBe("$12.50")
-        expect(runsSentence(totals({ cost: 1234.567, counted: 90 }), 90, true).cost).toBe(
+        expect(runsSentence(totals({ cost: 12.5, counted: 3 }), 3, "some").cost).toBe("$12.50")
+        expect(runsSentence(totals({ cost: 1234.567, counted: 90 }), 90, "some").cost).toBe(
             "$1234.57"
         )
     })
 
     it("has no trailing clause when the total covers every row shown", () => {
-        const s = runsSentence(totals({ cost: 1.5, counted: 1 }), 1, true)
+        const s = runsSentence(totals({ cost: 1.5, counted: 1 }), 1, "some")
         expect(s.unit).toBe("run")
         expect(s.why).toBe("")
     })

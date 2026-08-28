@@ -121,10 +121,21 @@ export interface RunsSentence {
  * between the two is exactly what the `why` clause exists to say out loud;
  * dropping it would leave an under-report looking like a receipt.
  */
+/**
+ * What is known about the ledger behind an empty list.
+ *
+ * A boolean here could say "there is history" or "there is none", and the panel
+ * caught a failed read to `[]` — so a ledger DevDeck could not read was
+ * described to the user as "nothing recorded yet". That is the exact sentence
+ * the `null`-until-loaded comment above `runs` exists to prevent, undone one
+ * line below it. Four states, because there are four.
+ */
+export type RunHistory = "none" | "some" | "loading" | "unreadable"
+
 export function runsSentence(
     totals: RunTotals,
     shown: number,
-    hasHistory: boolean
+    history: RunHistory
 ): RunsSentence {
     let why = ""
     if (totals.excluded > 0) {
@@ -147,7 +158,14 @@ export function runsSentence(
         if (unexplained > 0) parts.push(clause(unexplained, "could not be vouched for"))
         why = `${totals.excluded} excluded from the total (${parts.join(", ")})`
     } else if (shown === 0) {
-        why = hasHistory ? "no runs match this filter" : "nothing recorded yet"
+        why =
+            history === "some"
+                ? "no runs match this filter"
+                : history === "none"
+                  ? "nothing recorded yet"
+                  : history === "loading"
+                    ? "reading the run ledger…"
+                    : "couldn't read the run ledger"
     }
     return {
         count: shown,

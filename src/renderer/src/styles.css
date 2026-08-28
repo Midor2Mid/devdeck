@@ -211,6 +211,16 @@ select:focus {
 .sb-changes:hover {
     color: var(--accent);
 }
+/* "We couldn't look" is not "there is nothing" and must not borrow the accent
+   that means reviewable work. --muted is the token for a fact the app cannot
+   vouch for; the leading "?" carries the same distinction in form, so the chip
+   survives the skins where --muted and --accent-soft sit close together. */
+.sb-changes.unknown {
+    color: var(--muted);
+}
+.sb-changes.unknown:hover {
+    color: var(--text);
+}
 .sb-attn {
     color: var(--accent);
 }
@@ -5733,7 +5743,10 @@ button .ic,
 [data-style="crt"] button.accent,
 [data-style="crt"] .lc-sha,
 [data-style="crt"] .work-key,
-[data-style="crt"] .sb-changes,
+/* :not(.unknown) — the phosphor glow is an accent, and the unknown chip must
+   not borrow the accent that means reviewable work. Without this it read muted
+   and glowed amber at the same time, in one style out of twelve. */
+[data-style="crt"] .sb-changes:not(.unknown),
 [data-style="crt"] .sb-pull.behind,
 [data-style="crt"] .sb-identity {
     text-shadow: 0 0 7px color-mix(in srgb, var(--accent) 55%, transparent);

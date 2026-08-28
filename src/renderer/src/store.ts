@@ -45,7 +45,7 @@ import {
     markCheckFailed,
     clearCheckFailed
 } from "./agentSignals"
-import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
+import { holdersOf, holdersSummary, sameDir, type CwdHolder } from "./ownership"
 import { recordExit, exitCodeOf, clearExit } from "./termExit"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -186,7 +186,15 @@ interface AppState extends Persisted {
      * already" question, asked before a second agent joins them rather than after
      * they have both written. Hits git per live session, so call it on demand.
      */
-    holdersIn: (cwd: string) => Promise<CwdHolder[]>
+    /**
+     * Who else is working in `cwd`, and how many sessions could not be checked.
+     *
+     * `unreadable` exists because the alternative was a `.catch(() => [])` that
+     * turned a failed `git status` into "that session is holding nothing" — and
+     * the caller renders that as "Its own checkout, so it can't collide with an
+     * agent already working in this project", which is a false all-clear.
+     */
+    holdersIn: (cwd: string) => Promise<{ holders: CwdHolder[]; unreadable: number }>
     /**
      * The directory a session's git reads resolve against. Exposed because more
      * than one view asks the same question, and two spellings of it drifted
@@ -1240,15 +1248,28 @@ export const useStore = create<AppState>((set, get) => {
                     // Same one rule as the evidence read and the conflict map: an
                     // empty-string termCwd entry must fall through, not be kept.
                     const dir = sessionCwd(s.termId)
-                    return {
-                        termId: s.termId,
-                        sessionName: s.sessionName,
-                        cwd: dir,
-                        files: (await window.api.git.changes(dir).catch(() => [])).map((c) => c.path)
-                    }
+                    // null, not [] - a read that failed says nothing about
+                    // whether this session is in the way.
+                    const files = await window.api.git
+                        .changes(dir)
+                        .then((cs) => cs.map((c) => c.path) as string[] | null)
+                        .catch(() => null)
+                    return { termId: s.termId, sessionName: s.sessionName, cwd: dir, files }
                 })
             )
-            return holdersOf(entries, cwd)
+            const readable = entries.filter(
+                (e): e is { termId: string; sessionName: string; cwd: string; files: string[] } =>
+                    e.files !== null
+            )
+            return {
+                holders: holdersOf(readable, cwd),
+                // Scoped to THIS directory, exactly as holdersOf is. Counting
+                // every failed read anywhere made a session mid-rebase in project
+                // B warn about a collision in project A - and, since a session
+                // whose cwd is outside every open project fails the IPC guard
+                // permanently, it would have latched the warning on forever.
+                unreadable: entries.filter((e) => e.files === null && sameDir(e.cwd, cwd)).length
+            }
         },
         dispatchBoardTask: async (id, opts) => {
             const task = get().boardTasks.find((t) => t.id === id)
@@ -1293,7 +1314,15 @@ export const useStore = create<AppState>((set, get) => {
             // Without a worktree the new agent shares the project's working tree.
             // If someone is already editing it, say who and what they're holding —
             // the conflict map only tells you this after both have written.
-            const clash = opts.worktree ? "" : holdersSummary(await get().holdersIn(proj.path))
+            // A session we could not read is not an absence of conflict, and this
+            // confirm is the last beat before real tokens are spent - it says so.
+            const who = opts.worktree ? null : await get().holdersIn(proj.path)
+            const clash = who
+                ? holdersSummary(who.holders) ||
+                  (who.unreadable > 0
+                      ? `Couldn't check ${who.unreadable === 1 ? "one session" : `${who.unreadable} sessions`} for changes, so this may still collide with an agent already working here.`
+                      : "")
+                : ""
 
             const ok = await confirm({
                 title: "Dispatch to an agent",
@@ -1639,20 +1668,33 @@ export const useStore = create<AppState>((set, get) => {
                         : s
                 )
 
-            // Wait until an agent term has settled: seen working, then idle for a beat.
-            const waitForIdle = async (termId: string): Promise<"idle" | "stopped" | "gone"> => {
+            /**
+             * Wait until an agent term has settled: seen working, then idle for a beat.
+             *
+             * The result is a discriminated `ok`, not a three-way union of strings.
+             * The union named "gone" — the session left the grid, killed or crashed
+             * — and the dispatch below handled only "stopped", so a step whose agent
+             * died fell into the SUCCESS branch: marked `done`, a ✓ in the pipeline
+             * bar, and the run finishing `status: "done"` on work that never
+             * happened. With `ok`, falling through on an outcome nobody enumerated
+             * is impossible rather than merely wrong.
+             */
+            const waitForIdle = async (
+                termId: string
+            ): Promise<{ ok: true } | { ok: false; reason: "stopped" | "gone" }> => {
                 const start = Date.now()
                 let sawWork = false
                 for (;;) {
-                    if (stale()) return "stopped"
-                    if (!get().termAgents[termId]) return "gone"
+                    if (stale()) return { ok: false, reason: "stopped" }
+                    if (!get().termAgents[termId]) return { ok: false, reason: "gone" }
                     const st = get().agentStatus[termId]
                     if (st === "working") sawWork = true
                     if (st === "attention") setRun({ status: "waiting" })
                     else if (get().pipelineRun?.status === "waiting") setRun({ status: "running" })
                     const elapsed = Date.now() - start
                     // Require either observed work or a minimum grace, then a stable idle.
-                    if (st === "idle" && (sawWork || elapsed > 4000) && elapsed > 1500) return "idle"
+                    if (st === "idle" && (sawWork || elapsed > 4000) && elapsed > 1500)
+                        return { ok: true }
                     await sleep(300)
                 }
             }
@@ -1779,7 +1821,18 @@ export const useStore = create<AppState>((set, get) => {
                         await sleep(600)
                         const result = await waitForIdle(termId)
                         off()
-                        if (result === "stopped") return
+                        if (!result.ok) {
+                            // "stopped" is the user's Stop: the run is already being
+                            // torn down, so leave quietly. "gone" is the session
+                            // dying mid-step, which used to reach the success branch
+                            // below and mark the step done.
+                            if (result.reason === "stopped") return
+                            passed = false
+                            setStep(i, { status: "failed", gateMsg: "session went away mid-step" })
+                            setRun({ status: "error", gateMsg: "the agent session went away mid-step" })
+                            skipFrom(i + 1)
+                            return
+                        }
 
                         if (!gateActive(step.gate)) {
                             passed = true

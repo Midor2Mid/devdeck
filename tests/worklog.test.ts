@@ -56,6 +56,19 @@ describe("buildWorklog", () => {
         expect(md).toContain("- claude · fix #1423")
     })
 
+    it("names a repo whose status could not be read, rather than omitting it", () => {
+        // `changes: null` is a failed `git status`. Filtering on `> 0` dropped
+        // the repo entirely, so a standup someone reads as complete quietly
+        // left out the one project the app could not look at.
+        const md = buildWorklog({
+            title: "T",
+            repos: [repo({ name: "web", branch: "dev", changes: null })],
+            sessions: []
+        })
+        expect(md).toContain("## In progress")
+        expect(md).toContain("- **web** (dev): couldn't check for uncommitted changes")
+    })
+
     it("omits In progress entirely when clean and no sessions", () => {
         const md = buildWorklog({ title: "T", repos: [repo({ commits: [{ sha: "a", subject: "s", when: "w" }] })], sessions: [] })
         expect(md).not.toContain("## In progress")
