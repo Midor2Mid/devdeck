@@ -47,8 +47,13 @@ import * as worklog from "./worklog"
 import * as pr from "./pr"
 import { loadWindowState, saveWindowState } from "./windowState"
 import * as updater from "./updater"
+import { closePrompt } from "./closePrompt"
 
 let mainWindow: BrowserWindow | null = null
+/** Latched once the user has confirmed a close, or a quit is already running. */
+let quitDecided = false
+/** Latched by `teardown()`, so the two paths into it cannot both run it. */
+let tornDown = false
 
 /**
  * Renderer hardening (per the electron-best-practices security checklist):
@@ -137,7 +142,33 @@ function createWindow(): void {
         mainWindow.loadFile(join(__dirname, "../renderer/index.html"))
     }
 
-    mainWindow.on("close", () => {
+    mainWindow.on("close", (e) => {
+        // Main is the only process that can refuse a close, and until now it was
+        // the only one that did not know whether anything was running. `Ctrl+W`
+        // on a pane the user thought was a tab took the whole window, and every
+        // agent in it, with no way back.
+        if (!quitDecided) {
+            const prompt = closePrompt(ptyMgr.liveAgents())
+            // `showMessageBoxSync` blocks, so a second close cannot arrive
+            // mid-question; and a confirmed close latches `quitDecided`, so the
+            // app can never be made unquittable by this handler.
+            if (prompt && mainWindow) {
+                const choice = dialog.showMessageBoxSync(mainWindow, {
+                    type: "warning",
+                    message: prompt.message,
+                    detail: prompt.detail,
+                    buttons: prompt.buttons,
+                    defaultId: 0,
+                    cancelId: 0,
+                    noLink: true
+                })
+                if (choice === 0) {
+                    e.preventDefault()
+                    return
+                }
+            }
+            quitDecided = true
+        }
         if (mainWindow) saveWindowState(mainWindow)
     })
 }
@@ -611,13 +642,15 @@ function registerIpc(): void {
     ipcMain.handle("extend:remove", (_e, item: { kind: "skill" | "agent"; name: string; scope: "global" | "project"; path: string }) => skills.remove(item))
 
     // --- Terminal record & replay ---
-    ipcMain.handle("rec:start", (_e, termId: string) => recorder.startRecording(termId))
-    ipcMain.handle(
-        "rec:stop",
-        (_e, { termId, projectPath, label }: { termId: string; projectPath: string; label: string }) => {
-            guardPath(projectPath)
-            return recorder.stopRecording(termId, projectPath, label)
-        }
+    // `projectPath` is guarded and captured at *start*: the recorder then owns
+    // the destination, `rec:stop` needs nothing from the renderer, and a quit
+    // can flush a recording the renderer is no longer around to place.
+    ipcMain.handle("rec:start", (_e, { termId, projectPath }: { termId: string; projectPath: string }) => {
+        guardPath(projectPath)
+        return recorder.startRecording(termId, projectPath)
+    })
+    ipcMain.handle("rec:stop", (_e, { termId, label }: { termId: string; label: string }) =>
+        recorder.stopRecording(termId, label)
     )
     ipcMain.handle("rec:active", (_e, termId: string) => recorder.isRecording(termId))
     ipcMain.handle("rec:list", (_e, projectPath: string) => {
@@ -793,11 +826,34 @@ app.whenReady().then(() => {
     })
 })
 
-app.on("window-all-closed", () => {
+/**
+ * Everything that must happen before the process goes, exactly once.
+ *
+ * This used to live only in `window-all-closed`, which is one of several ways
+ * DevDeck stops: an `app.quit()` from the updater, an OS shutdown, a quit from
+ * anywhere that is not the last window closing, all skipped it - leaving pty
+ * trees alive, sqlite handles open, and the WS server bound.
+ */
+function teardown(): void {
+    if (tornDown) return
+    tornDown = true
+    // First, because it is the only step whose failure loses user data.
+    recorder.flushAll()
     ptyMgr.killAll()
     db.closeAll()
     server.stop()
     void mcpserver.stop()
     proxy.stop()
+}
+
+app.on("before-quit", () => {
+    // The close handler asks the question; this one never does. A quit already
+    // under way has been decided, and a second dialog here would ask it twice.
+    quitDecided = true
+    teardown()
+})
+
+app.on("window-all-closed", () => {
+    teardown()
     if (process.platform !== "darwin") app.quit()
 })

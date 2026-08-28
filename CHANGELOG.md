@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+### Main owns "is it safe to stop"
+
+Remedy item 6 of the 2026-08-26 audit. The renderer knew how many agents were
+live and could not veto anything; main could veto and did not know. `Ctrl+W` on
+a pane the user thought was a tab took the whole window and every agent in it,
+with no way back.
+
+- **Closing the window while an agent is running now asks.** Main already
+  receives `agentId` on `pty:create` (it decrypts that agent's API key from it)
+  and used to throw it away; it now keeps it, so the close handler can count
+  what is running and refuse. Cancel is the default button. A plain shell
+  sitting at a prompt is not counted - prompting for one would train you to
+  dismiss the dialog without reading it.
+- **A quit now tears down from any direction.** `before-quit` runs the same
+  teardown `window-all-closed` did, so a quit that never goes through the last
+  window closing no longer leaves pty trees alive, sqlite handles open and the
+  WS server bound. It never prompts - the close handler already asked.
+- **Closing a pane kills what the pane started.** `proc.kill()` signals the
+  shell alone: a `npm run dev` that backgrounded a dev server left it running
+  and holding its port after the pane was gone, invisibly. Panes are now reaped
+  with `taskkill /T` on Windows. **This is a behaviour change:** something your
+  shell launched deliberately to outlive the pane now dies with it.
+- **A recording is written before it is forgotten.** `stopRecording` used to
+  detach the listener and drop the events *before* writing the file, so a
+  read-only directory or a project deleted mid-recording destroyed the only copy
+  and the error you saw was the sound of it going. The write now comes first,
+  and a failure leaves the recording intact and retryable. The destination is
+  also captured at `rec:start` rather than supplied at stop - which removes the
+  renderer's ability to be wrong about where a recording goes, and lets a quit
+  flush a recording in progress.
+- **Closing a recording pane no longer claims it saved.** The UI cleared the
+  recording indicator on the same tick it asked main to stop, without waiting
+  for or catching the answer.
+
 ## 0.9.1 - 2026-08-27
 
 ### The stores stop destroying themselves

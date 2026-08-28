@@ -194,11 +194,18 @@ export function TerminalView(): JSX.Element {
         if (!pane) return
         const label = activeTab?.name ?? "session"
         if (recordingTermId === pane) {
-            const meta = await window.api.rec.stop(pane, activeProject.path, label)
-            setRecordingTermId(null)
-            if (meta) noteRecording(pane, `${label} · recorded (${meta.events} frames)`)
+            // Clear the indicator only once the file exists. A rejected stop now
+            // leaves the events in main and the pane still marked as recording,
+            // which is the truth - the alternative told the user it was saved.
+            try {
+                const meta = await window.api.rec.stop(pane, label)
+                setRecordingTermId(null)
+                if (meta) noteRecording(pane, `${label} · recorded (${meta.events} frames)`)
+            } catch (e) {
+                noteRecording(pane, `${label} · not saved: ${(e as Error).message}`)
+            }
         } else if (!recordingTermId) {
-            await window.api.rec.start(pane)
+            await window.api.rec.start(pane, activeProject.path)
             setRecordingTermId(pane)
         }
     }

@@ -1,5 +1,6 @@
 import * as nodePty from "@lydell/node-pty"
 import { EventEmitter } from "events"
+import { spawnSync } from "child_process"
 
 /**
  * A running pty and the tail of what it has printed.
@@ -9,6 +10,15 @@ interface Live {
     proc: nodePty.IPty
     /** Rolling tail of output, replayed when a client attaches to this id. */
     buffer: string
+    /**
+     * The agent this session runs, when it runs one.
+     *
+     * Main already receives this on `pty:create` (it decrypts that agent's API
+     * key from it) and used to throw it away. Keeping it is what lets the close
+     * handler answer "is anything still working" without a new IPC channel and
+     * without the renderer being asked at teardown time.
+     */
+    agentId?: string
 }
 
 /**
@@ -63,6 +73,8 @@ export interface CreateOpts {
     rows?: number
     /** Extra env vars merged over the inherited environment (e.g. model, API key). */
     env?: Record<string, string>
+    /** Agent this terminal runs, if any. Plain shells leave it undefined. */
+    agentId?: string
 }
 
 function defaultShell(): { file: string; args: string[] } {
@@ -139,7 +151,7 @@ export function createPty(opts: CreateOpts): void {
         rows: opts.rows ?? 24,
         env: terminalEnv(opts.env)
     })
-    const live: Live = { kind: "live", proc, buffer: "" }
+    const live: Live = { kind: "live", proc, buffer: "", agentId: opts.agentId }
     sessions.set(id, live)
 
     proc.onData((data) => {
@@ -195,16 +207,67 @@ export function resizePty(id: string, cols: number, rows: number): void {
     }
 }
 
+/**
+ * The agent ids of every session still running, one entry per live pty.
+ *
+ * Duplicates are kept: two panes running the same agent are two pieces of work
+ * in flight, and the close prompt counts work, not distinct agents.
+ */
+export function liveAgents(): string[] {
+    const out: string[] = []
+    for (const e of sessions.values()) {
+        if (e.kind === "live" && e.agentId) out.push(e.agentId)
+    }
+    return out
+}
+
+/**
+ * Kill a shell *and everything it started*.
+ *
+ * `proc.kill()` signals the shell alone. On Windows a conpty shell is routinely
+ * the root of a tree — `npm run dev` -> `node` -> a dev server holding a port —
+ * and those grandchildren survived every close: the pane vanished, the port
+ * stayed bound, and nothing in the UI could explain why the next run failed to
+ * bind. `taskkill /T` walks the tree; `/F` is needed because a detached child
+ * has no console to receive a polite request on.
+ *
+ * It must be **synchronous**. An async `spawn` loses the race with the
+ * `proc.kill()` on the next line: the shell dies first, its detached children
+ * are re-parented, and `taskkill /T` then walks a tree that no longer contains
+ * them - which is exactly the leak this is here to stop. Measured, not assumed.
+ *
+ * Best-effort otherwise: a failed or missing `taskkill` costs nothing, because
+ * `proc.kill()` still runs. `pid` is 0 for the first moment after spawn (the
+ * conpty handshake is async), and a 0 must never be passed to `taskkill /T`.
+ */
+function reapTree(proc: nodePty.IPty): void {
+    if (process.platform !== "win32") return
+    const pid = proc.pid
+    if (!pid || pid < 1) return
+    try {
+        spawnSync("taskkill", ["/T", "/F", "/PID", String(pid)], {
+            stdio: "ignore",
+            windowsHide: true,
+            timeout: 5000
+        })
+    } catch {
+        /* taskkill missing or refused; proc.kill() below still runs */
+    }
+}
+
+function killEntry(e: Live): void {
+    reapTree(e.proc)
+    try {
+        e.proc.kill()
+    } catch {
+        /* already dead */
+    }
+}
+
 export function killPty(id: string): void {
     const e = sessions.get(id)
     if (!e) return
-    if (e.kind === "live") {
-        try {
-            e.proc.kill()
-        } catch {
-            /* already dead */
-        }
-    }
+    if (e.kind === "live") killEntry(e)
     // A corpse is dropped the same way: this is the pane closing for good.
     sessions.delete(id)
 }
@@ -212,11 +275,7 @@ export function killPty(id: string): void {
 export function killAll(): void {
     for (const e of sessions.values()) {
         if (e.kind !== "live") continue
-        try {
-            e.proc.kill()
-        } catch {
-            /* ignore */
-        }
+        killEntry(e)
     }
     sessions.clear()
 }

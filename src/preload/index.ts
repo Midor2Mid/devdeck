@@ -771,9 +771,11 @@ const api = {
         }
     },
     rec: {
-        start: (termId: string): Promise<void> => ipcRenderer.invoke("rec:start", termId),
-        stop: (termId: string, projectPath: string, label: string): Promise<RecordingMeta | null> =>
-            ipcRenderer.invoke("rec:stop", { termId, projectPath, label }),
+        /** `projectPath` decides where the recording lands, and is captured here, at start. */
+        start: (termId: string, projectPath: string): Promise<void> =>
+            ipcRenderer.invoke("rec:start", { termId, projectPath }),
+        stop: (termId: string, label: string): Promise<RecordingMeta | null> =>
+            ipcRenderer.invoke("rec:stop", { termId, label }),
         active: (termId: string): Promise<boolean> => ipcRenderer.invoke("rec:active", termId),
         list: (projectPath: string): Promise<RecordingMeta[]> => ipcRenderer.invoke("rec:list", projectPath),
         load: (path: string): Promise<Recording> => ipcRenderer.invoke("rec:load", path)

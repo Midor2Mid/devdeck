@@ -2168,10 +2168,25 @@ export const useStore = create<AppState>((set, get) => {
             }
 
             // If this pane was recording, persist the recording before it dies.
+            //
+            // `rec.stop` is an `ipcMain.handle` that can reject two ways, and the
+            // clear used to run unconditionally on the same tick: the UI marked
+            // the recording saved at the exact moment the only copy of the events
+            // could be being dropped. It is sent before `pty.kill` deliberately -
+            // both cross the same channel in order, so the recorder sees the stop
+            // while its pty is still alive.
             if (s.recordingTermId === termId) {
-                const path = s.projects.find((p) => p.id === ownerProject)?.path
-                if (path) window.api.rec.stop(termId, path, ownerTab?.name ?? "session")
-                set({ recordingTermId: null })
+                const label = ownerTab?.name ?? "session"
+                void window.api.rec
+                    .stop(termId, label)
+                    .catch((e: Error) => {
+                        // The pane is already gone, so there is nothing left to
+                        // retry from: clear the indicator, but say what happened
+                        // rather than claim a file exists. Main still holds the
+                        // events, and `flushAll()` gets one more attempt on quit.
+                        get().noteRecording(termId, `${label} · not saved: ${e.message}`)
+                    })
+                    .finally(() => set({ recordingTermId: null }))
             }
             window.api.pty.kill(termId)
             forget(termId)
