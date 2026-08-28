@@ -5,8 +5,19 @@
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "f=\"${CLAUDE_PROJECT_DIR:-.}/.superpowers/HANDOFF.md\"; [ -f \"$f\" ] && { echo \"=== HANDOFF (resume state — read before planning) ===\"; cat \"$f\"; } || true",
-                        "statusMessage": "Loading handoff state"
+                        "command": "sh \"${CLAUDE_PROJECT_DIR:-.}/.claude/resume.sh\"",
+                        "statusMessage": "Deriving position + loading handoff"
+                    }
+                ]
+            }
+        ],
+        "PreCompact": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "echo 'PreCompact: detail is about to be dropped. If anything since the last handoff changed WHERE THE WORK STANDS (a phase finished, a decision was made, a blocker was hit), rewrite .superpowers/HANDOFF.md sections 1-2 NOW, before the context is compacted. Mechanical git facts are derived by .claude/resume.sh -- do not hand-type branch/commit/pushed state into the file.'",
+                        "statusMessage": "Reminding to refresh handoff"
                     }
                 ]
             }
