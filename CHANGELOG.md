@@ -51,6 +51,20 @@ dangerous - a bug in a path string was enough.
 - `extend:list` and `extend:remove` were the only two path-taking handlers in
   the IPC surface with no containment check at all. Both have one now.
 
+### Undo belongs to the close, not to the view
+
+Remedy item 8. Closing a session offered an Undo in Tabs and offered nothing in
+Overview or Canvas - the two cross-project surfaces the product exists for. The
+split was never a decision about intent, only about which file the button
+happened to live in.
+
+- `closePane` is now the closer that offers undo, so a view gets it by doing
+  nothing special. Closing a row in Overview (the hover x, middle-click, or
+  Delete) and closing a card in Canvas now offer the session back.
+- The close that must stay silent - the multi-pane tab close, where an undo
+  restoring one pane of three would lie - says so explicitly with
+  `closePaneSilent`.
+
 ## 0.9.1 - 2026-08-27
 
 ### The stores stop destroying themselves

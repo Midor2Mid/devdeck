@@ -323,14 +323,30 @@ interface AppState extends Persisted {
     /** Run a fixed command in a shell tab, focusing an existing one if it's already running it. */
     runCommandTab: (command: string, label?: string) => void
     splitActive: (dir: SplitDir, agentId: string) => void
+    /**
+     * Close a pane the way a person means it: the pane goes, and an undo toast
+     * offers it back.
+     *
+     * This is deliberately the *default* name. The split used to be by view -
+     * Tabs had undo, Overview and Canvas did not - which meant the two
+     * cross-project surfaces silently lost a session on a mis-click. The safe
+     * closer now owns the obvious name, and losing the undo takes an explicit
+     * call to `closePaneSilent`.
+     */
     closePane: (termId: string) => void
+    /**
+     * Close a pane with no undo offered.
+     *
+     * For closes a person did not ask for one pane at a time: a finished
+     * pipeline step tidying itself up, or the multi-pane tab close, where an
+     * undo that quietly restored one of three panes would lie.
+     */
+    closePaneSilent: (termId: string) => void
     closeActivePane: () => void
     /** The pane blown up to fill the stage, if any. Advisory: validZoom decides if it applies. */
     zoomedPane: string | undefined
     /** Zoom the given pane (default: the active one), or unzoom if it is already zoomed. */
     toggleZoomPane: (paneId?: string) => void
-    /** Close a pane the USER closed: same as closePane, plus an undo toast. */
-    closePaneWithUndo: (termId: string) => void
     /** Sessions closed this run, newest first, for undo. Not persisted: the ptys are gone. */
     closedSessions: ClosedSession[]
     /** Reopen the most recently closed session, resuming it where the agent supports it. */
@@ -2133,7 +2149,7 @@ export const useStore = create<AppState>((set, get) => {
             persist()
         },
 
-        closePane: (termId) => {
+        closePaneSilent: (termId) => {
             const s = get()
             if (isAgentId(s.agentOf(termId))) pushActivity("close", termId)
             let ownerProject: string | undefined
@@ -2224,16 +2240,17 @@ export const useStore = create<AppState>((set, get) => {
             const projectId = s.activeId
             if (!projectId) return
             const pane = s.activePane(projectId)
-            if (pane) s.closePaneWithUndo(pane)
+            if (pane) s.closePane(pane)
         },
 
-        closePaneWithUndo: (termId) => {
-            // Only for closes a person asked for. A programmatic closer (a
-            // finished pipeline step) must not offer to undo work the app
-            // itself tidied up, so it keeps calling closePane instead.
+        closePane: (termId) => {
+            // The default closer, so a new call site gets the safe behaviour
+            // without having to know that the other one exists. A closer that
+            // must NOT offer undo - a finished pipeline step, the multi-pane tab
+            // close - says so by calling `closePaneSilent`.
             const s = get()
             const label = s.termNames[termId] ?? s.activeTab(s.activeId ?? "")?.name ?? "session"
-            s.closePane(termId)
+            s.closePaneSilent(termId)
             undoToast(`Closed ${label}`, () => get().reopenLastClosed())
         },
 

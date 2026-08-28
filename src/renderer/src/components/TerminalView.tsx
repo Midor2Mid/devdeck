@@ -35,7 +35,7 @@ export function TerminalView(): JSX.Element {
     const agentStatus = useStore((s) => s.agentStatus)
     const newTab = useStore((s) => s.newTab)
     const splitActive = useStore((s) => s.splitActive)
-    const closePane = useStore((s) => s.closePane)
+    const closePaneSilent = useStore((s) => s.closePaneSilent)
     const renameTab = useStore((s) => s.renameTab)
     const setActiveTab = useStore((s) => s.setActiveTab)
     const composerDraft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
@@ -88,7 +88,7 @@ export function TerminalView(): JSX.Element {
     const activePaneId = useStore((s) => (s.activeId ? s.activePaneByProject[s.activeId] : undefined))
     const zoomedPane = useStore((s) => s.zoomedPane)
     const toggleZoomPane = useStore((s) => s.toggleZoomPane)
-    const closePaneWithUndo = useStore((s) => s.closePaneWithUndo)
+    const closePane = useStore((s) => s.closePane)
     // Holding Alt reveals each tab's jump number, so Alt+N teaches itself
     // instead of living only in the shortcuts sheet.
     const [altHeld, setAltHeld] = useState(false)
@@ -222,7 +222,7 @@ export function TerminalView(): JSX.Element {
     const closeTab = async (tab: Tab): Promise<void> => {
         const panes = [...new Set(collectLeaves(tab.root))]
         if (panes.length === 1) {
-            closePaneWithUndo(panes[0])
+            closePane(panes[0])
             return
         }
         const ok = await confirm({
@@ -232,7 +232,7 @@ export function TerminalView(): JSX.Element {
             danger: true
         })
         if (!ok) return
-        panes.forEach(closePane)
+        panes.forEach(closePaneSilent)
     }
 
     // The Alt+1..9 order, and the zoom that survives the current stage.
@@ -751,7 +751,7 @@ export function TerminalView(): JSX.Element {
                                             <span
                                                 className="tab-close"
                                                 data-tip="Close"
-                                                onClick={() => closePaneWithUndo(termId)}
+                                                onClick={() => closePane(termId)}
                                             >
                                                 ×
                                             </span>
