@@ -638,8 +638,29 @@ function registerIpc(): void {
         if (scope === "project") guardPath(projectPath)
         return skills.install(repo, ref, item, scope, projectPath)
     })
-    ipcMain.handle("extend:list", (_e, projectPath: string) => skills.listInstalled(projectPath))
-    ipcMain.handle("extend:remove", (_e, item: { kind: "skill" | "agent"; name: string; scope: "global" | "project"; path: string }) => skills.remove(item))
+    // The only two path-taking handlers in this file that had no containment
+    // call at all. An empty projectPath is the legitimate "no project open"
+    // case, where only the global scope is in play.
+    ipcMain.handle("extend:list", (_e, projectPath: string) => {
+        if (projectPath) guardPath(projectPath)
+        return skills.listInstalled(projectPath)
+    })
+    ipcMain.handle(
+        "extend:remove",
+        (
+            _e,
+            {
+                item,
+                projectPath
+            }: {
+                item: { kind: "skill" | "agent"; name: string; scope: "global" | "project"; path: string }
+                projectPath: string
+            }
+        ) => {
+            if (item.scope === "project") guardPath(projectPath)
+            return skills.remove(item, projectPath)
+        }
+    )
 
     // --- Terminal record & replay ---
     // `projectPath` is guarded and captured at *start*: the recorder then owns

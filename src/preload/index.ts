@@ -734,7 +734,8 @@ const api = {
         ): Promise<InstalledItem> => ipcRenderer.invoke("extend:install", { repo, ref, item, scope, projectPath }),
         list: (projectPath: string): Promise<{ global: InstalledItem[]; project: InstalledItem[] }> =>
             ipcRenderer.invoke("extend:list", projectPath),
-        remove: (item: InstalledItem): Promise<void> => ipcRenderer.invoke("extend:remove", item)
+        remove: (item: InstalledItem, projectPath: string): Promise<void> =>
+            ipcRenderer.invoke("extend:remove", { item, projectPath })
     },
     shell: {
         open: (url: string): Promise<void> => ipcRenderer.invoke("shell:open", url)

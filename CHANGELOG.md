@@ -36,6 +36,21 @@ with no way back.
   recording indicator on the same tick it asked main to stop, without waiting
   for or catching the answer.
 
+### Uninstalling a skill is confined to a root
+
+Remedy item 7. `skills.remove` guarded a recursive `rmSync` with an unanchored,
+root-agnostic regex: any path whose middle looked like `/.claude/skills/<leaf>`
+passed it, wherever it lived. `D:/OtherProduct/.claude/agents/x` and another
+user's home directory both qualified. It did not need an attacker to be
+dangerous - a bug in a path string was enough.
+
+- The location is now **rebuilt** from the scope's root with the same function
+  that decided where the item was installed, and the caller's path is checked
+  against it rather than acted on. Removing a global skill still works; removing
+  one project's item while another project is open does not.
+- `extend:list` and `extend:remove` were the only two path-taking handlers in
+  the IPC surface with no containment check at all. Both have one now.
+
 ## 0.9.1 - 2026-08-27
 
 ### The stores stop destroying themselves
