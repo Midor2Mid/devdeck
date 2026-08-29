@@ -407,10 +407,31 @@ function registerIpc(): void {
     })
 
     // --- Database ---
+    // A SQLite "connection" is a file path, so creating or testing one is a
+    // file read - the one path-taking channel that had no confinement, and
+    // therefore the way around the confinement on all the others. Allowed if
+    // the file is inside an open project, or if the user personally picked it
+    // in the dialog (db:pickFile records that in the main process, where a
+    // renderer cannot add to it). Not narrowed to project roots alone: a
+    // database in D:\data is an ordinary thing to point DevDeck at, and
+    // removing that would be a worse bug than the one being fixed.
+    const guardDbInput = (input: { kind?: string; database?: string }): void => {
+        if (!input || input.kind !== "sqlite") return
+        const file = String(input.database ?? "")
+        if (!file) throw new Error("A SQLite connection needs a database file.")
+        if (inProject(file) || db.isApprovedDbFile(file)) return
+        throw new Error("That database file is outside every open project - use Browse to choose it.")
+    }
     ipcMain.handle("db:list", (_e, projectId: string) => db.listConnections(projectId))
-    ipcMain.handle("db:save", (_e, input) => db.saveConnection(input))
+    ipcMain.handle("db:save", (_e, input) => {
+        guardDbInput(input)
+        return db.saveConnection(input)
+    })
     ipcMain.handle("db:remove", (_e, id: string) => db.removeConnection(id))
-    ipcMain.handle("db:test", (_e, input) => db.testConnection(input))
+    ipcMain.handle("db:test", (_e, input) => {
+        guardDbInput(input)
+        return db.testConnection(input)
+    })
     ipcMain.handle("db:query", (_e, { profileId, sql }) => db.runQuery(profileId, sql))
     ipcMain.handle("db:tables", (_e, profileId: string) => db.listTables(profileId))
     ipcMain.on("db:disconnect", (_e, profileId: string) => db.disconnect(profileId))
@@ -423,7 +444,11 @@ function registerIpc(): void {
                 { name: "All files", extensions: ["*"] }
             ]
         })
-        return res.canceled ? "" : (res.filePaths[0] ?? "")
+        const picked = res.canceled ? "" : (res.filePaths[0] ?? "")
+        // The dialog IS the boundary: this is the moment the user chose a file
+        // outside their projects, and it is a choice the renderer cannot forge.
+        if (picked) db.approveDbFile(picked)
+        return picked
     })
 
     // Generic open-file picker (returns "" if cancelled).

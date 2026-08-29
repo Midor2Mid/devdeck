@@ -1,5 +1,5 @@
 import { app, safeStorage } from "electron"
-import { join } from "path"
+import { join, resolve } from "path"
 import { readFileSync } from "fs"
 import { atomicWrite } from "./atomic"
 import { randomUUID } from "crypto"
@@ -222,8 +222,14 @@ function getPool(profileId: string): LivePool {
         msReady.catch(() => undefined) // surfaced on the first query's await; avoid an unhandled rejection
         live = { kind: "sqlserver", ms, msReady }
     } else {
-        // SQLite: the `database` field holds the .db file path.
-        live = { kind: "sqlite", sqlite: new SqliteDatabase(profile.database) }
+        // SQLite: the `database` field holds the .db file path. `fileMustExist`
+        // because opening a path that isn't there used to CREATE an empty
+        // database and report a healthy connection to it - a typo in the path
+        // looked like a working connection with no tables in it.
+        live = {
+            kind: "sqlite",
+            sqlite: new SqliteDatabase(profile.database, { fileMustExist: true })
+        }
     }
     // A pool-level error (e.g. server dropped) shouldn't crash the app.
     live.pg?.on("error", (e) => console.error("[db] pg pool error:", e.message))
@@ -253,12 +259,94 @@ export function closeAll(): void {
     for (const id of [...pools.keys()]) closePool(id)
 }
 
+// ---------- which SQLite files may be opened ----------
+//
+// A SQLite "connection" is a file path the renderer hands over, and opening
+// one is a file read. Every other path-taking channel is confined to the open
+// projects; this one was not, so it was the way around that confinement.
+//
+// Confining it to project roots alone would have removed a real capability -
+// a database in D:\data is a perfectly ordinary thing to point DevDeck at. So
+// the boundary is *who chose the path*: inside a project, or picked by the
+// user through the file dialog, which is a decision a renderer cannot forge.
+//
+// The approvals are persisted (a saved connection must survive a restart) and
+// written only by the main process, so nothing in the renderer can add to
+// them without a dialog the user actually sees. On first run the list is
+// seeded from the SQLite profiles that already exist: those were chosen by
+// the user before this boundary existed, and silently breaking them would be
+// a bug report, not a security win.
+function approvalsFile(): string {
+    return join(app.getPath("userData"), "approved-db-files.json")
+}
+function normPath(p: string): string {
+    const r = resolve(p)
+    return process.platform === "win32" ? r.toLowerCase() : r
+}
+let approvedFiles: Set<string> | null = null
+
+function persistApprovals(set: Set<string>): void {
+    try {
+        atomicWrite(approvalsFile(), JSON.stringify([...set], null, 2))
+    } catch (err) {
+        // Not fatal: the connection still works this session, it just has to
+        // be re-picked next time. Saying so beats pretending it persisted.
+        console.error("[db] failed to save approved database files:", err)
+    }
+}
+
+function loadApprovals(): Set<string> {
+    if (approvedFiles) return approvedFiles
+    try {
+        const raw = JSON.parse(readFileSync(approvalsFile(), "utf8")) as unknown
+        if (!Array.isArray(raw)) throw new Error("not a list")
+        approvedFiles = new Set(raw.filter((x): x is string => typeof x === "string").map(normPath))
+        return approvedFiles
+    } catch {
+        // No file yet (or an unreadable one): seed from what the user already
+        // had. An unreadable file seeds the same way rather than emptying the
+        // list, because the profiles are the better record of the user's own
+        // past decisions either way.
+        const seeded = new Set(
+            load()
+                .profiles.filter((p) => p.kind === "sqlite" && p.database)
+                .map((p) => normPath(p.database))
+        )
+        approvedFiles = seeded
+        if (seeded.size) persistApprovals(seeded)
+        return seeded
+    }
+}
+
+/** Record that the user picked this file in a dialog. Main-process callers only. */
+export function approveDbFile(path: string): void {
+    if (!path) return
+    const set = loadApprovals()
+    const key = normPath(path)
+    if (set.has(key)) return
+    set.add(key)
+    persistApprovals(set)
+}
+
+/** Has the user personally chosen this file (or one recorded before the boundary existed)? */
+export function isApprovedDbFile(path: string): boolean {
+    return !!path && loadApprovals().has(normPath(path))
+}
+
+/** TEST-ONLY: drop the cached approvals so the next call re-reads from disk. */
+export function __resetApprovalsForTest(): void {
+    approvedFiles = null
+}
+
 // ---------- test / query / tables ----------
 export async function testConnection(input: ConnInput): Promise<QueryResult> {
     const start = Date.now()
     try {
         if (input.kind === "sqlite") {
-            const db = new SqliteDatabase(input.database)
+            // Same `fileMustExist` as getPool: "Connected in 2 ms" to a
+            // database that did not exist until Test was pressed is the most
+            // confident wrong answer this panel can give.
+            const db = new SqliteDatabase(input.database, { fileMustExist: true })
             try {
                 db.all("SELECT 1")
             } finally {
