@@ -63,7 +63,7 @@ export function ExtendAgentModal(): JSX.Element {
     const doRemove = async (item: InstalledItem): Promise<void> => {
         setBusy(item.path)
         try {
-            await window.api.extend.remove(item)
+            await window.api.extend.remove(item, projectPath)
             refreshInstalled()
         } catch (e) {
             setError((e as Error).message || "Remove failed.")

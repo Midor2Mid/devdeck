@@ -37,7 +37,11 @@ export function ChangesModal(): JSX.Element | null {
     const aiOnDiff = useStore((s) => s.aiOnDiff)
     const openPr = useStore((s) => s.openPr)
 
-    const [files, setFiles] = useState<ChangeFile[]>([])
+    // `null` until the first read resolves, and again whenever one fails — an
+    // empty array here is rendered as "Working tree clean", so it must mean
+    // exactly that and nothing else.
+    const [files, setFiles] = useState<ChangeFile[] | null>(null)
+    const [readError, setReadError] = useState("")
     const [sel, setSel] = useState<ChangeFile | null>(null)
     const [patch, setPatch] = useState("")
     const [msg, setMsg] = useState("")
@@ -58,10 +62,28 @@ export function ChangesModal(): JSX.Element | null {
 
     const refresh = useCallback(async () => {
         if (!cwd) return
-        // A failed read (transient lock, missing git, timeout) now rejects rather
-        // than resolving empty (see main/changes.ts's listChanges) — this panel
-        // still treats a failure as "nothing to show" rather than surfacing it.
-        const list = await window.api.git.changes(cwd).catch(() => [])
+        // A failed read (transient lock, missing git, timeout) rejects rather
+        // than resolving empty (see main/changes.ts's listChanges). Catching it
+        // to [] put the words "Working tree clean - nothing to review" in front
+        // of a user whose tree the app had just failed to read.
+        let list: ChangeFile[]
+        try {
+            list = await window.api.git.changes(cwd)
+        } catch (e) {
+            // Electron wraps a rejected handler as "Error invoking remote method
+            // 'git:changes': Error: fatal: ...". The user needs git's sentence,
+            // not the plumbing that carried it.
+            const raw = (e as Error).message || "git status failed"
+            setReadError(raw.replace(/^Error invoking remote method '[^']*':\s*(Error:\s*)?/, ""))
+            setFiles(null)
+            // Drop the selection too. Leaving it put a stale diff - with live
+            // stage / unstage / DISCARD buttons acting on it - beside a panel
+            // saying the tree could not be read.
+            setSel(null)
+            setPatch("")
+            return
+        }
+        setReadError("")
         setFiles(list)
         setSel((prev) => list.find((f) => f.path === prev?.path) ?? list[0] ?? null)
     }, [cwd])
@@ -85,7 +107,16 @@ export function ChangesModal(): JSX.Element | null {
         refresh()
     }
 
-    const stagedCount = files.filter((f) => f.staged).length
+    // Everything below reads a list. `null` (unread) is not an empty tree, so it
+    // is kept distinct above and flattened here only for arithmetic - the empty
+    // STATE is rendered from `files === null` separately.
+    const fileList = files ?? []
+    // A tree we could not read must not disable the actions. `fileList.length
+    // === 0` alone made an unreadable tree behave exactly like a clean one - the
+    // same collapse this change exists to remove, one `??` further down. The AI
+    // actions and the commit read the tree themselves; let them try.
+    const nothingToActOn = files !== null && files.length === 0
+    const stagedCount = fileList.filter((f) => f.staged).length
     const commit = async (): Promise<void> => {
         if (!msg.trim()) return
         setBusy(true)
@@ -114,7 +145,13 @@ export function ChangesModal(): JSX.Element | null {
 
             <div className="changes-body">
                 <div className="ch-files">
-                    {files.length === 0 ? (
+                    {files === null ? (
+                        <div className="muted sidebar-empty">
+                            {readError
+                                ? `Couldn't read the working tree - ${readError}`
+                                : "Reading the working tree…"}
+                        </div>
+                    ) : files.length === 0 ? (
                         <div className="muted sidebar-empty">Working tree clean - nothing to review.</div>
                     ) : (
                         files.map((f) => (
@@ -167,10 +204,10 @@ export function ChangesModal(): JSX.Element | null {
 
             <div className="ch-ai">
                 <span className="ch-ai-label">AI</span>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "review", handoffAgent)} data-tip="Have an agent review this diff">Review</button>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "explain", handoffAgent)}>Explain</button>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "commit", handoffAgent)}>Commit msg</button>
-                <button className="btn-min" disabled={files.length === 0} onClick={() => aiOnDiff(cwd, "pr", handoffAgent)}>PR description</button>
+                <button className="btn-min" disabled={nothingToActOn} onClick={() => aiOnDiff(cwd, "review", handoffAgent)} data-tip="Have an agent review this diff">Review</button>
+                <button className="btn-min" disabled={nothingToActOn} onClick={() => aiOnDiff(cwd, "explain", handoffAgent)}>Explain</button>
+                <button className="btn-min" disabled={nothingToActOn} onClick={() => aiOnDiff(cwd, "commit", handoffAgent)}>Commit msg</button>
+                <button className="btn-min" disabled={nothingToActOn} onClick={() => aiOnDiff(cwd, "pr", handoffAgent)}>PR description</button>
                 {/* Hand the diff to a *different* agent than the one that wrote it —
                     a second opinion from another model, not the same one re-reading
                     its own work. The prompt says so when the agents differ. */}
@@ -198,12 +235,14 @@ export function ChangesModal(): JSX.Element | null {
                     placeholder={
                         stagedCount > 0
                             ? `Commit message (${stagedCount} staged file${stagedCount === 1 ? "" : "s"} only)`
-                            : `Commit message (commits all ${files.length} changed file${files.length === 1 ? "" : "s"})`
+                            : files === null
+                              ? "Commit message (commits everything git finds)"
+                              : `Commit message (commits all ${fileList.length} changed file${fileList.length === 1 ? "" : "s"})`
                     }
                     onChange={(e) => setMsg(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && commit()}
                 />
-                <button className="accent" disabled={!msg.trim() || busy || files.length === 0} onClick={commit}>
+                <button className="accent" disabled={!msg.trim() || busy || nothingToActOn} onClick={commit}>
                     {stagedCount > 0 ? `Commit staged (${stagedCount})` : "Commit all"}
                 </button>
                 {note && <span className="ch-note">{note}</span>}

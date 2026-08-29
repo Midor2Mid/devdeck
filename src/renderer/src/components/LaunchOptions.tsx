@@ -51,6 +51,13 @@ export function LaunchOptions({
     const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
     const holdersIn = useStore((s) => s.holdersIn)
     const [holders, setHolders] = useState<CwdHolder[]>([])
+    // Sessions whose working tree could not be read this time. Not zero holders:
+    // "nobody is in here" and "I could not find out" are different sentences.
+    const [unreadable, setUnreadable] = useState(0)
+    // The all-clear below is a claim, and `holdersIn` awaits one `git status` per
+    // live session. Rendering it before the answer arrives states it for the
+    // whole round trip - seconds, on a locked or slow repo.
+    const [checking, setChecking] = useState(true)
 
     // Asked once when the popover opens: the answer needs a git call per live
     // session, and this is a transient surface. Ignored if it resolves after the
@@ -58,9 +65,14 @@ export function LaunchOptions({
     useEffect(() => {
         if (!cwd) return
         let live = true
-        void holdersIn(cwd).then((h) => {
-            if (live) setHolders(h)
-        })
+        setChecking(true)
+        void holdersIn(cwd)
+            .then((r) => {
+                if (!live) return
+                setHolders(r.holders)
+                setUnreadable(r.unreadable)
+            })
+            .finally(() => live && setChecking(false))
         return () => {
             live = false
         }
@@ -180,6 +192,15 @@ export function LaunchOptions({
                             // holding, so the worktree checkbox is a decision rather
                             // than a precaution.
                             <p className="launch-opts-warn">{holdersSummary(holders)}</p>
+                        ) : checking ? (
+                            <p className="launch-opts-hint">Checking who else is working here…</p>
+                        ) : unreadable > 0 ? (
+                            // The all-clear below is a claim. Do not make it on the
+                            // strength of a read that failed.
+                            <p className="launch-opts-warn">
+                                Couldn&apos;t check {unreadable === 1 ? "one session" : `${unreadable} sessions`} for
+                                changes, so this may still collide with an agent already working here.
+                            </p>
                         ) : (
                             <p className="launch-opts-hint">
                                 Its own checkout, so it can&apos;t collide with an agent already

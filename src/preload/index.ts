@@ -199,7 +199,8 @@ export interface UpdateStatus {
 export interface GitStatus {
     isRepo: boolean
     branch: string
-    changes: number
+    /** Uncommitted entries, or **null when the count could not be read**. Unknown is not zero. */
+    changes: number | null
     /** Tracking branch (e.g. "origin/main"), empty when the branch has no upstream. */
     upstream: string
     /** Commits the local branch is ahead / behind its upstream (0 when unknown). */
@@ -322,7 +323,8 @@ export interface WorklogRepo {
     name: string
     path: string
     branch: string
-    changes: number
+    /** Uncommitted entries, or null when `git status` failed. Unknown is not zero. */
+    changes: number | null
     commits: WorklogCommit[]
 }
 
@@ -734,7 +736,8 @@ const api = {
         ): Promise<InstalledItem> => ipcRenderer.invoke("extend:install", { repo, ref, item, scope, projectPath }),
         list: (projectPath: string): Promise<{ global: InstalledItem[]; project: InstalledItem[] }> =>
             ipcRenderer.invoke("extend:list", projectPath),
-        remove: (item: InstalledItem): Promise<void> => ipcRenderer.invoke("extend:remove", item)
+        remove: (item: InstalledItem, projectPath: string): Promise<void> =>
+            ipcRenderer.invoke("extend:remove", { item, projectPath })
     },
     shell: {
         open: (url: string): Promise<void> => ipcRenderer.invoke("shell:open", url)
@@ -771,9 +774,11 @@ const api = {
         }
     },
     rec: {
-        start: (termId: string): Promise<void> => ipcRenderer.invoke("rec:start", termId),
-        stop: (termId: string, projectPath: string, label: string): Promise<RecordingMeta | null> =>
-            ipcRenderer.invoke("rec:stop", { termId, projectPath, label }),
+        /** `projectPath` decides where the recording lands, and is captured here, at start. */
+        start: (termId: string, projectPath: string): Promise<void> =>
+            ipcRenderer.invoke("rec:start", { termId, projectPath }),
+        stop: (termId: string, label: string): Promise<RecordingMeta | null> =>
+            ipcRenderer.invoke("rec:stop", { termId, label }),
         active: (termId: string): Promise<boolean> => ipcRenderer.invoke("rec:active", termId),
         list: (projectPath: string): Promise<RecordingMeta[]> => ipcRenderer.invoke("rec:list", projectPath),
         load: (path: string): Promise<Recording> => ipcRenderer.invoke("rec:load", path)

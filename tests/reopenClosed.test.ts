@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { useStore, SHELL } from "../src/renderer/src/store"
 import { useSettings } from "../src/renderer/src/settings"
 import { leaf, splitLeaf, collectLeaves } from "../src/renderer/src/layout"
+import { useToasts } from "../src/renderer/src/toast"
 
 const PROJECT = { id: "p1", name: "proj", path: "D:/proj" }
 
@@ -171,5 +172,45 @@ describe("reopenLastClosed", () => {
         useStore.getState().reopenLastClosed()
         expect(useStore.getState().tabsByProject[PROJECT.id]).toHaveLength(1)
         expect(created).toEqual([])
+    })
+})
+
+// Undo used to belong to the VIEW, not to the close: Tabs had it, Overview and
+// Canvas did not - and those two are the cross-project surfaces the product is
+// sold on. The safe closer now owns the default name, so a view gets undo by
+// doing nothing special, and losing it takes an explicit `closePaneSilent`.
+describe("undo belongs to the close, not to the view", () => {
+    beforeEach(() => {
+        killed = []
+        created = []
+        useToasts.setState({ toasts: [] })
+        stubApi()
+        seed()
+    })
+
+    it("offers an undo for the ordinary close every view now calls", () => {
+        useStore.getState().closePane("A")
+        const t = useToasts.getState().toasts
+        expect(t).toHaveLength(1)
+        expect(t[0].actionLabel).toBe("Undo")
+        // And the offer is real: taking it puts the pane back in its tab.
+        expect(collectLeaves(useStore.getState().tabsByProject[PROJECT.id][0].root)).toEqual(["B"])
+        t[0].onAction!()
+        expect(collectLeaves(useStore.getState().tabsByProject[PROJECT.id][0].root)).toHaveLength(2)
+    })
+
+    it("names the session in the toast, so it is clear what came back", () => {
+        useStore.setState({ termNames: { A: "the important one" } })
+        useStore.getState().closePane("A")
+        expect(useToasts.getState().toasts[0].text).toContain("the important one")
+    })
+
+    it("stays silent for the closes that must not offer one", () => {
+        // The multi-pane tab close: an undo that restored one of three would lie.
+        useStore.getState().closePaneSilent("A")
+        expect(useToasts.getState().toasts).toEqual([])
+        // The pane is still recorded, so a later reopen is possible - the only
+        // thing withheld is the offer.
+        expect(useStore.getState().closedSessions).toHaveLength(1)
     })
 })

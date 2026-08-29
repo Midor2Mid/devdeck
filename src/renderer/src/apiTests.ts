@@ -24,7 +24,8 @@ export interface TestableResponse {
 export interface TestResult {
     test: ApiTest
     pass: boolean
-    actual: string
+    /** What was observed, or **null when it could not be read at all**. */
+    actual: string | null
 }
 
 const OP_LABEL: Record<TestOp, string> = {
@@ -77,21 +78,31 @@ function toText(v: unknown): string {
     return String(v)
 }
 
-function actualFor(test: ApiTest, resp: TestableResponse): string {
+/**
+ * What the response actually says for this test's source, or `null` when there
+ * was nothing to read.
+ *
+ * `""` used to mean both "the value is empty" and "there was no value" - and
+ * `compare` reads the second as the first. An unreadable body made `neq` true
+ * and `lt` true for any positive threshold, so every row rendered a green tick
+ * and the tab said "Tests ✓" for a request whose body never parsed. Nulling the
+ * unreadable case is the fix: `compare` never sees the ambiguous empty string.
+ */
+function actualFor(test: ApiTest, resp: TestableResponse): string | null {
     switch (test.source) {
         case "status":
-            return resp.status != null ? String(resp.status) : ""
+            return resp.status != null ? String(resp.status) : null
         case "time":
-            return resp.timeMs != null ? String(resp.timeMs) : ""
+            return resp.timeMs != null ? String(resp.timeMs) : null
         case "body":
-            return resp.body ?? ""
+            return resp.body ?? null
         case "header":
-            return headerValue(resp.headers, test.target) ?? ""
+            return headerValue(resp.headers, test.target) ?? null
         case "json":
             try {
                 return toText(resolveJsonPath(JSON.parse(resp.body ?? ""), test.target))
             } catch {
-                return ""
+                return null
             }
     }
 }
@@ -119,7 +130,8 @@ function compare(actual: string, op: TestOp, expected: string): boolean {
 export function evalTests(tests: ApiTest[], resp: TestableResponse): TestResult[] {
     return tests.map((test) => {
         const actual = actualFor(test, resp)
-        return { test, pass: compare(actual, test.op, test.value), actual }
+        // No assertion passes on an observation that was never made.
+        return { test, pass: actual !== null && compare(actual, test.op, test.value), actual }
     })
 }
 

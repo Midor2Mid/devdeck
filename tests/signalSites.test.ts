@@ -212,19 +212,25 @@ describe("the stall marker is still gated on expectation", () => {
     // the wiring pin has to anchor on that object, not on the resolveTileState
     // call site itself, which now just reads `resolveTileState(input, now)`.
     it("builds the tile-state input from the awaited set, the exit code and the changed count - not constants", () => {
-        const input = callSite("const input = {", mission, 8)
+        const input = callSite("const input = {", mission, 10)
         expect(input).toContain("awaited: awaited.has(s.termId)")
         // A constant in any of these positions type-checks and leaves the
         // suite green - the exact failure mode this file exists to catch.
         // `awaited: true` restores I1's stalled-everything regression;
         // `exitCode: undefined` makes every corpse read as its live state;
         // `changedCount: 0` is I4's swallowed-git-error bug moved into the
-        // wiring itself.
+        // wiring itself, and `?? 0` is the same bug in the fallback: an absent
+        // entry is a session nobody has polled, which is unknown, not clean.
         expect(input).not.toContain("awaited: true")
         expect(input).toContain("exitCode: exitCodeOf(s.termId)")
         expect(input).not.toContain("exitCode: undefined")
-        expect(input).toContain("changedCount: changedBySession[s.termId] ?? 0")
+        expect(input).toContain("changedCount: changedBySession[s.termId],")
         expect(input).not.toContain("changedCount: 0")
+        // Either fallback erases a distinction the tile depends on: `?? 0`
+        // claims a clean tree, `?? null` claims a failed check for a session
+        // nobody has polled yet.
+        expect(input).not.toContain("?? 0")
+        expect(input).not.toContain("?? null")
     })
 
     it("passes that same input into resolveTileState, rather than rebuilding it", () => {

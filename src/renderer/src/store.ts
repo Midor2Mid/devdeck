@@ -45,7 +45,7 @@ import {
     markCheckFailed,
     clearCheckFailed
 } from "./agentSignals"
-import { holdersOf, holdersSummary, type CwdHolder } from "./ownership"
+import { holdersOf, holdersSummary, sameDir, type CwdHolder } from "./ownership"
 import { recordExit, exitCodeOf, clearExit } from "./termExit"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -186,7 +186,15 @@ interface AppState extends Persisted {
      * already" question, asked before a second agent joins them rather than after
      * they have both written. Hits git per live session, so call it on demand.
      */
-    holdersIn: (cwd: string) => Promise<CwdHolder[]>
+    /**
+     * Who else is working in `cwd`, and how many sessions could not be checked.
+     *
+     * `unreadable` exists because the alternative was a `.catch(() => [])` that
+     * turned a failed `git status` into "that session is holding nothing" — and
+     * the caller renders that as "Its own checkout, so it can't collide with an
+     * agent already working in this project", which is a false all-clear.
+     */
+    holdersIn: (cwd: string) => Promise<{ holders: CwdHolder[]; unreadable: number }>
     /**
      * The directory a session's git reads resolve against. Exposed because more
      * than one view asks the same question, and two spellings of it drifted
@@ -323,14 +331,30 @@ interface AppState extends Persisted {
     /** Run a fixed command in a shell tab, focusing an existing one if it's already running it. */
     runCommandTab: (command: string, label?: string) => void
     splitActive: (dir: SplitDir, agentId: string) => void
+    /**
+     * Close a pane the way a person means it: the pane goes, and an undo toast
+     * offers it back.
+     *
+     * This is deliberately the *default* name. The split used to be by view -
+     * Tabs had undo, Overview and Canvas did not - which meant the two
+     * cross-project surfaces silently lost a session on a mis-click. The safe
+     * closer now owns the obvious name, and losing the undo takes an explicit
+     * call to `closePaneSilent`.
+     */
     closePane: (termId: string) => void
+    /**
+     * Close a pane with no undo offered.
+     *
+     * For closes a person did not ask for one pane at a time: a finished
+     * pipeline step tidying itself up, or the multi-pane tab close, where an
+     * undo that quietly restored one of three panes would lie.
+     */
+    closePaneSilent: (termId: string) => void
     closeActivePane: () => void
     /** The pane blown up to fill the stage, if any. Advisory: validZoom decides if it applies. */
     zoomedPane: string | undefined
     /** Zoom the given pane (default: the active one), or unzoom if it is already zoomed. */
     toggleZoomPane: (paneId?: string) => void
-    /** Close a pane the USER closed: same as closePane, plus an undo toast. */
-    closePaneWithUndo: (termId: string) => void
     /** Sessions closed this run, newest first, for undo. Not persisted: the ptys are gone. */
     closedSessions: ClosedSession[]
     /** Reopen the most recently closed session, resuming it where the agent supports it. */
@@ -1224,15 +1248,28 @@ export const useStore = create<AppState>((set, get) => {
                     // Same one rule as the evidence read and the conflict map: an
                     // empty-string termCwd entry must fall through, not be kept.
                     const dir = sessionCwd(s.termId)
-                    return {
-                        termId: s.termId,
-                        sessionName: s.sessionName,
-                        cwd: dir,
-                        files: (await window.api.git.changes(dir).catch(() => [])).map((c) => c.path)
-                    }
+                    // null, not [] - a read that failed says nothing about
+                    // whether this session is in the way.
+                    const files = await window.api.git
+                        .changes(dir)
+                        .then((cs) => cs.map((c) => c.path) as string[] | null)
+                        .catch(() => null)
+                    return { termId: s.termId, sessionName: s.sessionName, cwd: dir, files }
                 })
             )
-            return holdersOf(entries, cwd)
+            const readable = entries.filter(
+                (e): e is { termId: string; sessionName: string; cwd: string; files: string[] } =>
+                    e.files !== null
+            )
+            return {
+                holders: holdersOf(readable, cwd),
+                // Scoped to THIS directory, exactly as holdersOf is. Counting
+                // every failed read anywhere made a session mid-rebase in project
+                // B warn about a collision in project A - and, since a session
+                // whose cwd is outside every open project fails the IPC guard
+                // permanently, it would have latched the warning on forever.
+                unreadable: entries.filter((e) => e.files === null && sameDir(e.cwd, cwd)).length
+            }
         },
         dispatchBoardTask: async (id, opts) => {
             const task = get().boardTasks.find((t) => t.id === id)
@@ -1277,7 +1314,15 @@ export const useStore = create<AppState>((set, get) => {
             // Without a worktree the new agent shares the project's working tree.
             // If someone is already editing it, say who and what they're holding —
             // the conflict map only tells you this after both have written.
-            const clash = opts.worktree ? "" : holdersSummary(await get().holdersIn(proj.path))
+            // A session we could not read is not an absence of conflict, and this
+            // confirm is the last beat before real tokens are spent - it says so.
+            const who = opts.worktree ? null : await get().holdersIn(proj.path)
+            const clash = who
+                ? holdersSummary(who.holders) ||
+                  (who.unreadable > 0
+                      ? `Couldn't check ${who.unreadable === 1 ? "one session" : `${who.unreadable} sessions`} for changes, so this may still collide with an agent already working here.`
+                      : "")
+                : ""
 
             const ok = await confirm({
                 title: "Dispatch to an agent",
@@ -1623,20 +1668,33 @@ export const useStore = create<AppState>((set, get) => {
                         : s
                 )
 
-            // Wait until an agent term has settled: seen working, then idle for a beat.
-            const waitForIdle = async (termId: string): Promise<"idle" | "stopped" | "gone"> => {
+            /**
+             * Wait until an agent term has settled: seen working, then idle for a beat.
+             *
+             * The result is a discriminated `ok`, not a three-way union of strings.
+             * The union named "gone" — the session left the grid, killed or crashed
+             * — and the dispatch below handled only "stopped", so a step whose agent
+             * died fell into the SUCCESS branch: marked `done`, a ✓ in the pipeline
+             * bar, and the run finishing `status: "done"` on work that never
+             * happened. With `ok`, falling through on an outcome nobody enumerated
+             * is impossible rather than merely wrong.
+             */
+            const waitForIdle = async (
+                termId: string
+            ): Promise<{ ok: true } | { ok: false; reason: "stopped" | "gone" }> => {
                 const start = Date.now()
                 let sawWork = false
                 for (;;) {
-                    if (stale()) return "stopped"
-                    if (!get().termAgents[termId]) return "gone"
+                    if (stale()) return { ok: false, reason: "stopped" }
+                    if (!get().termAgents[termId]) return { ok: false, reason: "gone" }
                     const st = get().agentStatus[termId]
                     if (st === "working") sawWork = true
                     if (st === "attention") setRun({ status: "waiting" })
                     else if (get().pipelineRun?.status === "waiting") setRun({ status: "running" })
                     const elapsed = Date.now() - start
                     // Require either observed work or a minimum grace, then a stable idle.
-                    if (st === "idle" && (sawWork || elapsed > 4000) && elapsed > 1500) return "idle"
+                    if (st === "idle" && (sawWork || elapsed > 4000) && elapsed > 1500)
+                        return { ok: true }
                     await sleep(300)
                 }
             }
@@ -1763,7 +1821,18 @@ export const useStore = create<AppState>((set, get) => {
                         await sleep(600)
                         const result = await waitForIdle(termId)
                         off()
-                        if (result === "stopped") return
+                        if (!result.ok) {
+                            // "stopped" is the user's Stop: the run is already being
+                            // torn down, so leave quietly. "gone" is the session
+                            // dying mid-step, which used to reach the success branch
+                            // below and mark the step done.
+                            if (result.reason === "stopped") return
+                            passed = false
+                            setStep(i, { status: "failed", gateMsg: "session went away mid-step" })
+                            setRun({ status: "error", gateMsg: "the agent session went away mid-step" })
+                            skipFrom(i + 1)
+                            return
+                        }
 
                         if (!gateActive(step.gate)) {
                             passed = true
@@ -2133,7 +2202,7 @@ export const useStore = create<AppState>((set, get) => {
             persist()
         },
 
-        closePane: (termId) => {
+        closePaneSilent: (termId) => {
             const s = get()
             if (isAgentId(s.agentOf(termId))) pushActivity("close", termId)
             let ownerProject: string | undefined
@@ -2168,10 +2237,25 @@ export const useStore = create<AppState>((set, get) => {
             }
 
             // If this pane was recording, persist the recording before it dies.
+            //
+            // `rec.stop` is an `ipcMain.handle` that can reject two ways, and the
+            // clear used to run unconditionally on the same tick: the UI marked
+            // the recording saved at the exact moment the only copy of the events
+            // could be being dropped. It is sent before `pty.kill` deliberately -
+            // both cross the same channel in order, so the recorder sees the stop
+            // while its pty is still alive.
             if (s.recordingTermId === termId) {
-                const path = s.projects.find((p) => p.id === ownerProject)?.path
-                if (path) window.api.rec.stop(termId, path, ownerTab?.name ?? "session")
-                set({ recordingTermId: null })
+                const label = ownerTab?.name ?? "session"
+                void window.api.rec
+                    .stop(termId, label)
+                    .catch((e: Error) => {
+                        // The pane is already gone, so there is nothing left to
+                        // retry from: clear the indicator, but say what happened
+                        // rather than claim a file exists. Main still holds the
+                        // events, and `flushAll()` gets one more attempt on quit.
+                        get().noteRecording(termId, `${label} · not saved: ${e.message}`)
+                    })
+                    .finally(() => set({ recordingTermId: null }))
             }
             window.api.pty.kill(termId)
             forget(termId)
@@ -2209,16 +2293,17 @@ export const useStore = create<AppState>((set, get) => {
             const projectId = s.activeId
             if (!projectId) return
             const pane = s.activePane(projectId)
-            if (pane) s.closePaneWithUndo(pane)
+            if (pane) s.closePane(pane)
         },
 
-        closePaneWithUndo: (termId) => {
-            // Only for closes a person asked for. A programmatic closer (a
-            // finished pipeline step) must not offer to undo work the app
-            // itself tidied up, so it keeps calling closePane instead.
+        closePane: (termId) => {
+            // The default closer, so a new call site gets the safe behaviour
+            // without having to know that the other one exists. A closer that
+            // must NOT offer undo - a finished pipeline step, the multi-pane tab
+            // close - says so by calling `closePaneSilent`.
             const s = get()
             const label = s.termNames[termId] ?? s.activeTab(s.activeId ?? "")?.name ?? "session"
-            s.closePane(termId)
+            s.closePaneSilent(termId)
             undoToast(`Closed ${label}`, () => get().reopenLastClosed())
         },
 

@@ -22,6 +22,7 @@ import {
     type CatalogEntry
 } from "./skillsCore"
 import { SKILLS_CATALOG } from "./skillsCatalog"
+import { isWithinRoots } from "./files"
 
 const CLONE_TIMEOUT = 60000
 
@@ -179,12 +180,34 @@ export function listInstalled(projectPath: string): { global: InstalledItem[]; p
     }
 }
 
-export function remove(item: InstalledItem): void {
-    // Resolve first so ".." segments cannot smuggle the path outside .claude,
-    // then require a real leaf under .claude/skills|agents.
-    const norm = resolve(item.path).replace(/\\/g, "/")
-    if (!/\/\.claude\/(skills|agents)\/[^/]+/.test(norm)) {
+/**
+ * Uninstall one skill or agent.
+ *
+ * The guard is a **root**, not a regex. The old one tested an unanchored,
+ * root-agnostic pattern against the resolved path, so
+ * `D:/OtherProduct/.claude/agents/x` and `C:/Users/Someone/.claude/skills/y`
+ * both passed it - in front of a recursive `rmSync`. It did not need an
+ * attacker to be dangerous: a bug in a path string was enough to delete a
+ * directory outside every project.
+ *
+ * So the location is **rebuilt** from the scope's root with the same
+ * `targetPath` that decided where the item was installed, and the caller's
+ * `path` is treated as a claim to be checked against it rather than a place to
+ * act on. `projectPath` arrives already guarded to a real project.
+ */
+export function remove(item: InstalledItem, projectPath: string): void {
+    const root = item.scope === "global" ? homedir() : projectPath
+    if (!root) throw new Error("refusing to remove: no root for this scope")
+    if (!item.name || /[\/]/.test(item.name)) {
+        throw new Error("refusing to remove: name is not a single leaf")
+    }
+    const dir = join(root, ".claude", item.kind === "skill" ? "skills" : "agents")
+    const target = targetPath(item.scope, item.kind, item.name, { home: homedir(), projectPath })
+    if (!isWithinRoots(target, [dir])) {
         throw new Error("refusing to remove path outside .claude/skills|agents")
     }
-    rmSync(item.path, { recursive: true, force: true })
+    if (resolve(item.path) !== resolve(target)) {
+        throw new Error("refusing to remove a path that is not where this item lives")
+    }
+    rmSync(target, { recursive: true, force: true })
 }

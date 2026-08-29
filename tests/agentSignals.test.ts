@@ -311,13 +311,15 @@ describe("nextChangedCounts", () => {
 
     // I4: git.changes rejects on a transient failure (mid-rebase, an
     // index.lock, the timeout). Mapping that straight to [] claimed "nothing
-    // changed" about a session that may still have a dozen changed files -
-    // this is the fix, and the regression it exists to catch is a caller
-    // that goes back to overwriting with the fresh (zeroed) reading.
-    it("keeps a failed session's previous count instead of zeroing it", () => {
+    // changed" about a session that may still have a dozen changed files.
+    // The failure is now carried IN the value: null, not the previous count.
+    // Carrying the previous count forward was the older fix, and it presented
+    // a number that was true eight seconds ago as the current one - remedy
+    // item 9 replaced both halves with a nullable count.
+    it("records a failed session as unknown, not as its previous count", () => {
         adoptBaseline("a", [])
         const next = nextChangedCounts({ a: 12 }, [{ termId: "a", files: null }])
-        expect(next.a).toBe(12)
+        expect(next.a).toBeNull()
     })
 
     it("updates a session whose read succeeded", () => {
@@ -336,13 +338,12 @@ describe("nextChangedCounts", () => {
                 { termId: "b", files: ["x.ts"] }
             ]
         )
-        expect(next).toEqual({ a: 12, b: 1 })
+        expect(next).toEqual({ a: null, b: 1 })
     })
 
-    it("has nothing to fall back to for a session never seen before - it is simply absent, not zeroed", () => {
-        // MissionControl reads a missing key as 0 via `?? 0`, which is the same
-        // "no evidence yet" reading a brand-new session gets regardless of this
-        // function - there is no false claim here, only an absent one.
-        expect(nextChangedCounts({}, [{ termId: "a", files: null }])).toEqual({})
+    it("records a never-seen session's failed read as unknown too", () => {
+        // MissionControl reads a missing key as `?? null` - unknown either way -
+        // so the map and the absence now agree instead of one of them meaning 0.
+        expect(nextChangedCounts({}, [{ termId: "a", files: null }])).toEqual({ a: null })
     })
 })

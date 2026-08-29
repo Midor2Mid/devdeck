@@ -921,8 +921,19 @@ export function ApiPanel(): JSX.Element {
                                     >
                                         <span className="test-icon">{r.pass ? "✓" : "✗"}</span>
                                         <span className="test-desc">{describeTest(r.test)}</span>
-                                        <span className="test-actual" data-tip={r.actual}>
-                                            got: {r.actual.slice(0, 120) || "(empty)"}
+                                        {/* "(empty)" and "(nothing to read)" are
+                                            different results: the first is a value,
+                                            the second is the absence of one, and
+                                            only the second means the test could not
+                                            be run at all. */}
+                                        <span
+                                            className="test-actual"
+                                            data-tip={r.actual ?? "nothing to read"}
+                                        >
+                                            got:{" "}
+                                            {r.actual === null
+                                                ? "(nothing to read)"
+                                                : r.actual.slice(0, 120) || "(empty)"}
                                         </span>
                                     </div>
                                 ))}

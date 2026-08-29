@@ -8,7 +8,8 @@ import {
     formatDuration,
     runTotals,
     runsSentence,
-    RUN_READ_LIMIT
+    RUN_READ_LIMIT,
+    type RunHistory
 } from "../ledgerView"
 import type { RunExclusionReason, RunKind, RunRecord, UsageSummary } from "../../../preload/index"
 
@@ -160,13 +161,20 @@ export function UsagePanel(): JSX.Element {
     // "0 runs · $0 · nothing recorded yet", which is a lie told to someone with
     // a long history for as long as the IPC takes.
     const [runs, setRuns] = useState<RunRecord[] | null>(null)
+    // A read that FAILED, kept apart from one that has not resolved. Catching to
+    // an empty array put "nothing recorded yet" on screen for a user with months
+    // of history - the very lie the comment above says this null is here to stop.
+    const [runsFailed, setRunsFailed] = useState(false)
     const [runKind, setRunKind] = useState<RunKind | "all">("all")
     const [runProject, setRunProject] = useState<string>("all")
     useEffect(() => {
         window.api.ledger
             .read(RUN_READ_LIMIT)
-            .then(setRuns)
-            .catch(() => setRuns(NO_RUNS))
+            .then((r) => {
+                setRuns(r)
+                setRunsFailed(false)
+            })
+            .catch(() => setRunsFailed(true))
     }, [])
 
     const [win, setWin] = useState<Window>("week")
@@ -236,9 +244,16 @@ export function UsagePanel(): JSX.Element {
     // The sentence above the list: rows on screen, exclusive-only money, and the
     // count left out of that money said in words. All of it lives in ledgerView
     // so the branch is under test, not just the arithmetic behind it.
+    const runHistory: RunHistory = runsFailed
+        ? "unreadable"
+        : runs === null
+          ? "loading"
+          : runList.length > 0
+            ? "some"
+            : "none"
     const runsLine = useMemo(
-        () => runsSentence(runTotals(shownRuns), shownRuns.length, runList.length > 0),
-        [shownRuns, runList]
+        () => runsSentence(runTotals(shownRuns), shownRuns.length, runHistory),
+        [shownRuns, runHistory]
     )
     // Only the kinds and projects that actually appear in the history - a filter
     // that can only ever return nothing is chrome pretending to be a control.

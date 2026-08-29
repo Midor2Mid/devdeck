@@ -86,7 +86,13 @@ export function evaluateGate(gate: StepGate | undefined | null, rawOutput: strin
         case "contains":
             return text.includes(pattern)
         case "absent":
-            return !text.includes(pattern)
+            // An assertion must not pass on an observation that was never made.
+            // `!"".includes(p)` is true, so a shell that failed to spawn - or a
+            // prompt that never reached one - printed "✓ gate passed" into the
+            // activity feed for a check with nothing to check. This is the same
+            // defect the `verify:terminal` harness was fixed for and the shipped
+            // engine never was.
+            return text.trim().length > 0 && !text.includes(pattern)
         case "regex":
             try {
                 return new RegExp(pattern, "i").test(text)
