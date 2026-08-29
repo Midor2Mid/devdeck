@@ -54,8 +54,14 @@ function realNorm(p: string): string {
  * target got dereferenced and the root did not.
  */
 export function isWithinRoots(target: string, roots: string[]): boolean {
+    // Typed as a string, but every caller is one hop from an untyped IPC
+    // payload. Without this, a renderer sending an object gets a TypeError out
+    // of path.resolve - which still fails closed, but reaches the user as
+    // "paths[0] must be of type string" instead of an answer about the path.
+    if (typeof target !== "string" || !target) return false
     const t = realNorm(target)
     return roots.some((root) => {
+        if (typeof root !== "string" || !root) return false
         const r = realNorm(root)
         return t === r || t.startsWith(r + sep)
     })

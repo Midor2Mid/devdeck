@@ -92,3 +92,20 @@ describe("isWithinRoots dereferences links", () => {
         expect(isWithinRoots(join(alias, "src", "a.ts"), [proj])).toBe(true)
     })
 })
+
+describe("isWithinRoots on values the type system promised could not arrive", () => {
+    // Every caller is one hop from an untyped IPC payload, so "not a string"
+    // is a real input. It must be an answer about the path, not a TypeError
+    // from inside path.resolve.
+    it("refuses a non-string target instead of throwing", () => {
+        const bad = [null, undefined, 42, {}, [], ""] as unknown as string[]
+        for (const t of bad) {
+            expect(() => isWithinRoots(t, [root])).not.toThrow()
+            expect(isWithinRoots(t, [root])).toBe(false)
+        }
+    })
+    it("ignores a junk root rather than throwing on it", () => {
+        const roots = [null, "", root] as unknown as string[]
+        expect(isWithinRoots(win ? "C:\\proj\\app\\a.ts" : "/proj/app/a.ts", roots)).toBe(true)
+    })
+})
