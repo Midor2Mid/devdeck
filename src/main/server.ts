@@ -10,8 +10,6 @@ import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
 import {
-    isBlockedRemoteUrl,
-    isReadOnlySql,
     chooseBind,
     cookieToken,
     deviceCookie,
@@ -22,7 +20,12 @@ import {
 import { readDir, readFileText, writeFileText, allFiles, isWithinRoots } from "./files"
 import { atomicWrite } from "./atomic"
 import { listProjects } from "./projects"
-import { authenticate, type AuthResult } from "./devices"
+import {
+    authenticate,
+    isAuthLockedOut,
+    noteAuthFailure,
+    type AuthResult
+} from "./devices"
 import { exitNotice } from "../renderer/src/termExit"
 
 export interface RemoteSession {
@@ -184,18 +187,56 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         allowEnroll: boolean
     ): { auth: AuthResult; token: string } => {
         const userAgent = String(req.headers["user-agent"] ?? "")
+        // The peer address the socket actually came from, which is what
+        // devices.ts throttles repeated failures against. Deliberately NOT
+        // X-Forwarded-For or any other header: this server is reached
+        // directly over the LAN, and a caller-supplied header would let the
+        // guesser pick a fresh bucket per attempt, which is the whole attack
+        // the throttle exists to stop. An empty address (a socket already
+        // torn down) shares one bucket rather than skipping the limit.
+        const address = req.socket?.remoteAddress ?? ""
+        // One request, at most one failure charged. This function tries two
+        // credentials (cookie, then ?token=), which is one failed REQUEST
+        // presenting two dead credentials - not two guesses. Counting both
+        // halved the free budget for exactly the case the fallback exists to
+        // serve: a browser holding a revoked device cookie, which then loads a
+        // page, its assets and a WebSocket, and would be locked out while
+        // holding a freshly scanned, valid pairing token. So `authenticate` is
+        // told not to count, the lockout is checked once up front, and the
+        // failure is charged here, once.
+        const once = { countFailure: false }
+        if (isAuthLockedOut(address)) return { auth: { ok: false }, token: "" }
         try {
             const cookie = cookieToken(req.headers.cookie, !!config.tls)
             if (cookie) {
-                const byCookie = authenticate(cookie, userAgent, config.deviceTtlDays, allowEnroll)
+                const byCookie = authenticate(
+                    cookie,
+                    userAgent,
+                    config.deviceTtlDays,
+                    allowEnroll,
+                    address,
+                    once
+                )
                 if (byCookie.ok) return { auth: byCookie, token: cookie }
             }
             const queryToken = url.searchParams.get("token") ?? ""
-            if (!queryToken) return { auth: { ok: false }, token: "" }
-            return {
-                auth: authenticate(queryToken, userAgent, config.deviceTtlDays, allowEnroll),
-                token: queryToken
+            if (!queryToken) {
+                // A request carrying a dead cookie and no token is still a
+                // failed attempt; one carrying no credential at all is just an
+                // anonymous request and is not charged.
+                if (cookie) noteAuthFailure(address)
+                return { auth: { ok: false }, token: "" }
             }
+            const auth = authenticate(
+                queryToken,
+                userAgent,
+                config.deviceTtlDays,
+                allowEnroll,
+                address,
+                once
+            )
+            if (!auth.ok) noteAuthFailure(address)
+            return { auth, token: queryToken }
         } catch (err) {
             console.error("[server] auth store write failed:", (err as Error)?.message ?? err)
             return { auth: { ok: false }, token: "" }
@@ -366,7 +407,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     break
                 case "http": {
                     const req = msg.req as Parameters<typeof httpSend>[0]
-                    if (!req || isBlockedRemoteUrl(String(req.url ?? ""))) {
+                    if (!req) {
                         send(ws, {
                             t: "http:res",
                             res: {
@@ -377,7 +418,14 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         })
                         break
                     }
-                    httpSend(req).then((res) => send(ws, { t: "http:res", res }))
+                    // The guard moved inside httpSend, because checking here
+                    // only ever checked the FIRST url: fetch followed the
+                    // redirects itself, and any allowed public host could 302
+                    // the request to 127.0.0.1 or 169.254.169.254. guardRemote
+                    // re-runs it on every hop, against the resolved address.
+                    httpSend(req, { guardRemote: true }).then((res) =>
+                        send(ws, { t: "http:res", res })
+                    )
                     break
                 }
                 case "db:conns":
@@ -396,19 +444,14 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         )
                     break
                 case "db:query": {
+                    // Read-only is enforced by the driver now, not by a regex
+                    // on the first word here - see runReadOnly in db.ts. The
+                    // refusal for a driver that has no read-only mode
+                    // (SQL Server) comes back as an ordinary error result.
                     const sql = String(msg.sql)
-                    if (!isReadOnlySql(sql)) {
-                        send(ws, {
-                            t: "db:res",
-                            res: {
-                                ok: false,
-                                error: "Remote DB access is read-only (SELECT / SHOW / EXPLAIN only).",
-                                timeMs: 0
-                            }
-                        })
-                        break
-                    }
-                    runQuery(id, sql).then((res) => send(ws, { t: "db:res", res }))
+                    runQuery(id, sql, { readOnly: true }).then((res) =>
+                        send(ws, { t: "db:res", res })
+                    )
                     break
                 }
                 case "projects":

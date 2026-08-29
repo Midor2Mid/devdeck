@@ -302,6 +302,40 @@ describe("public device shape (M9)", () => {
     })
 })
 
+describe("what the throttle must NOT count", () => {
+    const addr = "10.0.0.42"
+
+    it("does not charge a correct pairing token that only hit the device cap", () => {
+        // The owner, holding the right credential, must not be answered with
+        // an exponentially growing refusal for presenting it.
+        const pt = pairingToken()
+        for (let i = 0; i < 20; i++) expect(authenticate(pt, `device ${i}`, 30, true, addr).ok).toBe(true)
+        for (let i = 0; i < 8; i++) expect(authenticate(pt, "one too many", 30, true, addr).ok).toBe(false)
+
+        // Free up a slot; the same token works immediately, with no lockout to
+        // wait out.
+        revokeDevice(listDevices(30)[0].id)
+        expect(authenticate(pt, "replacement", 30, true, addr).ok).toBe(true)
+    })
+
+    it("countFailure: false enforces the lockout but does not add to it", () => {
+        // The mode server.ts uses to try two credentials for one request.
+        for (let i = 0; i < 20; i++) {
+            authenticate(`bad-${i}`, "attacker", 30, true, addr, { countFailure: false })
+        }
+        // Twenty uncounted attempts, so nothing is locked and a real token works.
+        const r = authenticate(pairingToken(), "phone", 30, true, addr)
+        expect(r.ok).toBe(true)
+    })
+
+    it("still refuses while locked out, even in countFailure: false mode", () => {
+        for (let i = 0; i < 6; i++) authenticate(`bad-${i}`, "attacker", 30, true, addr)
+        const enrolled = authenticate(pairingToken(), "phone", 30, true, "10.0.0.99")
+        const token = enrolled.ok ? enrolled.deviceToken! : ""
+        expect(authenticate(token, "phone", 30, true, addr, { countFailure: false }).ok).toBe(false)
+    })
+})
+
 describe("expireForTest guard (M12)", () => {
     it("no-ops outside a test run, structurally - not merely by convention", () => {
         const r = authenticate(pairingToken(), "phone", 30)
@@ -320,5 +354,85 @@ describe("expireForTest guard (M12)", () => {
         // device outright - it must not have.
         expect(authenticate(token, "phone", 30).ok).toBe(true)
         expect(listDevices(30).some((d) => d.id === id)).toBe(true)
+    })
+})
+
+describe("failure throttle (remedy 15)", () => {
+    // The property: repeated failures from one address stop being answered,
+    // and they stop being answered BEFORE the device loop, which is both the
+    // guessing oracle and the per-request cost. Proven black-box by feeding a
+    // locked-out address a token that would otherwise match a paired device.
+    const enrol = (name: string, address = "10.0.0.1"): string => {
+        const r = authenticate(pairingToken(), name, 30, true, address)
+        return r.ok ? r.deviceToken! : ""
+    }
+    const fail = (n: number, address: string): void => {
+        for (let i = 0; i < n; i++) authenticate(`bad-${i}`, "attacker", 30, true, address)
+    }
+
+    it("refuses a valid token from an address that has failed too often", () => {
+        const token = enrol("phone")
+        fail(6, "10.0.0.9")
+        // Not "the token is wrong" - the address is inside its refusal window,
+        // so the loop that would have matched this token never runs.
+        expect(authenticate(token, "phone", 30, true, "10.0.0.9").ok).toBe(false)
+    })
+
+    it("keeps the same token working from a different address", () => {
+        const token = enrol("phone")
+        fail(20, "10.0.0.9")
+        expect(authenticate(token, "phone", 30, true, "10.0.0.1").ok).toBe(true)
+    })
+
+    it("gives a legitimate device a few free misses before any lockout", () => {
+        const token = enrol("phone", "10.0.0.7")
+        // A phone reconnecting with a stale cookie must not be locked out of
+        // its owner's own machine on the first handful of tries.
+        fail(5, "10.0.0.7")
+        expect(authenticate(token, "phone", 30, true, "10.0.0.7").ok).toBe(true)
+    })
+
+    it("clears the count on any success, so misses don't accumulate forever", () => {
+        const token = enrol("phone", "10.0.0.7")
+        fail(5, "10.0.0.7")
+        expect(authenticate(token, "phone", 30, true, "10.0.0.7").ok).toBe(true)
+        // Without the reset, these five would be failures 6-10 and lock the
+        // address out; with it, they are 1-5 again.
+        fail(5, "10.0.0.7")
+        expect(authenticate(token, "phone", 30, true, "10.0.0.7").ok).toBe(true)
+    })
+
+    it("lets the address back in once the window passes, and caps how long that is", () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date("2026-08-29T12:00:00Z"))
+        try {
+            const token = enrol("phone", "10.0.0.7")
+            // Far past the point where doubling would exceed any sane wait -
+            // what is capped is the delay, never the number of attempts, so
+            // this must not be a permanent ban.
+            fail(40, "10.0.0.7")
+            expect(authenticate(token, "phone", 30, true, "10.0.0.7").ok).toBe(false)
+            vi.advanceTimersByTime(30_001)
+            expect(authenticate(token, "phone", 30, true, "10.0.0.7").ok).toBe(true)
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it("throttles a caller that supplies no address rather than exempting it", () => {
+        const token = enrol("phone", "10.0.0.1")
+        for (let i = 0; i < 6; i++) authenticate(`bad-${i}`, "attacker", 30)
+        expect(authenticate(token, "phone", 30).ok).toBe(false)
+    })
+
+    it("counts an expired device's own token as a failure, not a free retry", () => {
+        const token = enrol("old phone", "10.0.0.7")
+        const id = listDevices(30)[0].id
+        expireForTest(id, Date.now() - 31 * 86_400_000)
+        // Five expired-token rejections plus one bad guess is six failures.
+        for (let i = 0; i < 5; i++) authenticate(token, "old phone", 30, true, "10.0.0.7")
+        authenticate("bad", "old phone", 30, true, "10.0.0.7")
+        const fresh = authenticate(pairingToken(), "old phone", 30, true, "10.0.0.7")
+        expect(fresh.ok).toBe(false)
     })
 })

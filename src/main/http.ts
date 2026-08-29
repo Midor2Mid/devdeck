@@ -1,3 +1,6 @@
+import { lookup } from "dns/promises"
+import { isBlockedAddress, isBlockedRemoteUrl } from "./guards"
+
 export interface HttpRequest {
     method: string
     url: string
@@ -17,17 +20,151 @@ export interface HttpResponse {
 
 const BODYLESS = new Set(["GET", "HEAD"])
 
+export interface HttpOptions {
+    /**
+     * Apply the SSRF guard to the resolved address of every hop, not just to
+     * the text of the URL the caller handed in. Set for requests relayed from
+     * the phone; the desktop API panel is the user's own browser-equivalent
+     * and is deliberately unguarded.
+     */
+    guardRemote?: boolean
+}
+
+/** Refusals stay in one place so the phone gets one message, not five. */
+const BLOCKED = "Blocked: remote requests to local/private hosts aren't allowed."
+/** Redirect chains are bounded; undici's own default is 20. */
+const MAX_HOPS = 10
+const REDIRECTS = new Set([301, 302, 303, 307, 308])
+
+/**
+ * Would this URL reach somewhere the phone must not reach?
+ *
+ * Two questions, because a hostname is a promise about an address:
+ * `isBlockedRemoteUrl` reads the text (scheme, obvious local names), and then
+ * the name is actually resolved and every address it yields is checked. That
+ * second half is what stops `http://127.1/`, `http://2130706433/`, and a
+ * public hostname whose A record points into the LAN - none of which look
+ * local as text.
+ *
+ * A name that will not resolve is refused rather than handed to fetch: the
+ * point of the guard is that "we could not tell" is not an allow.
+ *
+ * What this does NOT stop is DNS rebinding - `fetch` resolves the name again
+ * for itself, and a record with a one-second TTL can answer differently the
+ * second time. Pinning would mean connecting by address and carrying the Host
+ * header ourselves, which breaks TLS SNI/verification for the ordinary case.
+ * The exposure is a request to a LAN host by a party who already controls a
+ * DNS zone the user's phone asked about, and it is written down here rather
+ * than silently accepted.
+ */
+async function blockedTarget(raw: string): Promise<boolean> {
+    if (isBlockedRemoteUrl(raw)) return true
+    let host: string
+    try {
+        host = new URL(raw).hostname.replace(/^\[|\]$/g, "")
+    } catch {
+        return true
+    }
+    try {
+        const addrs = await lookup(host, { all: true, verbatim: true })
+        if (addrs.length === 0) return true
+        return addrs.some((a) => isBlockedAddress(a.address))
+    } catch {
+        return true
+    }
+}
+
+/** Headers a redirect to another origin must not carry with it. */
+const CREDENTIAL_HEADERS = new Set(["authorization", "cookie", "proxy-authorization", "host"])
+
+function sameOrigin(a: string, b: string): boolean {
+    try {
+        return new URL(a).origin === new URL(b).origin
+    } catch {
+        return false
+    }
+}
+
+function withoutCredentials(headers: Record<string, string>): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(headers)) {
+        if (!CREDENTIAL_HEADERS.has(k.toLowerCase())) out[k] = v
+    }
+    return out
+}
+
+/**
+ * `fetch` with the redirects followed by hand, so the guard runs on every hop
+ * instead of only on the URL the caller typed.
+ *
+ * This is the actual hole the guard had: `fetch` defaults to
+ * `redirect: "follow"`, the check ran once at the entry point, and any allowed
+ * public host could answer `302 Location: http://127.0.0.1:8787/` - DevDeck's
+ * own MCP server, on the machine the phone is remote-controlling - or
+ * `http://169.254.169.254/`. One check, then an unbounded number of unchecked
+ * requests.
+ *
+ * Returns `null` for a refusal (the caller turns that into BLOCKED) rather
+ * than throwing, so a refusal never reaches the user as a transport error.
+ */
+async function guardedFetch(req: HttpRequest, method: string): Promise<Response | null> {
+    let url = req.url
+    let verb = method
+    let body = BODYLESS.has(method) ? undefined : req.body
+    let headers = { ...(req.headers ?? {}) }
+
+    for (let hop = 0; hop <= MAX_HOPS; hop++) {
+        if (await blockedTarget(url)) return null
+        const res = await fetch(url, { method: verb, headers, body, redirect: "manual" })
+        if (!REDIRECTS.has(res.status)) return res
+
+        const location = res.headers.get("location")
+        // A redirect with nowhere to go is just a response; hand it back
+        // rather than inventing an error about it.
+        if (!location) return res
+        const from = url
+        try {
+            url = new URL(location, url).toString()
+        } catch {
+            return null
+        }
+        // Following redirects by hand means inheriting the obligations `fetch`
+        // was meeting for us. This is the one that bites: fetch strips
+        // credential headers when a redirect crosses origins, and a loop that
+        // replays req.headers verbatim would hand a saved request's API token
+        // to whatever host the endpoint named. The hardened path must not be
+        // the leaky one.
+        if (!sameOrigin(from, url)) headers = withoutCredentials(headers)
+        // Nothing reads a 3xx body, and an unread body keeps undici holding
+        // the socket until GC gets to it - up to MAX_HOPS of them per request.
+        await res.body?.cancel().catch(() => undefined)
+        // 303 always becomes GET; 301/302 do so for anything that isn't
+        // GET/HEAD, which is what every browser and undici already do. 307/308
+        // keep the method and the body by definition.
+        if (res.status === 303 || (res.status !== 307 && res.status !== 308 && !BODYLESS.has(verb))) {
+            verb = "GET"
+            body = undefined
+        }
+    }
+    // Out of hops. A redirect loop is not a reason to stop checking, so this
+    // is a refusal, not a "follow the last one anyway".
+    return null
+}
+
 // Runs in the main process, so it is free of browser CORS restrictions -
 // the whole point of a Postman-style client.
-export async function httpSend(req: HttpRequest): Promise<HttpResponse> {
+export async function httpSend(req: HttpRequest, opts: HttpOptions = {}): Promise<HttpResponse> {
     const start = Date.now()
     try {
         const method = (req.method || "GET").toUpperCase()
-        const res = await fetch(req.url, {
-            method,
-            headers: req.headers,
-            body: BODYLESS.has(method) ? undefined : req.body
-        })
+        const res = opts.guardRemote
+            ? await guardedFetch(req, method)
+            : await fetch(req.url, {
+                  method,
+                  headers: req.headers,
+                  body: BODYLESS.has(method) ? undefined : req.body
+              })
+        if (!res) return { ok: false, error: BLOCKED, timeMs: Date.now() - start }
         const body = await res.text()
         const headers: Record<string, string> = {}
         res.headers.forEach((value, key) => {

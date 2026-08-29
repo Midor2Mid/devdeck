@@ -15,8 +15,108 @@ export function tokenOk(provided: string | null | undefined, expected: string): 
 }
 
 /**
- * Block remote-initiated requests to local/private/link-local hosts (SSRF guard).
- * The desktop API panel is unaffected - this only gates the phone's relayed requests.
+ * Is this *numeric address* one the phone must never be able to reach?
+ *
+ * Separate from `isBlockedRemoteUrl` because the two answer different
+ * questions. This one takes an address that a resolver actually produced, so
+ * it is the check that survives `http://127.1/`, `http://2130706433/`, and a
+ * public hostname whose A record points at 10.0.0.5 - none of which look
+ * local as text. Anything that is not a recognisable literal address fails
+ * closed: this function is only ever handed resolver output, so a value it
+ * cannot parse means something upstream is not what we think it is.
+ *
+ * Deliberately NOT blocked: 100.64.0.0/10 (CGNAT). That is where Tailscale
+ * addresses live, and DevDeck itself offers a tailnet bind - blocking it here
+ * would refuse the user's own machines while adding nothing, since a tailnet
+ * peer is not a loopback the phone was never meant to see.
+ */
+export function isBlockedAddress(ip: string): boolean {
+    const h = ip.trim().toLowerCase().replace(/^\[|\]$/g, "")
+    if (!h) return true
+
+    const quad = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+    if (quad) return blockedV4(quad.slice(1).map(Number))
+
+    if (h.includes(":")) {
+        const groups = parseIpv6(h)
+        if (!groups) return true // an address we cannot read is not an address we allow
+        // IPv4-mapped (::ffff:0:0/96) is an IPv4 address wearing a hat, and it
+        // is NOT reliably spelled with dots: WHATWG URL normalises
+        // `[::ffff:127.0.0.1]` to `[::ffff:7f00:1]`, and a resolver hands back
+        // the same hex. Judging the text would have let every private range
+        // through in that spelling.
+        if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+            return blockedV4([groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff])
+        }
+        if (groups.every((g) => g === 0)) return true // ::
+        if (groups.slice(0, 7).every((g) => g === 0) && groups[7] === 1) return true // ::1
+        if ((groups[0] & 0xffc0) === 0xfe80) return true // fe80::/10, link-local
+        if ((groups[0] & 0xfe00) === 0xfc00) return true // fc00::/7, unique-local
+        return false
+    }
+    return true
+}
+
+function blockedV4(o: number[]): boolean {
+    if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true
+    const [a, b] = o
+    if (a === 127 || a === 0 || a === 10) return true
+    if (a === 169 && b === 254) return true // link-local + cloud metadata
+    if (a === 192 && b === 168) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    return false
+}
+
+/**
+ * An IPv6 literal as its eight 16-bit groups, or null if it isn't one.
+ *
+ * Written out rather than pattern-matched on the text because the prefix
+ * checks this replaces were wrong in both directions: `startsWith("fe80:")`
+ * missed the rest of fe80::/10 (`feb0::1` is link-local too), and neither
+ * spelling of an IPv4-mapped address was recognised at all.
+ */
+function parseIpv6(raw: string): number[] | null {
+    const zone = raw.indexOf("%")
+    const h = zone === -1 ? raw : raw.slice(0, zone)
+    const halves = h.split("::")
+    if (halves.length > 2) return null
+
+    const expand = (part: string): number[] | null => {
+        if (!part) return []
+        const out: number[] = []
+        for (const piece of part.split(":")) {
+            // A trailing dotted quad (`::ffff:127.0.0.1`) is two groups.
+            const dotted = piece.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+            if (dotted) {
+                const o = dotted.slice(1).map(Number)
+                if (o.some((n) => n > 255)) return null
+                out.push((o[0] << 8) | o[1], (o[2] << 8) | o[3])
+                continue
+            }
+            if (!/^[0-9a-f]{1,4}$/.test(piece)) return null
+            out.push(parseInt(piece, 16))
+        }
+        return out
+    }
+
+    const head = expand(halves[0])
+    const tail = halves.length === 2 ? expand(halves[1]) : []
+    if (!head || !tail) return null
+    if (halves.length === 1) return head.length === 8 ? head : null
+    const gap = 8 - head.length - tail.length
+    if (gap < 1) return null
+    return [...head, ...Array(gap).fill(0), ...tail]
+}
+
+/**
+ * Block remote-initiated requests to local/private/link-local hosts (SSRF guard),
+ * judging only the URL's *text*. The desktop API panel is unaffected - this
+ * only gates the phone's relayed requests.
+ *
+ * This is the cheap first pass, not the boundary: a hostname is a promise
+ * about an address, and the promise is kept by a DNS server we do not own.
+ * `httpSend`'s `guardRemote` mode is what resolves the name and re-checks
+ * every redirect hop; see the note there.
  */
 export function isBlockedRemoteUrl(raw: string): boolean {
     try {
@@ -24,26 +124,24 @@ export function isBlockedRemoteUrl(raw: string): boolean {
         if (u.protocol !== "http:" && u.protocol !== "https:") return true
         const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "")
         if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return true
-        if (h === "::1" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true
-        const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
-        if (m) {
-            const a = Number(m[1])
-            const b = Number(m[2])
-            if (a === 127 || a === 0 || a === 10) return true
-            if (a === 169 && b === 254) return true // link-local + cloud metadata
-            if (a === 192 && b === 168) return true
-            if (a === 172 && b >= 16 && b <= 31) return true
-        }
+        // Any literal address - v4 or v6 - is judged by the one function that
+        // knows what an address means. The v6 checks used to be duplicated here
+        // as string prefixes, and the copy was the one that was wrong.
+        if (h.includes(":") || /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.test(h)) return isBlockedAddress(h)
         return false
     } catch {
         return true
     }
 }
 
-/** Remote DB access is read-only - only data-returning statements are allowed. */
-export function isReadOnlySql(sql: string): boolean {
-    return /^\s*(select|with|explain|pragma|show|desc|describe)\b/i.test(sql)
-}
+// isReadOnlySql lived here: a regex on a statement's first word, called "the
+// whole security model" by the tool that depended on it. It let through
+// `WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x` (starts with "with")
+// and, on pg's simple-query protocol, `SELECT 1; DROP TABLE t` (one call, two
+// statements). It is deliberately not replaced by a better regex: read-only is
+// a capability the driver has - a transaction, or a connection flag - and
+// db.ts's runReadOnly now uses it per driver, refusing the one kind
+// (SQL Server) that has none.
 
 export type BindMode = "tailscale" | "lan" | "auto"
 export type BindChoice = { ok: true; host: string } | { ok: false; reason: string }

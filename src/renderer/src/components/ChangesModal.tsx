@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { useStore } from "../store"
 import { useSettings, aiModeAgents } from "../settings"
 import { Modal } from "./Modal"
+import { ipcMessage } from "../../../shared/ipcError"
 import type { ChangeFile } from "../../../preload/index"
 
 /**
@@ -73,8 +74,7 @@ export function ChangesModal(): JSX.Element | null {
             // Electron wraps a rejected handler as "Error invoking remote method
             // 'git:changes': Error: fatal: ...". The user needs git's sentence,
             // not the plumbing that carried it.
-            const raw = (e as Error).message || "git status failed"
-            setReadError(raw.replace(/^Error invoking remote method '[^']*':\s*(Error:\s*)?/, ""))
+            setReadError(ipcMessage(e, "git status failed"))
             setFiles(null)
             // Drop the selection too. Leaving it put a stale diff - with live
             // stage / unstage / DISCARD buttons acting on it - beside a panel

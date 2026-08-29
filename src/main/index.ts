@@ -385,9 +385,15 @@ function registerIpc(): void {
     ipcMain.handle("mcpsrv:status", () => mcpserver.status())
 
     // --- Pipeline ground-truth checks (command gates) ---
-    ipcMain.handle("checks:run", (_e, { cwd, command, timeoutMs }) =>
-        checks.runCheck(cwd, command, timeoutMs)
-    )
+    // This channel spawns a shell, so it gets the same confinement every other
+    // path-taking channel has. Reaching it needs a renderer XSS, which already
+    // owns window.api wholesale - this is hygiene, not a wall, and it is here
+    // because "runs a command in a directory you name" should never be the one
+    // channel that doesn't say which directories are allowed.
+    ipcMain.handle("checks:run", (_e, { cwd, command, timeoutMs }) => {
+        guardRepo(cwd)
+        return checks.runCheck(cwd, command, allowedRepoRoots(), timeoutMs)
+    })
     ipcMain.handle("mcpsrv:token", () => mcpserver.generateToken())
     ipcMain.handle("mcpsrv:register", (_e, { cwd, port }) => {
         guardRepo(cwd)
@@ -401,10 +407,38 @@ function registerIpc(): void {
     })
 
     // --- Database ---
+    // A SQLite "connection" is a file path, so creating or testing one is a
+    // file read - the one path-taking channel that had no confinement, and
+    // therefore the way around the confinement on all the others. Allowed if
+    // the file is inside an open project, or if the user personally picked it
+    // in the dialog (db:pickFile records that in the main process, where a
+    // renderer cannot add to it). Not narrowed to project roots alone: a
+    // database in D:\data is an ordinary thing to point DevDeck at, and
+    // removing that would be a worse bug than the one being fixed.
+    const dbInputRefusal = (input: { kind?: string; database?: string }): string | null => {
+        if (!input || input.kind !== "sqlite") return null
+        const file = String(input.database ?? "")
+        if (!file) return "A SQLite connection needs a database file."
+        if (inProject(file) || db.isApprovedDbFile(file)) return null
+        return "That database file is outside every open project - use Browse to choose it."
+    }
     ipcMain.handle("db:list", (_e, projectId: string) => db.listConnections(projectId))
-    ipcMain.handle("db:save", (_e, input) => db.saveConnection(input))
+    ipcMain.handle("db:save", (_e, input) => {
+        const refusal = dbInputRefusal(input)
+        if (refusal) throw new Error(refusal)
+        return db.saveConnection(input)
+    })
     ipcMain.handle("db:remove", (_e, id: string) => db.removeConnection(id))
-    ipcMain.handle("db:test", (_e, input) => db.testConnection(input))
+    // A refusal here is RETURNED, not thrown: db:test's contract has always
+    // been that a connection failure comes back as `{ ok: false, error }`, and
+    // the panel renders exactly that. Rejecting instead would have made the
+    // one input a user can plausibly get wrong - a path - the one that skips
+    // the error banner.
+    ipcMain.handle("db:test", (_e, input) => {
+        const refusal = dbInputRefusal(input)
+        if (refusal) return { ok: false, error: refusal, timeMs: 0 }
+        return db.testConnection(input)
+    })
     ipcMain.handle("db:query", (_e, { profileId, sql }) => db.runQuery(profileId, sql))
     ipcMain.handle("db:tables", (_e, profileId: string) => db.listTables(profileId))
     ipcMain.on("db:disconnect", (_e, profileId: string) => db.disconnect(profileId))
@@ -417,7 +451,11 @@ function registerIpc(): void {
                 { name: "All files", extensions: ["*"] }
             ]
         })
-        return res.canceled ? "" : (res.filePaths[0] ?? "")
+        const picked = res.canceled ? "" : (res.filePaths[0] ?? "")
+        // The dialog IS the boundary: this is the moment the user chose a file
+        // outside their projects, and it is a choice the renderer cannot forge.
+        if (picked) db.approveDbFile(picked)
+        return picked
     })
 
     // Generic open-file picker (returns "" if cancelled).
@@ -506,11 +544,16 @@ function registerIpc(): void {
     // A repo path is allowed if it's an open project, or inside an open
     // project's managed worktree sibling folder.
     const repoRoots = (): string[] => projects.listProjects().projects.map((x) => x.path)
-    const isAllowedRepo = (cwd: string): boolean => {
+    /** Every directory a repo operation may touch, as one list - open projects
+        plus their managed worktree siblings. Handed whole to callees that have
+        to re-check for themselves (checks.runCheck), so the allowed set is
+        defined in exactly one place. */
+    const allowedRepoRoots = (): string[] => {
         const roots = repoRoots()
-        if (files.isWithinRoots(cwd, roots)) return true
-        return files.isWithinRoots(cwd, roots.map((r) => worktrees.worktreeBase(r)))
+        return [...roots, ...roots.map((r) => worktrees.worktreeBase(r))]
     }
+    const isAllowedRepo = (cwd: string): boolean =>
+        files.isWithinRoots(cwd, allowedRepoRoots())
     const guardRepo = (cwd: string): void => {
         if (!isAllowedRepo(cwd)) throw new Error("Path is outside any open project.")
     }

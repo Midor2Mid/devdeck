@@ -13,6 +13,7 @@
  * already run commands directly, so this adds no new reach.)
  */
 import { spawn } from "child_process"
+import { isWithinRoots } from "./files"
 
 export interface CheckResult {
     /** Process exit code. -1 when the command could not be launched or timed out. */
@@ -33,10 +34,18 @@ const MAX_TIMEOUT_MS = 600_000
  * Run `command` in `cwd` through the platform shell (cmd.exe on Windows,
  * /bin/sh elsewhere), so pipes and `&&` work the way the user expects when they
  * type the same line into a terminal.
+ *
+ * `roots` is required rather than optional, and an empty list is a refusal.
+ * This function spawns a shell; the one thing a caller must never be able to
+ * do is forget to say where that is allowed to happen. The IPC handler guards
+ * `cwd` as well - the check here is what makes the *sanctioned* path unable to
+ * run outside every open project, so a future caller that skips the handler
+ * does not quietly inherit a shell anywhere on the disk.
  */
 export function runCheck(
     cwd: string,
     command: string,
+    roots: string[],
     timeoutMs = DEFAULT_TIMEOUT_MS
 ): Promise<CheckResult> {
     const started = Date.now()
@@ -45,6 +54,15 @@ export function runCheck(
     return new Promise((resolve) => {
         if (!command.trim()) {
             return resolve({ exitCode: -1, output: "", timedOut: false, error: "empty command", ms: 0 })
+        }
+        if (!cwd || roots.length === 0 || !isWithinRoots(cwd, roots)) {
+            return resolve({
+                exitCode: -1,
+                output: "",
+                timedOut: false,
+                error: "Refused: the check's working directory is outside every open project.",
+                ms: Date.now() - started
+            })
         }
 
         let out = ""

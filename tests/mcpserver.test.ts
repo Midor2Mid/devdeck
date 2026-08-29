@@ -83,8 +83,14 @@ describe("devdeck_db_connections", () => {
     })
 })
 
-describe("devdeck_db_query read-only guard", () => {
-    // The whole security model of this tool. Each of these must never reach the DB.
+describe("devdeck_db_query is read-only", () => {
+    // The tool no longer judges the SQL before running it - a regex on the
+    // first word was walked through by `WITH x AS (DELETE ...) SELECT`. What
+    // it must do instead is ask the db layer for the read-only path on EVERY
+    // call, so the driver refuses the write inside the database. These are the
+    // same statements the old guard listed; the assertion is now that each one
+    // reaches a driver that cannot execute it, rather than a regex that
+    // happens to recognise it.
     const writes = [
         "DELETE FROM users",
         "DROP TABLE users",
@@ -93,17 +99,39 @@ describe("devdeck_db_query read-only guard", () => {
         "TRUNCATE users",
         "ALTER TABLE users ADD col int",
         "GRANT ALL ON users TO bob",
-        "  \n  delete from users"
+        "  \n  delete from users",
+        // The two the regex let straight through.
+        "WITH x AS (DELETE FROM users RETURNING *) SELECT * FROM x",
+        "SELECT 1; DROP TABLE users"
     ]
 
     for (const sql of writes) {
-        it(`refuses: ${sql.trim().slice(0, 28)}`, async () => {
-            const r = await callTool("devdeck_db_query", { connectionId: "c1", sql }, deps)
-            expect(r.isError).toBe(true)
-            expect(text(r)).toMatch(/read-only/i)
-            expect(runQuery).not.toHaveBeenCalled()
+        it(`runs read-only: ${sql.trim().slice(0, 28)}`, async () => {
+            runQuery.mockResolvedValue({ ok: true, columns: [], rows: [], timeMs: 1 })
+            await callTool("devdeck_db_query", { connectionId: "c1", sql }, deps)
+            expect(runQuery).toHaveBeenCalledWith("c1", sql, { readOnly: true })
         })
     }
+
+    it("never asks for a writable query, whatever the SQL looks like", async () => {
+        runQuery.mockResolvedValue({ ok: true, columns: [], rows: [], timeMs: 1 })
+        await callTool("devdeck_db_query", { connectionId: "c1", sql: "SELECT 1" }, deps)
+        const opts = runQuery.mock.calls[0][2]
+        expect(opts).toEqual({ readOnly: true })
+    })
+
+    it("surfaces the driver's refusal as an error instead of an empty result", async () => {
+        // What a write actually looks like now: the database says no, and the
+        // agent has to be told that rather than shown zero rows.
+        runQuery.mockResolvedValue({
+            ok: false,
+            error: "cannot execute DELETE in a read-only transaction",
+            timeMs: 2
+        })
+        const r = await callTool("devdeck_db_query", { connectionId: "c1", sql: "DELETE FROM users" }, deps)
+        expect(r.isError).toBe(true)
+        expect(text(r)).toMatch(/read-only transaction/i)
+    })
 
     it("allows a SELECT and returns rows", async () => {
         runQuery.mockResolvedValue({

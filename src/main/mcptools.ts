@@ -8,9 +8,13 @@
  * instead: it queries the schema and the data itself, mid-task, when it needs to.
  *
  * Safety posture, deliberately narrow:
- *  - The database tools are read-only. `devdeck_db_query` rejects anything that
- *    isn't a data-returning statement, reusing the same `isReadOnlySql` guard the
- *    remote mobile server uses — an agent cannot mutate or drop anything.
+ *  - The database tools are read-only, and that is now enforced by the driver
+ *    rather than by inspecting the SQL: `devdeck_db_query` runs inside a
+ *    read-only transaction (postgres/mysql) or on a read-only connection
+ *    (sqlite), and is refused outright for SQL Server, which has no such mode.
+ *    The claim "an agent cannot mutate or drop anything" is a claim about
+ *    where the statement executes, not about how it is spelled — the regex
+ *    this replaced was walked through by `WITH x AS (DELETE …) SELECT`.
  *  - `devdeck_http_send` is the one tool that isn't read-only, because an HTTP
  *    request is whatever the endpoint makes of it. It is contained by only ever
  *    replaying a request the *user already saved*: the agent picks one by id and
@@ -29,7 +33,6 @@
  * Electron or a live socket; the transport lives in `mcpserver.ts`.
  */
 import * as db from "./db"
-import { isReadOnlySql } from "./guards"
 
 /** Hard ceiling on rows returned to an agent, regardless of the query's own LIMIT. */
 export const MAX_ROWS = 200
@@ -240,7 +243,7 @@ export const TOOLS: McpToolDef[] = [
     {
         name: "devdeck_db_query",
         description:
-            `Run a READ-ONLY SQL query against a DevDeck database connection and get the rows back. Only data-returning statements are allowed (SELECT / WITH / EXPLAIN / PRAGMA / SHOW / DESCRIBE); anything that writes is rejected. At most ${MAX_ROWS} rows are returned. Use this to check real data instead of assuming what the schema or contents look like.`,
+            `Run a READ-ONLY SQL query against a DevDeck database connection and get the rows back. The query runs in a read-only transaction, so anything that writes fails in the database itself. SQL Server connections are refused entirely (no read-only transaction exists there). At most ${MAX_ROWS} rows are returned. Use this to check real data instead of assuming what the schema or contents look like.`,
         inputSchema: {
             type: "object",
             properties: {
@@ -354,17 +357,13 @@ export async function callTool(
             const sql = typeof args.sql === "string" ? args.sql : ""
             if (!id) return fail("connectionId is required.")
             if (!sql.trim()) return fail("sql is required.")
-            // The guard is the whole security model for this tool — keep it first.
-            if (!isReadOnlySql(sql)) {
-                return fail(
-                    "Refused: devdeck_db_query only runs read-only statements " +
-                        "(SELECT / WITH / EXPLAIN / PRAGMA / SHOW / DESCRIBE). " +
-                        "Ask the user to run writes themselves in the DevDeck DB panel."
-                )
-            }
             let res: db.QueryResult
             try {
-                res = await db.runQuery(id, sql)
+                // `readOnly` is not a hint - it selects a path where the
+                // driver itself refuses writes (see runReadOnly in db.ts).
+                // This used to be a regex on the first word, right here, which
+                // a `WITH x AS (DELETE ...) SELECT` walked straight through.
+                res = await db.runQuery(id, sql, { readOnly: true })
             } catch (e) {
                 return fail(`Query failed: ${e instanceof Error ? e.message : String(e)}`)
             }
