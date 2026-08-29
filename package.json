@@ -19,7 +19,8 @@
     "package:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-signed.ps1",
     "verify:terminal": "node scripts/verify-terminal.mjs",
     "worktree": "node scripts/worktree.mjs",
-    "verify:packaged": "node scripts/verify-packaged.mjs"
+    "verify:packaged": "node scripts/verify-packaged.mjs",
+    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1 -WaitSeconds 600 -Relaunch"
   },
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.12",
