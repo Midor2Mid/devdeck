@@ -35,7 +35,15 @@ function stubApi(over: Record<string, unknown> = {}): void {
             workspace: { save: (): void => undefined },
             settings: { save: (): void => undefined },
             projects: { setActive: async (): Promise<void> => undefined },
-            pty: { kill: (): void => undefined, input: (): void => undefined },
+            pty: {
+                // `buffer` is what whenReady falls back to on its deadline:
+                // an empty one means the session never spoke.
+                buffer: async (): Promise<{ buffer: string; exitCode: number | undefined }> => ({
+                    buffer: "",
+                    exitCode: undefined
+                }),
+                kill: (): void => undefined, input: (): void => undefined
+            },
             git: {
                 status: async (): Promise<{ changes: number }> => ({ changes: 0 }),
                 changes: async (): Promise<{ path: string }[]> => []

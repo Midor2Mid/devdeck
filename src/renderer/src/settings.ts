@@ -369,7 +369,17 @@ export const IDLE_MIN = 300
 // No practical ceiling - this is "how long before we call an agent quiet", not a
 // claim that it finished. Bounded only so a typo cannot disable the signal.
 export const IDLE_MAX = 600_000
-export const DEFAULT_IDLE_MS = 1000
+/**
+ * How long an agent must be silent before DevDeck calls it quiet.
+ *
+ * Raised from 1000 ms in the same change that stopped visibility deciding the
+ * classification. At one second, every tool call and every API round trip
+ * crossed the threshold and read as a finished turn — which was tolerable only
+ * while looking at a pane suppressed the signal entirely. Now that a watched
+ * session flips like an unwatched one, the threshold has to describe a real
+ * pause rather than a network hop.
+ */
+export const DEFAULT_IDLE_MS = 6000
 
 /** A usable idle threshold, whatever the input. Junk falls back to the default. */
 export function clampIdleMs(ms: unknown): number {
@@ -577,8 +587,17 @@ interface SettingsState extends AppSettings {
     resetAll: () => void
     openSettings: (section?: string) => void
     closeSettings: () => void
-    /** Resolve the configured shell to a launchable file + args (Windows). */
-    resolveShell: (kind?: ShellKind) => { file: string; args: string[] }
+    /**
+     * Resolve the configured shell to a launchable file + args (Windows), or
+     * `null` when the selection cannot be honoured.
+     *
+     * `null` is a **refusal the caller must handle**, not a fallback. It used to
+     * return `{ file: "" }` for a `custom` shell with a blank path, and `pty.ts`
+     * reads `opts.shell?.file ? opts.shell : defaultShell()` — so a blank custom
+     * path silently launched PowerShell instead of the shell the user picked,
+     * and nothing ever said the setting had done nothing.
+     */
+    resolveShell: (kind?: ShellKind) => { file: string; args: string[] } | null
 }
 
 export const useSettings = create<SettingsState>((set, get) => {
@@ -1059,14 +1078,14 @@ export const useSettings = create<SettingsState>((set, get) => {
                 case "cmd":
                     return { file: "cmd.exe", args: [] }
                 case "gitbash":
-                    return {
-                        file: customShellPath || "C:\\Program Files\\Git\\bin\\bash.exe",
-                        args: ["-i", "-l"]
-                    }
+                    // NOT `customShellPath || ...`. The two settings share one
+                    // field, so that launched whatever binary the user had typed
+                    // into the custom-path box with BASH's argv (`-i -l`).
+                    return { file: "C:\\Program Files\\Git\\bin\\bash.exe", args: ["-i", "-l"] }
                 case "wsl":
                     return { file: "wsl.exe", args: [] }
                 case "custom":
-                    return { file: customShellPath, args: [] }
+                    return customShellPath.trim() ? { file: customShellPath, args: [] } : null
                 default:
                     return { file: "powershell.exe", args: ["-NoLogo"] }
             }

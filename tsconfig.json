@@ -11,9 +11,14 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
+        // The suite imports two plain-JS build scripts (scripts/*.mjs). allowJs lets
+        // TypeScript infer their shapes; checkJs stays off, so the scripts themselves
+        // are not typechecked - only the tests that exercise them are.
+        "allowJs": true,
+        "checkJs": false,
         "isolatedModules": true,
         "allowSyntheticDefaultImports": true,
         "types": ["node"]
     },
-    "include": ["src", "electron.vite.config.ts"]
+    "include": ["src", "tests", "electron.vite.config.ts"]
 }

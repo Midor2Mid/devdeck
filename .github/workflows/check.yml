@@ -1,0 +1,28 @@
+# `npm test` and `npm run typecheck` were honour-system: nothing ran them but a
+# person remembering to. This runs both on every push and PR.
+#
+# windows-latest, not ubuntu: DevDeck is a Windows-first Electron app, the suite
+# mocks `@lydell/node-pty` rather than avoiding it, and several tests reason
+# about Windows paths and exit codes. A green run on Linux would be testing a
+# platform nobody ships.
+name: check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Typecheck first: it now covers `tests/` too, so a test that no longer
+      # matches the types it exercises fails here rather than passing green.
+      - run: npm run typecheck
+      - run: npm test

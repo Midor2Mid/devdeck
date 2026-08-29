@@ -62,7 +62,13 @@ export function WorktreesModal(): JSX.Element {
 
     const remove = async (wt: Worktree): Promise<void> => {
         setBusy(true)
-        await window.api.git.worktreeRemove(project.path, wt.path)
+        setErr("")
+        // `{ok, error}` was discarded here while `create` twelve lines above
+        // checks it. A worktree with uncommitted changes, or a locked one, fails
+        // to remove - and the row simply reappeared on the next refresh with no
+        // explanation for why the click did nothing.
+        const res = await window.api.git.worktreeRemove(project.path, wt.path)
+        if (!res.ok) setErr(res.error || "git worktree remove failed")
         setBusy(false)
         refresh()
     }

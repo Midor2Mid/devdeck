@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { useStore, SHELL } from "../src/renderer/src/store"
 import { useSettings } from "../src/renderer/src/settings"
 import { leaf, splitLeaf, collectLeaves } from "../src/renderer/src/layout"
+import type { Project } from "../src/preload/index"
 import { useToasts } from "../src/renderer/src/toast"
 
-const PROJECT = { id: "p1", name: "proj", path: "D:/proj" }
+const PROJECT: Project = { id: "p1", name: "proj", path: "D:/proj", addedAt: 0 }
 
 let killed: string[] = []
 let created: { id: string; initialCommand?: string; cwd: string }[] = []

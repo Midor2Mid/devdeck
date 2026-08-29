@@ -99,11 +99,29 @@ export function ChangesModal(): JSX.Element | null {
 
     if (!target || !cwd) return null
 
-    const act = async (fn: () => Promise<unknown>, ok: string): Promise<void> => {
+    /**
+     * Run one git operation and report **what happened**, not what was asked for.
+     *
+     * `Promise<unknown>` is the type that made the bug possible: `stageFile`,
+     * `unstageFile` and `discardFile` all return a boolean, and this threw it
+     * away one hop from where it was produced, then printed `ok` unconditionally.
+     * The worst caller is the one behind "This cannot be undone" - a discard that
+     * failed still said "Discarded." Fifteen lines below, `commit` branches on
+     * `res.ok` and renders the error, so the shape was already in this file.
+     */
+    const act = async (fn: () => Promise<boolean>, ok: string, fail: string): Promise<void> => {
         setBusy(true)
-        await fn()
+        let done = false
+        try {
+            done = await fn()
+        } catch (e) {
+            setBusy(false)
+            setNote(`${fail} - ${(e as Error).message}`)
+            refresh()
+            return
+        }
         setBusy(false)
-        setNote(ok)
+        setNote(done ? ok : fail)
         refresh()
     }
 
@@ -175,11 +193,11 @@ export function ChangesModal(): JSX.Element | null {
                                 <span className="ch-diff-name">{sel.path}</span>
                                 <span className="spacer" />
                                 {sel.staged ? (
-                                    <button className="btn-min" disabled={busy} onClick={() => act(() => window.api.git.unstage(cwd, sel.path), "Unstaged.")}>
+                                    <button className="btn-min" disabled={busy} onClick={() => act(() => window.api.git.unstage(cwd, sel.path), "Unstaged.", "Unstage failed.")}>
                                         unstage
                                     </button>
                                 ) : (
-                                    <button className="btn-min" disabled={busy} onClick={() => act(() => window.api.git.stage(cwd, sel.path), "Staged.")}>
+                                    <button className="btn-min" disabled={busy} onClick={() => act(() => window.api.git.stage(cwd, sel.path), "Staged.", "Stage failed.")}>
                                         stage
                                     </button>
                                 )}
@@ -188,7 +206,11 @@ export function ChangesModal(): JSX.Element | null {
                                     disabled={busy}
                                     onClick={() => {
                                         if (confirm(`Discard changes to ${sel.path}? This cannot be undone.`))
-                                            act(() => window.api.git.discard(cwd, sel.path, sel.untracked), "Discarded.")
+                                            act(
+                                                () => window.api.git.discard(cwd, sel.path, sel.untracked),
+                                                "Discarded.",
+                                                "Nothing was discarded - the file is unchanged."
+                                            )
                                     }}
                                 >
                                     discard

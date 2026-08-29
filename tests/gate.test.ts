@@ -133,18 +133,18 @@ describe("command (ground-truth) gates", () => {
 // which a blank screen satisfies perfectly") and the shipped engine was not.
 describe("an absent gate on output that was never produced", () => {
     it("fails on empty output instead of passing vacuously", () => {
-        expect(evaluateGate({ mode: "absent", pattern: "error" }, "")).toBe(false)
+        expect(evaluateGate(gate({ mode: "absent", pattern: "error" }), "")).toBe(false)
     })
 
     it("fails on whitespace-only output too", () => {
-        expect(evaluateGate({ mode: "absent", pattern: "error" }, "   \r\n  ")).toBe(false)
+        expect(evaluateGate(gate({ mode: "absent", pattern: "error" }), "   \r\n  ")).toBe(false)
     })
 
     it("still passes when there is real output and the pattern is genuinely absent", () => {
-        expect(evaluateGate({ mode: "absent", pattern: "error" }, "build ok\n")).toBe(true)
+        expect(evaluateGate(gate({ mode: "absent", pattern: "error" }), "build ok\n")).toBe(true)
     })
 
     it("still fails when the pattern is present", () => {
-        expect(evaluateGate({ mode: "absent", pattern: "error" }, "error: nope\n")).toBe(false)
+        expect(evaluateGate(gate({ mode: "absent", pattern: "error" }), "error: nope\n")).toBe(false)
     })
 })

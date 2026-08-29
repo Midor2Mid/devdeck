@@ -225,7 +225,8 @@ export function NetworkPanel(): JSX.Element {
 
     const addr = `http://127.0.0.1:${port}`
     const copyAddr = (): void => {
-        navigator.clipboard.writeText(addr)
+        // See StandupModal: `navigator.clipboard` is denied in this renderer.
+        window.api.clipboard.writeText(addr)
         setCopied(true)
         setTimeout(() => setCopied(false), 1200)
     }

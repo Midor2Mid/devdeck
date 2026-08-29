@@ -2,6 +2,107 @@
 
 ## Unreleased
 
+### The tests are typechecked, and something other than a person runs them
+
+Remedy item 16 (an enabler, done last rather than first). `tsconfig.json`
+included only `src`, so `tsc --listFiles` reported zero files under `tests/` —
+99 suites could drift from the types they exercise and stay green. There was no
+`.github` directory either, so `npm test` and `npm run typecheck` ran only when
+somebody remembered.
+
+- `tests` is in the typecheck. The first run surfaced 25 real mismatches (a
+  `Project` missing `addedAt`, a `StepGate` missing its retry fields, a
+  `runsSentence` argument that was still a boolean after the parameter became a
+  union) — all fixed here.
+- A CI workflow runs `npm run typecheck` then `npm test` on every push and pull
+  request, on `windows-latest`, because a green run on Linux would be testing a
+  platform DevDeck does not ship.
+
+One thing this does **not** yet do, despite being the reason it was proposed:
+the suites' hand-written `window.api` stubs are still cast through `unknown`, so
+they are not checked against `src/preload/index.ts`. Renaming an IPC channel
+still leaves every suite green. Typing those stubs is a change across 99 files
+and is not this.
+
+### An agent's state stops depending on whether you were looking
+
+Remedy item 13. Visibility gated the **classification**, not just the
+notification: the identical byte sequence from the identical agent produced a
+notification when you were in your browser and no state change at all when you
+were on the pane. The state that caused the signal was destroyed by looking at
+it, so no one could reproduce, confirm, or falsify an attention claim — which is
+why tuning the heuristic could never have fixed it.
+
+- **A session you are watching now records what it did.** Going quiet marks it
+  `waiting`, and a bell marks it `attention`, whether or not the pane is on
+  screen. Only the sound and the in-app notification are still withheld from a
+  pane you are already looking at.
+- **The quiet threshold moves from 1 s to 6 s**, in the same change and not a
+  later one. At one second every tool call and API round trip read as a finished
+  turn — survivable only while watching a pane suppressed the signal entirely.
+  It is a setting; the clamp around it is unchanged.
+- **The tile stops claiming a turn finished.** It says what was actually
+  observed: quiet since the last output. The chip beside it already says for how
+  long.
+
+Expect the deck's attention count to read **higher** on stock settings. Sessions
+you are watching now count, which is the honest number.
+
+### A destructive operation's result gets read
+
+Remedy item 12. `ChangesModal`'s `act(fn: () => Promise<unknown>, ok: string)`
+printed its success string unconditionally — and its three callers are stage,
+unstage, and the **discard** behind a dialog that says "This cannot be undone."
+Fifteen lines below it, `commit` branches on the result and renders the error, so
+the right shape was already in the file.
+
+- **"Discarded." is no longer printed for a discard that failed.** Narrowing that
+  parameter to `Promise<boolean>` was the whole fix — `stageFile`, `unstageFile`
+  and `discardFile` all already returned one, thrown away a single hop from where
+  it was produced.
+- **Removing a git account waits for its token to actually be gone.** `clearPat`
+  was un-awaited and returned `void`, so the row vanished while the encrypted PAT
+  stayed on disk — the store deliberately refuses to save when it could not be
+  read, and that refusal was invisible here.
+- **A worktree that will not remove says why**, instead of the row quietly
+  reappearing on the next refresh.
+- **Browser comments are no longer cleared into the void** when there is no agent
+  session to send them to.
+- **Four "Copied" messages now copy something.** They called
+  `navigator.clipboard.writeText`, which this app's own deny-all permission
+  handler blocks — the house `window.api.clipboard` goes through main and works.
+- Discarding an untracked directory is recursive. (After `-uall` above, git's
+  porcelain lists the files rather than the directory, so this is now defence
+  rather than a reachable bug — but a non-recursive delete of a directory failing
+  and reporting success is how it stayed hidden.)
+
+### A prompt waits for the shell, and a shell that never starts says so
+
+Remedy item 11. Five places spawned an agent CLI, slept a hard-coded 2800 ms,
+and typed the prompt whether or not anything was listening - and `writePty`
+drops a write to a session that is not live yet **silently**, so a slow boot lost
+the prompt with no trace. The card that prompt was for had already been marked
+dispatched, given a cost window, and appended to an append-only ledger.
+
+- **Readiness is observed instead of guessed.** The store already sees every
+  session's first byte; `whenReady` resolves on that byte plus a short quiet
+  settle, with the old 2800 ms demoted from plan to deadline. On a deadline miss
+  the prompt is still sent - losing work is worse than a quiet CLI - but the
+  activity feed now says it may not have landed, which is the part that did not
+  exist. Six hard-coded sleeps deleted.
+- **A shell that fails to start reports itself.** `nodePty.spawn` throws for a
+  missing or non-executable shell, and that throw was swallowed whole: main
+  stayed healthy, nothing reached stderr, and the pane simply stayed black
+  forever. It now prints which shell it tried, git's - or Windows' - own error,
+  and where to change it.
+- **`initialCommand` rides the first byte** rather than a 500 ms timer, in the
+  one process that can see that byte for free.
+- **A custom shell with a blank path is refused, not substituted.** It used to
+  fall through to PowerShell without a word, so a broken setting looked like a
+  working one. Relatedly, selecting Git Bash no longer launches whatever is in
+  the custom-path box **with bash's arguments** - the two settings shared a
+  field and only one of them owned it.
+
 ### Main owns "is it safe to stop"
 
 Remedy item 6 of the 2026-08-26 audit. The renderer knew how many agents were

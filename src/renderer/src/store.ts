@@ -203,6 +203,16 @@ interface AppState extends Persisted {
      */
     sessionCwd: (termId: string) => string
 
+    /**
+     * Resolve once a session has printed its first byte and gone quiet for a
+     * beat, or `false` if nothing arrived before the deadline.
+     *
+     * Exposed because readiness is not only the store's business: any surface
+     * that spawns a session and then types into it needs the same answer, and
+     * the alternative each one reached for was a hard-coded sleep.
+     */
+    whenReady: (termId: string, opts?: { settleMs?: number; timeoutMs?: number }) => Promise<boolean>
+
     flush: () => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
@@ -634,7 +644,108 @@ export const useStore = create<AppState>((set, get) => {
     // where a pane closes while its read is in flight.
     const evidenceInFlight = new Set<string>()
 
+    /**
+     * Callbacks waiting for a session's first byte, keyed by termId.
+     *
+     * Readiness was always observable and never observed: `onPtyData` below
+     * already sees the first byte of every session. Five call sites instead
+     * slept 2800 ms and typed blind, and `pty.input` -> `writePty` drops a write
+     * to a session that is not live yet **silently** — so a slow CLI boot lost
+     * the prompt with no trace, while the card that prompt was for had already
+     * been marked dispatched, given a cost window, and appended to a ledger that
+     * ships no way to retract a line.
+     */
+    const readyWaiters = new Map<string, Set<() => void>>()
+
+    /**
+     * Resolve once this session looks ready for a prompt: its first byte, then a
+     * short quiet settle (the CLI has finished painting).
+     *
+     * `false` means no byte arrived before the deadline. The old 2800 ms lives on
+     * as that deadline rather than as the plan — an agent CLI that prints nothing
+     * at all before it is ready must not be reported as failed, so the settle is
+     * a lower bound and the caller is expected to send anyway and warn. Never
+     * silently drop.
+     */
+    const whenReady = (
+        termId: string,
+        opts?: { settleMs?: number; timeoutMs?: number }
+    ): Promise<boolean> => {
+        const settleMs = opts?.settleMs ?? 300
+        const timeoutMs = opts?.timeoutMs ?? 2800
+        return new Promise((resolve) => {
+            let sawByte = false
+            let settle: ReturnType<typeof setTimeout> | undefined
+            const finish = (ok: boolean): void => {
+                clearTimeout(deadline)
+                if (settle) clearTimeout(settle)
+                const set = readyWaiters.get(termId)
+                if (set) {
+                    set.delete(onByte)
+                    if (set.size === 0) readyWaiters.delete(termId)
+                }
+                resolve(ok)
+            }
+            const onByte = (): void => {
+                sawByte = true
+                if (settle) clearTimeout(settle)
+                settle = setTimeout(() => finish(true), settleMs)
+            }
+            const deadline = setTimeout(() => {
+                if (sawByte) {
+                    // It spoke and never stopped — a CLI that streams continuously
+                    // is ready, not absent.
+                    finish(true)
+                    return
+                }
+                // Nothing arrived through the stream, but the session may have
+                // printed before this promise existed (a re-attach, or a spawn
+                // that beat the subscription). Ask main once, on the failure
+                // path only, rather than reporting a false negative.
+                try {
+                    window.api.pty
+                        .buffer(termId)
+                        .then((b) => finish(b.buffer.length > 0))
+                        .catch(() => finish(false))
+                } catch {
+                    // A torn-down preload bridge throws SYNCHRONOUSLY, so there is
+                    // no promise to catch on - and an unhandled throw in a timer
+                    // would leave this promise pending forever.
+                    finish(false)
+                }
+            }, timeoutMs)
+            const existing = readyWaiters.get(termId)
+            if (existing) existing.add(onByte)
+            else readyWaiters.set(termId, new Set([onByte]))
+        })
+    }
+
+    /**
+     * Wait for the session, then send `text` as its first prompt.
+     *
+     * One place, because five call sites had the same three lines and the same
+     * blind sleep. On a deadline miss the prompt still goes — the alternative is
+     * losing work over a CLI that boots quietly — but the activity feed says so,
+     * which is the part that did not exist before.
+     */
+    const promptWhenReady = async (termId: string, text: string): Promise<boolean> => {
+        const ready = await whenReady(termId)
+        if (!ready) {
+            pushActivity(
+                "attention",
+                termId,
+                "printed nothing before the prompt was sent — it may not have been received"
+            )
+        }
+        window.api.pty.input(termId, text + "\r")
+        return ready
+    }
+
     const onPtyData = ({ id, data }: { id: string; data: string }): void => {
+        // Ahead of everything, including the agent gate: readiness is about the
+        // shell having started, and a plain shell tab waits on it too.
+        const waiting = readyWaiters.get(id)
+        if (waiting) for (const w of [...waiting]) w()
         // Backstop, ahead of the agent-only gate below: any output at all means
         // this id is alive right now, whether that's an ordinary respawn-in-place
         // or a stale exit event for a session a restart already replaced (I3) -
@@ -655,10 +766,17 @@ export const useStore = create<AppState>((set, get) => {
         // …and its committed-output rate, for the tile's trace.
         recordRate(id, data)
         const visible = isVisible(id)
-        if (hasBell(id, data) && !visible) {
+        // M4: visibility gates the NOTIFICATION, never the classification. The
+        // bell is a fact about the agent, and letting `!visible` decide whether
+        // to record it meant the identical byte sequence from the identical
+        // agent produced a notification when you were in your browser and no
+        // state change at all when you were on the pane - so no user could
+        // reproduce, confirm, or falsify a DevDeck attention claim. Tuning could
+        // never fix that; only moving the check could.
+        if (hasBell(id, data)) {
             const was = get().agentStatus[id]
             setStatus(id, "attention")
-            if (was !== "attention") {
+            if (was !== "attention" && !visible) {
                 pushNotification(id)
                 pushActivity("attention", id)
                 notifyAttention(id)
@@ -673,11 +791,12 @@ export const useStore = create<AppState>((set, get) => {
             setTimeout(
                 () => {
                     if (get().agentStatus[id] === "working") {
-                        // Finished a turn. If you're watching this pane there's nothing
-                        // to flag (idle); if it's a background session, mark it "waiting
-                        // for you" and give the soft signal so you don't have to babysit.
+                        // It has gone quiet. That is true whether or not anyone is
+                        // looking, so it is recorded either way - the ternary here
+                        // destroyed the state by observing it. Only the soft signal
+                        // is withheld from a pane you are already watching.
                         const away = !isVisible(id)
-                        setStatus(id, away ? "waiting" : "idle")
+                        setStatus(id, "waiting")
                         if (away) notifyWaiting()
                         // A dispatched card moves to review only on EVIDENCE the
                         // agent produced something — not because it went quiet for
@@ -1398,11 +1517,15 @@ export const useStore = create<AppState>((set, get) => {
             // is orders of magnitude more than this IPC round-trip needs.
             captureBaseline(termId, sessionCwd(termId))
             persist()
-            // Let the agent CLI boot, then send the task as its first prompt.
-            await sleep(2800)
-            window.api.pty.input(termId, task.title + "\r")
+            // Wait for the CLI's first byte, not for a fixed 2800ms. The card
+            // above is already `doing` with a cost window open and a ledger line
+            // behind it, so a prompt that never landed would leave a permanent
+            // record saying it did.
+            await promptWhenReady(termId, task.title)
             set({ lastAgentTermId: termId })
         },
+
+        whenReady,
 
         flush: () => {
             if (persistTimer) {
@@ -1492,8 +1615,7 @@ export const useStore = create<AppState>((set, get) => {
             const termId = get().newTab(agentId, undefined, label, cwd)
             if (!termId) return
             set({ changesTarget: null })
-            await sleep(2800)
-            window.api.pty.input(termId, prompt + "\r")
+            await promptWhenReady(termId, prompt)
             set({ lastAgentTermId: termId })
         },
 
@@ -1518,11 +1640,11 @@ export const useStore = create<AppState>((set, get) => {
                 if (termId) spawned.push({ termId, lens })
             }
             set({ reviewOpen: false, view: "terminal" })
-            // Let each freshly-spawned agent CLI boot before typing its prompt.
-            await sleep(2800)
-            for (const { termId, lens } of spawned) {
-                window.api.pty.input(termId, reviewPrompt(lens) + "\r")
-            }
+            // Each reviewer waits for its OWN first byte, in parallel - one slow
+            // lens no longer decides when the others are typed into.
+            await Promise.all(
+                spawned.map(({ termId, lens }) => promptWhenReady(termId, reviewPrompt(lens)))
+            )
             if (spawned.length) set({ lastAgentTermId: spawned[spawned.length - 1].termId })
         },
 
@@ -1555,9 +1677,7 @@ export const useStore = create<AppState>((set, get) => {
             if (!termId) return
             set({ workOpen: false, composerDrafts: { ...get().composerDrafts, [proj.id]: "" } })
             pushActivity("start", termId, `${item.key} · ${item.title}`.slice(0, 80))
-            // Wait for the agent CLI to boot, then send the ticket brief as its first prompt.
-            await sleep(2800)
-            window.api.pty.input(termId, brief + "\r")
+            await promptWhenReady(termId, brief)
             set({ lastAgentTermId: termId })
         },
 
@@ -1794,8 +1914,16 @@ export const useStore = create<AppState>((set, get) => {
                             return
                         }
                         liveByAgent[step.agentId] = termId
-                        // Give the freshly-spawned agent CLI time to boot before typing.
-                        await sleep(2800)
+                        // Wait for the CLI's first byte before the prompt below is
+                        // written; a step whose prompt was dropped into a pty that
+                        // was not reading yet ran nothing and still got a gate.
+                        if (!(await whenReady(termId))) {
+                            pushActivity(
+                                "attention",
+                                termId,
+                                "printed nothing before its step prompt was sent"
+                            )
+                        }
                         if (stale()) return
                     } else {
                         get().jumpToTerm(termId)

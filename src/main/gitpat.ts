@@ -31,18 +31,21 @@ function load(): Store {
     readFailed = res.reason === "unreadable"
     return { pats: {} }
 }
-function save(store: Store): void {
+/** Returns whether the store actually reached disk. */
+function save(store: Store): boolean {
     if (readFailed) {
         console.error(
             "[gitpat] refusing to save: the store exists but could not be read;" +
                 " writing now would delete every stored token"
         )
-        return
+        return false
     }
     try {
         atomicWrite(storeFile(), JSON.stringify(store, null, 2))
+        return true
     } catch (err) {
         console.error("[gitpat] failed to save:", err)
+        return false
     }
 }
 
@@ -88,10 +91,17 @@ export function status(): Record<string, boolean> {
     return out
 }
 
-export function clearPat(accountId: string): void {
+/**
+ * Forget an account's PAT, reporting whether it is really gone.
+ *
+ * `void` let the caller remove the row from the UI while the encrypted token
+ * stayed on disk - the store refuses to save when it could not be read, exactly
+ * so it never destroys tokens, and that refusal was invisible here.
+ */
+export function clearPat(accountId: string): boolean {
     const store = load()
     delete store.pats[accountId]
-    save(store)
+    return save(store)
 }
 
 /** Decrypt an account's PAT (main-process only). */

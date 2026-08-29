@@ -530,14 +530,13 @@ export function ApiPanel(): JSX.Element {
         ])
     }
 
-    const copyBody = async (): Promise<void> => {
-        try {
-            await navigator.clipboard.writeText(shownRespBody)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1400)
-        } catch {
-            /* clipboard unavailable */
-        }
+    const copyBody = (): void => {
+        // See StandupModal: `navigator.clipboard` is denied in this renderer, so
+        // the try/catch here was catching every copy and the `setCopied` after it
+        // never ran. Nothing was copied and nothing said so.
+        window.api.clipboard.writeText(shownRespBody)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1400)
     }
 
     // Hand the response to the focused agent session as context to reason about.

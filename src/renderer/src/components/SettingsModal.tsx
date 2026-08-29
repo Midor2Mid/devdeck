@@ -373,8 +373,15 @@ function GitSection(): JSX.Element {
 
     const update = (i: number, patch: Partial<GitAccount>): void =>
         setGitAccounts(accounts.map((a, idx) => (idx === i ? { ...a, ...patch } : a)))
-    const remove = (i: number): void => {
-        window.api.git.clearPat(accounts[i].id)
+    const remove = async (i: number): Promise<void> => {
+        // Awaited and read: removing the row while the token survives on disk is
+        // the account looking deleted and its credential still being there.
+        const id = accounts[i].id
+        const gone = await window.api.git.clearPat(id)
+        if (!gone) {
+            flash(id, "✗ could not clear its token - the account was kept")
+            return
+        }
         setGitAccounts(accounts.filter((_, idx) => idx !== i))
     }
     const add = (): void =>
@@ -402,9 +409,12 @@ function GitSection(): JSX.Element {
         flash(id, "token saved")
     }
     const clearToken = async (id: string): Promise<void> => {
-        await window.api.git.clearPat(id)
+        // The store refuses to write when it could not be read, precisely so it
+        // never destroys tokens - and that refusal used to be invisible here:
+        // "token cleared" while the encrypted PAT was still on disk.
+        const gone = await window.api.git.clearPat(id)
         refreshPats()
-        flash(id, "token cleared")
+        flash(id, gone ? "token cleared" : "✗ could not clear - the token is still stored")
     }
     const cache = async (a: GitAccount): Promise<void> => {
         const r = await window.api.git.cacheCredential(a.id, a.host ?? "github.com", a.username ?? "")

@@ -167,7 +167,15 @@ describe("dispatching a card", () => {
             api: {
                 projects: { setActive: async (): Promise<void> => undefined },
                 git: { changes: async (): Promise<{ path: string }[]> => dirty.map((path) => ({ path })) },
-                pty: { input: (): void => undefined, kill: (): void => undefined },
+                pty: {
+                    // `buffer` is what whenReady falls back to on its deadline:
+                    // an empty one means the session never spoke.
+                    buffer: async (): Promise<{ buffer: string; exitCode: number | undefined }> => ({
+                        buffer: "",
+                        exitCode: undefined
+                    }),
+                    input: (): void => undefined, kill: (): void => undefined
+                },
                 workspace: { save: (): void => undefined },
                 settings: { save: (): void => undefined },
                 ledger: { append: (): void => undefined }

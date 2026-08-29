@@ -670,7 +670,8 @@ const api = {
         setPat: (accountId: string, pat: string): Promise<void> =>
             ipcRenderer.invoke("git:setPat", { accountId, pat }),
         patStatus: (): Promise<Record<string, boolean>> => ipcRenderer.invoke("git:patStatus"),
-        clearPat: (accountId: string): Promise<void> =>
+        /** Resolves false when the token could not actually be removed from disk. */
+        clearPat: (accountId: string): Promise<boolean> =>
             ipcRenderer.invoke("git:clearPat", accountId),
         cacheCredential: (
             accountId: string,
