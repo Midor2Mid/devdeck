@@ -385,9 +385,15 @@ function registerIpc(): void {
     ipcMain.handle("mcpsrv:status", () => mcpserver.status())
 
     // --- Pipeline ground-truth checks (command gates) ---
-    ipcMain.handle("checks:run", (_e, { cwd, command, timeoutMs }) =>
-        checks.runCheck(cwd, command, timeoutMs)
-    )
+    // This channel spawns a shell, so it gets the same confinement every other
+    // path-taking channel has. Reaching it needs a renderer XSS, which already
+    // owns window.api wholesale - this is hygiene, not a wall, and it is here
+    // because "runs a command in a directory you name" should never be the one
+    // channel that doesn't say which directories are allowed.
+    ipcMain.handle("checks:run", (_e, { cwd, command, timeoutMs }) => {
+        guardRepo(cwd)
+        return checks.runCheck(cwd, command, allowedRepoRoots(), timeoutMs)
+    })
     ipcMain.handle("mcpsrv:token", () => mcpserver.generateToken())
     ipcMain.handle("mcpsrv:register", (_e, { cwd, port }) => {
         guardRepo(cwd)
@@ -506,11 +512,16 @@ function registerIpc(): void {
     // A repo path is allowed if it's an open project, or inside an open
     // project's managed worktree sibling folder.
     const repoRoots = (): string[] => projects.listProjects().projects.map((x) => x.path)
-    const isAllowedRepo = (cwd: string): boolean => {
+    /** Every directory a repo operation may touch, as one list - open projects
+        plus their managed worktree siblings. Handed whole to callees that have
+        to re-check for themselves (checks.runCheck), so the allowed set is
+        defined in exactly one place. */
+    const allowedRepoRoots = (): string[] => {
         const roots = repoRoots()
-        if (files.isWithinRoots(cwd, roots)) return true
-        return files.isWithinRoots(cwd, roots.map((r) => worktrees.worktreeBase(r)))
+        return [...roots, ...roots.map((r) => worktrees.worktreeBase(r))]
     }
+    const isAllowedRepo = (cwd: string): boolean =>
+        files.isWithinRoots(cwd, allowedRepoRoots())
     const guardRepo = (cwd: string): void => {
         if (!isAllowedRepo(cwd)) throw new Error("Path is outside any open project.")
     }
