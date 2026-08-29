@@ -15,8 +15,53 @@ export function tokenOk(provided: string | null | undefined, expected: string): 
 }
 
 /**
- * Block remote-initiated requests to local/private/link-local hosts (SSRF guard).
- * The desktop API panel is unaffected - this only gates the phone's relayed requests.
+ * Is this *numeric address* one the phone must never be able to reach?
+ *
+ * Separate from `isBlockedRemoteUrl` because the two answer different
+ * questions. This one takes an address that a resolver actually produced, so
+ * it is the check that survives `http://127.1/`, `http://2130706433/`, and a
+ * public hostname whose A record points at 10.0.0.5 - none of which look
+ * local as text. Anything that is not a recognisable literal address fails
+ * closed: this function is only ever handed resolver output, so a value it
+ * cannot parse means something upstream is not what we think it is.
+ *
+ * Deliberately NOT blocked: 100.64.0.0/10 (CGNAT). That is where Tailscale
+ * addresses live, and DevDeck itself offers a tailnet bind - blocking it here
+ * would refuse the user's own machines while adding nothing, since a tailnet
+ * peer is not a loopback the phone was never meant to see.
+ */
+export function isBlockedAddress(ip: string): boolean {
+    const h = ip.trim().toLowerCase().replace(/^\[|\]$/g, "")
+    if (!h) return true
+    // ::ffff:127.0.0.1 is 127.0.0.1 wearing a hat.
+    const v4 = h.startsWith("::ffff:") ? h.slice(7) : h
+    const m = v4.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+    if (m) {
+        const [a, b] = [Number(m[1]), Number(m[2])]
+        if (m.some((p, i) => i > 0 && Number(p) > 255)) return true
+        if (a === 127 || a === 0 || a === 10) return true
+        if (a === 169 && b === 254) return true // link-local + cloud metadata
+        if (a === 192 && b === 168) return true
+        if (a === 172 && b >= 16 && b <= 31) return true
+        return false
+    }
+    if (h.includes(":")) {
+        if (h === "::" || h === "::1") return true
+        if (h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true
+        return false
+    }
+    return true
+}
+
+/**
+ * Block remote-initiated requests to local/private/link-local hosts (SSRF guard),
+ * judging only the URL's *text*. The desktop API panel is unaffected - this
+ * only gates the phone's relayed requests.
+ *
+ * This is the cheap first pass, not the boundary: a hostname is a promise
+ * about an address, and the promise is kept by a DNS server we do not own.
+ * `httpSend`'s `guardRemote` mode is what resolves the name and re-checks
+ * every redirect hop; see the note there.
  */
 export function isBlockedRemoteUrl(raw: string): boolean {
     try {
@@ -25,15 +70,7 @@ export function isBlockedRemoteUrl(raw: string): boolean {
         const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "")
         if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return true
         if (h === "::1" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true
-        const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
-        if (m) {
-            const a = Number(m[1])
-            const b = Number(m[2])
-            if (a === 127 || a === 0 || a === 10) return true
-            if (a === 169 && b === 254) return true // link-local + cloud metadata
-            if (a === 192 && b === 168) return true
-            if (a === 172 && b >= 16 && b <= 31) return true
-        }
+        if (/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.test(h)) return isBlockedAddress(h)
         return false
     } catch {
         return true

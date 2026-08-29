@@ -10,7 +10,6 @@ import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
 import {
-    isBlockedRemoteUrl,
     isReadOnlySql,
     chooseBind,
     cookieToken,
@@ -386,7 +385,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     break
                 case "http": {
                     const req = msg.req as Parameters<typeof httpSend>[0]
-                    if (!req || isBlockedRemoteUrl(String(req.url ?? ""))) {
+                    if (!req) {
                         send(ws, {
                             t: "http:res",
                             res: {
@@ -397,7 +396,14 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         })
                         break
                     }
-                    httpSend(req).then((res) => send(ws, { t: "http:res", res }))
+                    // The guard moved inside httpSend, because checking here
+                    // only ever checked the FIRST url: fetch followed the
+                    // redirects itself, and any allowed public host could 302
+                    // the request to 127.0.0.1 or 169.254.169.254. guardRemote
+                    // re-runs it on every hop, against the resolved address.
+                    httpSend(req, { guardRemote: true }).then((res) =>
+                        send(ws, { t: "http:res", res })
+                    )
                     break
                 }
                 case "db:conns":
