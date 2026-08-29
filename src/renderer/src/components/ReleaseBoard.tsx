@@ -13,6 +13,7 @@ export function ReleaseBoard(): JSX.Element {
     const close = useStore((s) => s.setReleaseOpen)
     const project = useStore((s) => s.activeProject())
     const newTab = useStore((s) => s.newTab)
+    const whenReady = useStore((s) => s.whenReady)
 
     const [cfg, setCfg] = useState<ReleaseConfig | null>(null)
     const [status, setStatus] = useState<StageStatus[]>([])
@@ -114,7 +115,11 @@ export function ReleaseBoard(): JSX.Element {
                         target={cfg.stages[promoteIdx + 1]}
                         onSendTerminal={(cmds) => {
                             const id = newTab(SHELL, undefined, `promote ${cfg.stages[promoteIdx].name}→${cfg.stages[promoteIdx + 1].name}`)
-                            if (id) setTimeout(() => window.api.pty.input(id, cmds), 500)
+                            // The shell's first byte, not a 500ms guess: a shell
+                            // that took longer had these commands written into a
+                            // pty that was not reading yet, and writePty drops
+                            // that silently.
+                            if (id) void whenReady(id).then(() => window.api.pty.input(id, cmds))
                             close(false)
                         }}
                         onTagged={() => cfg && refresh(cfg)}

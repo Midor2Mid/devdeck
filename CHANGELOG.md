@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### A prompt waits for the shell, and a shell that never starts says so
+
+Remedy item 11. Five places spawned an agent CLI, slept a hard-coded 2800 ms,
+and typed the prompt whether or not anything was listening - and `writePty`
+drops a write to a session that is not live yet **silently**, so a slow boot lost
+the prompt with no trace. The card that prompt was for had already been marked
+dispatched, given a cost window, and appended to an append-only ledger.
+
+- **Readiness is observed instead of guessed.** The store already sees every
+  session's first byte; `whenReady` resolves on that byte plus a short quiet
+  settle, with the old 2800 ms demoted from plan to deadline. On a deadline miss
+  the prompt is still sent - losing work is worse than a quiet CLI - but the
+  activity feed now says it may not have landed, which is the part that did not
+  exist. Six hard-coded sleeps deleted.
+- **A shell that fails to start reports itself.** `nodePty.spawn` throws for a
+  missing or non-executable shell, and that throw was swallowed whole: main
+  stayed healthy, nothing reached stderr, and the pane simply stayed black
+  forever. It now prints which shell it tried, git's - or Windows' - own error,
+  and where to change it.
+- **`initialCommand` rides the first byte** rather than a 500 ms timer, in the
+  one process that can see that byte for free.
+- **A custom shell with a blank path is refused, not substituted.** It used to
+  fall through to PowerShell without a word, so a broken setting looked like a
+  working one. Relatedly, selecting Git Bash no longer launches whatever is in
+  the custom-path box **with bash's arguments** - the two settings shared a
+  field and only one of them owned it.
+
 ### Main owns "is it safe to stop"
 
 Remedy item 6 of the 2026-08-26 audit. The renderer knew how many agents were

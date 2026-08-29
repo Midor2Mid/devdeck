@@ -577,8 +577,17 @@ interface SettingsState extends AppSettings {
     resetAll: () => void
     openSettings: (section?: string) => void
     closeSettings: () => void
-    /** Resolve the configured shell to a launchable file + args (Windows). */
-    resolveShell: (kind?: ShellKind) => { file: string; args: string[] }
+    /**
+     * Resolve the configured shell to a launchable file + args (Windows), or
+     * `null` when the selection cannot be honoured.
+     *
+     * `null` is a **refusal the caller must handle**, not a fallback. It used to
+     * return `{ file: "" }` for a `custom` shell with a blank path, and `pty.ts`
+     * reads `opts.shell?.file ? opts.shell : defaultShell()` — so a blank custom
+     * path silently launched PowerShell instead of the shell the user picked,
+     * and nothing ever said the setting had done nothing.
+     */
+    resolveShell: (kind?: ShellKind) => { file: string; args: string[] } | null
 }
 
 export const useSettings = create<SettingsState>((set, get) => {
@@ -1059,14 +1068,14 @@ export const useSettings = create<SettingsState>((set, get) => {
                 case "cmd":
                     return { file: "cmd.exe", args: [] }
                 case "gitbash":
-                    return {
-                        file: customShellPath || "C:\\Program Files\\Git\\bin\\bash.exe",
-                        args: ["-i", "-l"]
-                    }
+                    // NOT `customShellPath || ...`. The two settings share one
+                    // field, so that launched whatever binary the user had typed
+                    // into the custom-path box with BASH's argv (`-i -l`).
+                    return { file: "C:\\Program Files\\Git\\bin\\bash.exe", args: ["-i", "-l"] }
                 case "wsl":
                     return { file: "wsl.exe", args: [] }
                 case "custom":
-                    return { file: customShellPath, args: [] }
+                    return customShellPath.trim() ? { file: customShellPath, args: [] } : null
                 default:
                     return { file: "powershell.exe", args: ["-NoLogo"] }
             }

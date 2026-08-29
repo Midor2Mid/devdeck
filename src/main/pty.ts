@@ -133,14 +133,12 @@ export function bufferOf(id: string): { buffer: string; exitCode: number | undef
     return { buffer: e.buffer, exitCode: e.kind === "dead" ? e.exitCode : undefined }
 }
 
-export function createPty(opts: CreateOpts): void {
-    const { id } = opts
-    // Attaching to a RUNNING session is a no-op; spawning over a corpse is a
-    // deliberate restart and must go ahead.
-    if (sessions.get(id)?.kind === "live") return
-
-    const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
-    const proc = nodePty.spawn(file, args, {
+/**
+ * The spawn itself, isolated so its option block stays readable next to the
+ * failure handling in `createPty`.
+ */
+function spawnShell(file: string, args: string[], opts: CreateOpts): nodePty.IPty {
+    return nodePty.spawn(file, args, {
         // `xterm-color` is a legacy 8-colour terminfo — a CLI that trusts TERM
         // caps itself at 16 colours, which is a big part of why agent output
         // looks washed out. Windows/conpty ignores `name`, but it *is* TERM on
@@ -151,9 +149,52 @@ export function createPty(opts: CreateOpts): void {
         rows: opts.rows ?? 24,
         env: terminalEnv(opts.env)
     })
+}
+
+export function createPty(opts: CreateOpts): void {
+    const { id } = opts
+    // Attaching to a RUNNING session is a no-op; spawning over a corpse is a
+    // deliberate restart and must go ahead.
+    if (sessions.get(id)?.kind === "live") return
+
+    const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
+    let proc: nodePty.IPty
+    try {
+        proc = spawnShell(file, args, opts)
+    } catch (e) {
+        // Experiment E2 (2026-08-29): `nodePty.spawn` throws synchronously for a
+        // missing or non-executable shell ("File not found: <path>"), and the
+        // throw inside `ipcMain.on("pty:create")` is swallowed whole - main stays
+        // healthy and keeps serving IPC, nothing reaches stderr, and no `pty:exit`
+        // is ever emitted. The observed symptom is therefore a permanently BLACK
+        // PANE that never learns anything, not a crash. So this reports rather
+        // than recovers.
+        const why = e instanceof Error ? e.message : String(e)
+        const notice = [
+            "",
+            "DevDeck could not start this terminal.",
+            `  shell: ${file}`,
+            `  error: ${why}`,
+            "Pick a different shell in Settings -> Terminal, or fix the path there.",
+            ""
+        ].join("\r\n")
+        // Through the SAME surface a real death uses: a corpse holding the
+        // reason, one data event so an attached pane prints it now, and one exit
+        // event so every consumer (the exit record, the tile, the remote client)
+        // learns this session is over instead of waiting forever.
+        sessions.set(id, { kind: "dead", buffer: notice, exitCode: 1, diedAt: Date.now() })
+        ptyEvents.emit("data", { id, data: notice })
+        ptyEvents.emit("exit", { id, exitCode: 1, stale: false })
+        return
+    }
     const live: Live = { kind: "live", proc, buffer: "", agentId: opts.agentId }
     sessions.set(id, live)
 
+    // Fires `initialCommand` on the FIRST byte the shell prints, and never on a
+    // timer. The 500 ms guess was made in the one process that can see that byte
+    // for free: a shell slower than half a second had its command written into a
+    // pty that was not reading yet, and the command was simply gone.
+    let sentInitial = !opts.initialCommand
     proc.onData((data) => {
         live.buffer += data
         if (live.buffer.length > BUFFER_CAP) {
@@ -164,6 +205,14 @@ export function createPty(opts: CreateOpts): void {
             live.buffer = trimmed
         }
         ptyEvents.emit("data", { id, data })
+        if (!sentInitial) {
+            sentInitial = true
+            try {
+                proc.write(opts.initialCommand + "\r")
+            } catch {
+                /* the session can die between its first byte and this write */
+            }
+        }
     })
     proc.onExit(({ exitCode }) => {
         // Computed once, before anything below reads or changes the map: true
@@ -178,15 +227,6 @@ export function createPty(opts: CreateOpts): void {
         ptyEvents.emit("exit", { id, exitCode, stale })
     })
 
-    if (opts.initialCommand) {
-        setTimeout(() => {
-            try {
-                proc.write(opts.initialCommand + "\r")
-            } catch {
-                /* session may already be gone */
-            }
-        }, 500)
-    }
 }
 
 export function writePty(id: string, data: string): void {

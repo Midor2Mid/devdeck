@@ -225,11 +225,26 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 if (preset && mcpSrv.enabled && mcpSrv.token) {
                     extraEnv[DEVDECK_TOKEN_ENV] = mcpSrv.token
                 }
+                // `null` means the shell setting cannot be honoured — today only a
+                // `custom` selection with a blank path. Refuse the spawn and say
+                // so in the pane. Passing it through would land on pty.ts's
+                // `opts.shell?.file ? … : defaultShell()` and quietly start
+                // PowerShell instead, which is how this went unnoticed.
+                const shell = useSettings.getState().resolveShell(
+                    useStore.getState().termShells[termId]
+                )
+                if (!shell) {
+                    term.write(
+                        "\r\nNo shell to start: \"Custom\" is selected in Settings → Terminal " +
+                            "with no path set.\r\nSet a path, or pick another shell.\r\n"
+                    )
+                    return
+                }
                 window.api.pty.create({
                     id: termId,
                     cwd: useStore.getState().termCwd[termId] ?? cwd,
                     initialCommand: cmd,
-                    shell: useSettings.getState().resolveShell(useStore.getState().termShells[termId]),
+                    shell,
                     cols: term.cols,
                     rows: term.rows,
                     env: Object.keys(extraEnv).length ? extraEnv : undefined,
