@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 - 2026-08-29
 
 ### Guards that read text now check the thing itself
 
