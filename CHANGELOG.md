@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### A destructive operation's result gets read
+
+Remedy item 12. `ChangesModal`'s `act(fn: () => Promise<unknown>, ok: string)`
+printed its success string unconditionally — and its three callers are stage,
+unstage, and the **discard** behind a dialog that says "This cannot be undone."
+Fifteen lines below it, `commit` branches on the result and renders the error, so
+the right shape was already in the file.
+
+- **"Discarded." is no longer printed for a discard that failed.** Narrowing that
+  parameter to `Promise<boolean>` was the whole fix — `stageFile`, `unstageFile`
+  and `discardFile` all already returned one, thrown away a single hop from where
+  it was produced.
+- **Removing a git account waits for its token to actually be gone.** `clearPat`
+  was un-awaited and returned `void`, so the row vanished while the encrypted PAT
+  stayed on disk — the store deliberately refuses to save when it could not be
+  read, and that refusal was invisible here.
+- **A worktree that will not remove says why**, instead of the row quietly
+  reappearing on the next refresh.
+- **Browser comments are no longer cleared into the void** when there is no agent
+  session to send them to.
+- **Four "Copied" messages now copy something.** They called
+  `navigator.clipboard.writeText`, which this app's own deny-all permission
+  handler blocks — the house `window.api.clipboard` goes through main and works.
+- Discarding an untracked directory is recursive. (After `-uall` above, git's
+  porcelain lists the files rather than the directory, so this is now defence
+  rather than a reachable bug — but a non-recursive delete of a directory failing
+  and reporting success is how it stayed hidden.)
+
 ### A prompt waits for the shell, and a shell that never starts says so
 
 Remedy item 11. Five places spawned an agent CLI, slept a hard-coded 2800 ms,

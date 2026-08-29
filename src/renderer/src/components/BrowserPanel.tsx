@@ -159,7 +159,10 @@ export function BrowserPanel(): JSX.Element {
             /* screenshot is best-effort */
         }
 
-        sendToAgent(text + "\n")
+        // sendToAgent returns false when there is no agent session to send to.
+        // Ignoring it cleared the user's typed comments into the void and showed
+        // "sent" — ApiPanel gets this right one file over.
+        if (!sendToAgent(text + "\n")) return
         setSent(true)
         setTimeout(() => setSent(false), 1500)
         setComments([])

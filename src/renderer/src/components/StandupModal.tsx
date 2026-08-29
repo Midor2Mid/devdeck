@@ -73,7 +73,10 @@ export function StandupModal(): JSX.Element {
     }, [generate])
 
     const copy = (): void => {
-        navigator.clipboard.writeText(text)
+        // The house clipboard, not `navigator.clipboard`: the renderer's deny-all
+        // permission handler blocks that API (see TerminalPane's comment), so
+        // this reported "✓ Copied" for a copy that never happened.
+        window.api.clipboard.writeText(text)
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
     }

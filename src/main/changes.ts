@@ -119,7 +119,13 @@ export async function unstageFile(cwd: string, path: string): Promise<boolean> {
 export async function discardFile(cwd: string, path: string, untracked: boolean): Promise<boolean> {
     if (untracked) {
         try {
-            await rm(join(cwd, path), { force: true })
+            // `recursive`, because an untracked entry can be a DIRECTORY: git's
+            // porcelain reports `?? build/` as one row, and a non-recursive rm
+            // threw on it, was caught, returned false - and the modal printed
+            // "Discarded." anyway, after a dialog that said it could not be
+            // undone. The lie and the failure were separate bugs; this is the
+            // failure.
+            await rm(join(cwd, path), { force: true, recursive: true })
             return true
         } catch {
             return false

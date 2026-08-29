@@ -220,7 +220,7 @@ function PromotePanel({
                         <button
                             className="btn-min"
                             disabled={!allChecked || commits.length === 0}
-                            onClick={() => { navigator.clipboard.writeText(cmds); setMsg("Commands copied.") }}
+                            onClick={() => { window.api.clipboard.writeText(cmds); setMsg("Commands copied.") }}
                         >
                             copy commands
                         </button>
