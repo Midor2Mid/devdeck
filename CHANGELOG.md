@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+### Guards that read text now check the thing itself
+
+Remedy item 14, five sites that shared one habit: inspect a string, then hand
+the unconstrained operation to `spawn`, `fetch`, `readFileSync` or a SQL
+driver. Each one is replaced by a capability the underlying API already had.
+
+- **A link no longer walks out of your project.** The filesystem guard resolved
+  `..` textually, so a directory junction inside an open project pointing at
+  `C:\Users\you\.ssh` was, as far as it could tell, inside the project — and on
+  Windows, creating that junction needs no elevation. Both the target and the
+  project roots are now dereferenced for real. A project you reach *through* a
+  junction keeps working; that was the likeliest thing to break.
+- **A redirect can't take the phone somewhere it isn't allowed.** The
+  local/private-host guard ran once, on the URL you typed, and then followed
+  redirects automatically — so any allowed public host could answer
+  `302 → http://127.0.0.1:8787/` (DevDeck's own MCP server, on the machine
+  you're remoting) or the cloud metadata address. Redirects are followed one at
+  a time now and re-checked at every hop, and the check is against the address
+  the name actually resolves to, which is what makes `http://127.1/` and
+  `http://2130706433/` stop working.
+- **Read-only means the database refuses the write.** Remote and agent queries
+  ran a regex over the statement's first word. `WITH x AS (DELETE …) SELECT`
+  starts with "with"; on PostgreSQL, `SELECT 1; DROP TABLE t` is one call.
+  Those queries now run inside a read-only transaction (PostgreSQL, MySQL) or
+  on a read-only connection (SQLite), so a write fails inside the database
+  rather than being spotted by a pattern.
+- **Two channels that took a path now say which paths are allowed.** A pipeline
+  check spawns a shell in a directory you name, and a SQLite connection *is* a
+  file read — both were the way around the confinement every other channel has.
+
+Three things this deliberately costs you:
+
+- **Remote and agent SQL against SQL Server is refused.** T-SQL has no
+  read-only transaction, so the promise could not be kept there; the honest
+  move is to remove the capability rather than keep claiming it. Run those
+  queries yourself in the DB panel.
+- **A SQLite file must be inside an open project or picked in the file
+  dialog.** Connections you already have keep working — they're carried over on
+  first launch — and Browse still reaches anywhere on disk.
+- **Testing a SQLite path that doesn't exist now fails.** It used to create an
+  empty database and report a healthy connection to it, so a typo looked like a
+  working connection with no tables in it.
+
+### The remote login stops answering as fast as it's asked
+
+Remedy item 15. The phone's authentication check was reachable before any
+credential was proven and answered at socket speed — a guessing oracle against
+the pairing token, and a way to make DevDeck busy: every miss walked every
+paired device's decrypt on the same thread that relays every terminal byte.
+
+Repeated failures from one address now stop being answered. Five misses are
+free, then the refusal window doubles from a second up to a cap of thirty, and
+any success clears it. What grows is the wait, not a strike count — the device
+most likely to fail repeatedly is your own phone with a token you revoked, and
+a limiter that locks you out of your own machine would be worse than the attack
+it prevents. A valid token from anywhere else is unaffected.
+
 ### The tests are typechecked, and something other than a person runs them
 
 Remedy item 16 (an enabler, done last rather than first). `tsconfig.json`
