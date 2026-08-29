@@ -48,10 +48,11 @@ function storeFile(): string {
 // Every unauthenticated HTTP request and WS upgrade calls authenticate(),
 // which used to mean a synchronous readFileSync + JSON.parse (load()) AND a
 // DPAPI decrypt of every paired device's token (in authenticate's loop) on
-// EVERY single call - unrate-limited, attacker-paced, on the same thread that
-// drives the UI and relays every PTY. Before per-device tokens existed,
-// rejecting a bad token was one in-memory hash compare; this is meant to get
-// back close to that cost on the common path.
+// EVERY single call - attacker-paced, on the same thread that drives the UI
+// and relays every PTY. Before per-device tokens existed, rejecting a bad
+// token was one in-memory hash compare; this is meant to get back close to
+// that cost on the common path. (What bounds the *rate* of those calls is the
+// failure throttle further down, next to `authenticate` itself.)
 //
 // `cachedRaw` holds the parsed (still-encrypted) store; `decryptedCache` holds
 // already-decrypted token/pairing values keyed by device id (or the
@@ -174,6 +175,10 @@ function decryptCached(key: string, enc: string | undefined): string {
 export function __resetCacheForTest(): void {
     cachedRaw = null
     decryptedCache.clear()
+    // The failure throttle is module state too: without this, a case that
+    // deliberately fails authentication would leave the next case inside a
+    // refusal window it never asked for.
+    attempts.clear()
 }
 
 function newToken(): string {
@@ -292,6 +297,79 @@ export function setPairingToken(token: string): boolean {
 // server.ts calls authenticate() per HTTP request and per WS upgrade.
 const STAMP_INTERVAL_MS = 60_000
 
+// --- Failure throttle ------------------------------------------------------
+//
+// `authenticate()` is reachable by anyone who can open a socket to the remote
+// server, before any credential is proven, and it used to answer as fast as
+// the attacker could ask. That made it two things at once: a guessing oracle
+// against the pairing token, and a self-DoS - every miss walks the whole
+// device list on the same thread that relays every PTY byte to every pane.
+//
+// The counter is keyed on the *failing* address and cleared by any success
+// from that address, and what grows is the refusal WINDOW, not a strike count
+// that eventually becomes permanent. That ordering is deliberate: the person
+// most likely to fail repeatedly is the owner's own phone carrying a revoked
+// or expired token, and a limiter that locks them out of their own machine
+// after a few reconnects is worse than the attack it prevents. The window is
+// capped at MAX_LOCK_MS, so the worst case for a legitimate device is one
+// half-minute wait, while an attacker's throughput past the free attempts
+// collapses to a couple of guesses a minute.
+//
+// This is a refusal window, not a sleep: authenticate() is synchronous and on
+// the main process's event loop, so delaying a response by blocking would
+// hand an attacker the very stall the throttle exists to prevent.
+const FREE_FAILS = 5
+const BASE_LOCK_MS = 1_000
+const MAX_LOCK_MS = 30_000
+/** Bound the map so a client cycling addresses can't grow it without limit. */
+const MAX_THROTTLE_KEYS = 1_000
+
+interface Attempts {
+    /** Consecutive failures from this address; reset by any success. */
+    fails: number
+    /** Epoch ms before which this address is refused without being checked. */
+    until: number
+}
+const attempts = new Map<string, Attempts>()
+
+/** 0 for the first FREE_FAILS misses, then 1s, 2s, 4s ... capped at 30s. */
+function lockMs(fails: number): number {
+    const over = fails - FREE_FAILS
+    if (over <= 0) return 0
+    return Math.min(BASE_LOCK_MS * 2 ** (over - 1), MAX_LOCK_MS)
+}
+
+/** True if this address is inside its refusal window right now. */
+function isLockedOut(key: string, now: number): boolean {
+    const entry = attempts.get(key)
+    return !!entry && entry.until > now
+}
+
+function noteFailure(key: string, now: number): void {
+    const entry = attempts.get(key) ?? { fails: 0, until: 0 }
+    entry.fails += 1
+    entry.until = now + lockMs(entry.fails)
+    attempts.set(key, entry)
+    if (attempts.size <= MAX_THROTTLE_KEYS) return
+    // Expired entries first - dropping one of those forgives nobody who is
+    // currently being refused. Only if that isn't enough do we evict by
+    // insertion order, and an attacker who forces that has to hold
+    // MAX_THROTTLE_KEYS live lockouts to buy back a single address.
+    for (const [k, v] of attempts) {
+        if (v.until <= now) attempts.delete(k)
+        if (attempts.size <= MAX_THROTTLE_KEYS) return
+    }
+    for (const k of attempts.keys()) {
+        attempts.delete(k)
+        if (attempts.size <= MAX_THROTTLE_KEYS) return
+    }
+}
+
+/** Any success clears the address: a real device is never a step closer to a lockout. */
+function noteSuccess(key: string): void {
+    attempts.delete(key)
+}
+
 /**
  * Authenticate a request from the phone. Device tokens are checked first: a
  * match against an expired device fails *and* removes that device's record,
@@ -307,17 +385,29 @@ const STAMP_INTERVAL_MS = 60_000
  *
  * Writes the store only when something actually changed (pairing minted,
  * device enrolled, device dropped, or lastSeenAt moved materially) - this is
- * an unauthenticated, unrate-limited, attacker-paced call path, so a save on
- * every rejected or no-op request would be a real cost, not just disk wear.
+ * an unauthenticated, attacker-paced call path, so a save on every rejected
+ * or no-op request would be a real cost, not just disk wear.
+ *
+ * `address` is the peer address the attempt arrived from (`req.socket.
+ * remoteAddress`), and it is what the failure throttle above counts against.
+ * It defaults to a single shared bucket rather than to "no throttle": a
+ * caller that cannot say where a request came from gets the limit applied
+ * more broadly, never not at all.
  */
 export function authenticate(
     token: string,
     userAgent: string,
     ttlDays: number,
-    allowEnroll = true
+    allowEnroll = true,
+    address = ""
 ): AuthResult {
-    const store = load()
     const now = Date.now()
+    // Before load(), and before the decrypt loop: the point is that a refused
+    // attempt costs an attacker a Map lookup of ours, not a walk of every
+    // paired device's DPAPI decrypt.
+    if (isLockedOut(address, now)) return { ok: false }
+
+    const store = load()
     const pairingBefore = store.pairing
 
     for (const device of store.devices) {
@@ -327,6 +417,7 @@ export function authenticate(
         if (isExpired(device.lastSeenAt, ttlDays, now)) {
             drop(store, device.id)
             save(store)
+            noteFailure(address, now)
             return { ok: false }
         }
 
@@ -334,10 +425,14 @@ export function authenticate(
             device.lastSeenAt = now
             save(store)
         }
+        noteSuccess(address)
         return { ok: true, device: toPublic(device) }
     }
 
-    if (!allowEnroll) return { ok: false }
+    if (!allowEnroll) {
+        noteFailure(address, now)
+        return { ok: false }
+    }
 
     const pairing = ensurePairing(store)
     // `store.devices.length < MAX_DEVICES` (not a separate early return):
@@ -362,6 +457,7 @@ export function authenticate(
         // and then fails on every later connection. Let it throw so the
         // caller sees a real failure instead of a phantom pairing.
         writeStore(store)
+        noteSuccess(address)
         return { ok: true, device: toPublic(device), deviceToken }
     }
 
@@ -369,6 +465,7 @@ export function authenticate(
     // doesn't mint a different one - but only when it was actually minted,
     // not on every ordinary rejection.
     if (store.pairing !== pairingBefore) save(store)
+    noteFailure(address, now)
     return { ok: false }
 }
 

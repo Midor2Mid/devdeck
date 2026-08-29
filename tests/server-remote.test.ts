@@ -303,3 +303,42 @@ describe("revoke closes the live socket (C1)", () => {
         wsB.close()
     })
 })
+
+describe("remote server - the auth path is rate-limited (remedy 15)", () => {
+    it("stops answering guesses from a client that keeps failing, over the real HTTP path", async () => {
+        // The unit test in tests/devices.test.ts proves the throttle; this one
+        // proves server.ts actually hands it the peer address, which is the
+        // half a devices.ts-only test cannot see. Every request here comes
+        // from 127.0.0.1, so it is one bucket by construction.
+        for (let i = 0; i < 6; i++) {
+            const res = await fetch(`${base}/?token=wrong-${i}`)
+            expect(res.status).toBe(401)
+        }
+
+        // The pairing token is genuine: only the refusal window can turn this
+        // into a 401.
+        const refused = await fetch(`${base}/?token=${pairingToken()}`)
+        expect(refused.status).toBe(401)
+
+        // And the same request succeeds the moment the window is cleared -
+        // which is what rules out "the token was wrong all along".
+        __resetCacheForTest()
+        const allowed = await fetch(`${base}/?token=${pairingToken()}`)
+        expect(allowed.status).toBe(200)
+    })
+
+    it("refuses the WebSocket upgrade too, not just HTTP", async () => {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        expect(token).toBeTruthy()
+
+        for (let i = 0; i < 6; i++) {
+            await expect(
+                connectWs({ Cookie: `devdeck_device=wrong-${i}` })
+            ).rejects.toMatchObject({ statusCode: 401 })
+        }
+        await expect(connectWs({ Cookie: `devdeck_device=${token}` })).rejects.toMatchObject({
+            statusCode: 401
+        })
+    })
+})

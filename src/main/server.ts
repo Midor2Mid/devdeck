@@ -184,16 +184,36 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         allowEnroll: boolean
     ): { auth: AuthResult; token: string } => {
         const userAgent = String(req.headers["user-agent"] ?? "")
+        // The peer address the socket actually came from, which is what
+        // devices.ts throttles repeated failures against. Deliberately NOT
+        // X-Forwarded-For or any other header: this server is reached
+        // directly over the LAN, and a caller-supplied header would let the
+        // guesser pick a fresh bucket per attempt, which is the whole attack
+        // the throttle exists to stop. An empty address (a socket already
+        // torn down) shares one bucket rather than skipping the limit.
+        const address = req.socket?.remoteAddress ?? ""
         try {
             const cookie = cookieToken(req.headers.cookie, !!config.tls)
             if (cookie) {
-                const byCookie = authenticate(cookie, userAgent, config.deviceTtlDays, allowEnroll)
+                const byCookie = authenticate(
+                    cookie,
+                    userAgent,
+                    config.deviceTtlDays,
+                    allowEnroll,
+                    address
+                )
                 if (byCookie.ok) return { auth: byCookie, token: cookie }
             }
             const queryToken = url.searchParams.get("token") ?? ""
             if (!queryToken) return { auth: { ok: false }, token: "" }
             return {
-                auth: authenticate(queryToken, userAgent, config.deviceTtlDays, allowEnroll),
+                auth: authenticate(
+                    queryToken,
+                    userAgent,
+                    config.deviceTtlDays,
+                    allowEnroll,
+                    address
+                ),
                 token: queryToken
             }
         } catch (err) {
