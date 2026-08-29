@@ -369,7 +369,17 @@ export const IDLE_MIN = 300
 // No practical ceiling - this is "how long before we call an agent quiet", not a
 // claim that it finished. Bounded only so a typo cannot disable the signal.
 export const IDLE_MAX = 600_000
-export const DEFAULT_IDLE_MS = 1000
+/**
+ * How long an agent must be silent before DevDeck calls it quiet.
+ *
+ * Raised from 1000 ms in the same change that stopped visibility deciding the
+ * classification. At one second, every tool call and every API round trip
+ * crossed the threshold and read as a finished turn — which was tolerable only
+ * while looking at a pane suppressed the signal entirely. Now that a watched
+ * session flips like an unwatched one, the threshold has to describe a real
+ * pause rather than a network hop.
+ */
+export const DEFAULT_IDLE_MS = 6000
 
 /** A usable idle threshold, whatever the input. Junk falls back to the default. */
 export function clampIdleMs(ms: unknown): number {

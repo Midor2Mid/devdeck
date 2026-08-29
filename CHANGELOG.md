@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### An agent's state stops depending on whether you were looking
+
+Remedy item 13. Visibility gated the **classification**, not just the
+notification: the identical byte sequence from the identical agent produced a
+notification when you were in your browser and no state change at all when you
+were on the pane. The state that caused the signal was destroyed by looking at
+it, so no one could reproduce, confirm, or falsify an attention claim — which is
+why tuning the heuristic could never have fixed it.
+
+- **A session you are watching now records what it did.** Going quiet marks it
+  `waiting`, and a bell marks it `attention`, whether or not the pane is on
+  screen. Only the sound and the in-app notification are still withheld from a
+  pane you are already looking at.
+- **The quiet threshold moves from 1 s to 6 s**, in the same change and not a
+  later one. At one second every tool call and API round trip read as a finished
+  turn — survivable only while watching a pane suppressed the signal entirely.
+  It is a setting; the clamp around it is unchanged.
+- **The tile stops claiming a turn finished.** It says what was actually
+  observed: quiet since the last output. The chip beside it already says for how
+  long.
+
+Expect the deck's attention count to read **higher** on stock settings. Sessions
+you are watching now count, which is the honest number.
+
 ### A destructive operation's result gets read
 
 Remedy item 12. `ChangesModal`'s `act(fn: () => Promise<unknown>, ok: string)`

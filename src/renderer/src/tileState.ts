@@ -231,7 +231,10 @@ function baseTileState(i: TileStateInput, now: number): TileState {
             chip: ago && ago !== "now" ? `WAITING ${ago}` : "WAITING",
             mark: "◇",
             tone: "neutral",
-            detail: "Finished a turn while you were away — it is your move.",
+            // Not "finished a turn" — the app cannot know that. All it observed
+            // is silence past the idle threshold, and the chip above already
+            // says how long. State the observation, not the inference.
+            detail: "Quiet since its last output — it is not doing anything right now.",
             actions: ["reply"]
         }
     }

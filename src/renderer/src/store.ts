@@ -766,10 +766,17 @@ export const useStore = create<AppState>((set, get) => {
         // …and its committed-output rate, for the tile's trace.
         recordRate(id, data)
         const visible = isVisible(id)
-        if (hasBell(id, data) && !visible) {
+        // M4: visibility gates the NOTIFICATION, never the classification. The
+        // bell is a fact about the agent, and letting `!visible` decide whether
+        // to record it meant the identical byte sequence from the identical
+        // agent produced a notification when you were in your browser and no
+        // state change at all when you were on the pane - so no user could
+        // reproduce, confirm, or falsify a DevDeck attention claim. Tuning could
+        // never fix that; only moving the check could.
+        if (hasBell(id, data)) {
             const was = get().agentStatus[id]
             setStatus(id, "attention")
-            if (was !== "attention") {
+            if (was !== "attention" && !visible) {
                 pushNotification(id)
                 pushActivity("attention", id)
                 notifyAttention(id)
@@ -784,11 +791,12 @@ export const useStore = create<AppState>((set, get) => {
             setTimeout(
                 () => {
                     if (get().agentStatus[id] === "working") {
-                        // Finished a turn. If you're watching this pane there's nothing
-                        // to flag (idle); if it's a background session, mark it "waiting
-                        // for you" and give the soft signal so you don't have to babysit.
+                        // It has gone quiet. That is true whether or not anyone is
+                        // looking, so it is recorded either way - the ternary here
+                        // destroyed the state by observing it. Only the soft signal
+                        // is withheld from a pane you are already watching.
                         const away = !isVisible(id)
-                        setStatus(id, away ? "waiting" : "idle")
+                        setStatus(id, "waiting")
                         if (away) notifyWaiting()
                         // A dispatched card moves to review only on EVIDENCE the
                         // agent produced something — not because it went quiet for
