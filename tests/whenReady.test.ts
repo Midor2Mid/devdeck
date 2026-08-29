@@ -1,6 +1,17 @@
 import { describe, it, expect, beforeAll, vi } from "vitest"
 import { useStore } from "../src/renderer/src/store"
 import { leaf } from "../src/renderer/src/layout"
+import type { WorkItem } from "../src/preload/index"
+
+const workItem = (key: string, title: string): WorkItem => ({
+    provider: "jira",
+    key,
+    title,
+    type: "Task",
+    status: "To Do",
+    url: "",
+    description: ""
+})
 
 const TERM = "t-ready"
 
@@ -205,7 +216,7 @@ describe("a prompt sent to a session that never spoke", () => {
             seed()
             const done = useStore
                 .getState()
-                .startWork({ key: "ABC-1", title: "do the thing", body: "" })
+                .startWork(workItem("ABC-1", "do the thing"))
             await vi.advanceTimersByTimeAsync(3200)
             await done
             // Never silently dropped - losing the work is worse than a quiet CLI.
@@ -225,7 +236,7 @@ describe("a prompt sent to a session that never spoke", () => {
             seed()
             const done = useStore
                 .getState()
-                .startWork({ key: "ABC-2", title: "the quick one", body: "" })
+                .startWork(workItem("ABC-2", "the quick one"))
             // One byte from whichever session startWork just spawned.
             await vi.advanceTimersByTimeAsync(50)
             const termId = Object.keys(useStore.getState().termAgents).find((id) => id !== TERM)

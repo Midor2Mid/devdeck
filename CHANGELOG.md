@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### The tests are typechecked, and something other than a person runs them
+
+Remedy item 16 (an enabler, done last rather than first). `tsconfig.json`
+included only `src`, so `tsc --listFiles` reported zero files under `tests/` —
+99 suites could drift from the types they exercise and stay green. There was no
+`.github` directory either, so `npm test` and `npm run typecheck` ran only when
+somebody remembered.
+
+- `tests` is in the typecheck. The first run surfaced 25 real mismatches (a
+  `Project` missing `addedAt`, a `StepGate` missing its retry fields, a
+  `runsSentence` argument that was still a boolean after the parameter became a
+  union) — all fixed here.
+- A CI workflow runs `npm run typecheck` then `npm test` on every push and pull
+  request, on `windows-latest`, because a green run on Linux would be testing a
+  platform DevDeck does not ship.
+
+One thing this does **not** yet do, despite being the reason it was proposed:
+the suites' hand-written `window.api` stubs are still cast through `unknown`, so
+they are not checked against `src/preload/index.ts`. Renaming an IPC channel
+still leaves every suite green. Typing those stubs is a change across 99 files
+and is not this.
+
 ### An agent's state stops depending on whether you were looking
 
 Remedy item 13. Visibility gated the **classification**, not just the

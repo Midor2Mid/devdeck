@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { useStore } from "../src/renderer/src/store"
+import type { Project } from "../src/preload/index"
 
 // Alt-tab-style project cycling. The property under test is that the walk does
 // NOT re-sort itself: setActiveProject records MRU on every call, so a cycle
 // built on it would ping-pong between two projects however many times you tap.
 
-const P = (id: string): { id: string; name: string; path: string } => ({
+const P = (id: string): Project => ({
     id,
     name: id,
-    path: "D:/" + id
+    path: "D:/" + id,
+    addedAt: 0
 })
 
 function stubApi(): void {

@@ -98,7 +98,7 @@ describe("visibility gates the notification, not the classification", () => {
     beforeAll(async () => {
         stubApi()
         await useStore.getState().init()
-        useSettings.setState({ agentIdleMs: 50, notifications: { waitingSound: true } })
+        useSettings.setState({ agentIdleMs: 50, notifications: { desktop: false, sound: false, waitingSound: true } })
     })
 
     beforeEach(() => {
