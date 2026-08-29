@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { isBlockedAddress, isBlockedRemoteUrl, isReadOnlySql, tokenOk } from "../src/main/guards"
+import { isBlockedAddress, isBlockedRemoteUrl, tokenOk } from "../src/main/guards"
 
 describe("isBlockedRemoteUrl (SSRF guard)", () => {
     it("blocks loopback / localhost", () => {
@@ -55,21 +55,6 @@ describe("isBlockedAddress (what the resolver actually returned)", () => {
         for (const junk of ["", "   ", "example.com", "999.1.1.1", "not an ip"]) {
             expect(isBlockedAddress(junk)).toBe(true)
         }
-    })
-})
-
-describe("isReadOnlySql (remote read-only)", () => {
-    it("allows data-returning statements", () => {
-        expect(isReadOnlySql("SELECT * FROM t")).toBe(true)
-        expect(isReadOnlySql("  with x as (select 1) select * from x")).toBe(true)
-        expect(isReadOnlySql("SHOW TABLES")).toBe(true)
-        expect(isReadOnlySql("explain analyze select 1")).toBe(true)
-    })
-    it("rejects mutating statements", () => {
-        expect(isReadOnlySql("DELETE FROM t")).toBe(false)
-        expect(isReadOnlySql("drop table t")).toBe(false)
-        expect(isReadOnlySql("UPDATE t SET a=1")).toBe(false)
-        expect(isReadOnlySql("insert into t values (1)")).toBe(false)
     })
 })
 

@@ -77,10 +77,14 @@ export function isBlockedRemoteUrl(raw: string): boolean {
     }
 }
 
-/** Remote DB access is read-only - only data-returning statements are allowed. */
-export function isReadOnlySql(sql: string): boolean {
-    return /^\s*(select|with|explain|pragma|show|desc|describe)\b/i.test(sql)
-}
+// isReadOnlySql lived here: a regex on a statement's first word, called "the
+// whole security model" by the tool that depended on it. It let through
+// `WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x` (starts with "with")
+// and, on pg's simple-query protocol, `SELECT 1; DROP TABLE t` (one call, two
+// statements). It is deliberately not replaced by a better regex: read-only is
+// a capability the driver has - a transaction, or a connection flag - and
+// db.ts's runReadOnly now uses it per driver, refusing the one kind
+// (SQL Server) that has none.
 
 export type BindMode = "tailscale" | "lan" | "auto"
 export type BindChoice = { ok: true; host: string } | { ok: false; reason: string }

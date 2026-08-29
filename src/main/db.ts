@@ -319,8 +319,159 @@ export async function testConnection(input: ConnInput): Promise<QueryResult> {
     }
 }
 
-export async function runQuery(profileId: string, sql: string): Promise<QueryResult> {
+/** One result from `pg`'s simple-query protocol - a multi-statement call yields several. */
+type PgResult = {
+    fields?: { name: string }[]
+    rows?: unknown[]
+    rowCount?: number | null
+    command?: string
+}
+
+export interface QueryOptions {
+    /**
+     * Run where the *driver* cannot write, rather than where a regex thinks
+     * the statement won't. Set by the two callers that are not the user
+     * sitting in front of the DB panel: the phone (`server.ts`) and an agent
+     * over MCP (`mcptools.ts`).
+     */
+    readOnly?: boolean
+}
+
+/**
+ * What SQL Server gets told, and why it is a refusal rather than a promise.
+ *
+ * `BEGIN READ ONLY` (pg) and `START TRANSACTION READ ONLY` (mysql) are
+ * enforced inside the server; T-SQL has no equivalent. Keeping the old regex
+ * for this one kind would mean holding a guarantee the driver cannot hold -
+ * and `mcptools.ts` states that guarantee to the agent in writing. Refusing
+ * the capability is the honest half of the trade.
+ */
+const MSSQL_REFUSAL =
+    "Refused: SQL Server has no read-only transaction, so a remote or agent query " +
+    "cannot be prevented from writing. Run it yourself in the DevDeck DB panel."
+
+function shapeRows(rows: Record<string, unknown>[], start: number): QueryResult {
+    return {
+        ok: true,
+        columns: rows[0] ? Object.keys(rows[0]) : [],
+        rows,
+        rowCount: rows.length,
+        timeMs: Date.now() - start
+    }
+}
+
+/**
+ * The read-only path, kept whole and separate from the desktop one.
+ *
+ * This replaces `isReadOnlySql` - a regex on the first word, which the code
+ * called "the whole security model for this tool" while it let through both
+ * `WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x` (starts with
+ * "with") and `SELECT 1; DROP TABLE t` (pg's simple-query protocol runs every
+ * statement in one call). Neither is clever; both are one line in a chat
+ * window. What replaces it is per-driver, because "read-only" is a capability
+ * each driver either has or does not:
+ *
+ *  - postgres: a `BEGIN READ ONLY` transaction, rolled back afterwards. Both
+ *    bypasses above fail *inside the server*, which is the only place that
+ *    can actually judge a statement.
+ *  - mysql: `START TRANSACTION READ ONLY`, same reasoning. (`multipleStatements`
+ *    is already off, so a single statement is all that can arrive.)
+ *  - sqlite: its own connection opened `readOnly`, so the file itself is
+ *    unwritable for the duration - `fileMustExist` too, since a read-only
+ *    query against a database that does not exist is a mistake worth naming.
+ *  - sqlserver: refused. See MSSQL_REFUSAL.
+ *
+ * The trade this makes: a query that relied on session state (a temp table, a
+ * `SET`) now runs in its own transaction and may behave differently. That is
+ * the cost of enforcing the promise where it can be enforced.
+ */
+async function runReadOnly(profileId: string, sql: string, start: number): Promise<QueryResult> {
+    try {
+        const profile = load().profiles.find((p) => p.id === profileId)
+        if (!profile) throw new Error("Connection not found")
+
+        if (profile.kind === "sqlserver") {
+            return { ok: false, error: MSSQL_REFUSAL, timeMs: Date.now() - start }
+        }
+
+        if (profile.kind === "sqlite") {
+            // A second handle rather than the pooled one: the pooled handle is
+            // the desktop's, and it is writable.
+            const ro = new SqliteDatabase(profile.database, { readOnly: true, fileMustExist: true })
+            try {
+                return shapeRows(ro.all(sql) as Record<string, unknown>[], start)
+            } finally {
+                ro.close()
+            }
+        }
+
+        const live = getPool(profileId)
+        if (live.kind === "postgres" && live.pg) {
+            const client = await live.pg.connect()
+            try {
+                await client.query("BEGIN READ ONLY")
+                const res = await client.query(sql)
+                // A multi-statement call returns an array of results; report
+                // the last, which is what the caller would have seen anyway.
+                const last: PgResult = Array.isArray(res) ? res[res.length - 1] : res
+                return {
+                    ok: true,
+                    columns: last?.fields?.map((f) => f.name) ?? [],
+                    rows: (last?.rows ?? []) as Record<string, unknown>[],
+                    rowCount: last?.rowCount ?? last?.rows?.length ?? 0,
+                    command: last?.command,
+                    timeMs: Date.now() - start
+                }
+            } finally {
+                // Nothing to commit by construction; the rollback is what
+                // guarantees the transaction cannot be left open on a pooled
+                // connection that someone else will get next.
+                await client.query("ROLLBACK").catch(() => undefined)
+                client.release()
+            }
+        }
+
+        if (live.kind === "mysql" && live.my) {
+            const conn = await live.my.getConnection()
+            try {
+                await conn.query("START TRANSACTION READ ONLY")
+                const [result, fields] = await conn.query(sql)
+                if (!Array.isArray(result)) throw new Error("Read-only query returned no rows")
+                const rows = result as Record<string, unknown>[]
+                return {
+                    ok: true,
+                    columns: fields
+                        ? (fields as mysql.FieldPacket[]).map((f) => f.name)
+                        : rows[0]
+                          ? Object.keys(rows[0])
+                          : [],
+                    rows,
+                    rowCount: rows.length,
+                    timeMs: Date.now() - start
+                }
+            } finally {
+                await conn.query("ROLLBACK").catch(() => undefined)
+                conn.release()
+            }
+        }
+
+        throw new Error("No active pool")
+    } catch (err) {
+        return {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+            timeMs: Date.now() - start
+        }
+    }
+}
+
+export async function runQuery(
+    profileId: string,
+    sql: string,
+    opts: QueryOptions = {}
+): Promise<QueryResult> {
     const start = Date.now()
+    if (opts.readOnly) return runReadOnly(profileId, sql, start)
     try {
         const live = getPool(profileId)
         if (live.kind === "sqlite" && live.sqlite) {

@@ -10,7 +10,6 @@ import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
 import { allConnections, runQuery, listTables } from "./db"
 import {
-    isReadOnlySql,
     chooseBind,
     cookieToken,
     deviceCookie,
@@ -422,19 +421,14 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                         )
                     break
                 case "db:query": {
+                    // Read-only is enforced by the driver now, not by a regex
+                    // on the first word here - see runReadOnly in db.ts. The
+                    // refusal for a driver that has no read-only mode
+                    // (SQL Server) comes back as an ordinary error result.
                     const sql = String(msg.sql)
-                    if (!isReadOnlySql(sql)) {
-                        send(ws, {
-                            t: "db:res",
-                            res: {
-                                ok: false,
-                                error: "Remote DB access is read-only (SELECT / SHOW / EXPLAIN only).",
-                                timeMs: 0
-                            }
-                        })
-                        break
-                    }
-                    runQuery(id, sql).then((res) => send(ws, { t: "db:res", res }))
+                    runQuery(id, sql, { readOnly: true }).then((res) =>
+                        send(ws, { t: "db:res", res })
+                    )
                     break
                 }
                 case "projects":
