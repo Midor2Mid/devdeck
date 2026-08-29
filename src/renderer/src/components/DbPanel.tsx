@@ -8,6 +8,7 @@ import { toCsv, toJson } from "../exporters"
 import { Icon } from "./Icon"
 import { Modal } from "./Modal"
 import "../monaco-setup"
+import { ipcMessage } from "../../../shared/ipcError"
 import type { ConnProfile, ConnInput, QueryResult, DbKind } from "../../../preload/index"
 
 const DEFAULT_PORT: Record<DbKind, number> = {
@@ -53,27 +54,45 @@ function ConnForm({
 
     const set = (patch: Partial<ConnInput>): void => setForm((f) => ({ ...f, ...patch }))
 
+    // Both of these await a main-process call that can now REJECT, not only
+    // resolve with `{ ok: false }`: the SQLite path guard refuses a file
+    // outside every project. Without the catch, `setBusy(false)` never ran and
+    // the refusal reached the user as Test and Save silently disabled forever
+    // - the worst possible way to say "that path isn't allowed".
     const test = async (): Promise<void> => {
         setBusy(true)
         setTestMsg(null)
-        const res = await window.api.db.test(form)
-        setTestMsg(
-            res.ok
-                ? { ok: true, text: `Connected in ${res.timeMs} ms` }
-                : { ok: false, text: res.error ?? "Failed" }
-        )
-        setBusy(false)
+        try {
+            const res = await window.api.db.test(form)
+            setTestMsg(
+                res.ok
+                    ? { ok: true, text: `Connected in ${res.timeMs} ms` }
+                    : { ok: false, text: res.error ?? "Failed" }
+            )
+        } catch (e) {
+            setTestMsg({ ok: false, text: ipcMessage(e, "Could not test the connection.") })
+        } finally {
+            setBusy(false)
+        }
     }
 
     const save = async (): Promise<void> => {
         if (!form.name.trim()) return
         if (form.kind === "sqlite" ? !form.database.trim() : !form.host.trim()) return
         setBusy(true)
-        const list = await window.api.db.save(form)
-        setBusy(false)
-        // Hand back the saved id so the panel can select it: landing on "Select or
-        // add a connection to run SQL" right after adding one cost a needless click.
-        onSaved(form.id || list.find((p) => p.name === form.name.trim())?.id)
+        setTestMsg(null)
+        try {
+            const list = await window.api.db.save(form)
+            // Hand back the saved id so the panel can select it: landing on "Select or
+            // add a connection to run SQL" right after adding one cost a needless click.
+            onSaved(form.id || list.find((p) => p.name === form.name.trim())?.id)
+        } catch (e) {
+            // Stay on the form with the reason showing, rather than closing as
+            // if it had saved.
+            setTestMsg({ ok: false, text: ipcMessage(e, "Could not save the connection.") })
+        } finally {
+            setBusy(false)
+        }
     }
 
     return (

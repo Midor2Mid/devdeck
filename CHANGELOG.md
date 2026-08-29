@@ -41,9 +41,11 @@ Three things this deliberately costs you:
 - **A SQLite file must be inside an open project or picked in the file
   dialog.** Connections you already have keep working — they're carried over on
   first launch — and Browse still reaches anywhere on disk.
-- **Testing a SQLite path that doesn't exist now fails.** It used to create an
-  empty database and report a healthy connection to it, so a typo looked like a
-  working connection with no tables in it.
+- **Testing a SQLite path that doesn't exist now fails**, and says so in those
+  words rather than the driver's. It used to create an empty database and
+  report a healthy connection to it, so a typo looked like a working connection
+  with no tables in it. The flip side: DevDeck no longer *creates* a database
+  for you — make the file, then point a connection at it.
 
 ### The remote login stops answering as fast as it's asked
 

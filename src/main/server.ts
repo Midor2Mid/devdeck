@@ -20,7 +20,12 @@ import {
 import { readDir, readFileText, writeFileText, allFiles, isWithinRoots } from "./files"
 import { atomicWrite } from "./atomic"
 import { listProjects } from "./projects"
-import { authenticate, type AuthResult } from "./devices"
+import {
+    authenticate,
+    isAuthLockedOut,
+    noteAuthFailure,
+    type AuthResult
+} from "./devices"
 import { exitNotice } from "../renderer/src/termExit"
 
 export interface RemoteSession {
@@ -190,6 +195,17 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         // the throttle exists to stop. An empty address (a socket already
         // torn down) shares one bucket rather than skipping the limit.
         const address = req.socket?.remoteAddress ?? ""
+        // One request, at most one failure charged. This function tries two
+        // credentials (cookie, then ?token=), which is one failed REQUEST
+        // presenting two dead credentials - not two guesses. Counting both
+        // halved the free budget for exactly the case the fallback exists to
+        // serve: a browser holding a revoked device cookie, which then loads a
+        // page, its assets and a WebSocket, and would be locked out while
+        // holding a freshly scanned, valid pairing token. So `authenticate` is
+        // told not to count, the lockout is checked once up front, and the
+        // failure is charged here, once.
+        const once = { countFailure: false }
+        if (isAuthLockedOut(address)) return { auth: { ok: false }, token: "" }
         try {
             const cookie = cookieToken(req.headers.cookie, !!config.tls)
             if (cookie) {
@@ -198,22 +214,29 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     userAgent,
                     config.deviceTtlDays,
                     allowEnroll,
-                    address
+                    address,
+                    once
                 )
                 if (byCookie.ok) return { auth: byCookie, token: cookie }
             }
             const queryToken = url.searchParams.get("token") ?? ""
-            if (!queryToken) return { auth: { ok: false }, token: "" }
-            return {
-                auth: authenticate(
-                    queryToken,
-                    userAgent,
-                    config.deviceTtlDays,
-                    allowEnroll,
-                    address
-                ),
-                token: queryToken
+            if (!queryToken) {
+                // A request carrying a dead cookie and no token is still a
+                // failed attempt; one carrying no credential at all is just an
+                // anonymous request and is not charged.
+                if (cookie) noteAuthFailure(address)
+                return { auth: { ok: false }, token: "" }
             }
+            const auth = authenticate(
+                queryToken,
+                userAgent,
+                config.deviceTtlDays,
+                allowEnroll,
+                address,
+                once
+            )
+            if (!auth.ok) noteAuthFailure(address)
+            return { auth, token: queryToken }
         } catch (err) {
             console.error("[server] auth store write failed:", (err as Error)?.message ?? err)
             return { auth: { ok: false }, token: "" }

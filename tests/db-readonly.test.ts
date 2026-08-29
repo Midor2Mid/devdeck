@@ -124,6 +124,25 @@ describe("runQuery { readOnly } - the driver enforces it, not a regex", () => {
         // until the moment it was asked about.
         const res = await db.runQuery(missingId, "SELECT 1", { readOnly: true })
         expect(res.ok).toBe(false)
+        // And it says so in words the user can act on. SQLite's own message is
+        // "unable to open database file", which reads like a permissions
+        // problem and hides the fact that DevDeck no longer creates the file.
+        expect(res.error).toMatch(/No database file at/)
+        expect(res.error).toMatch(/create it first/)
+    })
+
+    it("gives the same clear answer on the desktop path", async () => {
+        const res = await db.runQuery(missingId, "SELECT 1")
+        expect(res.ok).toBe(false)
+        expect(res.error).toMatch(/No database file at/)
+    })
+
+    it("does not rewrite an error that is not about a missing file", async () => {
+        // The rewrite is keyed on the file actually being absent, so a real
+        // permissions or corruption failure keeps the driver's own words.
+        const res = await db.runQuery(sqliteId, "SELECT * FROM no_such_table", { readOnly: true })
+        expect(res.ok).toBe(false)
+        expect(res.error).not.toMatch(/No database file at/)
     })
 
     it("refuses SQL Server outright rather than promising something T-SQL cannot do", async () => {

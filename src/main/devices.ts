@@ -371,6 +371,27 @@ function noteSuccess(key: string): void {
 }
 
 /**
+ * Charge one failure to an address, for a caller that tries more than one
+ * credential per request.
+ *
+ * `server.ts` tries the cookie and then `?token=`, which is ONE failed request
+ * presenting two dead credentials - not two guesses. Letting `authenticate`
+ * count both halved the free budget for exactly the case the cookie fallback
+ * exists to serve: a browser holding a revoked device cookie with a long
+ * Max-Age, which then loads a page, its assets, and a WebSocket. The owner
+ * would spend five free misses in about three requests and be refused for up
+ * to 30 s while holding a freshly scanned, entirely valid pairing token.
+ */
+export function noteAuthFailure(address: string): void {
+    noteFailure(address, Date.now())
+}
+
+/** Is this address inside its refusal window? Exported for the same caller. */
+export function isAuthLockedOut(address: string): boolean {
+    return isLockedOut(address, Date.now())
+}
+
+/**
  * Authenticate a request from the phone. Device tokens are checked first: a
  * match against an expired device fails *and* removes that device's record,
  * so it re-pairs cleanly instead of resurrecting. Only if no device token
@@ -393,14 +414,24 @@ function noteSuccess(key: string): void {
  * It defaults to a single shared bucket rather than to "no throttle": a
  * caller that cannot say where a request came from gets the limit applied
  * more broadly, never not at all.
+ *
+ * `countFailure: false` is for a caller that tries several credentials for one
+ * request and charges the failure itself, once - see `noteAuthFailure`. The
+ * lockout is still *enforced* in that mode; only the counting moves.
  */
 export function authenticate(
     token: string,
     userAgent: string,
     ttlDays: number,
     allowEnroll = true,
-    address = ""
+    address = "",
+    opts: { countFailure?: boolean } = {}
 ): AuthResult {
+    const count = opts.countFailure !== false
+    const failed = (): AuthResult => {
+        if (count) noteFailure(address, Date.now())
+        return { ok: false }
+    }
     const now = Date.now()
     // Before load(), and before the decrypt loop: the point is that a refused
     // attempt costs an attacker a Map lookup of ours, not a walk of every
@@ -417,8 +448,7 @@ export function authenticate(
         if (isExpired(device.lastSeenAt, ttlDays, now)) {
             drop(store, device.id)
             save(store)
-            noteFailure(address, now)
-            return { ok: false }
+            return failed()
         }
 
         if (now - device.lastSeenAt > STAMP_INTERVAL_MS) {
@@ -429,10 +459,7 @@ export function authenticate(
         return { ok: true, device: toPublic(device) }
     }
 
-    if (!allowEnroll) {
-        noteFailure(address, now)
-        return { ok: false }
-    }
+    if (!allowEnroll) return failed()
 
     const pairing = ensurePairing(store)
     // `store.devices.length < MAX_DEVICES` (not a separate early return):
@@ -440,7 +467,8 @@ export function authenticate(
     // so a pairing token minted just above by `ensurePairing` on a fresh
     // install still gets saved even when the very first enrolment attempt
     // happens to be over some pre-existing cap.
-    if (tokenOk(token, pairing) && store.devices.length < MAX_DEVICES) {
+    const pairingMatches = tokenOk(token, pairing)
+    if (pairingMatches && store.devices.length < MAX_DEVICES) {
         const deviceToken = newToken()
         const device: RemoteDevice = {
             id: randomBytes(16).toString("hex"),
@@ -465,8 +493,12 @@ export function authenticate(
     // doesn't mint a different one - but only when it was actually minted,
     // not on every ordinary rejection.
     if (store.pairing !== pairingBefore) save(store)
-    noteFailure(address, now)
-    return { ok: false }
+    // A CORRECT pairing token that only failed because the device cap is full
+    // is not a guess, and must not feed the guessing-oracle counter: the owner
+    // would be presenting a valid credential and be answered with an
+    // exponentially growing refusal for doing so.
+    if (pairingMatches) return { ok: false }
+    return failed()
 }
 
 /** Paired, non-expired devices - prunes expired records (and their tokens) as it reads. */

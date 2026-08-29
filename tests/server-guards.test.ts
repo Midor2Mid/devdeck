@@ -58,6 +58,42 @@ describe("isBlockedAddress (what the resolver actually returned)", () => {
     })
 })
 
+// The spelling that got through: WHATWG URL normalises `[::ffff:127.0.0.1]` to
+// `[::ffff:7f00:1]`, and a resolver returns the same hex - so a check that
+// only understood the DOTTED form of an IPv4-mapped address let every private
+// range through, in the one spelling a caller controls.
+describe("isBlockedAddress and IPv4-mapped IPv6", () => {
+    it("blocks a mapped loopback in hex, dotted, and uncompressed form", () => {
+        expect(isBlockedAddress("::ffff:7f00:1")).toBe(true)
+        expect(isBlockedAddress("::ffff:127.0.0.1")).toBe(true)
+        expect(isBlockedAddress("0:0:0:0:0:ffff:7f00:1")).toBe(true)
+    })
+    it("blocks mapped private and metadata addresses", () => {
+        expect(isBlockedAddress("::ffff:a00:1")).toBe(true) // 10.0.0.1
+        expect(isBlockedAddress("::ffff:c0a8:1")).toBe(true) // 192.168.0.1
+        expect(isBlockedAddress("::ffff:a9fe:a9fe")).toBe(true) // 169.254.169.254
+    })
+    it("still allows a mapped PUBLIC address", () => {
+        expect(isBlockedAddress("::ffff:5db8:d822")).toBe(false) // 93.184.216.34
+    })
+    it("blocks all of fe80::/10, not just addresses starting fe80:", () => {
+        expect(isBlockedAddress("feb0::1")).toBe(true)
+        expect(isBlockedAddress("febf::1")).toBe(true)
+        expect(isBlockedAddress("fec0::1")).toBe(false) // outside the /10
+    })
+    it("refuses a malformed IPv6 literal rather than reading it as public", () => {
+        for (const junk of ["::ffff:zz", "1::2::3", "12345::1", ":::1"]) {
+            expect(isBlockedAddress(junk)).toBe(true)
+        }
+    })
+    it("blocks the URL form too - one function decides, not a copy of it", () => {
+        expect(isBlockedRemoteUrl("http://[::ffff:127.0.0.1]/")).toBe(true)
+        expect(isBlockedRemoteUrl("http://[::ffff:7f00:1]:8787/tools")).toBe(true)
+        expect(isBlockedRemoteUrl("http://[::ffff:169.254.169.254]/")).toBe(true)
+        expect(isBlockedRemoteUrl("https://[2606:2800:220:1:248:1893:25c8:1946]/")).toBe(false)
+    })
+})
+
 describe("tokenOk (constant-time remote auth)", () => {
     const secret = "a".repeat(48)
     it("accepts the exact token", () => {

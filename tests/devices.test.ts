@@ -302,6 +302,40 @@ describe("public device shape (M9)", () => {
     })
 })
 
+describe("what the throttle must NOT count", () => {
+    const addr = "10.0.0.42"
+
+    it("does not charge a correct pairing token that only hit the device cap", () => {
+        // The owner, holding the right credential, must not be answered with
+        // an exponentially growing refusal for presenting it.
+        const pt = pairingToken()
+        for (let i = 0; i < 20; i++) expect(authenticate(pt, `device ${i}`, 30, true, addr).ok).toBe(true)
+        for (let i = 0; i < 8; i++) expect(authenticate(pt, "one too many", 30, true, addr).ok).toBe(false)
+
+        // Free up a slot; the same token works immediately, with no lockout to
+        // wait out.
+        revokeDevice(listDevices(30)[0].id)
+        expect(authenticate(pt, "replacement", 30, true, addr).ok).toBe(true)
+    })
+
+    it("countFailure: false enforces the lockout but does not add to it", () => {
+        // The mode server.ts uses to try two credentials for one request.
+        for (let i = 0; i < 20; i++) {
+            authenticate(`bad-${i}`, "attacker", 30, true, addr, { countFailure: false })
+        }
+        // Twenty uncounted attempts, so nothing is locked and a real token works.
+        const r = authenticate(pairingToken(), "phone", 30, true, addr)
+        expect(r.ok).toBe(true)
+    })
+
+    it("still refuses while locked out, even in countFailure: false mode", () => {
+        for (let i = 0; i < 6; i++) authenticate(`bad-${i}`, "attacker", 30, true, addr)
+        const enrolled = authenticate(pairingToken(), "phone", 30, true, "10.0.0.99")
+        const token = enrolled.ok ? enrolled.deviceToken! : ""
+        expect(authenticate(token, "phone", 30, true, addr, { countFailure: false }).ok).toBe(false)
+    })
+})
+
 describe("expireForTest guard (M12)", () => {
     it("no-ops outside a test run, structurally - not merely by convention", () => {
         const r = authenticate(pairingToken(), "phone", 30)

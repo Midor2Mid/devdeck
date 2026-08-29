@@ -1,6 +1,6 @@
 import { app, safeStorage } from "electron"
 import { join, resolve } from "path"
-import { readFileSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import { atomicWrite } from "./atomic"
 import { randomUUID } from "crypto"
 import { Pool as PgPool, Client as PgClient } from "pg"
@@ -226,9 +226,13 @@ function getPool(profileId: string): LivePool {
         // because opening a path that isn't there used to CREATE an empty
         // database and report a healthy connection to it - a typo in the path
         // looked like a working connection with no tables in it.
-        live = {
-            kind: "sqlite",
-            sqlite: new SqliteDatabase(profile.database, { fileMustExist: true })
+        try {
+            live = {
+                kind: "sqlite",
+                sqlite: new SqliteDatabase(profile.database, { fileMustExist: true })
+            }
+        } catch (err) {
+            throw sqliteOpenError(err, profile.database)
         }
     }
     // A pool-level error (e.g. server dropped) shouldn't crash the app.
@@ -339,6 +343,32 @@ export function __resetApprovalsForTest(): void {
 }
 
 // ---------- test / query / tables ----------
+/**
+ * What a failed open says when the file simply isn't there.
+ *
+ * The driver's own words are `Could not open the database "<path>"` (SQLite's
+ * underneath it are "unable to open database file"), both of which read like a
+ * permissions problem and say nothing about the one thing the user can fix.
+ * Since `fileMustExist` deliberately removed the old behaviour of *creating*
+ * the file, the message has to carry that decision - otherwise the capability
+ * disappears and the error blames the disk.
+ *
+ * `existsSync` is the actual gate, not the wording: a real permissions or
+ * corruption failure on a file that IS there keeps the driver's own message,
+ * because rewriting that one would be the same lie in the other direction.
+ */
+function sqliteOpenError(err: unknown, file: string): Error {
+    const msg = err instanceof Error ? err.message : String(err)
+    const failedToOpen = /could not open the database|unable to open database file/i.test(msg)
+    if (failedToOpen && !existsSync(file)) {
+        return new Error(
+            `No database file at ${file}. DevDeck opens existing SQLite files - create it first, ` +
+                `then point a connection at it.`
+        )
+    }
+    return err instanceof Error ? err : new Error(msg)
+}
+
 export async function testConnection(input: ConnInput): Promise<QueryResult> {
     const start = Date.now()
     try {
@@ -346,7 +376,12 @@ export async function testConnection(input: ConnInput): Promise<QueryResult> {
             // Same `fileMustExist` as getPool: "Connected in 2 ms" to a
             // database that did not exist until Test was pressed is the most
             // confident wrong answer this panel can give.
-            const db = new SqliteDatabase(input.database, { fileMustExist: true })
+            let db: SqliteDatabase
+            try {
+                db = new SqliteDatabase(input.database, { fileMustExist: true })
+            } catch (err) {
+                throw sqliteOpenError(err, input.database)
+            }
             try {
                 db.all("SELECT 1")
             } finally {
@@ -407,7 +442,14 @@ export async function testConnection(input: ConnInput): Promise<QueryResult> {
     }
 }
 
-/** One result from `pg`'s simple-query protocol - a multi-statement call yields several. */
+/**
+ * How many rows node-postgres fetches per portal execution on a read-only
+ * query. The value is a paging detail; passing it AT ALL is the point - see
+ * the comment in runReadOnly.
+ */
+const PG_PAGE_ROWS = 500
+
+/** One `pg` result. */
 type PgResult = {
     fields?: { name: string }[]
     rows?: unknown[]
@@ -485,7 +527,12 @@ async function runReadOnly(profileId: string, sql: string, start: number): Promi
         if (profile.kind === "sqlite") {
             // A second handle rather than the pooled one: the pooled handle is
             // the desktop's, and it is writable.
-            const ro = new SqliteDatabase(profile.database, { readOnly: true, fileMustExist: true })
+            let ro: SqliteDatabase
+            try {
+                ro = new SqliteDatabase(profile.database, { readOnly: true, fileMustExist: true })
+            } catch (err) {
+                throw sqliteOpenError(err, profile.database)
+            }
             try {
                 return shapeRows(ro.all(sql) as Record<string, unknown>[], start)
             } finally {
@@ -498,30 +545,66 @@ async function runReadOnly(profileId: string, sql: string, start: number): Promi
             const client = await live.pg.connect()
             try {
                 await client.query("BEGIN READ ONLY")
-                const res = await client.query(sql)
-                // A multi-statement call returns an array of results; report
-                // the last, which is what the caller would have seen anyway.
-                const last: PgResult = Array.isArray(res) ? res[res.length - 1] : res
+                // `rows` is what forces node-postgres onto the EXTENDED query
+                // protocol (`Query.requiresPreparation()` returns true for a
+                // truthy `rows`), and that is the load-bearing part, not a
+                // paging preference.
+                //
+                // On the simple protocol a single call may carry several
+                // statements, and Postgres honours transaction-control
+                // commands inside it - so `COMMIT; DELETE FROM users;` ends
+                // the READ ONLY transaction with its first statement and runs
+                // the delete in autocommit, where nothing is read-only. The
+                // extended protocol refuses more than one statement outright,
+                // which closes that and `SELECT 1; DROP TABLE t` with it.
+                //
+                // Session-level settings (SET SESSION CHARACTERISTICS,
+                // default_transaction_read_only) do NOT close it: they are
+                // themselves SQL, so a second statement can turn them off
+                // again. Only "one statement per call" is airtight.
+                //
+                // The cast is because pg's *types* don't describe `rows` on a
+                // query config even though the driver reads it - see
+                // node_modules/pg/lib/query.js's requiresPreparation().
+                const query = client.query as (cfg: unknown) => Promise<unknown>
+                const res = (await query({ text: sql, rows: PG_PAGE_ROWS })) as PgResult
                 return {
                     ok: true,
-                    columns: last?.fields?.map((f) => f.name) ?? [],
-                    rows: (last?.rows ?? []) as Record<string, unknown>[],
-                    rowCount: last?.rowCount ?? last?.rows?.length ?? 0,
-                    command: last?.command,
+                    columns: res?.fields?.map((f) => f.name) ?? [],
+                    rows: (res?.rows ?? []) as Record<string, unknown>[],
+                    rowCount: res?.rowCount ?? res?.rows?.length ?? 0,
+                    command: res?.command,
                     timeMs: Date.now() - start
                 }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                // Postgres's own words for this are "cannot insert multiple
+                // commands into a prepared statement", which tells a user
+                // nothing about what they did.
+                if (/multiple commands/i.test(msg)) {
+                    throw new Error(
+                        "Read-only queries run one statement at a time - split this into separate queries."
+                    )
+                }
+                throw err
             } finally {
-                // Nothing to commit by construction; the rollback is what
-                // guarantees the transaction cannot be left open on a pooled
-                // connection that someone else will get next.
                 await client.query("ROLLBACK").catch(() => undefined)
-                client.release()
+                // Truthy argument = discard this connection instead of
+                // returning it to the pool. The desktop panel shares that
+                // pool, and a connection that ran someone else's SQL should
+                // not carry whatever session state it left behind back into
+                // the user's own session.
+                client.release(true)
             }
         }
 
         if (live.kind === "mysql" && live.my) {
             const conn = await live.my.getConnection()
             try {
+                // mysql2 leaves `multipleStatements` off (see buildMyConfig),
+                // so one statement per call is already the protocol's rule
+                // here - this transaction is what makes that one statement
+                // unable to write.
                 await conn.query("START TRANSACTION READ ONLY")
                 const [result, fields] = await conn.query(sql)
                 if (!Array.isArray(result)) throw new Error("Read-only query returned no rows")
@@ -539,7 +622,9 @@ async function runReadOnly(profileId: string, sql: string, start: number): Promi
                 }
             } finally {
                 await conn.query("ROLLBACK").catch(() => undefined)
-                conn.release()
+                // Same reasoning as pg's release(true): don't hand a
+                // connection carrying someone else's session state back.
+                conn.destroy()
             }
         }
 

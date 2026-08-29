@@ -327,6 +327,31 @@ describe("remote server - the auth path is rate-limited (remedy 15)", () => {
         expect(allowed.status).toBe(200)
     })
 
+    it("charges one failed REQUEST once, even when it presents two dead credentials", async () => {
+        // authFor tries the cookie and then ?token=. Counting both halved the
+        // free budget for exactly the case the fallback exists to serve: a
+        // browser holding a revoked device cookie, which then loads a page,
+        // its assets and a WebSocket, and would be refused while holding a
+        // freshly scanned, entirely valid pairing token.
+        for (let i = 0; i < 4; i++) {
+            const res = await fetch(`${base}/?token=wrong-${i}`, {
+                headers: { Cookie: `devdeck_device=dead-${i}` }
+            })
+            expect(res.status).toBe(401)
+        }
+        // Four requests, four charges - under the free budget. With both
+        // credentials counted this would be eight, and this would 401.
+        const allowed = await fetch(`${base}/?token=${pairingToken()}`)
+        expect(allowed.status).toBe(200)
+    })
+
+    it("does not charge a request that carries no credential at all", async () => {
+        // An anonymous GET is not a guess. Ten of them must not spend the
+        // budget a real device needs.
+        for (let i = 0; i < 10; i++) expect((await fetch(`${base}/`)).status).toBe(401)
+        expect((await fetch(`${base}/?token=${pairingToken()}`)).status).toBe(200)
+    })
+
     it("refuses the WebSocket upgrade too, not just HTTP", async () => {
         const enrol = await fetch(`${base}/?token=${pairingToken()}`)
         const token = deviceTokenFrom(enrol.headers.get("set-cookie"))

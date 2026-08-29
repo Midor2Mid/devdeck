@@ -415,21 +415,28 @@ function registerIpc(): void {
     // renderer cannot add to it). Not narrowed to project roots alone: a
     // database in D:\data is an ordinary thing to point DevDeck at, and
     // removing that would be a worse bug than the one being fixed.
-    const guardDbInput = (input: { kind?: string; database?: string }): void => {
-        if (!input || input.kind !== "sqlite") return
+    const dbInputRefusal = (input: { kind?: string; database?: string }): string | null => {
+        if (!input || input.kind !== "sqlite") return null
         const file = String(input.database ?? "")
-        if (!file) throw new Error("A SQLite connection needs a database file.")
-        if (inProject(file) || db.isApprovedDbFile(file)) return
-        throw new Error("That database file is outside every open project - use Browse to choose it.")
+        if (!file) return "A SQLite connection needs a database file."
+        if (inProject(file) || db.isApprovedDbFile(file)) return null
+        return "That database file is outside every open project - use Browse to choose it."
     }
     ipcMain.handle("db:list", (_e, projectId: string) => db.listConnections(projectId))
     ipcMain.handle("db:save", (_e, input) => {
-        guardDbInput(input)
+        const refusal = dbInputRefusal(input)
+        if (refusal) throw new Error(refusal)
         return db.saveConnection(input)
     })
     ipcMain.handle("db:remove", (_e, id: string) => db.removeConnection(id))
+    // A refusal here is RETURNED, not thrown: db:test's contract has always
+    // been that a connection failure comes back as `{ ok: false, error }`, and
+    // the panel renders exactly that. Rejecting instead would have made the
+    // one input a user can plausibly get wrong - a path - the one that skips
+    // the error banner.
     ipcMain.handle("db:test", (_e, input) => {
-        guardDbInput(input)
+        const refusal = dbInputRefusal(input)
+        if (refusal) return { ok: false, error: refusal, timeMs: 0 }
         return db.testConnection(input)
     })
     ipcMain.handle("db:query", (_e, { profileId, sql }) => db.runQuery(profileId, sql))

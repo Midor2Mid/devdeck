@@ -22,18 +22,29 @@ const BLOCKED = "Blocked: remote requests to local/private hosts aren't allowed.
 
 /** A fetch stub driven by a url -> response table, recording every call. */
 function stubFetch(table: Record<string, { status: number; location?: string; body?: string }>) {
-    const calls: { url: string; method: string; redirect?: string; body?: unknown }[] = []
+    const calls: {
+        url: string
+        method: string
+        redirect?: string
+        body?: unknown
+        headers?: Record<string, string>
+        res?: Response
+    }[] = []
     const impl = vi.fn(async (url: string, init: RequestInit = {}) => {
-        calls.push({
+        const entry = {
             url,
             method: String(init.method ?? "GET"),
             redirect: init.redirect,
-            body: init.body
-        })
+            body: init.body,
+            headers: (init.headers ?? {}) as Record<string, string>
+        }
+        calls.push(entry)
         const hit = table[url] ?? { status: 200, body: "ok" }
         const headers = new Headers()
         if (hit.location) headers.set("location", hit.location)
-        return new Response(hit.body ?? "", { status: hit.status, headers })
+        const res = new Response(hit.body ?? "", { status: hit.status, headers })
+        ;(entry as { res?: Response }).res = res
+        return res
     })
     vi.stubGlobal("fetch", impl)
     return calls
@@ -44,6 +55,55 @@ beforeEach(() => {
     dnsMock.map.clear()
     dnsMock.map.set("api.example.com", ["93.184.216.34"])
     dnsMock.map.set("hop.example.com", ["93.184.216.34"])
+})
+
+describe("relayed HTTP - a redirect must not carry credentials with it", () => {
+    // Following redirects by hand means inheriting what `fetch` was doing for
+    // us. It strips credential headers when a redirect crosses origins; a loop
+    // that replays req.headers verbatim would hand a saved request's API token
+    // to whatever host the endpoint named - making the HARDENED path the leaky
+    // one.
+    const secret = { Authorization: "Bearer SECRET", Cookie: "session=abc", "X-Trace": "keep-me" }
+
+    it("drops Authorization and Cookie when the origin changes", async () => {
+        const calls = stubFetch({
+            "https://api.example.com/x": { status: 302, location: "https://hop.example.com/y" },
+            "https://hop.example.com/y": { status: 200, body: "ok" }
+        })
+        await httpSend(
+            { method: "GET", url: "https://api.example.com/x", headers: { ...secret } },
+            { guardRemote: true }
+        )
+        expect(calls[0].headers).toMatchObject({ Authorization: "Bearer SECRET" })
+        const forwarded = calls[1].headers ?? {}
+        expect(Object.keys(forwarded).map((k) => k.toLowerCase())).not.toContain("authorization")
+        expect(Object.keys(forwarded).map((k) => k.toLowerCase())).not.toContain("cookie")
+        // Non-credential headers still travel - this is a credential rule, not
+        // a "forget everything" rule.
+        expect(forwarded["X-Trace"]).toBe("keep-me")
+    })
+
+    it("keeps them on a same-origin redirect", async () => {
+        const calls = stubFetch({
+            "https://api.example.com/x": { status: 302, location: "https://api.example.com/y" },
+            "https://api.example.com/y": { status: 200, body: "ok" }
+        })
+        await httpSend(
+            { method: "GET", url: "https://api.example.com/x", headers: { ...secret } },
+            { guardRemote: true }
+        )
+        expect(calls[1].headers).toMatchObject({ Authorization: "Bearer SECRET" })
+    })
+
+    it("consumes each redirect body instead of parking the socket", async () => {
+        const calls = stubFetch({
+            "https://api.example.com/x": { status: 302, location: "https://hop.example.com/y" },
+            "https://hop.example.com/y": { status: 200, body: "landed" }
+        })
+        await httpSend({ method: "GET", url: "https://api.example.com/x" }, { guardRemote: true })
+        // Undici holds the connection until the body is read or cancelled.
+        expect(calls[0].res?.bodyUsed).toBe(true)
+    })
 })
 
 describe("relayed HTTP - the guard runs on every hop (remedy 14)", () => {

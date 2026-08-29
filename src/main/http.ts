@@ -74,6 +74,25 @@ async function blockedTarget(raw: string): Promise<boolean> {
     }
 }
 
+/** Headers a redirect to another origin must not carry with it. */
+const CREDENTIAL_HEADERS = new Set(["authorization", "cookie", "proxy-authorization", "host"])
+
+function sameOrigin(a: string, b: string): boolean {
+    try {
+        return new URL(a).origin === new URL(b).origin
+    } catch {
+        return false
+    }
+}
+
+function withoutCredentials(headers: Record<string, string>): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(headers)) {
+        if (!CREDENTIAL_HEADERS.has(k.toLowerCase())) out[k] = v
+    }
+    return out
+}
+
 /**
  * `fetch` with the redirects followed by hand, so the guard runs on every hop
  * instead of only on the URL the caller typed.
@@ -92,21 +111,33 @@ async function guardedFetch(req: HttpRequest, method: string): Promise<Response 
     let url = req.url
     let verb = method
     let body = BODYLESS.has(method) ? undefined : req.body
+    let headers = { ...(req.headers ?? {}) }
 
     for (let hop = 0; hop <= MAX_HOPS; hop++) {
         if (await blockedTarget(url)) return null
-        const res = await fetch(url, { method: verb, headers: req.headers, body, redirect: "manual" })
+        const res = await fetch(url, { method: verb, headers, body, redirect: "manual" })
         if (!REDIRECTS.has(res.status)) return res
 
         const location = res.headers.get("location")
         // A redirect with nowhere to go is just a response; hand it back
         // rather than inventing an error about it.
         if (!location) return res
+        const from = url
         try {
             url = new URL(location, url).toString()
         } catch {
             return null
         }
+        // Following redirects by hand means inheriting the obligations `fetch`
+        // was meeting for us. This is the one that bites: fetch strips
+        // credential headers when a redirect crosses origins, and a loop that
+        // replays req.headers verbatim would hand a saved request's API token
+        // to whatever host the endpoint named. The hardened path must not be
+        // the leaky one.
+        if (!sameOrigin(from, url)) headers = withoutCredentials(headers)
+        // Nothing reads a 3xx body, and an unread body keeps undici holding
+        // the socket until GC gets to it - up to MAX_HOPS of them per request.
+        await res.body?.cancel().catch(() => undefined)
         // 303 always becomes GET; 301/302 do so for anything that isn't
         // GET/HEAD, which is what every browser and undici already do. 307/308
         // keep the method and the body by definition.
