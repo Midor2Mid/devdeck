@@ -86,4 +86,25 @@ describe("consuming a decision", () => {
         expect(refreshDecision("t1", "waiting", true)).toBeNull()
         expect(decisionFor("t1")).toBeNull()
     })
+
+    // Adjudicated as CORRECT, and pinned here because it reads like a bug and a
+    // later refactor would be tempted to "fix" it with suppression. Between the
+    // keystroke being sent and the agent processing it, the prompt is still on
+    // screen. The tail is therefore unchanged, so refreshDecision takes neither
+    // clearing branch, finds no `prev` (consume deleted it), and re-mints the
+    // SAME id — the card briefly reappears. That is honest: the card reflects
+    // what is actually on screen. The second tap must then be refused, not
+    // fired, because `consumed` still holds that id.
+    it("re-mints the same decision while the prompt is still on screen, and refuses the second answer", () => {
+        const first = refreshDecision("t1", "waiting", true)!
+        expect(consumeDecision(first.id, "1")).toEqual({ ok: true, send: "1", termId: "t1" })
+
+        // The agent has not caught up: same screen, so the same decision returns.
+        const again = refreshDecision("t1", "waiting", true)
+        expect(again?.id).toBe(first.id)
+        expect(decisionFor("t1")?.id).toBe(first.id)
+
+        // ...and tapping it a second time answers "Already answered."
+        expect(consumeDecision(first.id, "1")).toEqual({ ok: false, reason: "consumed" })
+    })
 })
