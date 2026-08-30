@@ -74,10 +74,36 @@ export function printableDelta(
 }
 
 import type { AgentStatus, AnySession } from "./store"
-import { detectApproval, type ApprovalPrompt } from "./approval"
+import type { ApprovalPrompt } from "./approval"
+import type { DecisionSnapshot, DecisionView } from "../../shared/decision"
 
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
+
+/**
+ * Main's current answer for each session, keyed by terminal id.
+ *
+ * A module Map for the same reason the tails above are one: `promptFor` runs
+ * once per tile per second-tick, and routing that through React state would
+ * churn the whole grid on every pty burst. It also must not be a store slice
+ * read through a selector — a selector that built a fresh object per render is
+ * how this app has spun forever before.
+ */
+const decisions = new Map<string, DecisionView>()
+
+/**
+ * Replace the cache with main's snapshot. Wired to `decisions:changed` in
+ * App.tsx; called directly by tests.
+ *
+ * A wholesale replace, not a merge: main sends its complete answer every time,
+ * so a session that no longer has a decision is expressed by its absence. A
+ * merge would leave the last prompt sitting in the cache after the agent moved
+ * on, and the tile would keep offering Approve for a question nobody asked.
+ */
+export function setDecisions(snapshot: DecisionSnapshot): void {
+    decisions.clear()
+    for (const [termId, d] of Object.entries(snapshot)) decisions.set(termId, d)
+}
 
 // Per-session OSC-scanning state. `open` is true while inside an OSC escape
 // whose terminator (BEL or ST) has not arrived yet. `pendingEsc` is true when
@@ -296,6 +322,7 @@ export function forgetTail(id: string): void {
     lastAt.delete(id)
     rings.delete(id)
     oscState.delete(id)
+    decisions.delete(id)
 }
 
 /** A short "time since" label: "" · "now" · "35s" · "2m" · "1h". */
@@ -400,15 +427,24 @@ export function sortForFollow(sessions: AnySession[]): AnySession[] {
 /**
  * The permission prompt this session is blocked on, or null.
  *
- * The gate, not the detector. `approval.ts` is deliberately conservative but
- * still asks its callers to run it only for sessions already flagged
- * attention/waiting, because a surface that ACTS on a match sends a keystroke
- * to a live agent. Mission and Overview are both such surfaces, so the rule
- * lives here once instead of being copied into each of them.
+ * The gate, not the detector — and no longer the classifier either. Main owns
+ * detection now (main/decisions.ts), reading its own copy of the same tail
+ * through the same `shared/approval.ts`, so the phone card and this tile cannot
+ * describe one prompt two ways. This surface keeps the *status* gate, because
+ * that is its own rule about when it may ACT: answering sends a keystroke to a
+ * live agent, and a match on a session that is merely mid-stream is a keystroke
+ * nobody asked for. Main applies the identical gate before minting a decision
+ * (`refreshDecision`); keeping it here too is deliberate belt-and-braces, and
+ * it is what makes this function safe no matter how the cache was filled.
  *
- * 16 lines is the same window Overview has always read.
+ * Reads the module cache, never IPC: callers run it once per tile per render.
  */
 export function promptFor(s: AnySession): ApprovalPrompt | null {
     if (!s.isAgent || (s.status !== "attention" && s.status !== "waiting")) return null
-    return detectApproval(getFullTail(s.termId, 16))
+    const d = decisions.get(s.termId)
+    if (!d) return null
+    // Main always mints exactly two options, Approve then Deny (refreshDecision).
+    const [approve, deny] = d.options
+    if (!approve || !deny) return null
+    return { kind: d.kind, question: d.question, approve: approve.send, deny: deny.send }
 }

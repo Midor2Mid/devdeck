@@ -10,21 +10,28 @@
 //      TUI redrew or somebody answered at the desk, the digit no longer means
 //      what the card said, and we refuse rather than fire it blind.
 import { detectApproval } from "../shared/approval"
+import type { DecisionOption, DecisionView } from "../shared/decision"
 import { getTail, tailDigest } from "./pty"
 
 /** The window the classifier reads. Same 16 lines the Overview has always read. */
 const WINDOW = 16
 
-export type RemoteOption = { label: string; send: string }
+export type RemoteOption = DecisionOption
 
-export type PendingDecision = {
-    id: string
+/**
+ * Main's full record of a decision. It extends `DecisionView` rather than
+ * restating it, so what crosses the bridge is literally the same object — a
+ * field renamed on one side becomes a typecheck error on the other instead of a
+ * card that silently renders `undefined`. The three extra fields are main's own
+ * bookkeeping — `termId` and `tailHash` are how a tap is matched back to a live
+ * screen — and no surface reads them. A serializer writing to something outside
+ * this machine should project to `DecisionView` explicitly rather than hand the
+ * whole record over; the Electron bridge does not, because the renderer already
+ * knows every terminal id it is asking about.
+ */
+export interface PendingDecision extends DecisionView {
     termId: string
-    kind: "menu" | "yesno"
-    question: string
-    tail: string
     tailHash: string
-    options: RemoteOption[]
     createdAt: number
 }
 

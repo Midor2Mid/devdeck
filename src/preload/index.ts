@@ -11,6 +11,7 @@ import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 import type { Loaded } from "../shared/loaded"
+import type { DecisionSnapshot, DecisionView } from "../shared/decision"
 
 // Re-exported as `RemoteDevice`: the renderer never sees (and never needs to
 // know about) the internal `RemoteDevice` shape that also carries
@@ -25,6 +26,11 @@ export type { Loaded }
 // bridge unchanged - restating it here is exactly how a renamed field stops
 // being an error anywhere.
 export type { RunKind, RunRecord, RunExclusionReason }
+// A pending permission prompt, as the renderer sees it. Deliberately from
+// `shared/`, NOT from `main/decisions`: that module imports `main/pty`, and a
+// value import anywhere along that path would drag the native pty binding into
+// the preload bundle. It would typecheck and then fail at runtime.
+export type { DecisionView, DecisionSnapshot }
 
 // Each terminal pane registers its own pty:data/pty:exit listener; raise the
 // cap so many open terminals don't trip Node's MaxListenersExceededWarning.
@@ -433,6 +439,26 @@ const api = {
             ): void => cb(p)
             ipcRenderer.on("pty:exit", handler)
             return () => ipcRenderer.removeListener("pty:exit", handler)
+        }
+    },
+    /**
+     * Permission prompts, as classified by MAIN — the only classifier there is.
+     * The renderer used to run its own detector over its own copy of the tail;
+     * two answers to one question is the defect class remedy 13 was about.
+     */
+    decisions: {
+        /** One session's current decision, or null. */
+        forTerm: (termId: string): Promise<DecisionView | null> =>
+            ipcRenderer.invoke("decisions:for", termId),
+        /**
+         * Main's whole current answer, pushed whenever it re-derives them.
+         * Carries the snapshot rather than a bare ping: a ping would cost one
+         * `invoke` per session per tick, and those replies can land out of order.
+         */
+        onChanged: (fn: (snapshot: DecisionSnapshot) => void): (() => void) => {
+            const handler = (_e: unknown, snapshot: DecisionSnapshot): void => fn(snapshot)
+            ipcRenderer.on("decisions:changed", handler)
+            return () => ipcRenderer.removeListener("decisions:changed", handler)
         }
     },
     projects: {

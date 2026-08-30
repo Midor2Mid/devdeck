@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { useStore } from "./store"
 import { nextSession } from "./deck"
+import { setDecisions } from "./missionTail"
 import { useSettings } from "./settings"
 import { useToasts, toast } from "./toast"
 import { PersistBlockedBar } from "./components/PersistBlockedBar"
@@ -126,14 +127,21 @@ export function App(): JSX.Element {
         return () => window.removeEventListener("beforeunload", flush)
     }, [init, loadSettings])
 
-    // Only push the mobile session snapshot when the remote server is actually
-    // on - otherwise this fires an IPC + snapshot build on every agent status
-    // flip for nothing (remote is off by default).
-    const remoteEnabled = useSettings((s) => s.remote.enabled)
+    // The session snapshot goes to main on every status flip, remote server or
+    // not. It used to be gated on `remote.enabled` to save an IPC when nobody
+    // was listening — but main is now the only classifier of permission
+    // prompts, and status is the half of that it cannot see for itself. Gated,
+    // main would mint nothing with remote off and the desktop's own Approve /
+    // Deny buttons would silently never appear. Main still broadcasts to the
+    // phone only when the server is running.
     useEffect(() => {
-        if (!remoteEnabled) return
         window.api.mobile.syncSessions(sessions())
-    }, [remoteEnabled, tabsByProject, agentStatus, termAgents, projects, sessions])
+    }, [tabsByProject, agentStatus, termAgents, projects, sessions])
+
+    // Main's classification, straight into missionTail's module cache — no
+    // React state on this path: it fires per status flip and the tiles read it
+    // synchronously on their own 1s tick.
+    useEffect(() => window.api.decisions.onChanged(setDecisions), [])
 
     // Tell the capture proxy which project is active, so it can tag traffic.
     const activeId = useStore((s) => s.activeId)

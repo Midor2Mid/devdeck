@@ -5,9 +5,20 @@
 // to a live agent.
 //
 // This module only CLASSIFIES. The rule about when it is safe to act on a match
-// — only for a session already flagged "attention"/"waiting" — belongs to each
-// caller's gate: `promptFor` in the renderer (missionTail.ts) and `refreshDecision`
-// in main (main/decisions.ts). Both are tested; neither may be removed.
+// — only for a session already flagged "attention"/"waiting" — belongs to the
+// caller's gate.
+//
+// For approvals there is now exactly ONE caller that classifies: `refreshDecision`
+// in main (main/decisions.ts), which holds that gate. Every surface that offers
+// Approve / Deny — the Mission tile and the Overview row via `promptFor`
+// (missionTail.ts), and the paired phone — reads main's answer instead of running
+// this itself, so one prompt cannot be described two ways. `promptFor` keeps the
+// same status gate as a display-side check; both gates are tested and neither may
+// be removed.
+//
+// The one other caller is store.ts's board-evidence check, which asks a different
+// question — "is this quiet agent blocked rather than finished?" — and is not a
+// surface that acts on the answer.
 
 export interface ApprovalPrompt {
     kind: "menu" | "yesno"
