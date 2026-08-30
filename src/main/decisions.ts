@@ -229,9 +229,37 @@ export function consumeDecision(decisionId: string, send: string): ConsumeResult
     if (consumed.has(decisionId)) return { ok: false, reason: "consumed" }
     const d = [...pending.values()].find((p) => p.id === decisionId)
     if (!d) return { ok: false, reason: "unknown" }
-    if (!d.options.some((o) => o.send === send)) return { ok: false, reason: "not-an-option" }
+    const option = d.options.find((o) => o.send === send)
+    if (!option) return { ok: false, reason: "not-an-option" }
     if (tailDigest(d.termId, WINDOW) !== d.tailHash) return { ok: false, reason: "moved-on" }
     consumed.set(d.id, d.termId)
     pending.delete(d.termId)
-    return { ok: true, send, termId: d.termId }
+    // `option.send`, not the `send` argument. The two are byte-identical - the
+    // find above is an exact string match - but returning main's own copy makes
+    // "the caller never writes a client-supplied string" true by construction
+    // rather than true by an argument about `===`. The caller writing this to a
+    // pty should not have to re-derive that argument to know it is safe.
+    return { ok: true, send: option.send, termId: d.termId }
+}
+
+/**
+ * Which session a decision id belongs to - live or already spent - or null if
+ * main never minted it.
+ *
+ * This exists so a caller can authorize a tap BEFORE consuming it. Consuming
+ * first and checking afterwards would let a device that is not allowed to answer
+ * a prompt still burn it, and the once-only rule means burning it is permanent:
+ * the person at the desk would see the card go away with nothing typed.
+ *
+ * `consumed` is searched too, and that is the point of keying it by termId: a
+ * second tap on a spent decision must still resolve to a session, or the answer
+ * to "who owns this?" would change from "t1" to "nobody" the instant it was
+ * answered, and the honest "Already answered." would come back as the confusing
+ * "That prompt is no longer on screen."
+ */
+export function decisionOwner(decisionId: string): string | null {
+    const spent = consumed.get(decisionId)
+    if (spent) return spent
+    const d = [...pending.values()].find((p) => p.id === decisionId)
+    return d ? d.termId : null
 }

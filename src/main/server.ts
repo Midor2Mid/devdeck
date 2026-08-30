@@ -27,7 +27,7 @@ import {
     type AuthResult
 } from "./devices"
 import { exitNotice } from "../renderer/src/termExit"
-import { decisionFor } from "./decisions"
+import { consumeDecision, decisionFor, decisionOwner } from "./decisions"
 
 export interface RemoteSession {
     termId: string
@@ -175,6 +175,22 @@ function withDecisions(sessions: readonly RemoteSession[]): RemoteSession[] {
             }
         }
     })
+}
+
+/**
+ * Why a `{t:"choice"}` was refused, in words the phone shows verbatim.
+ *
+ * The copy lives here rather than on the client because the client must not be
+ * the thing that decides what a refusal means: it renders the string it is
+ * given. Every refusal says something - a silent no-op over a slow phone link is
+ * how you get a second tap, and a second tap on a prompt that did fire is how
+ * the answer lands in whatever the agent asked next.
+ */
+const CHOICE_REASONS: Record<string, string> = {
+    unknown: "That prompt is no longer on screen.",
+    consumed: "Already answered.",
+    "not-an-option": "That is not one of the offered answers.",
+    "moved-on": "The terminal moved on - check it before answering again."
 }
 
 export function broadcastSessions(deps: ServerDeps): void {
@@ -446,6 +462,79 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                 case "input":
                     if (typeof msg.data === "string") writePty(id, msg.data)
                     break
+                case "choice": {
+                    // Answer a permission prompt with a token MAIN minted. A phone
+                    // may replay one of main's own answer tokens, for a prompt main
+                    // can still see on the screen it classified, on a session this
+                    // socket is attached to, exactly once. Everything else is a
+                    // refusal that says why.
+                    //
+                    // Note what is NOT read here: `id`. The terminal a decision
+                    // belongs to comes from main's own record (`decisionOwner`,
+                    // then `r.termId`), never from the wire - otherwise a device
+                    // could name a session it is attached to while spending a
+                    // decision minted for a different one. `id` is accepted and
+                    // cross-checked below so that it cannot quietly drift into
+                    // meaning something, but it is never the authority.
+                    //
+                    // There is deliberately no per-pty write lock. `decisionOwner`,
+                    // `consumeDecision` and `writePty` are all synchronous, so from
+                    // the first check to the write this is one run-to-completion
+                    // block in a single-threaded main process: no other socket, no
+                    // `{t:"input"}` and no `upload` can interleave. Introducing an
+                    // `await` anywhere between `consumeDecision` and `writePty` is
+                    // what would break that - and only then would a lock be the fix.
+                    const decisionId = typeof msg.decisionId === "string" ? msg.decisionId : ""
+                    const wanted = typeof msg.send === "string" ? msg.send : ""
+                    const owner = decisionOwner(decisionId)
+                    if (!owner) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: "unknown",
+                            reason: CHOICE_REASONS.unknown
+                        })
+                        break
+                    }
+                    if (!ws.attached?.has(owner)) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: "rejected",
+                            reason: "Not attached to that session."
+                        })
+                        break
+                    }
+                    if (id && id !== owner) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: "rejected",
+                            reason: "That answer belongs to a different session."
+                        })
+                        break
+                    }
+                    const r = consumeDecision(decisionId, wanted)
+                    if (!r.ok) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: r.reason === "unknown" ? "unknown" : "rejected",
+                            reason: CHOICE_REASONS[r.reason]
+                        })
+                        break
+                    }
+                    // `r.send` and `r.termId` - main's copy of both. And no `+ "\r"`:
+                    // for a menu a trailing Return breaks the numbered selection and
+                    // the ESC denial alike, and a yesno token from approval.ts
+                    // already ends in one. Honour the token as recorded.
+                    writePty(r.termId, r.send)
+                    send(ws, { t: "choice:res", decisionId, outcome: "accepted" })
+                    // The prompt is spent: push the session list so every paired
+                    // device drops the card instead of offering a second tap.
+                    broadcastSessions(deps)
+                    break
+                }
                 case "resize":
                     resizePty(id, Number(msg.cols), Number(msg.rows))
                     break
