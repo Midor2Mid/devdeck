@@ -24,22 +24,29 @@ vi.mock("electron", () => ({
 
 // Native/heavy modules server.ts imports but this file has no interest in
 // exercising - stubbed the same way tests/mcpserver.test.ts stubs db.ts.
-vi.mock("../src/main/pty", () => {
+vi.mock("../src/main/pty", async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { EventEmitter } = require("events")
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createHash } = require("crypto")
+    // Not `require`: this one is TypeScript source, so it has to go through
+    // vitest's own resolver.
+    const { lastLines } =
+        await vi.importActual<typeof import("../src/shared/tail")>("../src/shared/tail")
     return {
         ptyEvents: new EventEmitter(),
         getBuffer: () => "",
         writePty: () => {},
         resizePty: () => {},
-        // decisions.ts reads the screen through these two. The digest is a real
-        // sha256 of the same text `getTail` returns, so the registry's
-        // "did the screen move on?" check behaves as it does in production.
-        getTail: (id: string) => h.tails[id] ?? "",
-        tailDigest: (id: string) =>
-            createHash("sha256").update(h.tails[id] ?? "").digest("hex")
+        // decisions.ts reads the screen through these two. Both run the fixture
+        // through the REAL `lastLines` and honour `n`, because production's
+        // getTail does: it trims each line, drops blank ones and keeps the last
+        // n. A mock that hashed the raw fixture would compute a digest
+        // production never computes, and every "did the screen move on?" test
+        // would then pass against a normalization that does not exist.
+        getTail: (id: string, n: number) => lastLines(h.tails[id] ?? "", n),
+        tailDigest: (id: string, n: number) =>
+            createHash("sha256").update(lastLines(h.tails[id] ?? "", n)).digest("hex")
     }
 })
 vi.mock("../src/main/db", () => ({

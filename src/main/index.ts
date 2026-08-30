@@ -311,7 +311,20 @@ function registerIpc(): void {
     // and the tile would keep offering the answer to the PREVIOUS question —
     // on the one surface whose Approve button does not re-check the screen
     // before typing. See REFRESH_MS for why one second.
-    startDecisionRefresh(() => latestSessions, sendDecisions)
+    // The phone is on the same clock as the tile. `publishDecisions` only calls
+    // back when the decision snapshot actually changed, so this rebroadcasts
+    // the session list exactly when a card should appear, change or clear --
+    // not once a second. Without it the desktop got the fix above and the phone
+    // did not: a pane already in attention takes no status transition when the
+    // agent asks its NEXT question, so nothing would push, and the phone would
+    // keep showing the previous question's buttons. Tapping one is refused
+    // ("moved-on", decisions.ts), so this is staleness, not a hole -- but a
+    // button that fails is exactly what the remote card exists to replace.
+    const onDecisionsChanged = (snapshot: DecisionSnapshot): void => {
+        sendDecisions(snapshot)
+        if (server.isRunning()) server.broadcastSessions(serverDeps)
+    }
+    startDecisionRefresh(() => latestSessions, onDecisionsChanged)
     // This snapshot is NOT only the remote server's input any more: it is the
     // status half of what main needs to classify permission prompts, and the
     // desktop's own Mission Control tile reads main's answer. So the renderer
