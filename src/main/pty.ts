@@ -1,6 +1,8 @@
 import * as nodePty from "@lydell/node-pty"
 import { EventEmitter } from "events"
 import { spawnSync } from "child_process"
+import { createHash } from "crypto"
+import { cleanTail, lastLines } from "../shared/tail"
 
 /**
  * A running pty and the tail of what it has printed.
@@ -48,6 +50,13 @@ type Entry = Live | Corpse
 // buffer itself on attach via getBuffer(). A session that exits leaves a corpse
 // behind, which lives until the pane is closed or deliberately restarted.
 const sessions = new Map<string, Entry>()
+
+// The cleaned tail main classifies from. Kept beside the raw buffer rather than
+// derived from it on demand: the raw buffer is bytes mid-escape-sequence, and a
+// one-pass clean over a slice of it can cut an escape in half. Fed the same
+// chunks the renderer's tail is fed, so the two agree by construction.
+const TAIL_CAP = 4000
+const tails = new Map<string, string>()
 
 /**
  * Emits "data" {id,data} and "exit" {id,exitCode,stale}.
@@ -115,6 +124,17 @@ export function terminalEnv(extra?: Record<string, string>): Record<string, stri
 
 export function getBuffer(id: string): string {
     return sessions.get(id)?.buffer ?? ""
+}
+
+/** The last `n` non-empty cleaned lines of a session's output. "" if unknown. */
+export function getTail(id: string, n: number): string {
+    const t = tails.get(id)
+    return t ? lastLines(t, n) : ""
+}
+
+/** sha256 of exactly what getTail(id, n) returns — binds a decision to a screen. */
+export function tailDigest(id: string, n: number): string {
+    return createHash("sha256").update(getTail(id, n)).digest("hex")
 }
 
 /**
@@ -197,6 +217,7 @@ export function createPty(opts: CreateOpts): void {
     let sentInitial = !opts.initialCommand
     proc.onData((data) => {
         live.buffer += data
+        tails.set(id, cleanTail(tails.get(id) ?? "", data, TAIL_CAP))
         if (live.buffer.length > BUFFER_CAP) {
             // Trim to the next line break so replay doesn't start mid escape-sequence.
             let trimmed = live.buffer.slice(-BUFFER_CAP)
@@ -310,6 +331,7 @@ export function killPty(id: string): void {
     if (e.kind === "live") killEntry(e)
     // A corpse is dropped the same way: this is the pane closing for good.
     sessions.delete(id)
+    tails.delete(id)
 }
 
 export function killAll(): void {
@@ -318,4 +340,5 @@ export function killAll(): void {
         killEntry(e)
     }
     sessions.clear()
+    tails.clear()
 }
