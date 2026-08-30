@@ -2,7 +2,7 @@ import * as nodePty from "@lydell/node-pty"
 import { EventEmitter } from "events"
 import { spawnSync } from "child_process"
 import { createHash } from "crypto"
-import { cleanTail, lastLines } from "../shared/tail"
+import { cleanTail, lastLines, CARRY_MAX, OSC, CSI, OTHER } from "../shared/tail"
 
 /**
  * A running pty and the tail of what it has printed.
@@ -57,6 +57,43 @@ const sessions = new Map<string, Entry>()
 // chunks the renderer's tail is fed, so the two agree by construction.
 const TAIL_CAP = 4000
 const tails = new Map<string, string>()
+
+// Anchored (no "g" flag, so no lastIndex state) copies of the escape-sequence
+// regexes, used only to ask "does the sequence starting here resolve within
+// the bytes I already have" - never to strip anything themselves.
+const OSC_START = new RegExp("^(?:" + OSC.source + ")")
+const CSI_START = new RegExp("^(?:" + CSI.source + ")")
+const OTHER_START = new RegExp("^(?:" + OTHER.source + ")")
+
+// Raw bytes held back from a session's tail because they might be an escape
+// sequence a chunk boundary cut in half. cleanTail's own control-char strip
+// treats an unresolved ESC as a stray byte and deletes it outright - correct
+// for real noise, fatal for a sequence that simply hasn't finished arriving:
+// the ESC is gone before the rest of the sequence lands, and what's left
+// renders as literal bracket-and-digit text. Held raw here until it resolves
+// into a complete match (or, per CARRY_MAX, until it's clearly not one).
+const rawCarry = new Map<string, string>()
+
+/**
+ * Split newly-arrived raw pty bytes (already prefixed with any carry from the
+ * previous chunk) into the prefix that's safe to run through cleanTail now
+ * and the suffix to hold for next time.
+ *
+ * Only the LAST escape byte in `raw` needs checking: anything before it was
+ * already resolved in an earlier call, by the same invariant this function
+ * maintains. Capped at CARRY_MAX so a lone byte that merely looks like the
+ * start of an escape - or a real one these regexes don't recognise, e.g. a
+ * DCS string - can't stall a session's tail forever.
+ */
+function safeSplit(raw: string): { clean: string; carry: string } {
+    const idx = raw.lastIndexOf("\x1b")
+    if (idx === -1 || raw.length - idx > CARRY_MAX) return { clean: raw, carry: "" }
+    const tail = raw.slice(idx)
+    if (OSC_START.test(tail) || CSI_START.test(tail) || OTHER_START.test(tail)) {
+        return { clean: raw, carry: "" }
+    }
+    return { clean: raw.slice(0, idx), carry: tail }
+}
 
 /**
  * Emits "data" {id,data} and "exit" {id,exitCode,stale}.
@@ -203,12 +240,24 @@ export function createPty(opts: CreateOpts): void {
         // event so every consumer (the exit record, the tile, the remote client)
         // learns this session is over instead of waiting forever.
         sessions.set(id, { kind: "dead", buffer: notice, exitCode: 1, diedAt: Date.now() })
+        // The corpse's buffer is the notice text, not whatever a prior process
+        // left behind at this id — the tail must match, or getTail would show a
+        // dead process's screen under a corpse that displays this one.
+        tails.set(id, cleanTail("", notice, TAIL_CAP))
+        rawCarry.delete(id)
         ptyEvents.emit("data", { id, data: notice })
         ptyEvents.emit("exit", { id, exitCode: 1, stale: false })
         return
     }
     const live: Live = { kind: "live", proc, buffer: "", agentId: opts.agentId }
     sessions.set(id, live)
+    // A restart (spawning over a corpse) reaches here with a fresh, empty
+    // buffer above — the tail must reset the same way, or it stays seeded
+    // with the dead process's leftover text until 4000 chars of new output
+    // push it out. That stale blend is exactly what a later check (comparing
+    // tailDigest before firing a keystroke at a live agent) exists to catch.
+    tails.set(id, "")
+    rawCarry.delete(id)
 
     // Fires `initialCommand` on the FIRST byte the shell prints, and never on a
     // timer. The 500 ms guess was made in the one process that can see that byte
@@ -217,7 +266,9 @@ export function createPty(opts: CreateOpts): void {
     let sentInitial = !opts.initialCommand
     proc.onData((data) => {
         live.buffer += data
-        tails.set(id, cleanTail(tails.get(id) ?? "", data, TAIL_CAP))
+        const { clean, carry } = safeSplit((rawCarry.get(id) ?? "") + data)
+        rawCarry.set(id, carry)
+        tails.set(id, cleanTail(tails.get(id) ?? "", clean, TAIL_CAP))
         if (live.buffer.length > BUFFER_CAP) {
             // Trim to the next line break so replay doesn't start mid escape-sequence.
             let trimmed = live.buffer.slice(-BUFFER_CAP)
@@ -332,6 +383,7 @@ export function killPty(id: string): void {
     // A corpse is dropped the same way: this is the pane closing for good.
     sessions.delete(id)
     tails.delete(id)
+    rawCarry.delete(id)
 }
 
 export function killAll(): void {
@@ -341,4 +393,5 @@ export function killAll(): void {
     }
     sessions.clear()
     tails.clear()
+    rawCarry.clear()
 }

@@ -28,6 +28,7 @@ const pty = await import("../src/main/pty")
 
 const ID = "t-tail"
 const feed = (s: string): void => fakes[fakes.length - 1].onDataCb?.(s)
+const exit = (code: number): void => fakes[fakes.length - 1].onExitCb?.({ exitCode: code })
 
 describe("main keeps a readable tail per session", () => {
     beforeEach(() => {
@@ -40,6 +41,20 @@ describe("main keeps a readable tail per session", () => {
         feed("\x1b[32mDo you want to proceed?\x1b[0m\r\n")
         feed("❯ 1. Yes\r\n  2. No (esc)\r\n")
         expect(pty.getTail(ID, 3)).toBe("Do you want to proceed?\n❯ 1. Yes\n2. No (esc)")
+    })
+
+    it("strips an escape sequence split across two chunks", () => {
+        feed("\x1b[3")
+        feed("2mok\x1b[0m\r\n")
+        expect(pty.getTail(ID, 1)).toBe("ok")
+    })
+
+    it("resets the tail on a restart over a corpse, instead of blending it with the dead process's text", () => {
+        feed("old process output\r\n")
+        exit(1) // process dies; the buffer (and, before the fix, the tail) survives as a corpse
+        pty.createPty({ id: ID }) // restart over the corpse - a fresh live entry
+        feed("new line\r\n")
+        expect(pty.getTail(ID, 16)).toBe("new line")
     })
 
     it("returns an empty string for a session it has never seen", () => {
