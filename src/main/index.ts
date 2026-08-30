@@ -12,7 +12,7 @@ import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerConfig, ServerDeps, ServerStartResult } from "./server"
 import * as devices from "./devices"
-import { clearDecision, decisionFor, refreshDecision } from "./decisions"
+import { clearDecision, decisionFor, publishDecisions, startDecisionRefresh } from "./decisions"
 import type { DecisionSnapshot } from "../shared/decision"
 import {
     gitStatus,
@@ -300,6 +300,18 @@ function registerIpc(): void {
                 mainWindow.webContents.send("mobile:new", { projectId })
         }
     }
+    const sendDecisions = (snapshot: DecisionSnapshot): void => {
+        if (mainWindow && !mainWindow.isDestroyed())
+            mainWindow.webContents.send("decisions:changed", snapshot)
+    }
+    // Main re-reads the screens on its own clock, not only when the renderer
+    // pushes. A status push cannot be the only trigger: a session already
+    // flagged attention whose pane is off screen takes no status transition
+    // when more output arrives (store.ts's pty handler), so nothing would push,
+    // and the tile would keep offering the answer to the PREVIOUS question —
+    // on the one surface whose Approve button does not re-check the screen
+    // before typing. See REFRESH_MS for why one second.
+    startDecisionRefresh(() => latestSessions, sendDecisions)
     // This snapshot is NOT only the remote server's input any more: it is the
     // status half of what main needs to classify permission prompts, and the
     // desktop's own Mission Control tile reads main's answer. So the renderer
@@ -307,17 +319,10 @@ function registerIpc(): void {
     // `remote.enabled` gate on this call had to go for exactly that reason.
     ipcMain.on("mobile:sessions", (_e, sessions: RemoteSession[]) => {
         latestSessions = sessions
-        // Re-derive every session's decision from the tails main already holds,
-        // then hand the renderer the whole result. One classifier, one answer:
-        // the tile and the phone card cannot describe the same prompt
-        // differently because there is only one description.
-        const snapshot: DecisionSnapshot = {}
-        for (const s of sessions) {
-            const d = refreshDecision(s.termId, s.status, s.isAgent)
-            if (d) snapshot[s.termId] = d
-        }
-        if (mainWindow && !mainWindow.isDestroyed())
-            mainWindow.webContents.send("decisions:changed", snapshot)
+        // Forced: the renderer asked, so it gets an answer even if nothing
+        // changed. A renderer that just reloaded has an empty cache, and
+        // deduplicating its first push would leave it that way.
+        publishDecisions(sessions, sendDecisions, true)
         if (server.isRunning()) server.broadcastSessions(serverDeps)
     })
     ipcMain.handle("decisions:for", (_e, id: string) => decisionFor(String(id)))

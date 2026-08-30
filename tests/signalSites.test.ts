@@ -358,6 +358,7 @@ describe("the quiet-after field still commits rather than clamps as you type", (
 //      is never filled and, again, every unit test still passes.
 const APP = src("../src/renderer/src/App.tsx")
 const TAIL_MOD = src("../src/renderer/src/missionTail.ts")
+const MAIN = src("../src/main/index.ts")
 
 describe("main is the only classifier, and it is actually fed (task 4)", () => {
     const app = codeLines(APP)
@@ -377,6 +378,14 @@ describe("main is the only classifier, and it is actually fed (task 4)", () => {
     it("subscribes to main's decisions", () => {
         expect(linesWith("window.api.decisions.onChanged(", app)).toHaveLength(1)
         expect(linesWith("setDecisions", app).length).toBeGreaterThan(0)
+    })
+
+    it("re-derives on main's own clock, not only on a renderer push", () => {
+        // Delete this one call and every unit test still passes, while a
+        // background tile in `attention` serves the previous screen's answer
+        // forever — store.ts takes no status transition on that path, so
+        // nothing pushes. See REFRESH_MS in main/decisions.ts.
+        expect(linesWith("startDecisionRefresh(", codeLines(MAIN))).toHaveLength(1)
     })
 
     it("leaves no approval classifier in the renderer's tile path", () => {
