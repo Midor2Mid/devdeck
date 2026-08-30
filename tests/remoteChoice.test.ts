@@ -305,6 +305,64 @@ describe("{t:\"choice\"} - answering a permission prompt from a phone (Task 6)",
         }
     })
 
+    it("writes to the terminal main recorded, not the one on the wire", async () => {
+        // The `id` field is omitted entirely. If the handler ever wrote to the
+        // wire's terminal instead of `ConsumeResult.termId`, it would write to
+        // "" -- which writePty silently drops -- and every other test would
+        // still pass, because they all send an `id` that the cross-check has
+        // already forced to equal the owner.
+        const d = menuOn("t1")
+        const ws = await pairedSocket()
+        try {
+            await attach(ws, "t1")
+            const res = await tap(ws, { decisionId: d.id, send: "1" })
+            expect(res).toEqual({ t: "choice:res", decisionId: d.id, outcome: "accepted" })
+            await waitForWrites(1)
+            expect(h.written).toEqual([["t1", "1"]])
+        } finally {
+            ws.close()
+        }
+    })
+
+    it("does not bring the card back while the answered screen is still up", async () => {
+        // The registry re-derives on a 1s tick. An answered prompt whose screen
+        // has not changed re-derives the id just spent, and re-minting it put an
+        // answerable card back on the desktop tile, whose button does not consume
+        // or re-check the digest.
+        const d = menuOn("t1")
+        const ws = await pairedSocket()
+        try {
+            await attach(ws, "t1")
+            expect((await tap(ws, { decisionId: d.id, send: "1" })).outcome).toBe("accepted")
+            expect(refreshDecision("t1", "attention", true)).toBeNull()
+            expect(h.written).toEqual([["t1", "1"]])
+        } finally {
+            ws.close()
+        }
+    })
+
+    it("mints again once the session has left attention, same screen or not", async () => {
+        // The escape hatch, so the refusal above cannot strand a session: leaving
+        // attention is main's signal that the next prompt is a new question.
+        const d = menuOn("t1")
+        const ws = await pairedSocket()
+        try {
+            await attach(ws, "t1")
+            expect((await tap(ws, { decisionId: d.id, send: "1" })).outcome).toBe("accepted")
+            expect(refreshDecision("t1", "working", true)).toBeNull()
+            const again = refreshDecision("t1", "attention", true)
+            expect(again?.id).toBe(d.id)
+            const res = await tap(ws, { decisionId: d.id, send: "1" })
+            expect(res.outcome).toBe("accepted")
+            expect(h.written).toEqual([
+                ["t1", "1"],
+                ["t1", "1"]
+            ])
+        } finally {
+            ws.close()
+        }
+    })
+
     it("refuses a second tap on the same decision", async () => {
         const d = menuOn("t1")
         const ws = await pairedSocket()

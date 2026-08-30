@@ -469,6 +469,17 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     // socket is attached to, exactly once. Everything else is a
                     // refusal that says why.
                     //
+                    // Be honest about what the attach check is worth: `case
+                    // "attach"` takes any id the client sends, so a paired device
+                    // can attach to anything it saw on the session list and clear
+                    // this. It is not a boundary against a hostile paired device --
+                    // `case "input"` already writes arbitrary bytes to an arbitrary
+                    // pty, so pairing IS the trust boundary and this handler grants
+                    // nothing beyond it. What the check buys is that a tap can only
+                    // answer a session the device actually opened, which is what
+                    // keeps a mis-addressed or replayed frame from firing into a
+                    // terminal nobody was looking at.
+                    //
                     // Note what is NOT read here: `id`. The terminal a decision
                     // belongs to comes from main's own record (`decisionOwner`,
                     // then `r.termId`), never from the wire - otherwise a device

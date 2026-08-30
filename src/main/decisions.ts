@@ -54,10 +54,10 @@ export function decisionFor(termId: string): PendingDecision | null {
  * "consumed" when it is in fact a fresh question. Clearing is the only moment we
  * are told the screen is gone, so it is where the record is dropped.
  *
- * This does NOT weaken the once-only rule. Re-minting after a consume happens
- * without a clear (the tail is unchanged, so `refreshDecision` never reaches the
- * clearing branch), which is exactly how a re-shown card still answers
- * "Already answered."
+ * This does NOT weaken the once-only rule. While the screen is unchanged the
+ * spent id is still recorded, and `refreshDecision` refuses to mint it a second
+ * time, so no card comes back to be answered on either surface. Only a session
+ * that has left attention -- a genuinely new question -- gets here.
  */
 export function clearDecision(termId: string): void {
     pending.delete(termId)
@@ -87,10 +87,26 @@ export function refreshDecision(
     const prev = pending.get(termId)
     if (prev && prev.tailHash === tailHash) return prev
 
+    // The whole digest, not a prefix of it: the id IS the screen binding, and
+    // two screens that differ only near the end must not share an id.
+    const id = "dec:" + termId + ":" + tailHash
+    // Which also means an ANSWERED prompt whose screen has not changed re-derives
+    // the id we just spent. Do not mint it again. Re-minting brought the card
+    // back on the next 1s tick: harmless on the phone, where the second tap is
+    // refused, but the desktop tile reads this same decision and its button
+    // writes straight to the pty without consuming or re-checking the digest --
+    // so the card that came back was answerable, unchecked, at the desk. Staying
+    // null until the screen actually moves is what makes "answered once" hold on
+    // both surfaces rather than only on the remote one.
+    //
+    // Nothing is cleared here: dropping the spent record is exactly what would
+    // let this id be minted again. `clearDecision` owns that, and it is reached
+    // when the session leaves attention -- which is the real signal that the
+    // next identical screen is a new question rather than this one still up.
+    if (consumed.has(id)) return null
+
     const decision: PendingDecision = {
-        // The whole digest, not a prefix of it: the id IS the screen binding, and
-        // two screens that differ only near the end must not share an id.
-        id: "dec:" + termId + ":" + tailHash,
+        id,
         termId,
         kind: prompt.kind,
         question: prompt.question,

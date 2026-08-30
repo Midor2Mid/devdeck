@@ -95,25 +95,52 @@ describe("consuming a decision", () => {
         expect(decisionFor("t1")).toBeNull()
     })
 
-    // Adjudicated as CORRECT, and pinned here because it reads like a bug and a
-    // later refactor would be tempted to "fix" it with suppression. Between the
-    // keystroke being sent and the agent processing it, the prompt is still on
-    // screen. The tail is therefore unchanged, so refreshDecision takes neither
-    // clearing branch, finds no `prev` (consume deleted it), and re-mints the
-    // SAME id — the card briefly reappears. That is honest: the card reflects
-    // what is actually on screen. The second tap must then be refused, not
-    // fired, because `consumed` still holds that id.
-    it("re-mints the same decision while the prompt is still on screen, and refuses the second answer", () => {
+    // REVERSED, deliberately. This previously pinned the opposite behaviour —
+    // that between the keystroke being sent and the agent processing it the
+    // prompt is still on screen, so the same id is re-minted and the card
+    // briefly reappears — and was adjudicated CORRECT on the grounds that the
+    // card should mirror what is actually on screen, with the second tap
+    // refused because `consumed` still holds the id.
+    //
+    // That adjudication was sound for the surface it was written for. It has
+    // been overtaken: the desktop tile now reads THIS registry (the "one
+    // classifier" change), and its Approve button calls store.ts's
+    // `respondApproval`, which writes to the pty directly — it never reaches
+    // `consumeDecision`, so it is not refused by `consumed` and does not
+    // re-check the digest. The re-minted card was therefore answerable a second
+    // time, unchecked, at the desk. "Refused because consumed" only ever
+    // described the remote path.
+    //
+    // So the mint is suppressed instead, and the honesty argument is paid for
+    // in `clearDecision`: the record is dropped when the session leaves
+    // attention, which is the real signal that the next identical screen is a
+    // new question. Making the desktop button consume like the phone does would
+    // let this be reconsidered; until then, not offering the second answer beats
+    // mirroring the screen.
+    it("does not re-mint a decision that was already answered on the same screen", () => {
         const first = refreshDecision("t1", "waiting", true)!
         expect(consumeDecision(first.id, "1")).toEqual({ ok: true, send: "1", termId: "t1" })
 
-        // The agent has not caught up: same screen, so the same decision returns.
-        const again = refreshDecision("t1", "waiting", true)
-        expect(again?.id).toBe(first.id)
-        expect(decisionFor("t1")?.id).toBe(first.id)
+        // Same screen, and the agent has not caught up: no card comes back.
+        expect(refreshDecision("t1", "waiting", true)).toBeNull()
+        expect(decisionFor("t1")).toBeNull()
 
-        // ...and tapping it a second time answers "Already answered."
+        // The spent record is what suppresses it, so it still refuses directly.
         expect(consumeDecision(first.id, "1")).toEqual({ ok: false, reason: "consumed" })
+    })
+
+    it("mints again for the same screen once the session has left attention", () => {
+        const first = refreshDecision("t1", "waiting", true)!
+        expect(consumeDecision(first.id, "1")).toEqual({ ok: true, send: "1", termId: "t1" })
+        expect(refreshDecision("t1", "waiting", true)).toBeNull()
+
+        // Leaving attention clears the spent record — a genuinely new question
+        // can reuse the screen it is asked on, so suppression must not be
+        // permanent.
+        expect(refreshDecision("t1", "working", true)).toBeNull()
+        const fresh = refreshDecision("t1", "waiting", true)
+        expect(fresh?.id).toBe(first.id)
+        expect(consumeDecision(fresh!.id, "1")).toEqual({ ok: true, send: "1", termId: "t1" })
     })
 })
 
