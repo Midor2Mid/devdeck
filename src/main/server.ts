@@ -27,6 +27,7 @@ import {
     type AuthResult
 } from "./devices"
 import { exitNotice } from "../renderer/src/termExit"
+import { decisionFor } from "./decisions"
 
 export interface RemoteSession {
     termId: string
@@ -37,6 +38,23 @@ export interface RemoteSession {
     badge: string
     isAgent: boolean
     status: "working" | "idle" | "attention" | "waiting"
+    /**
+     * A permission prompt this device may answer. `options` rather than a pair of
+     * fields so the wire format can grow to N choices without another protocol
+     * change; `tail` so the phone can show the raw screen beside the parsed
+     * question - the parsed label is the part an agent controls.
+     *
+     * Structurally this is `DecisionView` (src/shared/decision.ts), restated here
+     * because it is a wire contract: what a paired phone parses must be spelled
+     * out where the payload is defined.
+     */
+    pending?: {
+        id: string
+        kind: "menu" | "yesno"
+        question: string
+        tail: string
+        options: { label: string; send: string }[]
+    }
 }
 
 export interface ServerConfig {
@@ -127,8 +145,40 @@ function send(ws: WebSocket, msg: unknown): void {
 const projectRoots = (): string[] => listProjects().projects.map((p) => p.path)
 const inProject = (p: string): boolean => !!p && isWithinRoots(p, projectRoots())
 
+/**
+ * The session list as it goes on the wire: main's snapshot, plus the pending
+ * decision for any session that has one.
+ *
+ * The decision is only ever READ here. Minting, the attention/waiting gate and
+ * the screen binding all live in `decisions.ts` - `server.ts` classifying
+ * anything itself is how the phone and the desktop would come to describe one
+ * prompt two different ways.
+ *
+ * The projection is explicit rather than a spread of the whole record: main's
+ * `PendingDecision` also carries `termId`, `tailHash` and `createdAt`, which are
+ * its own bookkeeping and have no business leaving this machine. Sessions
+ * without a decision are passed through untouched, so the key is absent rather
+ * than present-and-empty.
+ */
+function withDecisions(sessions: readonly RemoteSession[]): RemoteSession[] {
+    return sessions.map((s) => {
+        const d = decisionFor(s.termId)
+        if (!d) return s
+        return {
+            ...s,
+            pending: {
+                id: d.id,
+                kind: d.kind,
+                question: d.question,
+                tail: d.tail,
+                options: d.options.map((o) => ({ label: o.label, send: o.send }))
+            }
+        }
+    })
+}
+
 export function broadcastSessions(deps: ServerDeps): void {
-    const sessions = deps.getSessions()
+    const sessions = withDecisions(deps.getSessions())
     for (const c of clients) send(c, { t: "sessions", sessions })
 }
 
@@ -375,7 +425,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         ws.attached = new Set()
         ws.deviceId = req.deviceId
         clients.add(ws)
-        send(ws, { t: "sessions", sessions: deps.getSessions() })
+        send(ws, { t: "sessions", sessions: withDecisions(deps.getSessions()) })
 
         ws.on("message", (raw) => {
             let msg: Record<string, unknown>
@@ -403,7 +453,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     if (typeof msg.projectId === "string") deps.requestNewSession(msg.projectId)
                     break
                 case "list":
-                    send(ws, { t: "sessions", sessions: deps.getSessions() })
+                    send(ws, { t: "sessions", sessions: withDecisions(deps.getSessions()) })
                     break
                 case "http": {
                     const req = msg.req as Parameters<typeof httpSend>[0]

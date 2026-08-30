@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { WebSocket } from "ws"
 import { rmSync } from "fs"
+import type { RemoteSession } from "../src/main/server"
 
 // Same temp-userData + no-DPAPI setup as tests/devices.test.ts, since server.ts
 // pulls in devices.ts (which needs `app`/`safeStorage`).
@@ -11,7 +12,9 @@ const h = vi.hoisted(() => {
     const { tmpdir } = require("os")
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { join } = require("path")
-    return { dir: mkdtempSync(join(tmpdir(), "server-remote-")) }
+    // `tails` is what the stubbed pty hands the decision registry - see the
+    // pty mock below and the Task 5 block at the bottom of this file.
+    return { dir: mkdtempSync(join(tmpdir(), "server-remote-")), tails: {} as Record<string, string> }
 })
 
 vi.mock("electron", () => ({
@@ -24,11 +27,19 @@ vi.mock("electron", () => ({
 vi.mock("../src/main/pty", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { EventEmitter } = require("events")
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createHash } = require("crypto")
     return {
         ptyEvents: new EventEmitter(),
         getBuffer: () => "",
         writePty: () => {},
-        resizePty: () => {}
+        resizePty: () => {},
+        // decisions.ts reads the screen through these two. The digest is a real
+        // sha256 of the same text `getTail` returns, so the registry's
+        // "did the screen move on?" check behaves as it does in production.
+        getTail: (id: string) => h.tails[id] ?? "",
+        tailDigest: (id: string) =>
+            createHash("sha256").update(h.tails[id] ?? "").digest("hex")
     }
 })
 vi.mock("../src/main/db", () => ({
@@ -52,10 +63,13 @@ vi.mock("../src/main/guards", async (importOriginal) => {
 const { start, stop, closeDeviceSockets } = await import("../src/main/server")
 const { pairingToken, revokeDevice, listDevices, __resetCacheForTest } =
     await import("../src/main/devices")
+const { refreshDecision, clearDecision } = await import("../src/main/decisions")
 
 const PORT = 18732
 const base = `http://127.0.0.1:${PORT}`
-const deps = { getSessions: () => [], requestNewSession: () => {} }
+// Mutable so a test can decide what main is reporting; reset in beforeEach.
+let sessions: RemoteSession[] = []
+const deps = { getSessions: () => sessions, requestNewSession: () => {} }
 
 async function waitForListen(): Promise<void> {
     const deadline = Date.now() + 3000
@@ -104,6 +118,7 @@ beforeEach(async () => {
     // devices.ts (I4) caches its store/decrypted tokens in memory; the file
     // delete above does nothing to that cache on its own.
     __resetCacheForTest()
+    sessions = []
     await start({ port: PORT, bind: "lan", deviceTtlDays: 30, tls: false }, deps)
     await waitForListen()
 })
@@ -365,5 +380,95 @@ describe("remote server - the auth path is rate-limited (remedy 15)", () => {
         await expect(connectWs({ Cookie: `devdeck_device=${token}` })).rejects.toMatchObject({
             statusCode: 401
         })
+    })
+})
+
+describe("the pending decision rides the session broadcast (Task 5)", () => {
+    // A real Claude Code permission prompt, shaped exactly as `getTail` would
+    // hand it over: a question, a pointed "1. Yes", and an "(esc)" reject.
+    const PROMPT_TAIL = [
+        "Do you want to proceed?",
+        "❯ 1. Yes",
+        "  2. No, and tell Claude what to do differently (esc)"
+    ].join("\n")
+
+    function agentSession(termId: string): RemoteSession {
+        return {
+            termId,
+            projectId: "p1",
+            projectName: "DevDeck",
+            projectPath: "D:/devdeck",
+            tabName: "claude",
+            badge: "AI",
+            isAgent: true,
+            status: "attention"
+        }
+    }
+
+    /** The next `{t}` frame the server pushes down `ws`. */
+    function nextMessage(ws: WebSocket, t: string): Promise<{ sessions: RemoteSession[] }> {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error(`no "${t}" frame arrived`)), 3000)
+            ws.on("message", (raw) => {
+                const msg = JSON.parse(raw.toString())
+                if (msg.t !== t) return
+                clearTimeout(timer)
+                resolve(msg)
+            })
+        })
+    }
+
+    /** Pair a device, then read back the session the server broadcasts for
+     *  `termId` - the literal bytes a phone receives, not an internal object. */
+    async function remoteSessionFor(termId: string): Promise<RemoteSession | undefined> {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const ws = await connectWs({ Cookie: `devdeck_device=${token}` })
+        try {
+            const frame = nextMessage(ws, "sessions")
+            // The server pushes a session list on connect; asking again makes
+            // the test independent of whether that first frame beat the listener.
+            ws.send(JSON.stringify({ t: "list" }))
+            return (await frame).sessions.find((s) => s.termId === termId)
+        } finally {
+            ws.close()
+        }
+    }
+
+    afterEach(() => {
+        clearDecision("t1")
+        clearDecision("t2")
+        h.tails = {}
+    })
+
+    it("carries a pending decision on the session broadcast", async () => {
+        sessions = [agentSession("t1")]
+        h.tails["t1"] = PROMPT_TAIL
+        expect(refreshDecision("t1", "attention", true)).toBeTruthy()
+
+        const s = await remoteSessionFor("t1")
+        expect(s?.pending).toEqual({
+            id: expect.stringMatching(/^dec:t1:/),
+            kind: "menu",
+            question: "Do you want to proceed?",
+            tail: expect.stringContaining("❯ 1. Yes"),
+            options: [
+                { label: "Approve", send: "1" },
+                { label: "Deny", send: "\x1b" }
+            ]
+        })
+    })
+
+    it("omits pending entirely when there is nothing to answer", async () => {
+        sessions = [agentSession("t2")]
+        // No tail, so the registry mints nothing.
+        expect(refreshDecision("t2", "attention", true)).toBeNull()
+
+        const s = await remoteSessionFor("t2")
+        expect(s).toBeTruthy()
+        // Not merely undefined: an explicit `null` on the wire would make the
+        // client's `if (s.pending)` guard the only thing standing between a
+        // phone and a card it cannot answer.
+        expect(s).not.toHaveProperty("pending")
     })
 })
