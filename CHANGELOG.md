@@ -30,6 +30,17 @@ terminal and type the digit yourself. Now the question travels with it.
 
 ### Fixed
 
+- **A region can fail without taking the cockpit with it.** One error boundary
+  wrapped the whole app, so a throw in the Database or API panel blanked the
+  window while several agents kept running in main — invisibly, with nothing
+  able to answer them. The topbar, the deck and each panel now fail on their
+  own, and the view recovers when you switch away and back.
+- **The wants-you count stops counting an agent you have already looked at.** It
+  counted every session that had finished its turn, and the acknowledgement only
+  fired when you *navigated* to a pane — so sitting on the pane while an agent
+  finished left the light on. A session that has been seen keeps saying
+  `waiting`; only the count changes, and the deck key says so by form (the
+  breathe stops, the dot becomes a hollow ring) rather than by colour.
 - **A project remembers the view it was last in.** The main view was global while
   the active tab and pane were per project, so switching projects landed you in
   the previous project's view pointed at the new project's data.
