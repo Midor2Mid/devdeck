@@ -4482,6 +4482,36 @@ button .ic,
 }
 
 
+/* One region failed, not the app. Deliberately the same card vocabulary as the
+   root crash above and no new tokens — a region crash must be recognisable as
+   the same kind of event, and it must not be prettier than it is serious. It
+   fills only the region it replaced, so the rest of the cockpit is still there
+   beside it, which is the whole message. */
+.region-crash {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+}
+.region-crash-card {
+    max-width: 440px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 10px);
+    padding: 18px 20px;
+}
+.region-crash-card h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+}
+.region-crash-card p {
+    margin: 0;
+    line-height: 1.5;
+}
+
 /* ---------- Activity drawer ---------- */
 .drawer-backdrop {
     position: fixed;
