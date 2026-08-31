@@ -320,6 +320,20 @@ interface AppState extends Persisted {
 
     // Agent session awareness (runtime-only)
     agentStatus: Record<string, AgentStatus>
+    /**
+     * Sessions whose current state you have already looked at or acted on.
+     *
+     * An ACKNOWLEDGEMENT axis, not a state: `waiting` stays `waiting` whether
+     * seen or not, and `resolveTileState` never receives this - only the
+     * wants-you count and one CSS class read it. Keeping the line sharp is the
+     * whole safety argument, because visibility-derived facts leaking into
+     * classification is a defect this app has already paid to remove once.
+     *
+     * Deliberately runtime-only. A persisted acknowledgement map is a new schema
+     * for a convenience, and a relaunch that lights everything up again is the
+     * honest reset.
+     */
+    seen: Record<string, true>
     lastAgentTermId: string | null
     notifications: AppNotification[]
     dismissNotification: (id: string) => void
@@ -477,6 +491,14 @@ function validateTabs(raw: Record<string, Tab[]> | undefined): Record<string, Ta
     return out
 }
 
+/** A copy of `rec` without `key`, or `rec` itself when the key was not there. */
+function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
+    if (!(key in rec)) return rec
+    const next = { ...rec }
+    delete next[key]
+    return next
+}
+
 const MAIN_VIEWS: readonly MainView[] = [
     "mission",
     "tasks",
@@ -591,7 +613,23 @@ export const useStore = create<AppState>((set, get) => {
         } else {
             pendingSince.delete(termId)
         }
-        set((s) => ({ agentStatus: { ...s.agentStatus, [termId]: status } }))
+        // A transition is news, so it is unseen - except when it happened in
+        // front of you. `ack` only runs when you NAVIGATE to a pane, so without
+        // this the count keeps counting an agent that finished its turn while
+        // you sat there watching it do so. Note what this does NOT do: the
+        // status is recorded either way. Visibility gates the acknowledgement,
+        // never the classification (M4).
+        const seenNow = status === "waiting" && isVisible(termId)
+        set((s) => ({
+            agentStatus: { ...s.agentStatus, [termId]: status },
+            seen: seenNow ? { ...s.seen, [termId]: true as const } : omit(s.seen, termId)
+        }))
+    }
+
+    /** Mark a session acknowledged without touching what it is. */
+    const markSeen = (termId?: string): void => {
+        if (!termId) return
+        set((s) => (s.seen[termId] ? s : { seen: { ...s.seen, [termId]: true as const } }))
     }
 
     const ack = (termId?: string): void => {
@@ -599,6 +637,7 @@ export const useStore = create<AppState>((set, get) => {
         pendingSince.delete(termId)
         set((s) => ({
             lastAgentTermId: termId,
+            seen: { ...s.seen, [termId]: true as const },
             agentStatus:
                 s.agentStatus[termId] === "attention" || s.agentStatus[termId] === "waiting"
                     ? { ...s.agentStatus, [termId]: "idle" }
@@ -984,6 +1023,7 @@ export const useStore = create<AppState>((set, get) => {
             const paneHold = { ...s.paneHold }
             delete paneHold[termId]
             return {
+                seen: omit(s.seen, termId),
                 agentStatus,
                 termInit,
                 termAgents,
@@ -1101,6 +1141,7 @@ export const useStore = create<AppState>((set, get) => {
         pendingApiRequest: null,
         pendingEditorOpen: null,
         agentStatus: {},
+        seen: {},
         lastAgentTermId: null,
         closedSessions: [],
         zoomedPane: undefined,
@@ -2166,6 +2207,9 @@ export const useStore = create<AppState>((set, get) => {
 
         respondApproval: (termId, keys) => {
             window.api.pty.input(termId, keys)
+            // Answering IS acknowledging: whatever the agent's status still says
+            // until its next byte arrives, you have dealt with this one.
+            markSeen(termId)
             pushActivity("attention", termId, "answered prompt")
         },
 

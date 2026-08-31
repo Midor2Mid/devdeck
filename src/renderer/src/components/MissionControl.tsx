@@ -39,6 +39,7 @@ export function MissionControl(): JSX.Element {
     const tabsByProject = useStore((s) => s.tabsByProject)
     const agentStatus = useStore((s) => s.agentStatus)
     const termAgents = useStore((s) => s.termAgents)
+    const seen = useStore((s) => s.seen)
     const termNames = useStore((s) => s.termNames)
     // The two places an outstanding expectation on a session is recorded. Both
     // are stable slices, so subscribing to them is safe; the Set is derived in
@@ -232,7 +233,7 @@ export function MissionControl(): JSX.Element {
     // The same predicate the deck bar's flag reads (tileState's wantsYou) — see
     // its doc comment for why this app cannot afford two counts for one
     // question again.
-    const attention = resolved.filter((r) => wantsYou(r.input, now)).length
+    const attention = resolved.filter((r) => wantsYou(r.input, now, !!seen[r.s.termId])).length
 
     return (
         <div className="mission">

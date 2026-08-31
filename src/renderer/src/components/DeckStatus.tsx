@@ -18,6 +18,7 @@ export function DeckStatus(): JSX.Element {
     // Stable slices only — the awaited Set below is derived in the component
     // body, not inside a useStore selector, to avoid the getSnapshot trap (a
     // selector returning a fresh object/array every call blanks the component).
+    const seen = useStore((s) => s.seen)
     const boardTasks = useStore((s) => s.boardTasks)
     const pipelineRun = useStore((s) => s.pipelineRun)
     const termAgents = useStore((s) => s.termAgents)
@@ -116,7 +117,8 @@ export function DeckStatus(): JSX.Element {
                 awaited: awaited.has(s.termId),
                 alive: !!termAgents[s.termId]
             },
-            now
+            now,
+            !!seen[s.termId]
         )
     ).length
 
