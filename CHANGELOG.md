@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 - 2026-09-01
 
 ### Answer a permission prompt from your phone
 
