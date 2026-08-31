@@ -66,14 +66,26 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 - Reach from anywhere: **Tailscale** (private, recommended) — bind is 0.0.0.0 but token-gated
 - [x] **Push-on-attention** (2026-06-29) — mobile client title-badge + beep + best-effort OS notification when an agent flips to *attention* and you're not looking; the no-Tailscale case now warns that a plain-LAN link is unencrypted
 - [x] **Constant-time token auth** (2026-06-29) — `tokenOk` (sha256 + `timingSafeEqual`) closes the `!==` timing side-channel; mobile-client `esc()` now escapes quotes (latent attribute XSS). Covered by `tests/server-guards.test.ts`
-- [x] **TLS / HTTPS option** (2026-06-30) — opt-in self-signed cert (`tlscert.ts` via `selfsigned`, SANs for localhost + LAN/Tailscale IPs, cached + reused); serves https/wss so the link + token are encrypted even on plain LAN and the mobile client gets a secure context. Verified live (200 with token, 401 without, over TLS)
+- [x] **TLS / HTTPS option** (2026-06-30) — opt-in self-signed cert (`tlscert.ts` via `selfsigned`, SANs for localhost + LAN/Tailscale IPs, cached + reused); serves https/wss so the link + token are encrypted even on plain LAN, and the session cookie can carry `Secure` + the `__Host-` prefix. Verified live (200 with token, 401 without, over TLS). Note: accepting the self-signed warning does **not** produce a secure context, so service workers and Web Push stay unavailable — a trusted cert (`tailscale cert`) is what would buy that
 - [x] **Mobile coding + AI** (2026-07-16) — the web client gained a Files view
       (browse project tree, open/edit/save, confined to project roots via
       `isWithinRoots`) and an AI view (compose a prompt with tap-to-insert
       `@file` mentions, fire at any running agent). ws: projects/fs:tree/read/
       write/files. Verified live.
-- [ ] Later: full **native** mobile app (the web client is now a real cockpit,
-      not just terminals)
+- [ ] **Structured approve/deny on the phone** (in flight, `feat/remote-approve-deny`) —
+      `approval.ts` + `cleanTail`/`lastLines` moved to `src/shared/`, `src/main/pty.ts`
+      is the single classifier, and main mints a `PendingDecision` (paused-state gated,
+      `tailHash`-bound, single-use) carried as `RemoteSession.pending` on the existing
+      `broadcastSessions`. One inbound `{t:"choice"}`, token-allowlisted, three-valued
+      ack. **Remaining: the card in `CLIENT_HTML`** — main mints and accepts, and no
+      phone can yet send. See `.superpowers/orca-2026-08-30/T1-build-list.md`.
+- [ ] Later, and only on a named trigger: PWA shell + Web Push + a trusted certificate
+      (`tailscale cert`). Parked because Orca ships a native app *and* a cloud relay and
+      still cannot wake a closed phone — its own code says the WebSocket "doubles as the
+      push channel". Promote when the recorded complaint is specifically "I missed it
+      because the tab was closed".
+- CUT: full **native** mobile app. The only thing native buys over the web client is
+  plain `ws://` without a secure-context rule. Not worth an app.
 
 ## Milestone 4 — Network debugging ✅ (2026-06-28)
 
@@ -337,3 +349,6 @@ degrade that file type to plaintext with no error anywhere.
 | 2026-06-27 | DB passwords encrypted at rest via Electron `safeStorage` (DPAPI) | Avoid plaintext credentials on disk; passwords are never sent back to the renderer (only referenced by connection id). |
 | 2026-06-27 | Claude status from activity + bell, not output parsing | Coupling to Claude CLI's text output is fragile (NOTES risk). Output-activity (working/idle) and the bell char `\x07` (attention) are format-independent and intentional signals. Visibility-aware so viewing a session clears attention and buffer-replay doesn't false-trigger. |
 | 2026-06-27 | Mobile access = terminals-first + Tailscale; pty made multi-client | A remote terminal is RCE surface, so: off by default, token required, prefer Tailscale (no public exposure). Pty refactored to an event bus + per-client buffer replay so phone + desktop attach to the same sessions. Session metadata stays in the renderer and is synced to the server. |
+| 2026-08-30 | No relay, no pairing service, no daemon, no native mobile app. The server lives in the main process; close the window and everything stops. | Promoted from an accident of architecture to a decision. Orca's 98 open zombie-session issues and its relay bug wall (#12518, #12931, #13735, #16789) are the bill for the alternative; #15615 is its own users asking for the Tailscale path DevDeck already ships. |
+| 2026-08-30 | No agent map, no dashboard pop-out window, no supervision surface behind an experimental flag. | Orca shipped an agent map and deleted it (PR #15853, v1.4.190) "to simplify the dashboard UI and reduce maintenance overhead". Its dashboard is flag-gated, and the consequence is users filing #15573/#16885 asking for a kanban that already exists. |
+| 2026-08-31 | No split, docked or multi-pane stage. One main view at a time; a project remembers which one. | Prompted by 1DevTool (terminal + browser + DB on one screen). Disqualifying on mechanism, not taste: `TerminalPane` resizes the pty to the pane, so a half-width stage halves `cols`, the agent wraps its permission prompt, and `detectApproval`'s `(esc)` + tail-position rules stop matching — Approve/Deny then vanishes from the tile, the Overview row **and** the phone, silently. Evidence for the pain was nil (no user quote anywhere asks for two views at once), and 1DevTool shipped seven layout modes in nine months on $6.6k lifetime revenue while its founder froze the DB pane by name for "maintenance surface". Full argument: `.superpowers/1devtool-2026-08-31/T1-verdict.md`. |

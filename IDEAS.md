@@ -34,6 +34,53 @@ have: **mobile remote access** (Tailscale), **terminal record/replay**, and the
 - 26 database engines (we have PG/MySQL/SQLite — enough).
 - Standalone "memory manager" UI (Claude already manages memory).
 
+## Checked against Orca and deliberately not built (2026-08-30)
+
+Full reasoning in `.superpowers/orca-2026-08-30/T1-build-list.md`. Do not re-propose
+without engaging it.
+
+- Agent map / spatial canvas — **Orca built it and deleted it** (PR #15853).
+- Dashboard pop-out window; right-sidebar activity bar; floating terminal; tab-group
+  docking — four surfaces answering questions one sorted list answers.
+- Worktree-per-agent as an app-managed lifecycle (85 cleanup files, 9 open
+  reconciliation bugs) and the worktree-as-navigation-object frame, which would
+  silently retire "a project is the unit of context".
+- Agent hibernation; silent stale-to-idle decay (a signal that lies).
+- Native mobile app, hosted relay, desktop-to-desktop pairing, headless daemon.
+- Design Mode (element → HTML+CSS+screenshot → prompt): passes the agent edge, killed
+  because this developer writes C# backends. Revisit when the work is frontend.
+- Terminal-theme import from Warp/Ghostty; i18n; in-product feature wall.
+- A `yolo/manual/mixed` permission chip — it lies on any custom arg.
+
+Two things the review recommended that DevDeck **already ships**: attention counts on a
+row you pass anyway (`DeckStatus.tsx`, `wantsYou`), and retaining a dead session's tile
+(`specs/2026-08-25-dead-pane-lifecycle-design.md`).
+
+## Checked against 1DevTool and deliberately not built (2026-08-31)
+
+Full reasoning in `.superpowers/1devtool-2026-08-31/T1-verdict.md`; competitor evidence in
+`R1-competitor.md`, mechanism cost in `R2-feasibility.md`.
+
+- **Terminal + browser + DB visible at once** — in any form: a two-pane split, a docked
+  drawer, a persistent secondary pane, or a full dockable workspace. Killed on mechanism:
+  `TerminalPane.tsx` resizes the pty to its pane, so a narrowed terminal wraps the agent's
+  permission prompt and `detectApproval` stops matching — Approve/Deny disappears from the
+  tile, the Overview row and the phone with no error. A cosmetic feature that silently
+  disables a correctness signal is the defect class this repo has spent two releases
+  removing.
+- Seven switchable layout presets. 1DevTool has seven in nine months; a product that had
+  solved on-screen composition would ship one.
+- The DB and browser panes as depth products. 1DevTool's own founder removed the database
+  client from his roadmap by name — *"Fewer features = less maintenance surface = lower
+  solo-founder risk"* — while marketing 26 engines.
+
+What DevDeck does instead, and already ships: panels stay mounted (`App.tsx` toggles
+`display`, so nothing is lost on a switch), the deck stays visible under every view with
+live state and the "N need you" count, terminals have their own splits/Grid/Canvas/Overview,
+and the MCP tools let an agent read the DB, replay saved requests and read browser console
+logs with **no panel visible at all**. Tools sharing *context* is the mechanism; sharing a
+screen is the screenshot.
+
 ## Unique to DevDeck — the moat (built around the user's workday)
 
 - [x] **Work-item-native start** — Jira/Azure Work panel, shipped v0.1.9
