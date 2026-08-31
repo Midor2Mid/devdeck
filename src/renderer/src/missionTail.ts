@@ -416,11 +416,21 @@ export function markLaunched(id: string, now = Date.now()): void {
 
 const RANK: Record<AgentStatus, number> = { attention: 0, waiting: 1, working: 2, idle: 3 }
 
+/**
+ * Where a session sits in the follow order, as a number.
+ *
+ * Exported for the one caller that has to rank a *group* of sessions rather than
+ * sort a list of them (Overview's grid). It exists so that caller can read this
+ * order instead of writing its own: a private rank in one surface is how two
+ * surfaces come to show the same sessions in different orders.
+ */
+export const followRank = (s: AnySession): number => RANK[s.status]
+
 /** Order sessions attention-first, then waiting-on-you, then working, then idle. */
 export function sortForFollow(sessions: AnySession[]): AnySession[] {
     return sessions
         .map((s, i) => [s, i] as const)
-        .sort((a, b) => RANK[a[0].status] - RANK[b[0].status] || a[1] - b[1])
+        .sort((a, b) => followRank(a[0]) - followRank(b[0]) || a[1] - b[1])
         .map(([s]) => s)
 }
 
