@@ -15,6 +15,7 @@ export function AgentKey({
 }): JSX.Element {
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const renameSession = useStore((s) => s.renameSession)
+    const seen = useStore((s) => s.seen)
     const dragPayload = useStore((s) => s.dragPayload)
     const setDragPayload = useStore((s) => s.setDragPayload)
     const [renaming, setRenaming] = useState(false)
@@ -34,6 +35,9 @@ export function AgentKey({
         (active ? " active" : "") +
         (compressed ? " compressed" : "") +
         (session.status === "waiting" ? " key-waiting" : "") +
+        // Acknowledged, not resolved: the status is untouched, so the key keeps
+        // saying `waiting` and only its FORM changes.
+        (seen[session.termId] ? " key-seen" : "") +
         (session.status === "attention" ? " key-attn" : "") +
         (dragPayload ? " drop-active" : "") +
         (over ? " drag-over" : "")

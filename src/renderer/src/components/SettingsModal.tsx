@@ -2047,7 +2047,9 @@ function RemoteSection(): JSX.Element {
                                     <div className="settings-hint">
                                         Self-signed HTTPS: your phone will warn “connection not
                                         private” the first time - accept it once. The link (and token)
-                                        are then encrypted even on plain LAN, and mobile push works.
+                                        are then encrypted even on plain LAN. Accepting the warning
+                                        does <b>not</b> make the page a secure context, so browser
+                                        notifications stay limited to a tab you have open.
                                     </div>
                                 )}
                             </div>

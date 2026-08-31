@@ -1262,6 +1262,24 @@ button .ic,
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent);
     }
 }
+/* Acknowledged: you have looked at this one, or answered it, since it last
+   changed. The state is UNCHANGED — it is still `waiting` — so the hue is
+   unchanged too and the difference is carried in form, exactly as the
+   reduced-motion rules below do it: the breathe stops and the dot becomes a
+   hollow ring rather than a filled one. Nothing else in the app reads `seen`
+   except the wants-you count; if a second rule appears here that changes what a
+   session IS, the acknowledgement axis has become a state and the design is
+   broken. */
+.deck-key.key-waiting.key-seen {
+    animation: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.deck-key.key-seen .tab-dot.status-waiting {
+    animation: none;
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .tab-dot.status-waiting,
     .deck-key.key-waiting {
@@ -4461,6 +4479,37 @@ button .ic,
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+}
+
+
+/* One region failed, not the app. Deliberately the same card vocabulary as the
+   root crash above and no new tokens — a region crash must be recognisable as
+   the same kind of event, and it must not be prettier than it is serious. It
+   fills only the region it replaced, so the rest of the cockpit is still there
+   beside it, which is the whole message. */
+.region-crash {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+}
+.region-crash-card {
+    max-width: 440px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 10px);
+    padding: 18px 20px;
+}
+.region-crash-card h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+}
+.region-crash-card p {
+    margin: 0;
+    line-height: 1.5;
 }
 
 /* ---------- Activity drawer ---------- */

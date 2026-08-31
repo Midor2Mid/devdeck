@@ -339,3 +339,58 @@ describe("the quiet-after field still commits rather than clamps as you type", (
         expect(f).toContain("setIdleDraft(null)")
     })
 })
+
+// --- One classifier, and the push that feeds it ---------------------------
+//
+// Main is the only thing that classifies a permission prompt now
+// (main/decisions.ts); the Mission tile and the Overview row read its answer
+// through missionTail's `promptFor`. Two wires make that work, and neither can
+// be reached by a unit test:
+//
+//   1. App.tsx must push the session snapshot to main WHETHER OR NOT the remote
+//      server is on. Status is the half of the classification main cannot see
+//      for itself, and the push used to be gated on `remote.enabled` to save an
+//      IPC. Restore that gate and main mints nothing with remote off — which is
+//      the default — so the desktop's own Approve / Deny buttons silently never
+//      appear. Every promptFor test still passes, because they seed the cache
+//      directly.
+//   2. Something has to subscribe to `decisions:changed`. Without it the cache
+//      is never filled and, again, every unit test still passes.
+const APP = src("../src/renderer/src/App.tsx")
+const TAIL_MOD = src("../src/renderer/src/missionTail.ts")
+const MAIN = src("../src/main/index.ts")
+
+describe("main is the only classifier, and it is actually fed (task 4)", () => {
+    const app = codeLines(APP)
+    const tail = codeLines(TAIL_MOD)
+
+    it("pushes the session snapshot to main", () => {
+        expect(linesWith("window.api.mobile.syncSessions(", app)).toHaveLength(1)
+    })
+
+    it("does not gate that push on the remote server being enabled", () => {
+        // The gate's only possible source in this file: nothing here may read
+        // `remote.enabled` again without someone re-reading the note above.
+        expect(linesWith("remote.enabled", app)).toHaveLength(0)
+        expect(linesWith("remoteEnabled", app)).toHaveLength(0)
+    })
+
+    it("subscribes to main's decisions", () => {
+        expect(linesWith("window.api.decisions.onChanged(", app)).toHaveLength(1)
+        expect(linesWith("setDecisions", app).length).toBeGreaterThan(0)
+    })
+
+    it("re-derives on main's own clock, not only on a renderer push", () => {
+        // Delete this one call and every unit test still passes, while a
+        // background tile in `attention` serves the previous screen's answer
+        // forever — store.ts takes no status transition on that path, so
+        // nothing pushes. See REFRESH_MS in main/decisions.ts.
+        expect(linesWith("startDecisionRefresh(", codeLines(MAIN))).toHaveLength(1)
+    })
+
+    it("leaves no approval classifier in the renderer's tile path", () => {
+        // A fallback `detectApproval` here would restore the two-answers defect
+        // while every promptFor test kept passing.
+        expect(linesWith("detectApproval", tail)).toHaveLength(0)
+    })
+})

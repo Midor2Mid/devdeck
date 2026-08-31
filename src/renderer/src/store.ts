@@ -116,6 +116,14 @@ interface Persisted {
     activePaneByProject: Record<string, string | undefined>
     composerDrafts: Record<string, string>
     view: MainView
+    /**
+     * The view each project was last looking at. `view` remains the single live
+     * value every consumer reads — this map only restores a project's place when
+     * you come back to it, so switching projects no longer lands you in the
+     * *previous* project's view pointed at this project's data. Same shape and
+     * same reason as `activeTabByProject` / `activePaneByProject` above.
+     */
+    viewByProject: Record<string, MainView>
     termLayout: TermLayout
     canvasPos: Record<string, CanvasPos>
     canvasLinks: CanvasLink[]
@@ -312,6 +320,20 @@ interface AppState extends Persisted {
 
     // Agent session awareness (runtime-only)
     agentStatus: Record<string, AgentStatus>
+    /**
+     * Sessions whose current state you have already looked at or acted on.
+     *
+     * An ACKNOWLEDGEMENT axis, not a state: `waiting` stays `waiting` whether
+     * seen or not, and `resolveTileState` never receives this - only the
+     * wants-you count and one CSS class read it. Keeping the line sharp is the
+     * whole safety argument, because visibility-derived facts leaking into
+     * classification is a defect this app has already paid to remove once.
+     *
+     * Deliberately runtime-only. A persisted acknowledgement map is a new schema
+     * for a convenience, and a relaunch that lights everything up again is the
+     * honest reset.
+     */
+    seen: Record<string, true>
     lastAgentTermId: string | null
     notifications: AppNotification[]
     dismissNotification: (id: string) => void
@@ -469,6 +491,57 @@ function validateTabs(raw: Record<string, Tab[]> | undefined): Record<string, Ta
     return out
 }
 
+/** A copy of `rec` without `key`, or `rec` itself when the key was not there. */
+function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
+    if (!(key in rec)) return rec
+    const next = { ...rec }
+    delete next[key]
+    return next
+}
+
+const MAIN_VIEWS: readonly MainView[] = [
+    "mission",
+    "tasks",
+    "terminal",
+    "editor",
+    "api",
+    "database",
+    "browser",
+    "network"
+]
+
+const isMainView = (v: unknown): v is MainView =>
+    typeof v === "string" && (MAIN_VIEWS as readonly string[]).includes(v)
+
+/**
+ * Read a persisted view map, dropping anything that is not a view this build
+ * knows. workspace.json outlives the build that wrote it: a view removed in a
+ * later version would otherwise restore as a name no `.deck-view` matches, and
+ * the stage would come up blank with nothing to click.
+ */
+const sanitizeViews = (raw: unknown): Record<string, MainView> => {
+    const out: Record<string, MainView> = {}
+    if (raw && typeof raw === "object") {
+        for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (isMainView(v)) out[id] = v
+        }
+    }
+    return out
+}
+
+/**
+ * Record the view a project is now looking at. Called wherever `view` is set —
+ * recording on write rather than on leave, so a path that changes project and
+ * view in one `set()` (jumping to a session in another project) still leaves
+ * the project it left behind remembering where it was.
+ */
+const rememberView = (
+    s: Pick<AppState, "viewByProject" | "activeId">,
+    view: MainView,
+    projectId: string | null = s.activeId
+): Record<string, MainView> =>
+    projectId ? { ...s.viewByProject, [projectId]: view } : s.viewByProject
+
 export const useStore = create<AppState>((set, get) => {
     // No save may run until `init()` has applied whatever workspace.json holds
     // (or confirmed there is none, on a fresh install). Same guard as
@@ -493,6 +566,7 @@ export const useStore = create<AppState>((set, get) => {
             activePaneByProject: s.activePaneByProject,
             composerDrafts: s.composerDrafts,
             view: s.view,
+            viewByProject: s.viewByProject,
             termLayout: s.termLayout,
             canvasPos: s.canvasPos,
             canvasLinks: s.canvasLinks,
@@ -539,7 +613,23 @@ export const useStore = create<AppState>((set, get) => {
         } else {
             pendingSince.delete(termId)
         }
-        set((s) => ({ agentStatus: { ...s.agentStatus, [termId]: status } }))
+        // A transition is news, so it is unseen - except when it happened in
+        // front of you. `ack` only runs when you NAVIGATE to a pane, so without
+        // this the count keeps counting an agent that finished its turn while
+        // you sat there watching it do so. Note what this does NOT do: the
+        // status is recorded either way. Visibility gates the acknowledgement,
+        // never the classification (M4).
+        const seenNow = status === "waiting" && isVisible(termId)
+        set((s) => ({
+            agentStatus: { ...s.agentStatus, [termId]: status },
+            seen: seenNow ? { ...s.seen, [termId]: true as const } : omit(s.seen, termId)
+        }))
+    }
+
+    /** Mark a session acknowledged without touching what it is. */
+    const markSeen = (termId?: string): void => {
+        if (!termId) return
+        set((s) => (s.seen[termId] ? s : { seen: { ...s.seen, [termId]: true as const } }))
     }
 
     const ack = (termId?: string): void => {
@@ -547,6 +637,7 @@ export const useStore = create<AppState>((set, get) => {
         pendingSince.delete(termId)
         set((s) => ({
             lastAgentTermId: termId,
+            seen: { ...s.seen, [termId]: true as const },
             agentStatus:
                 s.agentStatus[termId] === "attention" || s.agentStatus[termId] === "waiting"
                     ? { ...s.agentStatus, [termId]: "idle" }
@@ -932,6 +1023,7 @@ export const useStore = create<AppState>((set, get) => {
             const paneHold = { ...s.paneHold }
             delete paneHold[termId]
             return {
+                seen: omit(s.seen, termId),
                 agentStatus,
                 termInit,
                 termAgents,
@@ -1015,6 +1107,7 @@ export const useStore = create<AppState>((set, get) => {
         activePaneByProject: {},
         composerDrafts: {},
         view: "mission",
+        viewByProject: {},
         termLayout: "tabs",
         canvasPos: {},
         canvasLinks: [],
@@ -1048,6 +1141,7 @@ export const useStore = create<AppState>((set, get) => {
         pendingApiRequest: null,
         pendingEditorOpen: null,
         agentStatus: {},
+        seen: {},
         lastAgentTermId: null,
         closedSessions: [],
         zoomedPane: undefined,
@@ -1132,6 +1226,14 @@ export const useStore = create<AppState>((set, get) => {
                     }
                 }
             }
+            // The project active at the first launch after this upgrade has no
+            // remembered place yet, so it seeds from the global view: an existing
+            // workspace comes back where it was rather than forgetting it.
+            const startView = isMainView(w.view) ? w.view : "mission"
+            const viewByProject = sanitizeViews(w.viewByProject)
+            if (store.activeId && !viewByProject[store.activeId]) {
+                viewByProject[store.activeId] = startView
+            }
             set({
                 projects: store.projects,
                 activeId: store.activeId,
@@ -1146,7 +1248,8 @@ export const useStore = create<AppState>((set, get) => {
                 activeTabByProject: w.activeTabByProject ?? {},
                 activePaneByProject: w.activePaneByProject ?? {},
                 composerDrafts: w.composerDrafts ?? {},
-                view: w.view ?? "mission",
+                view: startView,
+                viewByProject,
                 termLayout: w.termLayout ?? "tabs",
                 canvasPos: w.canvasPos ?? {},
                 canvasLinks: w.canvasLinks ?? [],
@@ -1190,8 +1293,13 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         setActiveProject: async (id) => {
-            const mru = recordMru(get().projectMru, id)
-            set({ activeId: id, projectMru: mru })
+            const s = get()
+            const mru = recordMru(s.projectMru, id)
+            // A project you have been in before restores its own view; one you
+            // have never opened keeps the view you are in, so arriving somewhere
+            // new never moves the stage out from under you.
+            set({ activeId: id, projectMru: mru, view: s.viewByProject[id] ?? s.view })
+            persist()
             try {
                 localStorage.setItem(MRU_KEY, JSON.stringify(mru))
             } catch {
@@ -1270,7 +1378,7 @@ export const useStore = create<AppState>((set, get) => {
         activeProject: () => get().projects.find((p) => p.id === get().activeId),
 
         setView: (view) => {
-            set({ view })
+            set((s) => ({ view, viewByProject: rememberView(s, view) }))
             if (view === "terminal" && get().activeId) ack(get().activePaneByProject[get().activeId as string])
             persist()
         },
@@ -1639,7 +1747,11 @@ export const useStore = create<AppState>((set, get) => {
                 const termId = get().newTab(agentId, undefined, `review:${lens.id}`)
                 if (termId) spawned.push({ termId, lens })
             }
-            set({ reviewOpen: false, view: "terminal" })
+            set((s) => ({
+                reviewOpen: false,
+                view: "terminal",
+                viewByProject: rememberView(s, "terminal")
+            }))
             // Each reviewer waits for its OWN first byte, in parallel - one slow
             // lens no longer decides when the others are typed into.
             await Promise.all(
@@ -2095,6 +2207,9 @@ export const useStore = create<AppState>((set, get) => {
 
         respondApproval: (termId, keys) => {
             window.api.pty.input(termId, keys)
+            // Answering IS acknowledging: whatever the agent's status still says
+            // until its next byte arrives, you have dealt with this one.
+            markSeen(termId)
             pushActivity("attention", termId, "answered prompt")
         },
 
@@ -2126,6 +2241,7 @@ export const useStore = create<AppState>((set, get) => {
                 set({
                     activeId: pid,
                     view: "terminal",
+                    viewByProject: rememberView(s, "terminal", pid),
                     activeTabByProject: { ...s.activeTabByProject, [pid]: tab.id },
                     activePaneByProject: { ...s.activePaneByProject, [pid]: termId }
                 })
@@ -2202,7 +2318,8 @@ export const useStore = create<AppState>((set, get) => {
                 activeTabByProject: { ...s.activeTabByProject, [projectId]: tabId },
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: termId },
                 lastAgentTermId: isAgentId(agentId) ? termId : s.lastAgentTermId,
-                view: "terminal"
+                view: "terminal",
+                viewByProject: rememberView(s, "terminal", projectId)
             }))
             if (isAgentId(agentId)) {
                 markLaunched(termId)
@@ -2472,6 +2589,7 @@ export const useStore = create<AppState>((set, get) => {
                 closedSessions: rest,
                 activeId: entry.projectId,
                 view: "terminal",
+                viewByProject: rememberView(s, "terminal", entry.projectId),
                 termAgents: { ...s.termAgents, [termId]: entry.agentId },
                 termInit: command ? { ...s.termInit, [termId]: command } : s.termInit,
                 termCwd: entry.cwd ? { ...s.termCwd, [termId]: entry.cwd } : s.termCwd,
@@ -2588,7 +2706,8 @@ export const useStore = create<AppState>((set, get) => {
                 },
                 activeTabByProject: { ...s.activeTabByProject, [pid]: first.id },
                 activePaneByProject: { ...s.activePaneByProject, [pid]: firstLeaf(first.root) },
-                view: "terminal"
+                view: "terminal",
+                viewByProject: rememberView(s, "terminal", pid)
             }))
             window.api.projects.setActive(pid)
             for (const termId of startedAgents) {

@@ -8,7 +8,14 @@ import { generate } from "selfsigned"
 // Cached in userData and reused as long as it still covers the current LAN /
 // Tailscale IPs (so the SANs match). Self-signed means the phone shows a
 // one-time "not private" warning - the point is to encrypt the link on plain
-// LAN and provide a secure context (which unlocks reliable mobile push).
+// LAN, and to let the session cookie carry `Secure` + the `__Host-` prefix
+// (guards.ts).
+//
+// What it does NOT buy is a secure context: clicking through the interstitial
+// marks the origin insecure for that session, so `serviceWorker.register` and
+// `PushManager` stay refused, and iOS Safari offers no path to trust it at all.
+// This file used to claim it "unlocks reliable mobile push". It does not, and a
+// trusted certificate (e.g. `tailscale cert`) is what would.
 
 interface CachedCert {
     key: string

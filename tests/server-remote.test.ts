@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { WebSocket } from "ws"
 import { rmSync } from "fs"
+import type { RemoteSession } from "../src/main/server"
 
 // Same temp-userData + no-DPAPI setup as tests/devices.test.ts, since server.ts
 // pulls in devices.ts (which needs `app`/`safeStorage`).
@@ -11,7 +12,15 @@ const h = vi.hoisted(() => {
     const { tmpdir } = require("os")
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { join } = require("path")
-    return { dir: mkdtempSync(join(tmpdir(), "server-remote-")) }
+    // `tails` is what the stubbed pty hands the decision registry - see the
+    // pty mock below and the Task 5 block at the bottom of this file.
+    return {
+        dir: mkdtempSync(join(tmpdir(), "server-remote-")),
+        tails: {} as Record<string, string>,
+        // Every byte the server sent to a pty. The choice handler's whole point
+        // is that most refusals write nothing, and a no-op mock cannot show that.
+        writes: [] as { id: string; data: string }[]
+    }
 })
 
 vi.mock("electron", () => ({
@@ -21,14 +30,31 @@ vi.mock("electron", () => ({
 
 // Native/heavy modules server.ts imports but this file has no interest in
 // exercising - stubbed the same way tests/mcpserver.test.ts stubs db.ts.
-vi.mock("../src/main/pty", () => {
+vi.mock("../src/main/pty", async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { EventEmitter } = require("events")
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createHash } = require("crypto")
+    // Not `require`: this one is TypeScript source, so it has to go through
+    // vitest's own resolver.
+    const { lastLines } =
+        await vi.importActual<typeof import("../src/shared/tail")>("../src/shared/tail")
     return {
         ptyEvents: new EventEmitter(),
         getBuffer: () => "",
-        writePty: () => {},
-        resizePty: () => {}
+        writePty: (id: string, data: string) => {
+            h.writes.push({ id, data })
+        },
+        resizePty: () => {},
+        // decisions.ts reads the screen through these two. Both run the fixture
+        // through the REAL `lastLines` and honour `n`, because production's
+        // getTail does: it trims each line, drops blank ones and keeps the last
+        // n. A mock that hashed the raw fixture would compute a digest
+        // production never computes, and every "did the screen move on?" test
+        // would then pass against a normalization that does not exist.
+        getTail: (id: string, n: number) => lastLines(h.tails[id] ?? "", n),
+        tailDigest: (id: string, n: number) =>
+            createHash("sha256").update(lastLines(h.tails[id] ?? "", n)).digest("hex")
     }
 })
 vi.mock("../src/main/db", () => ({
@@ -52,10 +78,13 @@ vi.mock("../src/main/guards", async (importOriginal) => {
 const { start, stop, closeDeviceSockets } = await import("../src/main/server")
 const { pairingToken, revokeDevice, listDevices, __resetCacheForTest } =
     await import("../src/main/devices")
+const { refreshDecision, clearDecision } = await import("../src/main/decisions")
 
 const PORT = 18732
 const base = `http://127.0.0.1:${PORT}`
-const deps = { getSessions: () => [], requestNewSession: () => {} }
+// Mutable so a test can decide what main is reporting; reset in beforeEach.
+let sessions: RemoteSession[] = []
+const deps = { getSessions: () => sessions, requestNewSession: () => {} }
 
 async function waitForListen(): Promise<void> {
     const deadline = Date.now() + 3000
@@ -104,6 +133,7 @@ beforeEach(async () => {
     // devices.ts (I4) caches its store/decrypted tokens in memory; the file
     // delete above does nothing to that cache on its own.
     __resetCacheForTest()
+    sessions = []
     await start({ port: PORT, bind: "lan", deviceTtlDays: 30, tls: false }, deps)
     await waitForListen()
 })
@@ -365,5 +395,318 @@ describe("remote server - the auth path is rate-limited (remedy 15)", () => {
         await expect(connectWs({ Cookie: `devdeck_device=${token}` })).rejects.toMatchObject({
             statusCode: 401
         })
+    })
+})
+
+describe("the pending decision rides the session broadcast (Task 5)", () => {
+    // A real Claude Code permission prompt, shaped exactly as `getTail` would
+    // hand it over: a question, a pointed "1. Yes", and an "(esc)" reject.
+    const PROMPT_TAIL = [
+        "Do you want to proceed?",
+        "❯ 1. Yes",
+        "  2. No, and tell Claude what to do differently (esc)"
+    ].join("\n")
+
+    function agentSession(termId: string): RemoteSession {
+        return {
+            termId,
+            projectId: "p1",
+            projectName: "DevDeck",
+            projectPath: "D:/devdeck",
+            tabName: "claude",
+            badge: "AI",
+            isAgent: true,
+            status: "attention"
+        }
+    }
+
+    /** The next `{t}` frame the server pushes down `ws`. */
+    function nextMessage(ws: WebSocket, t: string): Promise<{ sessions: RemoteSession[] }> {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error(`no "${t}" frame arrived`)), 3000)
+            ws.on("message", (raw) => {
+                const msg = JSON.parse(raw.toString())
+                if (msg.t !== t) return
+                clearTimeout(timer)
+                resolve(msg)
+            })
+        })
+    }
+
+    /** Pair a device, then read back the session the server broadcasts for
+     *  `termId` - the literal bytes a phone receives, not an internal object. */
+    async function remoteSessionFor(termId: string): Promise<RemoteSession | undefined> {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const ws = await connectWs({ Cookie: `devdeck_device=${token}` })
+        try {
+            const frame = nextMessage(ws, "sessions")
+            // The server pushes a session list on connect; asking again makes
+            // the test independent of whether that first frame beat the listener.
+            ws.send(JSON.stringify({ t: "list" }))
+            return (await frame).sessions.find((s) => s.termId === termId)
+        } finally {
+            ws.close()
+        }
+    }
+
+    afterEach(() => {
+        clearDecision("t1")
+        clearDecision("t2")
+        h.tails = {}
+    })
+
+    it("carries a pending decision on the session broadcast", async () => {
+        sessions = [agentSession("t1")]
+        h.tails["t1"] = PROMPT_TAIL
+        expect(refreshDecision("t1", "attention", true)).toBeTruthy()
+
+        const s = await remoteSessionFor("t1")
+        expect(s?.pending).toEqual({
+            id: expect.stringMatching(/^dec:t1:/),
+            kind: "menu",
+            question: "Do you want to proceed?",
+            tail: expect.stringContaining("❯ 1. Yes"),
+            options: [
+                { label: "Approve", send: "1" },
+                { label: "Deny", send: "\x1b" }
+            ]
+        })
+    })
+
+    it("omits pending entirely when there is nothing to answer", async () => {
+        sessions = [agentSession("t2")]
+        // No tail, so the registry mints nothing.
+        expect(refreshDecision("t2", "attention", true)).toBeNull()
+
+        const s = await remoteSessionFor("t2")
+        expect(s).toBeTruthy()
+        // Not merely undefined: an explicit `null` on the wire would make the
+        // client's `if (s.pending)` guard the only thing standing between a
+        // phone and a card it cannot answer.
+        expect(s).not.toHaveProperty("pending")
+    })
+})
+
+describe("the client page carries the decision card (Task 7)", () => {
+    // The page is a string by construction and there is no DOM harness for it,
+    // so these assert the load-bearing pieces are still in the served HTML. What
+    // they guard is a deletion: the wire and the handler already have real tests
+    // above, and without a card none of that is reachable from a phone.
+    async function page(): Promise<string> {
+        const res = await fetch(`${base}/?token=${pairingToken()}`)
+        expect(res.status).toBe(200)
+        return res.text()
+    }
+
+    it("serves the card container and its render pass", async () => {
+        const html = await page()
+        expect(html).toContain('<div id="decision"></div>')
+        expect(html).toContain("function renderDecision()")
+    })
+
+    it("shows the raw screen beside the parsed question, both escaped", async () => {
+        const html = await page()
+        // The question is the string an agent controls; the tail is what lets a
+        // human notice it lying. Both go through esc().
+        expect(html).toContain("esc(p.question)")
+        expect(html).toContain("esc(p.tail)")
+    })
+
+    it("answers with a token the server minted, never a composed string", async () => {
+        const html = await page()
+        expect(html).toContain("t:'choice'")
+        expect(html).toContain("decisionId:p.id")
+        expect(html).toContain("p.options[Number(b.getAttribute('data-i'))].send")
+    })
+
+    it("guards the second tap and reports a refusal in the server's words", async () => {
+        const html = await page()
+        expect(html).toContain("if(submitting) return;")
+        expect(html).toContain("choice:res")
+        expect(html).toContain("m.reason")
+    })
+
+    it("flags a session that wants an answer in the list", async () => {
+        const html = await page()
+        expect(html).toContain("NEEDS YOU")
+    })
+})
+
+describe("answering a prompt from a phone (Task 6)", () => {
+    // The handler that writes to a live pty. Task 6 shipped without tests; what
+    // each of these pins is not the reply text but whether a keystroke reached
+    // the terminal, because that is the part that cannot be taken back.
+    const PROMPT_TAIL = [
+        "Do you want to proceed?",
+        "❯ 1. Yes",
+        "  2. No, and tell Claude what to do differently (esc)"
+    ].join("\n")
+
+    function agentSession(termId: string): RemoteSession {
+        return {
+            termId,
+            projectId: "p1",
+            projectName: "DevDeck",
+            projectPath: "D:/devdeck",
+            tabName: "claude",
+            badge: "AI",
+            isAgent: true,
+            status: "attention"
+        }
+    }
+
+    /** A paired socket, attached to `termId`, with the minted decision's id. */
+    async function paired(termId: string): Promise<{ ws: WebSocket; decisionId: string }> {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const ws = await connectWs({ Cookie: `devdeck_device=${token}` })
+        ws.send(JSON.stringify({ t: "attach", id: termId }))
+        const d = refreshDecision(termId, "attention", true)
+        if (!d) throw new Error("no decision was minted for the fixture")
+        return { ws, decisionId: d.id }
+    }
+
+    /** The next `choice:res` frame, or a rejection if none arrives. */
+    function choiceRes(ws: WebSocket): Promise<{ outcome: string; reason?: string }> {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('no "choice:res" frame')), 3000)
+            ws.on("message", (raw) => {
+                const msg = JSON.parse(raw.toString())
+                if (msg.t !== "choice:res") return
+                clearTimeout(timer)
+                resolve(msg)
+            })
+        })
+    }
+
+    beforeEach(() => {
+        sessions = [agentSession("t1")]
+        h.tails["t1"] = PROMPT_TAIL
+        h.writes = []
+    })
+
+    afterEach(() => {
+        clearDecision("t1")
+        h.tails = {}
+        h.writes = []
+    })
+
+    it("writes the recorded token to the owning pty and says so", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+
+        expect((await res).outcome).toBe("accepted")
+        expect(h.writes).toEqual([{ id: "t1", data: "1" }])
+        ws.close()
+    })
+
+    it("refuses once the screen has moved on, and writes NOTHING", async () => {
+        // The failure this whole design exists to prevent: the card describes a
+        // prompt the terminal has already left, and the digit lands in whatever
+        // the agent asked next.
+        const { ws, decisionId } = await paired("t1")
+        h.tails["t1"] = "the agent moved on and asked something else entirely"
+
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("moved on")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("spends a decision exactly once - a second tap writes nothing more", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const first = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+        expect((await first).outcome).toBe("accepted")
+
+        const second = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+        const r = await second
+        expect(r.outcome).not.toBe("accepted")
+        expect(r.reason).toContain("Already answered")
+        expect(h.writes).toHaveLength(1)
+        ws.close()
+    })
+
+    it("refuses a send string the client made up, however plausible", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const res = choiceRes(ws)
+        // "y\r" is a perfectly reasonable guess at an approval, and is exactly
+        // what must never reach a pty: only main's own recorded tokens do.
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "y\r" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("not one of the offered answers")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("refuses an unknown decision id", async () => {
+        const { ws } = await paired("t1")
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId: "dec:t1:nope", send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("unknown")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("refuses a tap from a socket that never opened the session", async () => {
+        const { decisionId } = await paired("t1")
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const other = await connectWs({ Cookie: `devdeck_device=${token}` })
+
+        const res = choiceRes(other)
+        other.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("Not attached")
+        expect(h.writes).toEqual([])
+        other.close()
+    })
+
+    it("refuses when the named session is not the one the decision belongs to", async () => {
+        const { ws, decisionId } = await paired("t1")
+        ws.send(JSON.stringify({ t: "attach", id: "t9" }))
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t9", decisionId, send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("different session")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("drops the card on every paired device once the prompt is spent", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+        await res
+
+        // The broadcast that follows an accepted answer is what clears the card
+        // without the phone deciding anything for itself.
+        const after = await new Promise<RemoteSession[]>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error("no sessions frame")), 3000)
+            ws.on("message", (raw) => {
+                const msg = JSON.parse(raw.toString())
+                if (msg.t !== "sessions") return
+                clearTimeout(timer)
+                resolve(msg.sessions)
+            })
+            ws.send(JSON.stringify({ t: "list" }))
+        })
+        expect(after.find((s) => s.termId === "t1")).not.toHaveProperty("pending")
+        ws.close()
     })
 })

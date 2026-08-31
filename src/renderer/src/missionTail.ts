@@ -4,43 +4,8 @@
 // last said. Tails live in a module Map (not the store) so the fast pty stream
 // never churns React state; consumers poll on an interval.
 
-const OSC = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g
-const CSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g
-const OTHER = /\x1b[=>()][0-9A-Za-z]?/g
-// Control chars to drop — but keep \t (09) and \n (0a); \r is handled first.
-const CTRL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g
-
-/** Append a chunk to the prior tail, strip terminal control noise, cap length. */
-export function cleanTail(prev: string, chunk: string, max = 200): string {
-    let s = prev + chunk
-    s = s.replace(OSC, "").replace(CSI, "").replace(OTHER, "")
-    s = s.replace(/\r/g, "\n").replace(CTRL, "")
-    if (s.length > max) s = s.slice(s.length - max)
-    return s
-}
-
-/** The last non-empty, trimmed line of a cleaned tail — the display peek. */
-export function peekLine(tail: string): string {
-    const lines = tail.split("\n")
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const t = lines[i].trim()
-        if (t) return t
-    }
-    return ""
-}
-
-/** The last N non-empty, trimmed lines of a cleaned tail — for the expanded view. */
-export function lastLines(tail: string, n: number): string {
-    return tail
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .slice(-n)
-        .join("\n")
-}
-
-/** Cap on a carried segment, so a stream with no newline can't grow it unbounded. */
-export const CARRY_MAX = 4000
+import { cleanTail, lastLines, peekLine, CARRY_MAX, OSC, CSI, OTHER, CTRL } from "../../shared/tail"
+export { cleanTail, lastLines, peekLine, CARRY_MAX }
 
 /** printableDelta's state, threaded by the caller between chunks of one stream. */
 export interface DeltaState {
@@ -109,10 +74,36 @@ export function printableDelta(
 }
 
 import type { AgentStatus, AnySession } from "./store"
-import { detectApproval, type ApprovalPrompt } from "./approval"
+import type { ApprovalPrompt } from "./approval"
+import type { DecisionSnapshot, DecisionView } from "../../shared/decision"
 
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
+
+/**
+ * Main's current answer for each session, keyed by terminal id.
+ *
+ * A module Map for the same reason the tails above are one: `promptFor` runs
+ * once per tile per second-tick, and routing that through React state would
+ * churn the whole grid on every pty burst. It also must not be a store slice
+ * read through a selector — a selector that built a fresh object per render is
+ * how this app has spun forever before.
+ */
+const decisions = new Map<string, DecisionView>()
+
+/**
+ * Replace the cache with main's snapshot. Wired to `decisions:changed` in
+ * App.tsx; called directly by tests.
+ *
+ * A wholesale replace, not a merge: main sends its complete answer every time,
+ * so a session that no longer has a decision is expressed by its absence. A
+ * merge would leave the last prompt sitting in the cache after the agent moved
+ * on, and the tile would keep offering Approve for a question nobody asked.
+ */
+export function setDecisions(snapshot: DecisionSnapshot): void {
+    decisions.clear()
+    for (const [termId, d] of Object.entries(snapshot)) decisions.set(termId, d)
+}
 
 // Per-session OSC-scanning state. `open` is true while inside an OSC escape
 // whose terminator (BEL or ST) has not arrived yet. `pendingEsc` is true when
@@ -331,6 +322,7 @@ export function forgetTail(id: string): void {
     lastAt.delete(id)
     rings.delete(id)
     oscState.delete(id)
+    decisions.delete(id)
 }
 
 /** A short "time since" label: "" · "now" · "35s" · "2m" · "1h". */
@@ -424,26 +416,45 @@ export function markLaunched(id: string, now = Date.now()): void {
 
 const RANK: Record<AgentStatus, number> = { attention: 0, waiting: 1, working: 2, idle: 3 }
 
+/**
+ * Where a session sits in the follow order, as a number.
+ *
+ * Exported for the one caller that has to rank a *group* of sessions rather than
+ * sort a list of them (Overview's grid). It exists so that caller can read this
+ * order instead of writing its own: a private rank in one surface is how two
+ * surfaces come to show the same sessions in different orders.
+ */
+export const followRank = (s: AnySession): number => RANK[s.status]
+
 /** Order sessions attention-first, then waiting-on-you, then working, then idle. */
 export function sortForFollow(sessions: AnySession[]): AnySession[] {
     return sessions
         .map((s, i) => [s, i] as const)
-        .sort((a, b) => RANK[a[0].status] - RANK[b[0].status] || a[1] - b[1])
+        .sort((a, b) => followRank(a[0]) - followRank(b[0]) || a[1] - b[1])
         .map(([s]) => s)
 }
 
 /**
  * The permission prompt this session is blocked on, or null.
  *
- * The gate, not the detector. `approval.ts` is deliberately conservative but
- * still asks its callers to run it only for sessions already flagged
- * attention/waiting, because a surface that ACTS on a match sends a keystroke
- * to a live agent. Mission and Overview are both such surfaces, so the rule
- * lives here once instead of being copied into each of them.
+ * The gate, not the detector — and no longer the classifier either. Main owns
+ * detection now (main/decisions.ts), reading its own copy of the same tail
+ * through the same `shared/approval.ts`, so the phone card and this tile cannot
+ * describe one prompt two ways. This surface keeps the *status* gate, because
+ * that is its own rule about when it may ACT: answering sends a keystroke to a
+ * live agent, and a match on a session that is merely mid-stream is a keystroke
+ * nobody asked for. Main applies the identical gate before minting a decision
+ * (`refreshDecision`); keeping it here too is deliberate belt-and-braces, and
+ * it is what makes this function safe no matter how the cache was filled.
  *
- * 16 lines is the same window Overview has always read.
+ * Reads the module cache, never IPC: callers run it once per tile per render.
  */
 export function promptFor(s: AnySession): ApprovalPrompt | null {
     if (!s.isAgent || (s.status !== "attention" && s.status !== "waiting")) return null
-    return detectApproval(getFullTail(s.termId, 16))
+    const d = decisions.get(s.termId)
+    if (!d) return null
+    // Main always mints exactly two options, Approve then Deny (refreshDecision).
+    const [approve, deny] = d.options
+    if (!approve || !deny) return null
+    return { kind: d.kind, question: d.question, approve: approve.send, deny: deny.send }
 }

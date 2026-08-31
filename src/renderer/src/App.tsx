@@ -1,9 +1,11 @@
 import { useEffect } from "react"
 import { useStore } from "./store"
 import { nextSession } from "./deck"
+import { setDecisions } from "./missionTail"
 import { useSettings } from "./settings"
 import { useToasts, toast } from "./toast"
 import { PersistBlockedBar } from "./components/PersistBlockedBar"
+import { RegionBoundary } from "./components/RegionBoundary"
 import { Topbar } from "./components/Topbar"
 import { Deck } from "./components/Deck"
 import { TerminalView } from "./components/TerminalView"
@@ -126,14 +128,21 @@ export function App(): JSX.Element {
         return () => window.removeEventListener("beforeunload", flush)
     }, [init, loadSettings])
 
-    // Only push the mobile session snapshot when the remote server is actually
-    // on - otherwise this fires an IPC + snapshot build on every agent status
-    // flip for nothing (remote is off by default).
-    const remoteEnabled = useSettings((s) => s.remote.enabled)
+    // The session snapshot goes to main on every status flip, remote server or
+    // not. It used to be gated on `remote.enabled` to save an IPC when nobody
+    // was listening — but main is now the only classifier of permission
+    // prompts, and status is the half of that it cannot see for itself. Gated,
+    // main would mint nothing with remote off and the desktop's own Approve /
+    // Deny buttons would silently never appear. Main still broadcasts to the
+    // phone only when the server is running.
     useEffect(() => {
-        if (!remoteEnabled) return
         window.api.mobile.syncSessions(sessions())
-    }, [remoteEnabled, tabsByProject, agentStatus, termAgents, projects, sessions])
+    }, [tabsByProject, agentStatus, termAgents, projects, sessions])
+
+    // Main's classification, straight into missionTail's module cache — no
+    // React state on this path: it fires per status flip and the tiles read it
+    // synchronously on their own 1s tick.
+    useEffect(() => window.api.decisions.onChanged(setDecisions), [])
 
     // Tell the capture proxy which project is active, so it can tag traffic.
     const activeId = useStore((s) => s.activeId)
@@ -330,38 +339,98 @@ export function App(): JSX.Element {
         <div className="app">
             <div className="app-body">
                 <div className="main">
-                    <Topbar />
+                    <RegionBoundary
+                        title="The top bar hit an error"
+                        description="Everything below it still works, and your sessions are still running. Use the deck at the bottom to move around."
+                        resetKey={view}
+                    >
+                        <Topbar />
+                    </RegionBoundary>
                     <PersistBlockedBar />
                     <div className="panels">
                         {/* All panels stay mounted; visibility toggled so terminals keep running. */}
                         <div className="panel" style={{ display: view === "mission" ? "flex" : "none" }}>
-                            <MissionControl />
+                            <RegionBoundary
+                                title="The Mission view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <MissionControl />
+                            </RegionBoundary>
                         </div>
                         <div className="panel" style={{ display: view === "tasks" ? "flex" : "none" }}>
-                            <TaskBoard />
+                            <RegionBoundary
+                                title="The Tasks view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <TaskBoard />
+                            </RegionBoundary>
                         </div>
                         <div className="panel" style={{ display: view === "terminal" ? "flex" : "none" }}>
-                            <TerminalView />
+                            <RegionBoundary
+                                title="The Terminal view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <TerminalView />
+                            </RegionBoundary>
                         </div>
                         <div className="panel" style={{ display: view === "editor" ? "flex" : "none" }}>
-                            <EditorPanel />
+                            <RegionBoundary
+                                title="The Editor view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <EditorPanel />
+                            </RegionBoundary>
                         </div>
                         <div className="panel" style={{ display: view === "api" ? "flex" : "none" }}>
-                            <ApiPanel />
+                            <RegionBoundary
+                                title="The API view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <ApiPanel />
+                            </RegionBoundary>
                         </div>
                         <div className="panel" style={{ display: view === "database" ? "flex" : "none" }}>
-                            <DbPanel />
+                            <RegionBoundary
+                                title="The Database view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <DbPanel />
+                            </RegionBoundary>
                         </div>
                         <div className="panel" style={{ display: view === "browser" ? "flex" : "none" }}>
-                            <BrowserPanel />
+                            <RegionBoundary
+                                title="The Browser view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <BrowserPanel />
+                            </RegionBoundary>
                         </div>
                         <div className="panel" style={{ display: view === "network" ? "flex" : "none" }}>
-                            <NetworkPanel />
+                            <RegionBoundary
+                                title="The Network view hit an error"
+                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
+                                resetKey={view}
+                            >
+                                <NetworkPanel />
+                            </RegionBoundary>
                         </div>
                     </div>
                 </div>
             </div>
-            <Deck />
+            <RegionBoundary
+                title="The deck hit an error"
+                description="Your sessions are still running and the view above still works. Reload when you get a chance."
+                resetKey={view}
+            >
+                <Deck />
+            </RegionBoundary>
             {settingsOpen && <SettingsModal />}
             {switcherOpen && <ProjectSwitcher />}
             {paletteOpen && <CommandPalette />}

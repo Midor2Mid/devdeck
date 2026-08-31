@@ -3,7 +3,7 @@ import { useStore } from "../store"
 import type { AnySession } from "../store"
 import { SplitView } from "./SplitView"
 import { Icon } from "./Icon"
-import { getTail, peekLine, sortForFollow, promptFor } from "../missionTail"
+import { getTail, peekLine, sortForFollow, followRank, promptFor } from "../missionTail"
 import { type ApprovalPrompt } from "../approval"
 
 /**
@@ -16,9 +16,6 @@ import { type ApprovalPrompt } from "../approval"
  * Rendered inside TerminalView's stage (a layout mode) so each terminal id mounts
  * exactly once — a separate always-mounted view would double-attach every pty.
  */
-
-const rank = (s: AnySession): number =>
-    s.status === "attention" ? 0 : s.status === "waiting" ? 1 : s.status === "working" ? 2 : 3
 
 function dotClass(s: AnySession): string {
     return s.isAgent ? "tab-dot claude status-" + s.status : "tab-dot shell"
@@ -161,12 +158,16 @@ export function OverviewView(): JSX.Element {
                 byKey.set(key, { key, label: g ?? s.projectName, isGroup: !!g, sessions: [] })
             byKey.get(key)!.sessions.push(s)
         }
+        // Both orderings read the shared follow order (missionTail), the same one
+        // the rail above and Mission's grid use. This surface used to rank on
+        // `status` with a private function, so the two lists could disagree about
+        // which session came first — the defect `wantsYou`'s comment describes.
         const arr = [...byKey.values()]
-        arr.forEach((gr) => gr.sessions.sort((a, b) => rank(a) - rank(b)))
+        arr.forEach((gr) => (gr.sessions = sortForFollow(gr.sessions)))
         arr.sort(
             (a, b) =>
-                Math.min(...a.sessions.map(rank)) - Math.min(...b.sessions.map(rank)) ||
-                a.label.localeCompare(b.label)
+                Math.min(...a.sessions.map(followRank)) -
+                    Math.min(...b.sessions.map(followRank)) || a.label.localeCompare(b.label)
         )
         return arr
     }, [sessions, projects])

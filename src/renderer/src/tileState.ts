@@ -261,6 +261,11 @@ function baseTileState(i: TileStateInput, now: number): TileState {
  * question, 200px apart, disagreeing by construction is a defect this app has
  * already fixed once.
  *
+ * `seen` is a third ARGUMENT rather than a field on the input, and that is the
+ * point: `resolveTileState` takes the input, so a field there could be read by
+ * the classifier and would put a visibility-derived fact back into what a
+ * session IS. As an argument to this predicate alone, it structurally cannot.
+ *
  * Deliberately over the raw facts rather than the resolved chip kind. A
  * `waiting` session that has also changed files resolves to CHANGED — the more
  * useful single label for a tile — but it still wants you, and the deck bar has
@@ -269,10 +274,18 @@ function baseTileState(i: TileStateInput, now: number): TileState {
  */
 export function wantsYou(
     i: Pick<TileStateInput, "status" | "exitCode" | "lastAt" | "awaited" | "alive">,
-    now: number
+    now: number,
+    seen = false
 ): boolean {
     // A dead process wants nothing.
     if (i.exitCode !== undefined) return false
-    if (i.status === "attention" || i.status === "waiting") return true
+    // Blocked on a question. Looking at it does not answer it, so `seen` buys
+    // nothing here - only the two states you can genuinely leave alone are
+    // acknowledgeable.
+    if (i.status === "attention") return true
+    // Finished its turn and handed back. Once you have looked at it (or acted on
+    // it) it is a thing you know about and deliberately left, so it stops
+    // counting. It is still `waiting` - this changes the COUNT, never the state.
+    if (i.status === "waiting") return !seen
     return isStalled(i.lastAt, i.alive, i.awaited, now)
 }

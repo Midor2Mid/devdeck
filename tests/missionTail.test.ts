@@ -18,7 +18,8 @@ import {
     STALL_MS,
     hasBell,
     forgetTail,
-    promptFor
+    promptFor,
+    setDecisions
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
 import type { DeltaState } from "../src/renderer/src/missionTail"
@@ -502,40 +503,118 @@ describe("barsPath", () => {
 })
 
 describe("promptFor", () => {
-    const TAIL =
-        "Do you want to make this edit to store.ts?\n" +
-        "❯ 1. Yes\n" +
-        "  2. No, and tell Claude what to do differently (esc)\n"
+    // The fixture is now what MAIN mints (refreshDecision in main/decisions.ts),
+    // not the terminal text it was derived from: this surface no longer reads a
+    // tail at all.
+    const MENU = {
+        id: "dec:p-1:abc",
+        kind: "menu" as const,
+        question: "Do you want to make this edit to store.ts?",
+        tail: "Do you want to make this edit to store.ts?\n\u276f 1. Yes\n  2. No (esc)",
+        options: [
+            { label: "Approve", send: "1" },
+            { label: "Deny", send: "\x1b" }
+        ]
+    }
 
-    afterEach(() => forgetTail("p-1"))
+    afterEach(() => {
+        setDecisions({})
+        forgetTail("p-1")
+    })
 
-    it("returns the detected prompt for an agent flagged attention", () => {
-        recordTail("p-1", TAIL)
+    it("returns main's prompt for an agent flagged attention", () => {
+        setDecisions({ "p-1": MENU })
         const p = promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))
         expect(p?.kind).toBe("menu")
         expect(p?.approve).toBe("1")
     })
 
-    it("returns the detected prompt for an agent flagged waiting", () => {
-        recordTail("p-1", TAIL)
+    it("returns main's prompt for an agent flagged waiting", () => {
+        setDecisions({ "p-1": MENU })
         expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "waiting" }))).not.toBeNull()
     })
 
-    // The gate, not the detector: the same tail on a working or idle session is
-    // mid-stream output, and answering it sends a keystroke nobody asked for.
+    // The gate, not the detector: the same prompt on a working or idle session
+    // is mid-stream output, and answering it sends a keystroke nobody asked for.
     it("returns null for a session that is not flagged attention or waiting", () => {
-        recordTail("p-1", TAIL)
+        setDecisions({ "p-1": MENU })
         expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "working" }))).toBeNull()
         expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "idle" }))).toBeNull()
     })
 
     it("returns null for a plain shell", () => {
-        recordTail("p-1", TAIL)
+        setDecisions({ "p-1": MENU })
         expect(promptFor(sess({ termId: "p-1", isAgent: false, status: "attention" }))).toBeNull()
     })
 
-    it("returns null when the tail holds no prompt", () => {
-        recordTail("p-1", "compiling…\ndone\n")
+    // The tail is no longer this function's input: a session with a textbook
+    // prompt sitting in its recorded output, and no decision from main, has no
+    // prompt here. This is the test that would fail if the renderer ever
+    // re-grew a classifier of its own.
+    it("returns null when main minted no decision, whatever the tail says", () => {
+        recordTail("p-1", "Do you want to proceed?\n\u276f 1. Yes\n  2. No (esc)\n")
+        setDecisions({})
         expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))).toBeNull()
+    })
+
+    // A snapshot is main's COMPLETE answer, so a prompt going away is expressed
+    // by its absence. Merging instead of replacing would leave the tile
+    // offering Approve for a question the agent has already moved past.
+    it("drops a decision the next snapshot no longer carries", () => {
+        setDecisions({ "p-1": MENU })
+        setDecisions({})
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))).toBeNull()
+    })
+
+    it("forgetTail drops the session's decision with its tail", () => {
+        setDecisions({ "p-1": MENU })
+        forgetTail("p-1")
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))).toBeNull()
+    })
+})
+
+describe("promptFor consumes main's decision", () => {
+    afterEach(() => setDecisions({}))
+
+    it("returns null for a session main minted no decision for", () => {
+        setDecisions({})
+        expect(promptFor({ termId: "t1", isAgent: true, status: "waiting" } as AnySession)).toBeNull()
+    })
+
+    it("returns main's prompt verbatim \u2014 it does not re-classify", () => {
+        setDecisions({
+            t1: {
+                id: "dec:t1:aaa",
+                kind: "menu",
+                question: "Do you want to proceed?",
+                tail: "Do you want to proceed?\n\u276f 1. Yes\n  2. No (esc)",
+                options: [
+                    { label: "Approve", send: "1" },
+                    { label: "Deny", send: "\x1b" }
+                ]
+            }
+        })
+        expect(promptFor({ termId: "t1", isAgent: true, status: "waiting" } as AnySession)).toEqual({
+            kind: "menu",
+            question: "Do you want to proceed?",
+            approve: "1",
+            deny: "\x1b"
+        })
+    })
+
+    it("still refuses an idle session even when main offers one", () => {
+        setDecisions({
+            t1: {
+                id: "dec:t1:bbb",
+                kind: "yesno",
+                question: "ok? (y/n)",
+                tail: "ok? (y/n)",
+                options: [
+                    { label: "Approve", send: "y\r" },
+                    { label: "Deny", send: "n\r" }
+                ]
+            }
+        })
+        expect(promptFor({ termId: "t1", isAgent: true, status: "idle" } as AnySession)).toBeNull()
     })
 })

@@ -12,6 +12,8 @@ import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerConfig, ServerDeps, ServerStartResult } from "./server"
 import * as devices from "./devices"
+import { clearDecision, decisionFor, publishDecisions, startDecisionRefresh } from "./decisions"
+import type { DecisionSnapshot } from "../shared/decision"
 import {
     gitStatus,
     getIdentity,
@@ -179,7 +181,13 @@ function registerIpc(): void {
     ptyMgr.ptyEvents.on("data", (d) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("pty:data", d)
     })
-    ptyMgr.ptyEvents.on("exit", (d) => {
+    ptyMgr.ptyEvents.on("exit", (d: { id: string; exitCode: number; stale?: boolean }) => {
+        // A session that ended is not waiting on an answer any more, so its
+        // decision goes with it — otherwise a card minted seconds before the
+        // exit stays tappable and fires a keystroke at a dead pty. `stale` is a
+        // restart's predecessor dying late: that id is live again under a new
+        // process, and clearing it would drop the new screen's decision.
+        if (!d.stale) clearDecision(d.id)
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("pty:exit", d)
     })
     ipcMain.on("pty:create", (e, opts) => {
@@ -292,10 +300,45 @@ function registerIpc(): void {
                 mainWindow.webContents.send("mobile:new", { projectId })
         }
     }
+    const sendDecisions = (snapshot: DecisionSnapshot): void => {
+        if (mainWindow && !mainWindow.isDestroyed())
+            mainWindow.webContents.send("decisions:changed", snapshot)
+    }
+    // Main re-reads the screens on its own clock, not only when the renderer
+    // pushes. A status push cannot be the only trigger: a session already
+    // flagged attention whose pane is off screen takes no status transition
+    // when more output arrives (store.ts's pty handler), so nothing would push,
+    // and the tile would keep offering the answer to the PREVIOUS question —
+    // on the one surface whose Approve button does not re-check the screen
+    // before typing. See REFRESH_MS for why one second.
+    // The phone is on the same clock as the tile. `publishDecisions` only calls
+    // back when the decision snapshot actually changed, so this rebroadcasts
+    // the session list exactly when a card should appear, change or clear --
+    // not once a second. Without it the desktop got the fix above and the phone
+    // did not: a pane already in attention takes no status transition when the
+    // agent asks its NEXT question, so nothing would push, and the phone would
+    // keep showing the previous question's buttons. Tapping one is refused
+    // ("moved-on", decisions.ts), so this is staleness, not a hole -- but a
+    // button that fails is exactly what the remote card exists to replace.
+    const onDecisionsChanged = (snapshot: DecisionSnapshot): void => {
+        sendDecisions(snapshot)
+        if (server.isRunning()) server.broadcastSessions(serverDeps)
+    }
+    startDecisionRefresh(() => latestSessions, onDecisionsChanged)
+    // This snapshot is NOT only the remote server's input any more: it is the
+    // status half of what main needs to classify permission prompts, and the
+    // desktop's own Mission Control tile reads main's answer. So the renderer
+    // pushes it whether or not the remote server is on — see App.tsx, where the
+    // `remote.enabled` gate on this call had to go for exactly that reason.
     ipcMain.on("mobile:sessions", (_e, sessions: RemoteSession[]) => {
         latestSessions = sessions
+        // Forced: the renderer asked, so it gets an answer even if nothing
+        // changed. A renderer that just reloaded has an empty cache, and
+        // deduplicating its first push would leave it that way.
+        publishDecisions(sessions, sendDecisions, true)
         if (server.isRunning()) server.broadcastSessions(serverDeps)
     })
+    ipcMain.handle("decisions:for", (_e, id: string) => decisionFor(String(id)))
     ipcMain.handle("server:start", async (_e, cfg: ServerConfig): Promise<ServerStartResult> => {
         try {
             await server.start(cfg, serverDeps)

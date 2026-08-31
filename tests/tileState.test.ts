@@ -246,6 +246,27 @@ describe("wantsYou", () => {
         ).toBe(false)
     })
 
+    it("stops counting a `waiting` session you have already seen", () => {
+        const live = { status: "waiting" as const, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
+        expect(wantsYou(live, NOW)).toBe(true)
+        expect(wantsYou(live, NOW, true)).toBe(false)
+    })
+
+    it("keeps counting `attention` however hard you look at it", () => {
+        // Looking at a permission prompt does not answer it. Only the states you
+        // can genuinely leave alone are acknowledgeable.
+        const asking = { status: "attention" as const, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
+        expect(wantsYou(asking, NOW, true)).toBe(true)
+    })
+
+    it("keeps counting a stall you have seen, because a stall is not a handover", () => {
+        // `seen` modifies the finished-a-turn state, not "this has been quiet for
+        // too long" - which is still true, and still worth a look, after you look.
+        const stalled = { status: "working" as const, exitCode: undefined, lastAt: NOW - 60 * 60 * 1000, awaited: true, alive: true }
+        expect(wantsYou(stalled, NOW)).toBe(true)
+        expect(wantsYou(stalled, NOW, true)).toBe(true)
+    })
+
     it("is true for attention", () => {
         expect(
             wantsYou(

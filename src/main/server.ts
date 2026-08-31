@@ -27,6 +27,7 @@ import {
     type AuthResult
 } from "./devices"
 import { exitNotice } from "../renderer/src/termExit"
+import { consumeDecision, decisionFor, decisionOwner } from "./decisions"
 
 export interface RemoteSession {
     termId: string
@@ -37,6 +38,23 @@ export interface RemoteSession {
     badge: string
     isAgent: boolean
     status: "working" | "idle" | "attention" | "waiting"
+    /**
+     * A permission prompt this device may answer. `options` rather than a pair of
+     * fields so the wire format can grow to N choices without another protocol
+     * change; `tail` so the phone can show the raw screen beside the parsed
+     * question - the parsed label is the part an agent controls.
+     *
+     * Structurally this is `DecisionView` (src/shared/decision.ts), restated here
+     * because it is a wire contract: what a paired phone parses must be spelled
+     * out where the payload is defined.
+     */
+    pending?: {
+        id: string
+        kind: "menu" | "yesno"
+        question: string
+        tail: string
+        options: { label: string; send: string }[]
+    }
 }
 
 export interface ServerConfig {
@@ -127,8 +145,56 @@ function send(ws: WebSocket, msg: unknown): void {
 const projectRoots = (): string[] => listProjects().projects.map((p) => p.path)
 const inProject = (p: string): boolean => !!p && isWithinRoots(p, projectRoots())
 
+/**
+ * The session list as it goes on the wire: main's snapshot, plus the pending
+ * decision for any session that has one.
+ *
+ * The decision is only ever READ here. Minting, the attention/waiting gate and
+ * the screen binding all live in `decisions.ts` - `server.ts` classifying
+ * anything itself is how the phone and the desktop would come to describe one
+ * prompt two different ways.
+ *
+ * The projection is explicit rather than a spread of the whole record: main's
+ * `PendingDecision` also carries `termId`, `tailHash` and `createdAt`, which are
+ * its own bookkeeping and have no business leaving this machine. Sessions
+ * without a decision are passed through untouched, so the key is absent rather
+ * than present-and-empty.
+ */
+function withDecisions(sessions: readonly RemoteSession[]): RemoteSession[] {
+    return sessions.map((s) => {
+        const d = decisionFor(s.termId)
+        if (!d) return s
+        return {
+            ...s,
+            pending: {
+                id: d.id,
+                kind: d.kind,
+                question: d.question,
+                tail: d.tail,
+                options: d.options.map((o) => ({ label: o.label, send: o.send }))
+            }
+        }
+    })
+}
+
+/**
+ * Why a `{t:"choice"}` was refused, in words the phone shows verbatim.
+ *
+ * The copy lives here rather than on the client because the client must not be
+ * the thing that decides what a refusal means: it renders the string it is
+ * given. Every refusal says something - a silent no-op over a slow phone link is
+ * how you get a second tap, and a second tap on a prompt that did fire is how
+ * the answer lands in whatever the agent asked next.
+ */
+const CHOICE_REASONS: Record<string, string> = {
+    unknown: "That prompt is no longer on screen.",
+    consumed: "Already answered.",
+    "not-an-option": "That is not one of the offered answers.",
+    "moved-on": "The terminal moved on - check it before answering again."
+}
+
 export function broadcastSessions(deps: ServerDeps): void {
-    const sessions = deps.getSessions()
+    const sessions = withDecisions(deps.getSessions())
     for (const c of clients) send(c, { t: "sessions", sessions })
 }
 
@@ -375,7 +441,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
         ws.attached = new Set()
         ws.deviceId = req.deviceId
         clients.add(ws)
-        send(ws, { t: "sessions", sessions: deps.getSessions() })
+        send(ws, { t: "sessions", sessions: withDecisions(deps.getSessions()) })
 
         ws.on("message", (raw) => {
             let msg: Record<string, unknown>
@@ -396,6 +462,90 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                 case "input":
                     if (typeof msg.data === "string") writePty(id, msg.data)
                     break
+                case "choice": {
+                    // Answer a permission prompt with a token MAIN minted. A phone
+                    // may replay one of main's own answer tokens, for a prompt main
+                    // can still see on the screen it classified, on a session this
+                    // socket is attached to, exactly once. Everything else is a
+                    // refusal that says why.
+                    //
+                    // Be honest about what the attach check is worth: `case
+                    // "attach"` takes any id the client sends, so a paired device
+                    // can attach to anything it saw on the session list and clear
+                    // this. It is not a boundary against a hostile paired device --
+                    // `case "input"` already writes arbitrary bytes to an arbitrary
+                    // pty, so pairing IS the trust boundary and this handler grants
+                    // nothing beyond it. What the check buys is that a tap can only
+                    // answer a session the device actually opened, which is what
+                    // keeps a mis-addressed or replayed frame from firing into a
+                    // terminal nobody was looking at.
+                    //
+                    // Note what is NOT read here: `id`. The terminal a decision
+                    // belongs to comes from main's own record (`decisionOwner`,
+                    // then `r.termId`), never from the wire - otherwise a device
+                    // could name a session it is attached to while spending a
+                    // decision minted for a different one. `id` is accepted and
+                    // cross-checked below so that it cannot quietly drift into
+                    // meaning something, but it is never the authority.
+                    //
+                    // There is deliberately no per-pty write lock. `decisionOwner`,
+                    // `consumeDecision` and `writePty` are all synchronous, so from
+                    // the first check to the write this is one run-to-completion
+                    // block in a single-threaded main process: no other socket, no
+                    // `{t:"input"}` and no `upload` can interleave. Introducing an
+                    // `await` anywhere between `consumeDecision` and `writePty` is
+                    // what would break that - and only then would a lock be the fix.
+                    const decisionId = typeof msg.decisionId === "string" ? msg.decisionId : ""
+                    const wanted = typeof msg.send === "string" ? msg.send : ""
+                    const owner = decisionOwner(decisionId)
+                    if (!owner) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: "unknown",
+                            reason: CHOICE_REASONS.unknown
+                        })
+                        break
+                    }
+                    if (!ws.attached?.has(owner)) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: "rejected",
+                            reason: "Not attached to that session."
+                        })
+                        break
+                    }
+                    if (id && id !== owner) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: "rejected",
+                            reason: "That answer belongs to a different session."
+                        })
+                        break
+                    }
+                    const r = consumeDecision(decisionId, wanted)
+                    if (!r.ok) {
+                        send(ws, {
+                            t: "choice:res",
+                            decisionId,
+                            outcome: r.reason === "unknown" ? "unknown" : "rejected",
+                            reason: CHOICE_REASONS[r.reason]
+                        })
+                        break
+                    }
+                    // `r.send` and `r.termId` - main's copy of both. And no `+ "\r"`:
+                    // for a menu a trailing Return breaks the numbered selection and
+                    // the ESC denial alike, and a yesno token from approval.ts
+                    // already ends in one. Honour the token as recorded.
+                    writePty(r.termId, r.send)
+                    send(ws, { t: "choice:res", decisionId, outcome: "accepted" })
+                    // The prompt is spent: push the session list so every paired
+                    // device drops the card instead of offering a second tap.
+                    broadcastSessions(deps)
+                    break
+                }
                 case "resize":
                     resizePty(id, Number(msg.cols), Number(msg.rows))
                     break
@@ -403,7 +553,7 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     if (typeof msg.projectId === "string") deps.requestNewSession(msg.projectId)
                     break
                 case "list":
-                    send(ws, { t: "sessions", sessions: deps.getSessions() })
+                    send(ws, { t: "sessions", sessions: withDecisions(deps.getSessions()) })
                     break
                 case "http": {
                     const req = msg.req as Parameters<typeof httpSend>[0]
@@ -678,6 +828,21 @@ const CLIENT_HTML = `<!doctype html>
   .gridtbl th,.gridtbl td{border:1px solid var(--bd);padding:4px 8px;text-align:left;white-space:nowrap}
   .gridtbl th{color:var(--ac)}
   .tbl-item{padding:8px 6px;border-bottom:1px solid var(--bd);color:var(--mu);font-size:13px}
+  /* The pending-decision card. Sits above the quick keys so the answer is the
+     nearest thing to your thumb, and shows the raw screen under the parsed
+     question - the question is the string an agent controls. */
+  #decision{background:var(--bg2);padding:0 8px}
+  #decision .card{border:1px solid var(--ac);border-radius:10px;padding:10px;margin:8px 0;background:var(--bg3)}
+  #decision .q{font-weight:600;margin-bottom:6px;line-height:1.35}
+  #decision .tail{margin:0 0 8px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;color:var(--mu);font-family:monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:34vh;overflow:auto}
+  #decision .acts{display:flex;gap:8px}
+  #decision .acts button{flex:1;min-height:44px;border-radius:8px;font-size:15px;font-weight:600}
+  #decision .acts .approve{background:var(--ac);color:#14110d;border:none}
+  #decision .acts .deny{background:var(--bg3);border:1px solid var(--bd);color:var(--tx)}
+  #decision .acts button[disabled]{opacity:.45}
+  #decision .dnote{margin:0 0 8px;font-size:13px;color:var(--mu);line-height:1.4}
+  #decision .dnote.bad{color:var(--clay)}
+  .badge.needs{color:var(--ac);border-color:var(--ac)!important}
 </style>
 </head>
 <body>
@@ -750,6 +915,7 @@ const CLIENT_HTML = `<!doctype html>
   </div>
   <div id="term-view">
     <div id="term"></div>
+    <div id="decision"></div>
     <div class="keys">
       <button data-k="\\r">⏎</button>
       <button data-k="\\u0003">⌃C</button>
@@ -784,6 +950,10 @@ const CLIENT_HTML = `<!doctype html>
   var filesView=document.getElementById('files-view'), aiView=document.getElementById('ai-view');
   var ws, term, attachedId = null, sessions = [], prevStatus = {}, notifyAsked = false;
   var projs=[], froot='', fcur='', fpath='', aFiles=[];
+  // The decision currently on screen, whether a tap is in flight, and the last
+  // thing the server said about one. 'submitting' is the double-tap guard: a
+  // second tap is how the wrong digit reaches a live agent.
+  var pendingId=null, submitting=false, dnote='', dnoteBad=false, dnoteTimer=null;
 
   // Ask for OS-notification permission on the first user gesture (browsers
   // require one). Notifications only fire on a secure context (https / Tailscale
@@ -812,7 +982,7 @@ const CLIENT_HTML = `<!doctype html>
     document.getElementById('nav').style.display = v==='term'?'none':'flex';
     backBtn.style.display = v==='term'?'block':'none';
     [].forEach.call(document.querySelectorAll('#nav button'),function(b){ b.classList.toggle('active', b.getAttribute('data-v')===v); });
-    if(v!=='term') attachedId=null;
+    if(v!=='term'){ attachedId=null; dnote=''; renderDecision(); }
     if(v==='list') titleEl.textContent='DevDeck';
     if(v==='http') titleEl.textContent='HTTP';
     if(v==='db'){ titleEl.textContent='Database'; sendMsg({t:'db:conns'}); }
@@ -833,7 +1003,15 @@ const CLIENT_HTML = `<!doctype html>
       if(m.t === 'sessions'){
         m.sessions.forEach(function(s){ if(s.status==='attention' && prevStatus[s.termId]!=='attention') notifyAttention(s); });
         prevStatus={}; m.sessions.forEach(function(s){ prevStatus[s.termId]=s.status; });
-        sessions = m.sessions; updateBadge(); if(!attachedId) renderList();
+        sessions = m.sessions; updateBadge(); if(!attachedId) renderList(); renderDecision();
+      }
+      else if(m.t === 'choice:res'){
+        // Three-valued on purpose. A binary success/failure invites a retry, and
+        // a retry is how the wrong digit reaches a live agent - so anything that
+        // is not an accepted answer says what happened, in the server's words.
+        submitting=false;
+        if(m.outcome === 'accepted') setNote('Answered ✓', false);
+        else setNote(m.reason || 'Response unconfirmed - check the terminal before answering again.', true);
       }
       else if(m.t === 'data' && m.id === attachedId && term){ term.write(m.data); }
       else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m'+(m.notice||'[process exited]')+'\\x1b[0m\\r\\n'); }
@@ -887,6 +1065,7 @@ const CLIENT_HTML = `<!doctype html>
         var label = s.isAgent ? (s.badge||'AGENT') : 'shell';
         html+='<div class="sess" data-id="'+s.termId+'"><span class="dot '+kindClass+' '+s.status+'"></span>'+
           '<div class="meta"><div>'+esc(s.tabName)+'</div><div class="st">'+esc(label)+' · '+s.status+'</div></div>'+
+          (s.pending?'<span class="badge needs">NEEDS YOU</span>':'')+
           (s.isAgent?'<span class="badge">'+esc(s.badge||'')+'</span>':'')+'</div>';
       });
       html+='<div class="sess new" data-new="'+pid+'"><span class="dot agent"></span><div class="meta">+ New agent session</div></div>';
@@ -894,6 +1073,54 @@ const CLIENT_HTML = `<!doctype html>
     listEl.innerHTML=html;
     [].forEach.call(listEl.querySelectorAll('.sess[data-id]'),function(el){ el.onclick=function(){ openTerm(el.getAttribute('data-id')); }; });
     [].forEach.call(listEl.querySelectorAll('.sess[data-new]'),function(el){ el.onclick=function(){ sendMsg({t:'new',projectId:el.getAttribute('data-new')}); }; });
+  }
+
+  // What the server said about the last tap. Kept outside the card because the
+  // card is gone by the time an accepted answer is worth confirming.
+  function setNote(msg, bad){
+    dnote=msg; dnoteBad=!!bad;
+    if(dnoteTimer) clearTimeout(dnoteTimer);
+    dnoteTimer=setTimeout(function(){ dnote=''; renderDecision(); }, 6000);
+    renderDecision();
+  }
+
+  // The card for the attached session's pending decision, if it has one.
+  //
+  // Driven entirely by the session list: the desktop answering a prompt, or the
+  // agent moving on, arrives as a broadcast and the card leaves on its own. The
+  // page never decides a decision is spent - that is main's to say, and a client
+  // that guessed would offer a second tap on a prompt that already fired.
+  function renderDecision(){
+    var el=document.getElementById('decision');
+    if(!el) return;
+    var s=attachedId?sessions.filter(function(x){return x.termId===attachedId;})[0]:null;
+    var p=(s&&s.pending)?s.pending:null;
+    // A new question re-enables the buttons; the old one's in-flight tap is not
+    // this question's business.
+    if(p && p.id!==pendingId){ pendingId=p.id; submitting=false; }
+    if(!p) pendingId=null;
+    var html='';
+    if(p){
+      html+='<div class="card"><div class="q">'+esc(p.question)+'</div>'+
+        '<pre class="tail">'+esc(p.tail)+'</pre><div class="acts">';
+      p.options.forEach(function(o,i){
+        html+='<button class="'+(i===0?'approve':'deny')+'" data-i="'+i+'"'+(submitting?' disabled':'')+'>'+
+          (i===0?'✓ ':'✕ ')+esc(o.label)+'</button>';
+      });
+      html+='</div></div>';
+    }
+    if(dnote) html+='<div class="dnote'+(dnoteBad?' bad':'')+'">'+esc(dnote)+'</div>';
+    el.innerHTML=html;
+    if(!p) return;
+    [].forEach.call(el.querySelectorAll('.acts button'),function(b){
+      b.onclick=function(){
+        if(submitting) return;
+        submitting=true; renderDecision();
+        // 'send' is one of main's own recorded tokens, echoed back - never a
+        // string this page composed.
+        sendMsg({t:'choice',id:attachedId,decisionId:p.id,send:p.options[Number(b.getAttribute('data-i'))].send});
+      };
+    });
   }
 
   function fit(){
@@ -916,6 +1143,7 @@ const CLIENT_HTML = `<!doctype html>
     term.open(document.getElementById('term'));
     term.onData(function(d){ sendMsg({t:'input',id:id,data:d}); });
     attachedId=id; sendMsg({t:'attach',id:id});
+    dnote=''; renderDecision();
     setTimeout(fit,60);
   }
 

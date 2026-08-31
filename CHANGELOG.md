@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+### Answer a permission prompt from your phone
+
+An agent that stops to ask permission used to reach the phone as the word
+"attention" and nothing else — you could see that something wanted you, open the
+terminal and type the digit yourself. Now the question travels with it.
+
+- **One classifier, in main.** `approval.ts` and the tail helpers moved to
+  `src/shared/`, and `src/main/pty.ts` keeps the cleaned tail that main reads.
+  The renderer used to build its own copy of the same screen, so the tile and the
+  phone could describe one prompt two different ways; there is now one answer to
+  what an agent asked.
+- **A decision is bound to the screen that produced it.** Main mints it only for
+  a session actually waiting on you, hashes the tail it was read from, and spends
+  it once. Answer at the desk and every paired phone drops the card without being
+  told; tap a card whose terminal has moved on and the answer is refused with
+  "the terminal moved on — check it before answering again" rather than firing a
+  digit into whatever the agent asked next.
+- **The card shows the raw screen, not just the parsed question.** The question
+  is the one string an agent controls, so the excerpt it was read from sits under
+  it. Approve and Deny are 44px targets above the quick keys, and a session
+  waiting on you carries a NEEDS YOU badge in the list.
+- **A phone can only replay tokens main recorded.** A made-up `send` string is
+  refused, as is a tap from a device that never opened that session, or one
+  naming a different session than the decision belongs to. None of those write
+  anything to the terminal.
+
+### Fixed
+
+- **A region can fail without taking the cockpit with it.** One error boundary
+  wrapped the whole app, so a throw in the Database or API panel blanked the
+  window while several agents kept running in main — invisibly, with nothing
+  able to answer them. The topbar, the deck and each panel now fail on their
+  own, and the view recovers when you switch away and back.
+- **The wants-you count stops counting an agent you have already looked at.** It
+  counted every session that had finished its turn, and the acknowledgement only
+  fired when you *navigated* to a pane — so sitting on the pane while an agent
+  finished left the light on. A session that has been seen keeps saying
+  `waiting`; only the count changes, and the deck key says so by form (the
+  breathe stops, the dot becomes a hollow ring) rather than by colour.
+- **A project remembers the view it was last in.** The main view was global while
+  the active tab and pane were per project, so switching projects landed you in
+  the previous project's view pointed at the new project's data.
+- **The Overview grid orders sessions like everything else does.** It ranked them
+  with a private function while the rail directly above it, and Mission, used the
+  shared follow order.
+- **Self-signed HTTPS no longer claims to unlock mobile push.** It does not:
+  clicking through the browser warning marks the origin insecure, so service
+  workers and Web Push stay unavailable. What the certificate really buys —
+  encryption on plain LAN, and `Secure` + `__Host-` on the session cookie — is
+  what the copy now says.
+
 ## 0.10.0 - 2026-08-29
 
 ### Guards that read text now check the thing itself
