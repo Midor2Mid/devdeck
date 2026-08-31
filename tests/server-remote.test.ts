@@ -14,7 +14,13 @@ const h = vi.hoisted(() => {
     const { join } = require("path")
     // `tails` is what the stubbed pty hands the decision registry - see the
     // pty mock below and the Task 5 block at the bottom of this file.
-    return { dir: mkdtempSync(join(tmpdir(), "server-remote-")), tails: {} as Record<string, string> }
+    return {
+        dir: mkdtempSync(join(tmpdir(), "server-remote-")),
+        tails: {} as Record<string, string>,
+        // Every byte the server sent to a pty. The choice handler's whole point
+        // is that most refusals write nothing, and a no-op mock cannot show that.
+        writes: [] as { id: string; data: string }[]
+    }
 })
 
 vi.mock("electron", () => ({
@@ -36,7 +42,9 @@ vi.mock("../src/main/pty", async () => {
     return {
         ptyEvents: new EventEmitter(),
         getBuffer: () => "",
-        writePty: () => {},
+        writePty: (id: string, data: string) => {
+            h.writes.push({ id, data })
+        },
         resizePty: () => {},
         // decisions.ts reads the screen through these two. Both run the fixture
         // through the REAL `lastLines` and honour `n`, because production's
@@ -477,5 +485,228 @@ describe("the pending decision rides the session broadcast (Task 5)", () => {
         // client's `if (s.pending)` guard the only thing standing between a
         // phone and a card it cannot answer.
         expect(s).not.toHaveProperty("pending")
+    })
+})
+
+describe("the client page carries the decision card (Task 7)", () => {
+    // The page is a string by construction and there is no DOM harness for it,
+    // so these assert the load-bearing pieces are still in the served HTML. What
+    // they guard is a deletion: the wire and the handler already have real tests
+    // above, and without a card none of that is reachable from a phone.
+    async function page(): Promise<string> {
+        const res = await fetch(`${base}/?token=${pairingToken()}`)
+        expect(res.status).toBe(200)
+        return res.text()
+    }
+
+    it("serves the card container and its render pass", async () => {
+        const html = await page()
+        expect(html).toContain('<div id="decision"></div>')
+        expect(html).toContain("function renderDecision()")
+    })
+
+    it("shows the raw screen beside the parsed question, both escaped", async () => {
+        const html = await page()
+        // The question is the string an agent controls; the tail is what lets a
+        // human notice it lying. Both go through esc().
+        expect(html).toContain("esc(p.question)")
+        expect(html).toContain("esc(p.tail)")
+    })
+
+    it("answers with a token the server minted, never a composed string", async () => {
+        const html = await page()
+        expect(html).toContain("t:'choice'")
+        expect(html).toContain("decisionId:p.id")
+        expect(html).toContain("p.options[Number(b.getAttribute('data-i'))].send")
+    })
+
+    it("guards the second tap and reports a refusal in the server's words", async () => {
+        const html = await page()
+        expect(html).toContain("if(submitting) return;")
+        expect(html).toContain("choice:res")
+        expect(html).toContain("m.reason")
+    })
+
+    it("flags a session that wants an answer in the list", async () => {
+        const html = await page()
+        expect(html).toContain("NEEDS YOU")
+    })
+})
+
+describe("answering a prompt from a phone (Task 6)", () => {
+    // The handler that writes to a live pty. Task 6 shipped without tests; what
+    // each of these pins is not the reply text but whether a keystroke reached
+    // the terminal, because that is the part that cannot be taken back.
+    const PROMPT_TAIL = [
+        "Do you want to proceed?",
+        "❯ 1. Yes",
+        "  2. No, and tell Claude what to do differently (esc)"
+    ].join("\n")
+
+    function agentSession(termId: string): RemoteSession {
+        return {
+            termId,
+            projectId: "p1",
+            projectName: "DevDeck",
+            projectPath: "D:/devdeck",
+            tabName: "claude",
+            badge: "AI",
+            isAgent: true,
+            status: "attention"
+        }
+    }
+
+    /** A paired socket, attached to `termId`, with the minted decision's id. */
+    async function paired(termId: string): Promise<{ ws: WebSocket; decisionId: string }> {
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const ws = await connectWs({ Cookie: `devdeck_device=${token}` })
+        ws.send(JSON.stringify({ t: "attach", id: termId }))
+        const d = refreshDecision(termId, "attention", true)
+        if (!d) throw new Error("no decision was minted for the fixture")
+        return { ws, decisionId: d.id }
+    }
+
+    /** The next `choice:res` frame, or a rejection if none arrives. */
+    function choiceRes(ws: WebSocket): Promise<{ outcome: string; reason?: string }> {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('no "choice:res" frame')), 3000)
+            ws.on("message", (raw) => {
+                const msg = JSON.parse(raw.toString())
+                if (msg.t !== "choice:res") return
+                clearTimeout(timer)
+                resolve(msg)
+            })
+        })
+    }
+
+    beforeEach(() => {
+        sessions = [agentSession("t1")]
+        h.tails["t1"] = PROMPT_TAIL
+        h.writes = []
+    })
+
+    afterEach(() => {
+        clearDecision("t1")
+        h.tails = {}
+        h.writes = []
+    })
+
+    it("writes the recorded token to the owning pty and says so", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+
+        expect((await res).outcome).toBe("accepted")
+        expect(h.writes).toEqual([{ id: "t1", data: "1" }])
+        ws.close()
+    })
+
+    it("refuses once the screen has moved on, and writes NOTHING", async () => {
+        // The failure this whole design exists to prevent: the card describes a
+        // prompt the terminal has already left, and the digit lands in whatever
+        // the agent asked next.
+        const { ws, decisionId } = await paired("t1")
+        h.tails["t1"] = "the agent moved on and asked something else entirely"
+
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("moved on")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("spends a decision exactly once - a second tap writes nothing more", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const first = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+        expect((await first).outcome).toBe("accepted")
+
+        const second = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+        const r = await second
+        expect(r.outcome).not.toBe("accepted")
+        expect(r.reason).toContain("Already answered")
+        expect(h.writes).toHaveLength(1)
+        ws.close()
+    })
+
+    it("refuses a send string the client made up, however plausible", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const res = choiceRes(ws)
+        // "y\r" is a perfectly reasonable guess at an approval, and is exactly
+        // what must never reach a pty: only main's own recorded tokens do.
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "y\r" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("not one of the offered answers")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("refuses an unknown decision id", async () => {
+        const { ws } = await paired("t1")
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId: "dec:t1:nope", send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("unknown")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("refuses a tap from a socket that never opened the session", async () => {
+        const { decisionId } = await paired("t1")
+        const enrol = await fetch(`${base}/?token=${pairingToken()}`)
+        const token = deviceTokenFrom(enrol.headers.get("set-cookie"))
+        const other = await connectWs({ Cookie: `devdeck_device=${token}` })
+
+        const res = choiceRes(other)
+        other.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("Not attached")
+        expect(h.writes).toEqual([])
+        other.close()
+    })
+
+    it("refuses when the named session is not the one the decision belongs to", async () => {
+        const { ws, decisionId } = await paired("t1")
+        ws.send(JSON.stringify({ t: "attach", id: "t9" }))
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t9", decisionId, send: "1" }))
+
+        const r = await res
+        expect(r.outcome).toBe("rejected")
+        expect(r.reason).toContain("different session")
+        expect(h.writes).toEqual([])
+        ws.close()
+    })
+
+    it("drops the card on every paired device once the prompt is spent", async () => {
+        const { ws, decisionId } = await paired("t1")
+        const res = choiceRes(ws)
+        ws.send(JSON.stringify({ t: "choice", id: "t1", decisionId, send: "1" }))
+        await res
+
+        // The broadcast that follows an accepted answer is what clears the card
+        // without the phone deciding anything for itself.
+        const after = await new Promise<RemoteSession[]>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error("no sessions frame")), 3000)
+            ws.on("message", (raw) => {
+                const msg = JSON.parse(raw.toString())
+                if (msg.t !== "sessions") return
+                clearTimeout(timer)
+                resolve(msg.sessions)
+            })
+            ws.send(JSON.stringify({ t: "list" }))
+        })
+        expect(after.find((s) => s.termId === "t1")).not.toHaveProperty("pending")
+        ws.close()
     })
 })

@@ -105,7 +105,11 @@ describe("appendRun / readRuns", () => {
         expect(all).toHaveLength(RUN_KEEP + 4)
         expect(all[0].id).toBe(`r${RUN_CAP + 4}`)
         expect(all[all.length - 1].id).toBe(`r${RUN_CAP + 1 - RUN_KEEP}`)
-    })
+        // 5005 real appends and one rewrite, all synchronous disk I/O. It fits
+        // the 5s default when run alone and does not when the suite is busy, so
+        // the budget is stated rather than left to depend on what else is
+        // running: a timeout that other test files can trip is not a signal.
+    }, 30000)
 
     it("clears", () => {
         appendRun(rec())

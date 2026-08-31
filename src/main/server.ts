@@ -828,6 +828,21 @@ const CLIENT_HTML = `<!doctype html>
   .gridtbl th,.gridtbl td{border:1px solid var(--bd);padding:4px 8px;text-align:left;white-space:nowrap}
   .gridtbl th{color:var(--ac)}
   .tbl-item{padding:8px 6px;border-bottom:1px solid var(--bd);color:var(--mu);font-size:13px}
+  /* The pending-decision card. Sits above the quick keys so the answer is the
+     nearest thing to your thumb, and shows the raw screen under the parsed
+     question - the question is the string an agent controls. */
+  #decision{background:var(--bg2);padding:0 8px}
+  #decision .card{border:1px solid var(--ac);border-radius:10px;padding:10px;margin:8px 0;background:var(--bg3)}
+  #decision .q{font-weight:600;margin-bottom:6px;line-height:1.35}
+  #decision .tail{margin:0 0 8px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;color:var(--mu);font-family:monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:34vh;overflow:auto}
+  #decision .acts{display:flex;gap:8px}
+  #decision .acts button{flex:1;min-height:44px;border-radius:8px;font-size:15px;font-weight:600}
+  #decision .acts .approve{background:var(--ac);color:#14110d;border:none}
+  #decision .acts .deny{background:var(--bg3);border:1px solid var(--bd);color:var(--tx)}
+  #decision .acts button[disabled]{opacity:.45}
+  #decision .dnote{margin:0 0 8px;font-size:13px;color:var(--mu);line-height:1.4}
+  #decision .dnote.bad{color:var(--clay)}
+  .badge.needs{color:var(--ac);border-color:var(--ac)!important}
 </style>
 </head>
 <body>
@@ -900,6 +915,7 @@ const CLIENT_HTML = `<!doctype html>
   </div>
   <div id="term-view">
     <div id="term"></div>
+    <div id="decision"></div>
     <div class="keys">
       <button data-k="\\r">⏎</button>
       <button data-k="\\u0003">⌃C</button>
@@ -934,6 +950,10 @@ const CLIENT_HTML = `<!doctype html>
   var filesView=document.getElementById('files-view'), aiView=document.getElementById('ai-view');
   var ws, term, attachedId = null, sessions = [], prevStatus = {}, notifyAsked = false;
   var projs=[], froot='', fcur='', fpath='', aFiles=[];
+  // The decision currently on screen, whether a tap is in flight, and the last
+  // thing the server said about one. 'submitting' is the double-tap guard: a
+  // second tap is how the wrong digit reaches a live agent.
+  var pendingId=null, submitting=false, dnote='', dnoteBad=false, dnoteTimer=null;
 
   // Ask for OS-notification permission on the first user gesture (browsers
   // require one). Notifications only fire on a secure context (https / Tailscale
@@ -962,7 +982,7 @@ const CLIENT_HTML = `<!doctype html>
     document.getElementById('nav').style.display = v==='term'?'none':'flex';
     backBtn.style.display = v==='term'?'block':'none';
     [].forEach.call(document.querySelectorAll('#nav button'),function(b){ b.classList.toggle('active', b.getAttribute('data-v')===v); });
-    if(v!=='term') attachedId=null;
+    if(v!=='term'){ attachedId=null; dnote=''; renderDecision(); }
     if(v==='list') titleEl.textContent='DevDeck';
     if(v==='http') titleEl.textContent='HTTP';
     if(v==='db'){ titleEl.textContent='Database'; sendMsg({t:'db:conns'}); }
@@ -983,7 +1003,15 @@ const CLIENT_HTML = `<!doctype html>
       if(m.t === 'sessions'){
         m.sessions.forEach(function(s){ if(s.status==='attention' && prevStatus[s.termId]!=='attention') notifyAttention(s); });
         prevStatus={}; m.sessions.forEach(function(s){ prevStatus[s.termId]=s.status; });
-        sessions = m.sessions; updateBadge(); if(!attachedId) renderList();
+        sessions = m.sessions; updateBadge(); if(!attachedId) renderList(); renderDecision();
+      }
+      else if(m.t === 'choice:res'){
+        // Three-valued on purpose. A binary success/failure invites a retry, and
+        // a retry is how the wrong digit reaches a live agent - so anything that
+        // is not an accepted answer says what happened, in the server's words.
+        submitting=false;
+        if(m.outcome === 'accepted') setNote('Answered ✓', false);
+        else setNote(m.reason || 'Response unconfirmed - check the terminal before answering again.', true);
       }
       else if(m.t === 'data' && m.id === attachedId && term){ term.write(m.data); }
       else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m'+(m.notice||'[process exited]')+'\\x1b[0m\\r\\n'); }
@@ -1037,6 +1065,7 @@ const CLIENT_HTML = `<!doctype html>
         var label = s.isAgent ? (s.badge||'AGENT') : 'shell';
         html+='<div class="sess" data-id="'+s.termId+'"><span class="dot '+kindClass+' '+s.status+'"></span>'+
           '<div class="meta"><div>'+esc(s.tabName)+'</div><div class="st">'+esc(label)+' · '+s.status+'</div></div>'+
+          (s.pending?'<span class="badge needs">NEEDS YOU</span>':'')+
           (s.isAgent?'<span class="badge">'+esc(s.badge||'')+'</span>':'')+'</div>';
       });
       html+='<div class="sess new" data-new="'+pid+'"><span class="dot agent"></span><div class="meta">+ New agent session</div></div>';
@@ -1044,6 +1073,54 @@ const CLIENT_HTML = `<!doctype html>
     listEl.innerHTML=html;
     [].forEach.call(listEl.querySelectorAll('.sess[data-id]'),function(el){ el.onclick=function(){ openTerm(el.getAttribute('data-id')); }; });
     [].forEach.call(listEl.querySelectorAll('.sess[data-new]'),function(el){ el.onclick=function(){ sendMsg({t:'new',projectId:el.getAttribute('data-new')}); }; });
+  }
+
+  // What the server said about the last tap. Kept outside the card because the
+  // card is gone by the time an accepted answer is worth confirming.
+  function setNote(msg, bad){
+    dnote=msg; dnoteBad=!!bad;
+    if(dnoteTimer) clearTimeout(dnoteTimer);
+    dnoteTimer=setTimeout(function(){ dnote=''; renderDecision(); }, 6000);
+    renderDecision();
+  }
+
+  // The card for the attached session's pending decision, if it has one.
+  //
+  // Driven entirely by the session list: the desktop answering a prompt, or the
+  // agent moving on, arrives as a broadcast and the card leaves on its own. The
+  // page never decides a decision is spent - that is main's to say, and a client
+  // that guessed would offer a second tap on a prompt that already fired.
+  function renderDecision(){
+    var el=document.getElementById('decision');
+    if(!el) return;
+    var s=attachedId?sessions.filter(function(x){return x.termId===attachedId;})[0]:null;
+    var p=(s&&s.pending)?s.pending:null;
+    // A new question re-enables the buttons; the old one's in-flight tap is not
+    // this question's business.
+    if(p && p.id!==pendingId){ pendingId=p.id; submitting=false; }
+    if(!p) pendingId=null;
+    var html='';
+    if(p){
+      html+='<div class="card"><div class="q">'+esc(p.question)+'</div>'+
+        '<pre class="tail">'+esc(p.tail)+'</pre><div class="acts">';
+      p.options.forEach(function(o,i){
+        html+='<button class="'+(i===0?'approve':'deny')+'" data-i="'+i+'"'+(submitting?' disabled':'')+'>'+
+          (i===0?'✓ ':'✕ ')+esc(o.label)+'</button>';
+      });
+      html+='</div></div>';
+    }
+    if(dnote) html+='<div class="dnote'+(dnoteBad?' bad':'')+'">'+esc(dnote)+'</div>';
+    el.innerHTML=html;
+    if(!p) return;
+    [].forEach.call(el.querySelectorAll('.acts button'),function(b){
+      b.onclick=function(){
+        if(submitting) return;
+        submitting=true; renderDecision();
+        // 'send' is one of main's own recorded tokens, echoed back - never a
+        // string this page composed.
+        sendMsg({t:'choice',id:attachedId,decisionId:p.id,send:p.options[Number(b.getAttribute('data-i'))].send});
+      };
+    });
   }
 
   function fit(){
@@ -1066,6 +1143,7 @@ const CLIENT_HTML = `<!doctype html>
     term.open(document.getElementById('term'));
     term.onData(function(d){ sendMsg({t:'input',id:id,data:d}); });
     attachedId=id; sendMsg({t:'attach',id:id});
+    dnote=''; renderDecision();
     setTimeout(fit,60);
   }
 
