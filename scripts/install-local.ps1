@@ -61,25 +61,36 @@ while (Get-Process -Name "DevDeck" -ErrorAction SilentlyContinue) {
 }
 
 # --- copy ------------------------------------------------------------------
-$before = (Get-Item (Join-Path $target "DevDeck.exe")).LastWriteTime
 Write-Host "==> copying files"
 Copy-Item -Path (Join-Path $source "*") -Destination $target -Recurse -Force
 
 # --- prove it landed, two ways ---------------------------------------------
-# The timestamp alone would be satisfied by a partial copy, and the version
-# alone would be satisfied by the previous install of the same version.
-$after = (Get-Item (Join-Path $target "DevDeck.exe")).LastWriteTime
-if ($after -le $before) { Fail "DevDeck.exe timestamp did not move ($before -> $after) - the copy did not land." }
-
-$asar = Join-Path $target "resources\app.asar"
-if (-not (Test-Path $asar)) { Fail "No app.asar at $asar." }
-$bytes = [System.IO.File]::ReadAllBytes($asar)
-$text = [System.Text.Encoding]::UTF8.GetString($bytes)
-if ($text -notmatch [regex]::Escape("`"version`":`"$pkgVersion`"")) {
-    Fail "app.asar does not carry version $pkgVersion - the bundle is not the one just built."
+# Both checks compare the installed file against the one just built, because
+# the two obvious cheaper checks are false negatives here:
+#   - DevDeck.exe's timestamp does not move. electron-builder reuses the cached
+#     Electron binary, so a rebuild of the same version leaves the exe byte- and
+#     mtime-identical; "timestamp did not move" fired on a copy that had landed.
+#   - The app.asar version string is pretty-printed ("version": "0.10.0"), so a
+#     regex for the unspaced form never matched.
+# Hashing catches a partial copy (which the timestamp would not) and a stale
+# install of the same version (which the version string would not).
+function Sha($p) { (Get-FileHash $p -Algorithm SHA256).Hash }
+foreach ($rel in @("DevDeck.exe", "resources\app.asar")) {
+    $dst = Join-Path $target $rel
+    if (-not (Test-Path $dst)) { Fail "No $rel at $dst - the copy did not land." }
+    if ((Sha $dst) -ne (Sha (Join-Path $source $rel))) {
+        Fail "$rel differs from the build in $source - the copy did not land."
+    }
+    Write-Host "  ok   $rel matches the build"
 }
 
-Write-Host "  ok   DevDeck.exe updated ($after)"
+# The bundle should also be the version the repo claims - a build from a
+# different checkout would match itself and still be the wrong app.
+$asar = Join-Path $target "resources\app.asar"
+$text = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($asar))
+if ($text -notmatch "`"version`"\s*:\s*`"$([regex]::Escape($pkgVersion))`"") {
+    Fail "app.asar does not carry version $pkgVersion - the bundle is not the one just built."
+}
 Write-Host "  ok   app.asar carries $pkgVersion"
 
 if ($Relaunch) {
