@@ -406,15 +406,35 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             {hold === "resume" && (
                 <div className="resume-overlay">
                     <div className="resume-card">
-                        <div className="resume-title">Resume this agent session?</div>
+                        {/* Two buttons only when they would run two different
+                            commands. Without `resumeArgs` — claude-yolo, gemini,
+                            and any user preset that has none — `resumeCmd` falls
+                            back to `coldCmd`, so "Resume" and "Start fresh" were
+                            the same keystroke behind different words, over copy
+                            promising a conversation that was about to be
+                            discarded. The dead bar below has always gated on
+                            `canResumeAgent`; this card did not. */}
+                        <div className="resume-title">
+                            {canResumeAgent ? "Resume this agent session?" : "Start this agent?"}
+                        </div>
                         <div className="resume-sub">
-                            Restored from your last run — its conversation isn&apos;t live yet.
+                            {canResumeAgent
+                                ? "Restored from your last run — its conversation isn't live yet."
+                                : "Restored from your last run. This agent has no resume command, so it starts a new conversation."}
                         </div>
                         <div className="resume-actions">
-                            <button className="accent" onClick={() => resolveHold("resume")}>
-                                Resume
-                            </button>
-                            <button onClick={() => resolveHold("fresh")}>Start fresh</button>
+                            {canResumeAgent ? (
+                                <>
+                                    <button className="accent" onClick={() => resolveHold("resume")}>
+                                        Resume
+                                    </button>
+                                    <button onClick={() => resolveHold("fresh")}>Start fresh</button>
+                                </>
+                            ) : (
+                                <button className="accent" onClick={() => resolveHold("fresh")}>
+                                    Start
+                                </button>
+                            )}
                         </div>
                         {resumeCmd && <code className="resume-cmd">{resumeCmd}</code>}
                     </div>
