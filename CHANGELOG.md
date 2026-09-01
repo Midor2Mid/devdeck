@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.11.1 - 2026-09-02
+
+Two honesty fixes on surfaces 0.11.0 had just touched.
+
+### Fixed
+
+- **The phone keyboard can no longer bury the answer.** `#app` was
+  `height:100vh` - a fixed layout-viewport height - and nothing inside the
+  terminal view is a scroll container, so focusing the input bar below the
+  decision card opened the keyboard over the answer with no way to scroll it
+  back. Neither iOS Safari nor Chrome Android shrinks the layout viewport in
+  response. `100dvh` (with `100vh` left as the fallback) and a `dvh` cap on the
+  tail excerpt are the whole fix. Found by a review pass, not by testing - the
+  card has still never rendered on a real phone, though the buttons were always
+  in normal flow at 44px, so the answer itself stayed under the thumb.
+- **Resume is no longer offered to an agent that cannot resume.** `resumeCmd`
+  falls back to the cold-start command whenever a preset has no `resumeArgs`, so
+  for claude-yolo, gemini and any user preset without one, the cold-start card's
+  "Resume" and "Start fresh" ran the identical command - under copy promising to
+  restore the conversation the button was about to discard. The card now reads
+  the same `canResumeAgent` predicate the dead-pane bar has always used, and asks
+  "Start this agent?" with a single button when resuming is not a thing that
+  agent can do.
+
+### Also
+
+- **Eight agent roles under `.claude/agents/`** (pm, po, designer, frontend-dev,
+  backend-dev, qa, release-eng, marketing) plus a `TEAM.md`. The four that
+  existed only judge work; these mostly build it, and each carries the
+  constraints this repo has paid to learn.
+- **The local installer stops reporting a landed copy as a failure.** It checked
+  `DevDeck.exe`'s mtime, which electron-builder leaves untouched when it reuses
+  the cached Electron binary, and matched the asar version against an unspaced
+  `"version":"x"` the pretty-printed bundle never contains. Both are now a
+  SHA-256 comparison against the build just made, which catches a partial copy
+  and a stale same-version install alike.
+
 ## 0.11.0 - 2026-09-01
 
 ### Answer a permission prompt from your phone
