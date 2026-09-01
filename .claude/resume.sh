@@ -78,8 +78,13 @@ live='next|continue|keep|still|resume|pending|todo|unpushed|not pushed|no PR|dec
 ack='merged|settled|released|shipped|landed|abandoned|closed'
 pat='`(feat|fix|chore|docs|refactor|perf|release|hotfix|spike|audit)/[A-Za-z0-9._/-]+`'
 
-for b in $(grep -oE "$pat" "$handoff" | tr -d '`' | grep -vE '\.[a-z]{2,4}$' | sort -u); do
+# Directories share those prefixes (`docs/superpowers/plans/`, `release/win-unpacked`)
+# and warning about them taught the reader to skim the whole block, which is worse
+# than not checking. Two exclusions, both exact rather than heuristic: git refuses a
+# ref ending in `/`, and a token that exists as a path in the repo is a path.
+for b in $(grep -oE "$pat" "$handoff" | tr -d '`' | grep -vE '\.[a-z]{2,4}$|/$' | sort -u); do
     [ "$b" = "$branch" ] && continue
+    [ -e "$b" ] && continue
     if ! g rev-parse --verify --quiet "$b" >/dev/null; then
         grep -F -- "$b" "$handoff" | grep -qiE "$ack" ||
             note "mentions \`$b\`, which is not a branch here (renamed, deleted, or never created)"
