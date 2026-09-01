@@ -781,7 +781,13 @@ const CLIENT_HTML = `<!doctype html>
   :root{--bg:#1b1a18;--bg2:#211f1c;--bg3:#141312;--bd:#322e28;--tx:#e4ddcf;--mu:#8f8678;--ac:#b8895c;--moss:#8c9a68;--clay:#c4855d;}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font-family:system-ui,sans-serif;font-size:15px}
-  #app{display:flex;flex-direction:column;height:100vh}
+  /* dvh, not vh: opening the phone keyboard does not shrink the layout
+     viewport on iOS Safari or Chrome Android, so a 100vh column never
+     re-lays-out and anything the keyboard covers cannot be scrolled back.
+     Orca shipped the same bug and had to add a visualViewport handler for it
+     (#16930); two units are the whole fix here, and vh stays as the fallback
+     for anything that does not know dvh. */
+  #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
   header{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--bd)}
   header .brand{font-weight:600;letter-spacing:1px;color:var(--ac)}
   header button{background:transparent;border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:6px 12px;font-size:15px}
@@ -834,7 +840,7 @@ const CLIENT_HTML = `<!doctype html>
   #decision{background:var(--bg2);padding:0 8px}
   #decision .card{border:1px solid var(--ac);border-radius:10px;padding:10px;margin:8px 0;background:var(--bg3)}
   #decision .q{font-weight:600;margin-bottom:6px;line-height:1.35}
-  #decision .tail{margin:0 0 8px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;color:var(--mu);font-family:monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:34vh;overflow:auto}
+  #decision .tail{margin:0 0 8px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;color:var(--mu);font-family:monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:30dvh;overflow:auto}
   #decision .acts{display:flex;gap:8px}
   #decision .acts button{flex:1;min-height:44px;border-radius:8px;font-size:15px;font-weight:600}
   #decision .acts .approve{background:var(--ac);color:#14110d;border:none}
