@@ -16,3 +16,10 @@ release/
 # 4.7M of session scratch. Anything durable from it belongs in CHANGELOG.md or
 # NOTES.md, which is where the bake-off removal's reasoning ended up.
 .superpowers/
+
+# Vendored design references. Kept for local use only: both were moved in from
+# user scope and neither records a licence, so their provenance cannot be
+# established -- and SignPath Foundation requires that every component's licence
+# be nameable. Stripped from history 2026-09-02; do not re-add them.
+.claude/skills/apple-design/
+.claude/skills/animation-vocabulary/
