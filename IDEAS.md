@@ -42,9 +42,8 @@ without engaging it.
 - Agent map / spatial canvas — **Orca built it and deleted it** (PR #15853).
 - Dashboard pop-out window; right-sidebar activity bar; floating terminal; tab-group
   docking — four surfaces answering questions one sorted list answers.
-- Worktree-per-agent as an app-managed lifecycle (85 cleanup files, 9 open
-  reconciliation bugs) and the worktree-as-navigation-object frame, which would
-  silently retire "a project is the unit of context".
+- Worktree-per-agent as an app-managed lifecycle, and the worktree-as-navigation-object
+  frame — it would silently retire "a project is the unit of context".
 - Agent hibernation; silent stale-to-idle decay (a signal that lies).
 - Native mobile app, hosted relay, desktop-to-desktop pairing, headless daemon.
 - Design Mode (element → HTML+CSS+screenshot → prompt): passes the agent edge, killed
@@ -68,11 +67,11 @@ Full reasoning in `.superpowers/1devtool-2026-08-31/T1-verdict.md`; competitor e
   tile, the Overview row and the phone with no error. A cosmetic feature that silently
   disables a correctness signal is the defect class this repo has spent two releases
   removing.
-- Seven switchable layout presets. 1DevTool has seven in nine months; a product that had
-  solved on-screen composition would ship one.
-- The DB and browser panes as depth products. 1DevTool's own founder removed the database
-  client from his roadmap by name — *"Fewer features = less maintenance surface = lower
-  solo-founder risk"* — while marketing 26 engines.
+- Seven switchable layout presets — a product that had solved on-screen composition
+  would need one, not seven.
+- The DB and browser panes as depth products — four engines already covers the
+  relational work this developer's projects need; more is maintenance surface, not
+  value.
 
 What DevDeck does instead, and already ships: panels stay mounted (`App.tsx` toggles
 `display`, so nothing is lost on a switch), the deck stays visible under every view with

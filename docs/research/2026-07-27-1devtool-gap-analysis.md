@@ -64,8 +64,8 @@ doesn't survive, but the *conversation* does (`claude --continue`). Sessions,
 layout, and drafts already persist. Leave it.
 
 ### 2. DB engine breadth — *cherry-pick two*
-26 engines is a marketing number. The four DevDeck has cover relational work,
-and `sqlserver` matters for your .NET projects — 1DevTool's list leads with
+Engine count isn't the bar for this stack: the four DevDeck has cover relational
+work, and `sqlserver` matters for your .NET projects — 1DevTool's list leads with
 Postgres/MySQL/Mongo/Redis/Elasticsearch. Only **MongoDB** and **Redis** are
 plausibly useful to you; both are one driver + one `DbKind` branch each. Low
 priority, cheap when wanted.
@@ -163,8 +163,8 @@ Mission Control.
 
 ## Explicitly don't build
 
-1DevTool's surface sprawls: **Notes, Draw, Templates**, top workspace tabs, a
-right activity bar. The June note already flagged this and it still holds — the
+1DevTool's feature list includes **Notes, Draw, Templates**, top workspace tabs, and a
+right activity bar — surfaces DevDeck doesn't carry. The June note already flagged this and it still holds — the
 wabi-sabi rule is that every feature justifies its visual weight. The Task board
 (0.7.0) was the one that earned it. **Draw** and **Templates** don't.
 
