@@ -647,3 +647,100 @@ Verification for every step is `run-app` with a scratch `userDataDir`, at both
 2079px and 900 × 600, in at least Slate + Modern Pro and **Washi + Bauhaus**
 (the light theme this file's own contrast math flags, and the zero-radius style
 that will reshape `.probe-tag` into a rectangle).
+
+---
+
+# Acceptance criteria
+
+Written by `po` on 2026-09-03, before implementation, against this spec and the
+live tree. **These are the contract this build is ruled against** — `qa` executes
+them and `po` rules on the result. `[must]` blocks the build; `[should]` is
+reported but does not block.
+
+Ground truth they were written against: the author's real `settings.json` holds
+8 presets — 5 `runMode: "agent"` (`claude`, `codex`, `gemini`, `claude-yolo`, and
+**`New agent` with `command: ""`**) and 3 `runMode: "normal"` (`dev`, `build`,
+`test`). The blank-command preset is real, not hypothetical.
+
+**Out of scope, deliberately:** the *Copy diagnostics* affordance (§5). The
+record it copies does not exist yet; it ships with the diagnostics build.
+
+## 1 · The presence probe
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 1 | [must] Resolves against the hydrated login-shell PATH, never main's `process.env.PATH` | unit — hydrated PATH holds a fake binary that main's does not, assert `found`; then the inverse, assert `missing` | either direction resolves off `process.env.PATH` |
+| 2 | [must] The walk expands `PATHEXT`, not a bare-name stat | unit — a directory holding only `claude.cmd` resolves bare `claude` to `found`, `resolved` ending `.cmd` | only an exact-filename stat exists. **The single most likely real-world false negative** — a global npm install writes `claude.cmd`, nothing named `claude` |
+| 3 | [must] Hydration failure answers `unknown` for every preset — never `missing`, never `found` | unit — hydration throws or times out over a list containing a would-be-`found` command | any preset falls back to `found` (a stale cache) or `missing` (treating "couldn't check" as "checked and absent") |
+| 4 | [must] Only `runMode: "agent"` presets are probed | unit — probe a mixed list; `dev` gets no entry | `npm` is stat-walked and scored as a binary |
+| 5 | [must] Probing never spawns `where`/`which` per call | inspection — no per-token subprocess; hydration spawns once, not once per preset | each preset triggers a child process (privilege-management software gates each spawn) |
+| 6 | [should] `found` carries the resolved absolute path; `missing`/`unknown` carry none | unit — `.resolved` is absolute on `found`, `undefined` otherwise | a negative result carries a stale or guessed path the tooltip would render as meaningful |
+
+## 2 · Zero-projects route
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 7 | [must] With zero projects, all eight view targets render the same `NoProjects` panel | run-app, scratch profile, empty `projects.json`; screenshot `.main` after each of the eight keys | any view still renders its own empty state — e.g. Mission's `SYSTEM` port wall is reachable |
+| 8 | [must] `TerminalView`'s old "No project selected" block is unreachable at zero projects | inspection (deleted per the deletion table) plus the terminal screenshot from #7 | the block survives and is reachable by any path |
+| 9 | [must] The eight `.deck-view` keys are disabled, tooltip `Add a project to use the views.`, none active | run-app — assert the attribute and `data-tip` on each; assert no `.deck-view.on` | any key switches `view` at zero projects, or one shows the accent underline |
+| 10 | [must] The `NoProjects` probe line renders one of the four documented sentences, and the `unknown` sentence is textually distinct from the `missing` one | run-app (`found`/`missing`/no-presets live; `unknown` via `DEVDECK_FORCE_PATH_UNKNOWN=1`) | the two sentences collapse into one string, or either uses the word "installed" |
+| 11 | [must] More than three `found` names truncate to a plain-text `+2 more.`, not a control | run-app with 5 or more resolvable presets | it is a button, or the count is wrong |
+| 12 | [must] `Open a project folder` is the panel's only accent element and invokes the real folder dialog | run-app — computed styles over the panel; a click transitions `projects.length` to 1 and routes away | a second accent exists, or the button is inert |
+
+## 3 · Project switcher's three empty states
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 13 | [must] Zero projects shows `No projects yet. Add a folder to start.` | run-app, scratch profile, Ctrl+K | it still reads `No matching projects.` |
+| 14 | [must] Projects present with a non-matching query shows the query inside a real `code` element | run-app, 8 seeded projects, query `zzzznope` | the query is plain text, or a pasted Windows path widens the modal |
+| 15 | [should] The third, currently unreachable branch exists in code | inspection only | only two of the three conditions were implemented |
+
+## 4 · The launcher head
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 16 | [must] `+ New terminal` is a ghost button; the tab bar's agent button is the screen's only accent | run-app with terminals open | two accent-filled elements are visible at once (three are today) |
+| 17 | [must] The chevron glyph is gone from the launcher heading | inspection / run-app | any glyph remains (DESIGN.md's chrome rule) |
+| 18 | [must] The notice bar appears only for all-`missing` or an unhydrated PATH — never partial, never healthy | run-app — one `found` plus one `missing` shows **no** bar; all-nonsense commands shows the bar with `Agent settings` | a bar appears for a mixed result, or is absent for all-missing, or its action is not `Agent settings` |
+| 19 | [must] The unhydrated bar's copy and action (`Re-check`) are distinct from the all-`missing` bar's | run-app via the force seam, plus inspection of both branches | both render through one branch, collapsing `unknown` into `missing` visually while the data distinguishes them |
+| 20 | [must] Zero presets shows `No startup commands configured. Add one in Settings, or open a plain shell.` with no bar, no pill, no stripe | run-app with `agents: []` | the zero-presets state is indistinguishable from all-`missing`, or from a healthy grid (today's bug) |
+| 21 | [must] At 900×600 the bar's action stays on the first wrapped line and nothing scrolls `.main` horizontally | run-app at the documented minimum; `scrollWidth` against the viewport | horizontal scroll appears, or the action drops to its own line |
+| 22 | [should] In Washi + Bauhaus the dashed pill and the faint-icon lightness drop stay visible on a light ground | run-app, theme and style switched | the marker is distinguishable only by a hue this theme collapses |
+
+## 5 · Launcher cards — four states, first match wins
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 23 | [must] A blank-command card shows `no command set` in sans italic `--faint`, and clicking it opens Settings → Agents without launching | run-app with the real `New agent` preset | it prints the preset id (today's behaviour), or a click opens a pane |
+| 24 | [must] That card uses `aria-disabled="true"`, not `disabled`, and its click handler still fires | run-app — attribute inspection plus the navigation in #23 | real `disabled` is used, which makes the fix-it click impossible and reintroduces the failure by another route |
+| 25 | [must] A `found` card is unchanged from today — mono `--faint` command, accent icon, no extra row | run-app with a resolvable command | a healthy card grows or changes colour; a healthy launcher does not grow by a pixel |
+| 26 | [must] An `unknown` card shows `UNCHECKED`, **keeps the accent icon**, keeps mono, and still launches | unit on the state-selection function, plus run-app via the force seam | it renders identically to `missing`. **Collapsing `unknown` into `missing` is the one failure this entire build exists to prevent** |
+| 27 | [must] A `missing` card shows a `--faint` icon, a dashed rule and a `NOT ON PATH` pill — and **still launches** | run-app with command `zzz-not-a-real-cli`; click and confirm a live pane | it refuses to launch, the icon stays accent, or the pill reads `MISSING` |
+| 28 | [must] The pill sits on its own row at 900px, and only marked cards grow (~16px) | run-app — compare a `found` card's height to a `missing` one in the same grid | all cards grow, or the pill overlaps the command |
+| 29 | [must] The existing unsafe danger stripe composes with the probe markers | run-app — `claude-yolo` pointed at a nonsense command shows stripe **and** faint icon **and** dashed pill | either marker is dropped when the other is present |
+
+## 6 · Settings → Agents
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 30 | [must] Each row shows a right-aligned `on PATH` / `not on PATH` / `unchecked` mark; `not on PATH` carries the dashed underline, `unchecked` none | run-app with seeded states | any state uses a pill here, or two states share one treatment |
+| 31 | [must] The `not on PATH` tooltip names the alias-or-function caveat and never says "not installed" | run-app — read the tooltip | "installed" appears, or the caveat is dropped |
+| 32 | [must] A blank command gets **no** border on the input, and the sentence below it | run-app on the real `New agent` preset | a `--danger` border appears (explicitly overruled), or the sentence is missing or reads "error"/"invalid" |
+| 33 | [must] Normal-mode presets show no status mark at all | run-app — the `dev`/`build`/`test` rows | `npm` is probed and marked (criterion 4 at the second surface) |
+| 34 | [must] One `Re-check PATH` control; an unhydrated PATH yields exactly one section hint, not one per row | unit on the handler, plus run-app | the hint repeats per row, or the control is missing |
+| 35 | [must] At the narrow breakpoint the mark moves under the field, with no new breakpoint added | run-app at the existing single-column collapse | the mark is clipped or overlaps the input |
+
+## 7 · Copy rules, cross-cutting
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 36 | [must] No new user-facing string contains the word "installed" | grep over the diff | any new string says "not installed" rather than "not found on your PATH" |
+| 37 | [must] Values — commands, resolved paths, queries — are mono or `code`; names — DevDeck, Ctrl+K, Settings — are sans | inspection of the new JSX | a command renders in the same typeface as its sentence, the complaint that motivated the card fix |
+
+## Rejected as unverifiable, and who owns each gap
+
+- **"The `unknown` state renders correctly when the antivirus genuinely kills hydration."** Not reproducible on demand, and provoking it deliberately is worse than the gap. Covered by criterion 3's unit test plus the `DEVDECK_FORCE_PATH_UNKNOWN=1` seam `backend-dev` built for exactly this — which is what promoted criteria 10, 19 and 26 from inspection to real observation. The real-antivirus path stays **unproven** and is labelled so.
+- **"A stranger's first five minutes feel calm."** A judgement, not a criterion. Owned by `design-reviewer`, then by `field`'s real users.
+- **"The probe never delays the launcher paint."** A measurement with no agreed target, so any pass/fail line would be invented rather than derived. Owned by `performance-analyst`. Measured incidentally: 48 ms first call, 36 ms after, 188 ms on `Re-check`.
+- **All 84 theme × style combinations.** Owned by `design-reviewer`. Criterion 22 smoke-checks Washi + Bauhaus only.
+- **"The agent button warns before launching a `missing` preset."** Settled as a conscious gap by this file's own ruling; a criterion requiring it would reopen a closed decision.
