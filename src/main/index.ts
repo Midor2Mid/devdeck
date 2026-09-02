@@ -36,6 +36,7 @@ import * as netproxy from "./netproxy"
 import * as search from "./search"
 import * as dotnet from "./dotnet"
 import * as system from "./system"
+import * as shellpath from "./shellPath"
 import * as usage from "./usage"
 import * as ledger from "./ledger"
 import * as recorder from "./recorder"
@@ -545,6 +546,16 @@ function registerIpc(): void {
     // --- Ambient system state (Docker + listening ports) ---
     ipcMain.handle("system:info", () => system.info())
 
+    // --- Agent-CLI presence probe (a login-shell PATH walk; see main/shellPath.ts) ---
+    // The preset list lives in the renderer, so it comes in over the wire and
+    // nothing about its shape is trusted; `probe` sanitises it. Only `runMode:
+    // "agent"` presets get an answer at all.
+    ipcMain.handle(
+        "probe:commands",
+        (_e, { requests, refresh }: { requests: unknown; refresh?: boolean }) =>
+            shellpath.probe(requests, refresh === true)
+    )
+
     // --- Token usage + cost (parsed from Claude Code's local transcripts) ---
     ipcMain.handle("usage:tokens", (_e, sinceDays?: number) => usage.tokenUsage(sinceDays))
     ipcMain.handle(
@@ -924,6 +935,11 @@ app.whenReady().then(() => {
     applyNavigationGuards()
     applySecurity()
     createWindow()
+    // Fire-and-forget, before the renderer has finished booting: the one login
+    // shell this process ever spawns for its PATH takes ~150-600ms, and starting
+    // it here means the first probe request finds the answer already cached
+    // instead of waiting on a spawn while the launcher paints.
+    shellpath.warmShellEnv()
     updater.initUpdater(() => mainWindow)
     // Best-effort check shortly after launch; failures (e.g. private repo) are
     // reported to the renderer but never block startup.

@@ -11,6 +11,7 @@ import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 import type { Loaded } from "../shared/loaded"
+import type { ProbeReport, ProbeRequest, ProbeResult, ProbeState } from "../shared/probe"
 import type { DecisionSnapshot, DecisionView } from "../shared/decision"
 
 // Re-exported as `RemoteDevice`: the renderer never sees (and never needs to
@@ -31,6 +32,11 @@ export type { RunKind, RunRecord, RunExclusionReason }
 // value import anywhere along that path would drag the native pty binding into
 // the preload bundle. It would typecheck and then fail at runtime.
 export type { DecisionView, DecisionSnapshot }
+// The probe's contract, from `shared/` for the same reason: `main/shellPath.ts`
+// spawns a shell, and a value import along that path would drag child_process
+// wiring into the preload bundle. `unknown` and `blank` are first-class answers
+// here - see the type's own comments before rendering any of the four.
+export type { ProbeReport, ProbeRequest, ProbeResult, ProbeState }
 
 // Each terminal pane registers its own pty:data/pty:exit listener; raise the
 // cap so many open terminals don't trip Node's MaxListenersExceededWarning.
@@ -612,6 +618,19 @@ const api = {
     },
     system: {
         info: (): Promise<SystemInfo> => ipcRenderer.invoke("system:info")
+    },
+    probe: {
+        /**
+         * Which agent CLIs are on the PATH a pane will actually have.
+         *
+         * Pass every preset; non-`agent` ones are skipped and simply have no
+         * entry in `results` (a shell line has no binary to look up). The
+         * login-shell PATH is read once per app process, so calling this on
+         * mount is cheap - `refresh: true` is the design's `Re-check` control
+         * and is the only thing that re-spawns a shell.
+         */
+        commands: (requests: ProbeRequest[], refresh?: boolean): Promise<ProbeReport> =>
+            ipcRenderer.invoke("probe:commands", { requests, refresh })
     },
     usage: {
         tokens: (sinceDays?: number): Promise<UsageSummary> =>
