@@ -407,7 +407,7 @@ pill per row would be eight pills competing with eight inputs.
 | found | `on PATH`, `--faint` | the resolved absolute path, mono |
 | not on PATH | `not on PATH`, `--muted`, **1px dashed `--border` underline** | `DevDeck looked for `<code>claude</code>` on your PATH and didn't find it. A shell alias or function is invisible to that check — if it runs in your terminal, it will run here.` |
 | unchecked | `unchecked`, `--faint` | `DevDeck couldn't read your shell's PATH. Nothing is wrong with this command — it just wasn't verified.` |
-| blank command | Command input takes the existing `.warn-field` class, and a line below the card (see below) | — |
+| blank command | A line below the card (see below). **No border on the input** — see the ruling | — |
 | normal-mode preset | **no mark at all** | — |
 
 Blank-command line, below the card, same slot the existing `.agent-warn` block
@@ -417,15 +417,27 @@ uses:
 This command is blank, so its launcher card can't run anything.
 ```
 
-Present tense, names the consequence, does not scold. **One arguable colour
-spend:** `.warn-field` is a 1px `--danger` border. A blank command is not a
-destructive action — it is a config fault that makes a control inert, closer to
-the risk-marker axis than to `ok`/`danger`. I am reusing it because the precedent
-is in this exact section already (the `OPENAI_API_KEY` field on the author's own
-Codex preset renders it today), and because a field-level "this input is the
-problem" mark is what it means there too. **This is the one decision in the spec
-I would like confirmed or overruled.** If overruled: drop the border, keep the
-sentence — the sentence is what carries it.
+Present tense, names the consequence, does not scold.
+
+> **RULED 2026-09-03 — overruled: no border.** The spec originally reused
+> `.warn-field` (a 1px `--danger` border) on the command input, on the grounds
+> that the precedent already exists in this section (the `OPENAI_API_KEY` field
+> on the author's own Codex preset renders it today). Overruled by the owner:
+> `DESIGN.md:355` forbids a warning colour, and a blank command is a config
+> fault that makes a control inert rather than anything destructive — spending
+> `--danger` on "inert" dilutes it where it marks genuinely destructive things.
+> **The sentence carries it.** The existing `.warn-field` usage elsewhere in the
+> section is left alone; this is not a licence to go remove it, and it is not a
+> precedent for adding it.
+
+> **RULED 2026-09-03 — the CTA gap is accepted.** No missing-agent marker goes
+> inside the tab bar's accent-filled `+ <agent>` button. No legible
+> non-colour marker fits inside a 28px filled pill, and a badge on the primary
+> CTA is the surface proliferation this product spent six months undoing. The
+> caret menu row and the notice bar carry the state. Recorded as a **conscious
+> gap**: a stranger can still click the product's main button and get a shell
+> error, and the mitigation is that the probe's state is legible one row away.
+> Revisit only if a beta user actually hits it.
 
 Section-level, once, not per row:
 
