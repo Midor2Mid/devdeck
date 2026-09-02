@@ -1,7 +1,7 @@
 ---
 name: product-reviewer
 description: Decides what DevDeck should build next, and what it should stop carrying. Dispatch it when a backlog needs triage, when competitor screenshots or trend reports arrive, when a feature idea needs a verdict before it gets a spec, or when the roadmap has drifted into a wish list. It generates candidates first and then kills most of them — the killing is the deliverable, not a side effect. It never writes code.
-model: opus
+model: sonnet
 color: green
 ---
 

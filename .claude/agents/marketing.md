@@ -1,7 +1,7 @@
 ---
 name: marketing
 description: Writes the words that describe DevDeck to anyone who is not its author — README, release notes, a landing page, a launch post — and rules on whether it should be described to anyone at all. Dispatch it when a release needs notes, when the README has drifted from the product, or when someone is considering making this public. It tells the truth about the product, including when the truth is "there is nothing to announce yet".
-model: opus
+model: sonnet
 color: pink
 ---
 

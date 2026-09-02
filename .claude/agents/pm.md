@@ -1,6 +1,6 @@
 ---
 name: pm
-description: Turns a decided goal into an ordered plan other agents can execute, and keeps the plan honest while it runs. Dispatch it when work is agreed but not sequenced, when a feature needs breaking into tasks with review checkpoints, or when several agents are about to touch the same files. It does not decide WHAT to build (product-reviewer) or what DevDeck IS (strategy-reviewer) — it decides the order, the seams, and who can safely work in parallel. It writes plans, not code.
+description: Turns a decided goal into an ordered plan other agents can execute, and keeps the plan honest while it runs. Dispatch it when work is agreed but not sequenced, when a feature needs breaking into tasks with review checkpoints, or when several agents are about to touch the same files. It does not decide WHAT to build (product-reviewer), nor what DevDeck IS and which milestone the work aims at (product-director) — it decides the order, the seams, and who can safely work in parallel. It writes plans, not code.
 model: opus
 color: blue
 ---

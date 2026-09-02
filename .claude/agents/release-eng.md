@@ -1,7 +1,7 @@
 ---
 name: release-eng
 description: Gets a build out of the repo and onto the machine. Dispatch it to cut a release, package and sign, install locally, publish to GitHub, or diagnose a packaging/updater failure. It owns the steps between "the code is right" and "the user is running it" — which is where this project has repeatedly stalled.
-model: opus
+model: sonnet
 color: green
 ---
 
