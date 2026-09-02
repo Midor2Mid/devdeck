@@ -72,13 +72,18 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
       `isWithinRoots`) and an AI view (compose a prompt with tap-to-insert
       `@file` mentions, fire at any running agent). ws: projects/fs:tree/read/
       write/files. Verified live.
-- [ ] **Structured approve/deny on the phone** (in flight, `feat/remote-approve-deny`) —
-      `approval.ts` + `cleanTail`/`lastLines` moved to `src/shared/`, `src/main/pty.ts`
-      is the single classifier, and main mints a `PendingDecision` (paused-state gated,
-      `tailHash`-bound, single-use) carried as `RemoteSession.pending` on the existing
-      `broadcastSessions`. One inbound `{t:"choice"}`, token-allowlisted, three-valued
-      ack. **Remaining: the card in `CLIENT_HTML`** — main mints and accepts, and no
-      phone can yet send. See `.superpowers/orca-2026-08-30/T1-build-list.md`.
+- [x] **Structured approve/deny on the phone** — **shipped 0.11.0 (2026-09-01)**,
+      merged at `4af3de3`. `approval.ts` + `cleanTail`/`lastLines` live in `src/shared/`.
+      The single classifier is **`src/shared/approval.ts`, driven from
+      `src/main/decisions.ts`** — **not** `src/main/pty.ts`, which only keeps the
+      cleaned tail and a digest of it and classifies nothing. Main mints a
+      `PendingDecision` (paused-state gated, `tailHash`-bound, single-use) carried as
+      `RemoteSession.pending` on the existing `broadcastSessions`; one inbound
+      `{t:"choice"}`, token-allowlisted, three-valued ack; the card renders in
+      `CLIENT_HTML` with the raw excerpt beneath the parsed question. 0.11.1 fixed two
+      things on it (`100dvh` so the phone keyboard cannot bury the answer; no "Resume"
+      offered to an agent that cannot resume). **Still unverified on a physical phone**
+      — the card has never rendered on real hardware. That is a beta blocker, not a bug.
 - [ ] Later, and only on a named trigger: PWA shell + Web Push + a trusted certificate
       (`tailscale cert`). Parked because Orca ships a native app *and* a cloud relay and
       still cannot wake a closed phone — its own code says the WebSocket "doubles as the
@@ -136,7 +141,11 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **In-app notifications** (toasts) when a background agent needs attention
 - [x] **Mobile DB + HTTP** — run SQL / send HTTP requests from the phone client
 - [x] **Embedded browser** panel + **Comment Mode** → click page elements, annotate, send grouped feedback to the focused agent
-- [ ] Later: **AI quota display** (the rest shipped: browser screenshot/console/network capture → M14/M19, terminal Canvas → M13, Dashboard → M12)
+- [ ] Later: **AI quota display** — quota only. **Cost is not "later"; it ships** —
+      `src/main/usage.ts` computes real tokens and USD from Claude Code's transcripts (see
+      the parking-lot entry and the 2026-09-02 Decisions-log row). The rest shipped:
+      browser screenshot/console/network capture → M14/M19, terminal Canvas → M13,
+      Dashboard → M12
 
 ## Milestone 10 — themes, polish & perf ✅ (2026-06-27)
 
@@ -233,7 +242,19 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 > Pruned 2026-06-28: command palette (M17), split terminals + layout restore (M1.5), Git multi-account (M15), SSH profiles (M16), remote/mobile (M7), MCP (M18), embedded browser (M9), light theme (M10), snippets (M12), and file-`@path`-into-session (M5) all shipped.
 > Pruned 2026-06-29: the v0.5.0 four-feature batch (task runner, agent triage inbox, workspace presets, AI **usage/activity** dashboard) + pipe-result-into-session + push-on-attention + DB query history + rename-sessions all shipped (see M5/M3.5/M7 above and M23 below). What's left is genuinely unbuilt:
 
-- **Live AI quota/cost display** — the activity dashboard (M23) tracks sessions/time, not tokens or dollars; real quota needs per-provider APIs (DevDeck only spawns the CLI, so it can't see the API)
+- **Live AI *cost* display — SHIPPED, and the claim that used to sit on this line was
+  false.** It said DevDeck "can't see the API". It never needed to: `src/main/usage.ts`
+  reads Claude Code's own transcripts under `~/.claude/projects`, dedupes rows by
+  message/request id, and computes real input/output/cache tokens plus a per-model USD
+  cost (`costOf`, `costInWindow`, `MODEL_RATES`). What M23's activity dashboard tracks
+  (sessions and time) is a different quantity from what `usage.ts` computes (tokens and
+  dollars); conflating the two is what kept this line wrong for two months. The open work
+  is surfacing it honestly, not obtaining it.
+- **Live AI *quota* display — not real, and not for want of an API.** A subscription's
+  remaining quota is in no transcript and behind no endpoint DevDeck is entitled to read.
+  Anything shown would be a guess rendered as a gauge — the exact failure this repo has
+  spent three releases removing. Unknown, absent and zero are three states; a quota gauge
+  can only show an invented fourth.
 - Cross-platform (macOS/Linux) polish
 - [x] **Saved command runner per project** (2026-07-01) — arbitrary shell commands per project (Sidebar → project menu → "Saved commands…"), launched as chips beside the package.json task runner; stored in `projectCommands`
 - Remote project folders over SSH (SSH terminals shipped; mounting remote folders did not)
@@ -351,4 +372,6 @@ degrade that file type to plaintext with no error anywhere.
 | 2026-06-27 | Mobile access = terminals-first + Tailscale; pty made multi-client | A remote terminal is RCE surface, so: off by default, token required, prefer Tailscale (no public exposure). Pty refactored to an event bus + per-client buffer replay so phone + desktop attach to the same sessions. Session metadata stays in the renderer and is synced to the server. |
 | 2026-08-30 | No relay, no pairing service, no daemon, no native mobile app. The server lives in the main process; close the window and everything stops. | Promoted from an accident of architecture to a decision. Orca's 98 open zombie-session issues and its relay bug wall (#12518, #12931, #13735, #16789) are the bill for the alternative; #15615 is its own users asking for the Tailscale path DevDeck already ships. |
 | 2026-08-30 | No agent map, no dashboard pop-out window, no supervision surface behind an experimental flag. | Orca shipped an agent map and deleted it (PR #15853, v1.4.190) "to simplify the dashboard UI and reduce maintenance overhead". Its dashboard is flag-gated, and the consequence is users filing #15573/#16885 asking for a kanban that already exists. |
+| 2026-09-02 | **The distribution refusal is reversed, and distribution is now the milestone.** `.superpowers/roadmap-2026-09-01/A2-long-arc.md` §4 lists *"Distribution, in any form"* (`:245`) and *"Code signing, `electron-updater`, and published GitHub releases"* (`:285`) as **Unthinkable**. Both are **superseded**, one day later, by the owner's standing decisions of 2026-09-02 (`.claude/agents/TEAM.md`): the ambition is a product with users and the next milestone is **5–10 real external users**. A public repo, an OSI-approved licence, a trustworthy certificate, a published release with `latest.yml`, first-run instructions, a feedback path, and a homepage carrying SignPath's required attribution are therefore **ordered work**, not refusals. **What survives from A2:** the **empty-table test** itself (`:33`) — a surface whose store has never held a row is not a feature — plus Unthinkable **#3** (no fifth strategy memo), **#4** (no sixteenth settings section) and **#6** (no second ledger). **What does not survive is that test's evidence base:** the only `settings.json` it can read belongs to the one person who has ever run this app, so an empty store proves *"he did not use it"* and never *"nobody wants it"*. Keep the test as a test; stop citing one machine's stores as market evidence until there are five to ten of them. | A2's argument was that 1DevTool got ~3,000 installs and ~20 active users, so distribution only enlarges the denominator of an adoption failure. That is sound about a **launch** and wrong about **this** milestone, which is 5–10 named users rather than 3,000 anonymous installs. The gate is not marketing, it is **trust**: the build is self-signed and trusted on exactly one machine, so a stranger meets a SmartScreen wall before forming any opinion at all, and a refusal to sign is a refusal to ever be evaluated. A2's own strongest sentence — that zero external validation exists — is the argument *for* getting some; until it does, every refusal in `.superpowers/` reasons about users from a sample of one, A2's included. **Cost of the reversal:** the licence to hard-code one shell, fight one antivirus and delete a feature the day its owner stops using it is spent; a signed release path, an issue tracker and a support surface arrive in its place. |
+| 2026-09-02 | **Compaction proximity is unavailable, deliberately — and the question is now closed.** Measured, not assumed: across **516** transcripts under `~/.claude/projects`, `"context_window"` appears in **0** files and `"rate_limits"` in **0**. The transcript does carry the **numerator** (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens` on the last assistant line) and an exact record that a compaction **already happened** (`isCompactSummary` / `compact_boundary` — 7 of 516 files). It does not carry the **denominator**. The only channel that would deliver real limits to a third-party client is the **`statusLine` slot in the user's own CLI config**, and writing into `~/.claude/settings.json` is the **vendor-config write retired on 2026-09-01** (`.superpowers/roadmap-2026-09-01/A1-near-term.md:284`). So: *"this session has compacted"* is reportable; *"this session is about to compact"* is **not**, and is not to be re-proposed. | A gauge whose denominator DevDeck holds and the vendor changes without telling it is the signal-that-can-lie failure, and it would lie hardest in exactly the eight-hour session it exists to protect. Reading the fill without the limit is the honest half and is already available; inventing the limit is not worth a write into a config the user edits by hand — which A1 refused on stronger grounds than this one. |
 | 2026-08-31 | No split, docked or multi-pane stage. One main view at a time; a project remembers which one. | Prompted by 1DevTool (terminal + browser + DB on one screen). Disqualifying on mechanism, not taste: `TerminalPane` resizes the pty to the pane, so a half-width stage halves `cols`, the agent wraps its permission prompt, and `detectApproval`'s `(esc)` + tail-position rules stop matching — Approve/Deny then vanishes from the tile, the Overview row **and** the phone, silently. Evidence for the pain was nil (no user quote anywhere asks for two views at once), and 1DevTool shipped seven layout modes in nine months on $6.6k lifetime revenue while its founder froze the DB pane by name for "maintenance surface". Full argument: `.superpowers/1devtool-2026-08-31/T1-verdict.md`. |
