@@ -6,6 +6,76 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 
 > Direction confirmed 2026-06-27: pursue **all four** next-step tracks over time (terminal polish, Monaco editor, API depth, deeper Claude). Default shell stays PowerShell.
 
+---
+
+## Next — the path to 5–10 real users
+
+**Everything below Milestone 1 is history.** This section is the only live plan;
+read it first. Ordered by `product-director` on 2026-09-03 against the standing
+decision recorded in the Decisions log: the ambition is **a product with users**,
+and the next milestone is **5–10 real external users** — not a public launch and
+not revenue.
+
+The one test every item passes: *does this get a stranger closer to running
+DevDeck and saying something back?* Work that does not is **not yet**, however
+good it is. Nobody outside the author's machine has ever opened this app, so
+there is no external evidence about anything yet, and that is the gap the
+milestone closes.
+
+| # | Step | Owner | Unblocks | State |
+|---|---|---|---|---|
+| 1 | `LICENSE` (MIT) + a provenance audit of every vendored file | `release-eng` / `technical-director` | The SignPath application, which cannot be filed without it | **done** 2026-09-02 |
+| 2 | Scrub the tracked tree and its history of employer and client identifiers | `docs-writer` / `technical-director` | The public flip. **The irreversible step** — publishing a client's project names cannot be undone | **done** 2026-09-02 |
+| 3 | Rewrite the competitor kill-lists in a register that survives publication | `docs-writer` / `product-director` | The public flip | **done** 2026-09-02 |
+| 4 | Delete + recreate the remote, push clean history, then flip public and file with SignPath Foundation | `release-eng` | A certificate that clears SmartScreen; the release feed; the updater | needs 1–3 and 5 in draft |
+| 5 | A one-page homepage: SignPath attribution, the code-signing policy, **Windows-only**, **single maintainer, PRs by invitation** | `marketing` / `docs-writer` | Step 4 — the application requires the attribution line and a published policy | |
+| 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run; ends the Avast dependency in the release path | needs 4 |
+| 7 | Verify the approve/deny card on a **physical phone** | `qa` | The most distinctive thing in the product, and the worst first impression if it is broken. It has never rendered on real hardware | |
+| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9. `PRODUCT.md`'s validation section is rewritten **here**, when there is a true sentence to replace the false one with | spec in progress |
+| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim | `field` | The evidence this whole milestone exists to get | |
+
+### The two builds behind step 8
+
+Both came out of the 2026-09-02 competitor triage, whose verdict was that **no
+competitor feature should be built next**. These are DevDeck's own gaps.
+
+- **A three-state agent-CLI presence probe** (~1.5 days). The app stops offering
+  to run things that do not exist. `found | missing | unknown`, resolved against
+  the **hydrated login-shell PATH** — main's `process.env.PATH` is not the pane's,
+  because panes spawn PowerShell with the user's profile, so resolving against
+  main's PATH would report `missing` for an agent the terminal runs perfectly.
+  Resolution is an `fs.stat` walk with `PATHEXT`, never a spawned `where`/`which`
+  per probe (privilege-management software gates each spawn). Hydration failure
+  answers `unknown`. Today `pty.ts` types the agent command into a live shell, so
+  a missing `claude` yields a shell error inside a pane already registered as an
+  agent session and rendered as `waiting` — **the app says an agent is running
+  when no agent ever started.**
+- **A failure a stranger can hand you** (~2 days). One capped, deduped,
+  **redacted** record in the existing user-data directory, plus a *Copy
+  diagnostics* affordance on the crash card and in Settings → About. Nothing is
+  transmitted: no endpoint, no telemetry, no log upload. Today there is no log
+  file anywhere — `app.getPath("logs")` is never called — and eleven error
+  boundaries report to a `console.error` that is unreachable in a packaged app.
+  The redactor ships in the same commit as the button, because a copy button
+  without one hands a stranger a footgun.
+
+### Behind those, in order
+
+The confirmed usage-ledger data-loss bug (it rewrites every session the user did
+not hand-close to 0 ms), then `claude --session-id <uuid>` per-pane transcripts,
+which turns per-session cost from an attribution into a receipt and makes
+`runRecorder.ts`'s attribution machinery deletable.
+
+### Explicitly not on this path
+
+Every feature: cost surfacing, quota, context fill, terminal colour, launch
+templates, the `+Claude` menu. **Trigger: three users installed.** Also off:
+turning `remote.enabled` on (its own trigger stands), macOS and Linux (the 5–10
+are recruited on Windows or not recruited), and a sixth competitor study —
+permanently.
+
+---
+
 ## Milestone 1 — Terminal + project core (the beating heart) ✅ MVP
 
 - [x] App shell: Electron + electron-vite + React + TS, runs on Windows
