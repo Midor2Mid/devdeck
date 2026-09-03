@@ -1,5 +1,131 @@
 # Changelog
 
+## 0.12.0 - 2026-09-03
+
+The release that stops the app claiming things it does not know, and starts
+letting it explain itself when it breaks. Both halves came out of one question:
+what happens when someone who is not the author opens this.
+
+### The app stops offering to run what it cannot find
+
+A preset whose command is not on your PATH used to launch anyway, silently. The
+pane opened, DevDeck registered it as an agent session, opened a usage event for
+it and rendered it as **waiting** — while the shell printed "not recognized" into
+it and no agent ever started. The app said an agent was running when none was.
+
+- **A three-state presence probe.** `found`, `not on PATH`, `unchecked`. The
+  launcher card, the Settings → Agents row and the first-run screen all read it.
+  A healthy card is unchanged — a healthy launcher does not grow by a pixel.
+- **It resolves against your shell's PATH, not the app's.** `process.env.PATH` in
+  a GUI-launched Electron process is not the PATH a pane gets: panes spawn
+  PowerShell, which runs your profile, and a profile is exactly where an
+  npm-global `claude` lands. DevDeck now asks your shell once, at startup,
+  deliberately *without* `-NoProfile`. Reading its own environment instead would
+  have reported `missing` for an agent your terminal runs perfectly.
+- **`unchecked` is not a weaker "missing".** If that shell probe fails — and on
+  this machine an antivirus can kill it outright — every card answers
+  `unchecked` and keeps its accent icon. Nothing about the card is qualified;
+  only our knowledge is.
+- **A marker, not a gate.** A `not on PATH` card still launches, because a PATH
+  walk cannot see a shell alias or a function. The copy says "not found on your
+  PATH", never "not installed". The only card that refuses is one with a blank
+  command, which is a fact about the preset rather than a guess about your
+  machine — and it routes you to Settings to fix it.
+- Resolution walks `PATHEXT`, so a global npm install (`claude.cmd`, no
+  extensionless `claude`) resolves. Two of three agents on the author's own
+  machine only resolve that way.
+
+### A stranger's first five minutes
+
+- **Zero projects now open one panel, not Mission.** Previously the first thing
+  a new user saw was a `SYSTEM` row listing every listening port on their
+  machine, above 60% empty space, with "Add or open a project" as low-contrast
+  text in a corner. All eight views now resolve to one screen with a single
+  accent action, the prerequisite named out loud, and a truthful line about which
+  agent commands were found.
+- **The keyboard-chord card is gone.** It taught three shortcuts to someone with
+  no project to use them on and no agent installed, while `F1` already lists
+  every shortcut.
+- **The project switcher stops reporting zero results for an empty list.** Three
+  states now: no projects yet, no match for what you typed (with your query in
+  mono so a pasted path cannot widen the modal), and the list.
+- **One accent per screen** in the launcher again. Three filled controls were
+  competing; the agent button — the thing the product is about — is the one.
+
+### When something breaks, you can hand someone the reason
+
+Eleven error boundaries reported to a console that does not exist in a packaged
+app. There was no log file anywhere.
+
+- **A capped, deduped, redacted record**, and a *Copy diagnostics* button on both
+  crash cards and in Settings → About. It carries your versions, your OS, your
+  shell, your agent commands and their PATH result, the recent errors with their
+  component stacks, and the last pty exit.
+- **Nothing is sent anywhere.** No endpoint, no telemetry, no upload, no issue
+  link. It goes to your clipboard and the sentence under the button says so —
+  along with the fact that file paths and command lines are included, *before* the
+  reassurance that secrets are removed.
+- **"Show what's copied" shows the record**, not a description of it. It is the
+  only fully honest answer to "what is in this blob".
+- **A render loop cannot flood it.** Ten thousand identical throws collapse to one
+  entry with a count. If anything was dropped, the record says so in prose and
+  the screen renders that verbatim.
+- **The copy control has four states, and the fourth is the point.** If DevDeck
+  cannot read its own log, the button is disabled and says so. Offering to copy
+  nothing and succeeding would be worse than refusing.
+
+### Fixed
+
+- **A crashed region no longer re-throws every time the app re-renders.** A
+  boundary with no reset key was clearing itself on any re-render — and the app
+  re-renders on agent status, sessions, tabs and projects. One crash could become
+  sixty error reports, half of them then discarded by the log's own rate limit,
+  taking any other error in that window with them.
+- **Settings, the project switcher and the command palette can no longer blank
+  the window.** A throw in any of them now shows that surface's own card with the
+  rest of the cockpit intact — and a way out, because a crashed modal used to
+  take its own close button down with it.
+- **Six "Copied" confirmations that could not know whether they were true.** The
+  clipboard bridge returned nothing, so every caller announced success blind.
+  It now reports failure, and the callers wait for the answer. In the terminal
+  that matters twice over: a refused copy used to clear your selection too,
+  leaving nothing to copy by hand.
+- **Two clipboard writes at once no longer report a false failure.** The write
+  and its read-back are one serialized step; before, nine of ten parallel writes
+  claimed to fail while succeeding.
+- **A crashed top bar's card no longer renders its own heading off-screen**, and
+  crash cards no longer cover each other's buttons on a small window.
+- The Settings → Agents form no longer breaks its own layout for every AI agent
+  preset: the API-key field had been orphaned onto a third row without its label,
+  and the command field you type in had lost 56% of its width.
+
+### Security
+
+Every item below was found by attacking the new code, and each ships with a
+regression test that was watched to fail first.
+
+- **A UNC path in a preset command opened an outbound SMB session.** Windows
+  authenticates as you to whoever answers on port 445, and the call blocked the
+  main process for **26 seconds** — every window, every terminal and the remote
+  server — before answering `missing` about a host it never reached. No attacker
+  needed: a corporate PATH containing a UNC entry, off VPN, would have done this
+  on every launcher open.
+- **`PASSWORD=` was not redacted.** The rule required at least one character
+  before the keyword, so `DB_PASSWORD=` was caught and the plainest form in
+  existence was not. Neither was `NAME: value` in any form — headers, YAML and
+  JSON all use a colon, and no rule looked for one.
+- **The diagnostics record is redacted on the way out, not only on the way in.**
+  It always was documented that way; it was not doing it. That also makes the fix
+  retroactive: a secret already written to the log is removed when the record is
+  built, rather than being permanently baked in.
+- **One NUL byte from a crash report used to break the copy button permanently**,
+  and would otherwise have handed you a record silently cut at that byte.
+- A crafted error report could forge the record's own sections — a second
+  "Incomplete" heading, or an entire fictitious error line.
+- The PATH walk no longer freezes the app on a slow miss: it is asynchronous with
+  a time budget, and `powershell.exe` is now resolved absolutely rather than
+  through a PATH whose third entry is user-writable.
+
 ## 0.11.1 - 2026-09-02
 
 Two honesty fixes on surfaces 0.11.0 had just touched.
