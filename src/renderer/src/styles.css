@@ -4236,6 +4236,11 @@ button .ic,
     font-size: 15px;
     font-weight: 600;
 }
+/* A second heading inside one section (About's Diagnostics block) needs the gap
+   the section boundary would otherwise have given it. */
+.settings-section h3:not(:first-child) {
+    margin-top: var(--sp-2xl);
+}
 .setting-row {
     display: grid;
     grid-template-columns: 160px 1fr;

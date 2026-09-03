@@ -14,6 +14,7 @@ import {
     type DeviceTtlDays
 } from "../settings"
 import { useStore } from "../store"
+import { DiagnosticsNote, useCopyDiagnostics } from "./CopyDiagnostics"
 import { THEMES, STYLES } from "../themes"
 import type { McpServer } from "../../../preload/index"
 import { MCP_CATALOG, addServer } from "../mcpCatalog"
@@ -1623,6 +1624,8 @@ function AISection(): JSX.Element {
 function AboutSection(): JSX.Element {
     const [version, setVersion] = useState("")
     const [status, setStatus] = useState<UpdateStatus | null>(null)
+    const diag = useCopyDiagnostics("about")
+    const [showRecord, setShowRecord] = useState(false)
 
     useEffect(() => {
         window.api.app.version().then(setVersion)
@@ -1688,6 +1691,34 @@ function AboutSection(): JSX.Element {
                 readable; on a private repo the check fails and you can keep installing builds
                 manually.
             </p>
+
+            <h3>Diagnostics</h3>
+            <div className="update-row">
+                <button disabled={diag.disabled} onClick={diag.onClick}>
+                    {diag.label}
+                </button>
+                {/* Disabled until a record exists to show: an empty <pre> under
+                    "Show what's copied" would answer the question with nothing. */}
+                <button
+                    disabled={diag.text === null}
+                    onClick={() => setShowRecord((v) => !v)}
+                >
+                    {showRecord ? "Hide what's copied" : "Show what's copied"}
+                </button>
+            </div>
+            <DiagnosticsNote state={diag} className="settings-hint" />
+            {showRecord && diag.text !== null && (
+                <>
+                    <pre className="diag-record">{diag.text}</pre>
+                    {/* Showing the record IS the answer to "what does this blob
+                        contain" - a paragraph describing it would be a second
+                        thing that can drift from the first. */}
+                    <p className="diag-caption">
+                        This is the whole text, exactly as it will be copied. Long values are
+                        truncated; whatever was left out is listed under Incomplete.
+                    </p>
+                </>
+            )}
         </div>
     )
 }
