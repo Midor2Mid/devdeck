@@ -47,6 +47,7 @@ import {
 } from "./agentSignals"
 import { holdersOf, holdersSummary, sameDir, type CwdHolder } from "./ownership"
 import { recordExit, exitCodeOf, clearExit } from "./termExit"
+import { agentInitCommand } from "./launchCommand"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
 import { confirm } from "./confirm"
@@ -2296,9 +2297,15 @@ export const useStore = create<AppState>((set, get) => {
             const preset = isAgentId(agentId) ? useSettings.getState().agentById(agentId) : undefined
             const baseLabel = label ?? (preset ? preset.name.toLowerCase() : "shell")
             // Agents default to their command; a shell only runs an explicit command (e.g. ssh).
-            const init = isAgentId(agentId)
-                ? (initialCommand ?? preset?.command ?? agentId)
-                : initialCommand
+            // Blank is absent here: `??` let a preset's `""` through and wrote a
+            // blank line into the fresh shell, so the pane opened and nothing
+            // whatsoever happened. See agentInitCommand.
+            const init = agentInitCommand(
+                isAgentId(agentId),
+                initialCommand,
+                preset?.command,
+                agentId
+            )
             const tab: Tab = { id: tabId, name: `${baseLabel} ${count}`, root: leaf(termId) }
             set((s) => ({
                 termAgents: { ...s.termAgents, [termId]: agentId },

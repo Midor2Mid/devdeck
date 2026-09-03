@@ -4,6 +4,7 @@ import { orderByMru, previousProjectId } from "../projectMru"
 import { contextMenu } from "../contextmenu"
 import { projectContextMenu } from "../projectMenu"
 import { ProjectChip } from "./ProjectChip"
+import { switcherEmpty } from "../probeView"
 
 /**
  * Full-window launchpad for switching and managing projects: a searchable grid
@@ -206,11 +207,30 @@ export function ProjectSwitcher(): JSX.Element {
                         )
                     })}
                     {ordered.length === 0 && (
-                        <div className="muted switcher-empty">No matching projects.</div>
+                        <div className="muted switcher-empty">{emptyText(projects.length, q)}</div>
                     )}
                 </div>
                 <div className="switcher-foot muted small">↑↓←→ to move · Enter to open · Esc to close</div>
             </div>
         </div>
+    )
+}
+
+/**
+ * An empty grid, in the three states it actually has. This was one sentence -
+ * "No matching projects." - shown for a workspace with no projects at all,
+ * which is absent rendered as zero: the house rule broken in the first thirty
+ * seconds of a stranger's first session.
+ */
+function emptyText(projectCount: number, q: string): JSX.Element {
+    const e = switcherEmpty(projectCount, q)
+    if (e.kind === "no-projects") return <>No projects yet. Add a folder to start.</>
+    if (e.kind === "none-to-show") return <>No projects to show.</>
+    // The query is a machine-readable value inside a sentence, so it is mono -
+    // and it wraps, so a pasted Windows path cannot widen the modal.
+    return (
+        <>
+            No projects match <code className="switcher-empty-q">{e.query}</code>.
+        </>
     )
 }

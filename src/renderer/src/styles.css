@@ -552,6 +552,12 @@ button .ic,
     text-align: center;
     padding: 40px;
 }
+/* A machine-readable value inside a sentence -> mono; `anywhere` so a pasted
+   Windows path wraps instead of widening the modal. */
+.switcher-empty-q {
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+}
 .switcher-foot {
     padding: 10px 20px;
     border-top: 1px solid var(--border-soft);
@@ -1413,6 +1419,60 @@ button .ic,
     color: var(--muted);
     position: relative;
 }
+/* ---------- first contact: launch with no projects ---------- */
+/* One object on a void, reusing .empty-state's geometry and its ensō rather
+   than a new container. The cap is the only new rule: .empty-state has no
+   max-width, so this text would otherwise sprawl the full 2000px, and 46ch
+   wraps the lede to two lines at 900px AND at 2000px - the same shape at both
+   ends, which is the point of capping it. Centred is the documented exception
+   to "no everything-centred": one object on a void with the ensō behind it. */
+.first-run {
+    max-width: 46ch;
+}
+.first-run h1 {
+    font-size: var(--fs-title);
+    font-weight: 600;
+    letter-spacing: var(--ls-title);
+    color: var(--text);
+    margin: 0 0 var(--sp-md);
+}
+.first-run-lede {
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    color: var(--muted);
+    margin: 0 0 var(--sp-xl);
+}
+/* The only accent on this screen. */
+.first-run button.accent {
+    font-size: var(--fs-sm);
+    margin-bottom: var(--sp-xl);
+}
+.first-run-pre,
+.first-run-probe {
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    margin: 0;
+}
+.first-run-pre {
+    margin-bottom: var(--sp-xs);
+}
+/* Holds its row while empty. The probe answers in ~50ms and the sentence must
+   appear IN this space rather than pushing the panel down under the reader. */
+.first-run-probe {
+    min-height: calc(var(--fs-sm) * var(--lh-body));
+    margin-bottom: var(--sp-xl);
+}
+.first-run-pre code,
+.first-run-probe code {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+}
+.first-run-chord {
+    font-size: var(--fs-label);
+    color: var(--faint);
+    margin: 0;
+}
+
 /* Launcher: the empty-terminal screen — startup commands as click-to-run cards. */
 .launcher {
     height: 100%;
@@ -1495,6 +1555,61 @@ button .ic,
     font-family: var(--font-mono);
     font-size: 10px;
     color: var(--faint);
+}
+/* The PATH notice, at the top of the launcher panel: spans the panel rather
+   than the padded column it sits in. ~54px of the 444px launcher viewport at
+   the minimum window, which is why it appears only in the two states where the
+   alternative is a stranger clicking into silence. */
+.launcher-notice {
+    margin: -34px -24px 18px;
+    /* At 900px the sentence wraps to three lines. The action stays on the FIRST
+       of them - `.notice-bar` centres its items, which against a three-line
+       sentence would park the button beside the middle line. */
+    align-items: flex-start;
+}
+
+/* ---------- PATH probe marks on a launch card ---------- */
+/* Three channels, none of them a hue, and no new token: the icon's LIGHTNESS
+   drops, a dashed rule appears under the command, and the pill says the word.
+   Every card's icon is accent-coloured, so a faint one is the odd one out in a
+   grid at a glance with no legend - and it survives all 84 skins and every
+   colour-vision difference, which an attention colour would not (in four of
+   seven themes the accent IS amber or clay, so "absent" would look like
+   "selected"). Composes with .launch-card-unsafe: the danger stripe answers
+   what a launch will do to the repo, these answer whether it runs at all. */
+.launch-card-offpath .launch-card-icon,
+.launch-card-nocmd .launch-card-icon {
+    color: var(--faint);
+}
+.launch-card-offpath .launch-card-cmd {
+    border-bottom: 1px dashed var(--border);
+}
+/* The absence of a command, deliberately NOT typeset as one: sans and italic
+   where .launch-card-cmd is mono, because mono in this system means "this is
+   the literal string that will run". This slot used to print the preset id. */
+.launch-card-none {
+    font-size: 10.5px;
+    font-style: italic;
+    color: var(--faint);
+}
+/* Geometry copied from .mtile-chip, which stays where it is: those are
+   tone-coloured and glyphed at 9px, a different axis on a different surface. */
+.probe-tag {
+    align-self: center;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--faint);
+}
+/* Dashed = "this reading is qualified" - the established idiom
+   (.mtile-chip.tone-warn, .usage-run-cost.approx), and the one form marker
+   here that carries meaning with hue switched off entirely. */
+.probe-tag.qualified {
+    border-style: dashed;
+    color: var(--muted);
 }
 /* A large, faint ensō behind empty states - turns void into intentional ma. */
 .empty-state::before,
@@ -2074,7 +2189,10 @@ button .ic,
 }
 .cmd-edit-grid {
     display: grid;
-    grid-template-columns: auto 1fr auto 1fr;
+    /* The fifth column is the PATH mark's, at the end of the Command row. It is
+       `auto`, so it costs nothing on a card that has no mark to show, and every
+       card's inputs keep the same widths either way. */
+    grid-template-columns: auto 1fr auto 1fr auto;
     gap: 6px 8px;
     align-items: center;
     margin-top: 8px;
@@ -2098,6 +2216,28 @@ button .ic,
     display: flex;
     gap: 8px;
     margin-top: 8px;
+}
+/* No pill here: Settings is a form, and eight pills would compete with eight
+   inputs. Same dashed-underline idiom as the launcher's qualified tag. */
+.cmd-path-mark {
+    justify-self: end;
+    white-space: nowrap;
+    font-size: var(--fs-label);
+    color: var(--faint);
+}
+.cmd-path-mark.qualified {
+    color: var(--muted);
+    border-bottom: 1px dashed var(--border);
+}
+/* A blank command makes a control inert rather than anything destructive, so
+   this is a plain sentence and NOT .agent-warn's --danger border - spending
+   --danger on "inert" dilutes it where it marks genuinely destructive things
+   (ruled 2026-09-03). The sentence carries it. */
+.agent-note {
+    font-size: var(--fs-label);
+    line-height: var(--lh-body);
+    color: var(--muted);
+    margin: 0 0 8px;
 }
 .agent-badge.cmd-badge {
     color: var(--accent);
@@ -5968,50 +6108,6 @@ kbd {
 }
 .shortcuts-foot {
     margin: 16px 0 0;
-}
-
-/* ---------- first-run intro tip ---------- */
-.intro-tip {
-    position: fixed;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 75;
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    padding: 12px 16px;
-    background: var(--bg-2);
-    border: 1px solid var(--accent);
-    border-radius: 12px;
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
-    max-width: 90vw;
-}
-.intro-tip-title {
-    font-weight: 600;
-    margin-bottom: 3px;
-    display: flex;
-    align-items: center;
-    gap: var(--sp-sm, 8px);
-}
-/* The mark carries the accent here — it's the brand, and this card is the one
-   place the app introduces itself. Enso draws in currentColor. */
-.intro-tip-mark {
-    color: var(--accent);
-    flex: none;
-}
-.intro-tip-text {
-    font-size: 12px;
-    color: var(--muted);
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-.intro-tip-actions {
-    display: flex;
-    gap: 8px;
-    flex: none;
 }
 
 /* ---------- confirm dialog ---------- */

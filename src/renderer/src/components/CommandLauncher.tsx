@@ -1,6 +1,9 @@
 import { useSettings, isUnsafeAgent, missingRecommended, type AgentPreset } from "../settings"
 import { useStore, SHELL } from "../store"
 import { toast } from "../toast"
+import { useProbe } from "../useProbe"
+import { cardMark, canLaunch, launcherNotice, type CardMark } from "../probeView"
+import { Icon } from "./Icon"
 
 /**
  * The empty-terminal launch screen: every configured startup command surfaced as
@@ -11,6 +14,9 @@ import { toast } from "../toast"
  * question actually gets asked — a user looking at a thin launcher wanted to know
  * "how do I see the template start commands?" and nothing at this point said they
  * existed. A feature the UI never reveals is a feature nobody has.
+ *
+ * The body carries **no accent**: a grid of cards cannot all be the one thing to
+ * act on, so the screen's single filled action stays the tab bar's `+ <agent>`.
  */
 export function CommandLauncher({ projectName }: { projectName: string }): JSX.Element {
     const agents = useSettings((s) => s.agents)
@@ -18,6 +24,8 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
     const openSettings = useSettings((s) => s.openSettings)
     const addRecommended = useSettings((s) => s.addRecommended)
     const missing = missingRecommended(agents)
+    const { report, rechecking, recheck } = useProbe(agents)
+    const notice = launcherNotice(agents, report)
 
     const launch = (a: AgentPreset): void => {
         if (a.runMode === "normal") newTab(SHELL, a.command || undefined, a.name)
@@ -39,16 +47,66 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
 
     return (
         <div className="launcher">
+            {/* A PATH result that makes every card likely to fail outlives a
+                toast, and its two causes need different sentences and different
+                actions. Silence is the correct report for a healthy machine and
+                for a partial result — the cards carry those. */}
+            {notice && (
+                <div className="notice-bar launcher-notice" role="status">
+                    <Icon name="help" size={14} />
+                    {notice.kind === "missing" ? (
+                        <>
+                            <span className="notice-bar-text">
+                                Not on your PATH:{" "}
+                                {notice.tokens.map((t, i) => (
+                                    <span key={t}>
+                                        {i > 0 ? ", " : ""}
+                                        <code>{t}</code>
+                                    </span>
+                                ))}
+                                {notice.more > 0 ? ` +${notice.more} more` : ""}. A shell alias or
+                                function still works — but if a card does nothing, this is why.
+                            </span>
+                            <button
+                                type="button"
+                                className="notice-bar-action"
+                                onClick={() => openSettings("agents")}
+                            >
+                                Agent settings
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <span className="notice-bar-text">
+                                DevDeck couldn&rsquo;t read your shell&rsquo;s PATH, so these
+                                commands are unchecked. Cards still run; they just weren&rsquo;t
+                                verified.
+                            </span>
+                            {/* Pending lives on the button, not on the cards: a
+                                re-check re-spawns a login shell, which is ~200ms
+                                here and seconds with a heavy profile. */}
+                            <button
+                                type="button"
+                                className="notice-bar-action"
+                                disabled={rechecking}
+                                onClick={recheck}
+                            >
+                                {rechecking ? "Re-checking…" : "Re-check"}
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
             <div className="launcher-head">
-                <h2>❯ Launch a command</h2>
+                <h2>Launch a command</h2>
                 <p className="muted">
-                    No terminals yet in {projectName}. Pick a startup command, or open a plain shell.
+                    {agents.length === 0
+                        ? "No startup commands configured. Add one in Settings, or open a plain shell."
+                        : `No terminals yet in ${projectName}. Pick a startup command, or open a plain shell.`}
                 </p>
             </div>
             <div className="launcher-actions">
-                <button className="accent" onClick={() => newTab(SHELL)}>
-                    + New terminal
-                </button>
+                <button onClick={() => newTab(SHELL)}>+ New terminal</button>
                 {missing.length > 0 && (
                     <button
                         onClick={() => {
@@ -66,31 +124,70 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
                 <div key={g.name} className="launcher-group">
                     <div className="launcher-group-title">{g.name}</div>
                     <div className="launcher-grid">
-                        {g.items.map((a) => (
-                            <button
-                                key={a.id}
-                                className={
-                                    "launch-card" + (isUnsafeAgent(a.command) ? " launch-card-unsafe" : "")
-                                }
-                                onClick={() => launch(a)}
-                                data-tip={
-                                    a.runMode === "normal"
-                                        ? `Run: ${a.command || "(no command)"}`
-                                        : isUnsafeAgent(a.command)
-                                          ? `Start a ${a.name} session — skips permission prompts, so it can edit and run anything in this project without asking`
-                                          : `Start a ${a.name} session`
-                                }
-                            >
-                                <span className="launch-card-icon">
-                                    {a.icon || (a.runMode === "normal" ? "❯" : "✳")}
-                                </span>
-                                <span className="launch-card-name">{a.name}</span>
-                                <span className="launch-card-cmd">{a.command || a.id}</span>
-                            </button>
-                        ))}
+                        {g.items.map((a) => {
+                            const mark = cardMark(a, report)
+                            return (
+                                <button
+                                    key={a.id}
+                                    className={
+                                        "launch-card" +
+                                        // Orthogonal to every probe mark, and composes with
+                                        // them: the stripe answers "what will this do to my
+                                        // repo", the mark answers "will this run at all".
+                                        (isUnsafeAgent(a.command) ? " launch-card-unsafe" : "") +
+                                        (mark === "not-on-path" ? " launch-card-offpath" : "") +
+                                        (mark === "no-command" ? " launch-card-nocmd" : "")
+                                    }
+                                    // Not `disabled`: a disabled button has no click target, so
+                                    // it could not route to the fix. The card that cannot run
+                                    // anything opens the place where you give it something.
+                                    aria-disabled={canLaunch(a, mark) ? undefined : true}
+                                    onClick={() =>
+                                        canLaunch(a, mark) ? launch(a) : openSettings("agents")
+                                    }
+                                    data-tip={cardTip(a, mark)}
+                                >
+                                    <span className="launch-card-icon">
+                                        {a.icon || (a.runMode === "normal" ? "❯" : "✳")}
+                                    </span>
+                                    <span className="launch-card-name">{a.name}</span>
+                                    {mark === "no-command" ? (
+                                        // Sans italic, never mono: mono means "this is the
+                                        // literal string that will run", and there is no
+                                        // string. The absence of a value must not be dressed
+                                        // as one — this slot used to print the preset id.
+                                        <span className="launch-card-none">no command set</span>
+                                    ) : (
+                                        <span className="launch-card-cmd">{a.command}</span>
+                                    )}
+                                    {mark === "unchecked" && <span className="probe-tag">UNCHECKED</span>}
+                                    {mark === "not-on-path" && (
+                                        <span className="probe-tag qualified">NOT ON PATH</span>
+                                    )}
+                                </button>
+                            )
+                        })}
                     </div>
                 </div>
             ))}
         </div>
     )
+}
+
+function cardTip(a: AgentPreset, mark: CardMark): string {
+    if (mark === "no-command")
+        return a.runMode === "normal"
+            ? `Open a plain shell — ${a.name} has no command set`
+            : `${a.name} has no command set. Opens Settings → Agents.`
+    const base =
+        a.runMode === "normal"
+            ? `Run: ${a.command}`
+            : isUnsafeAgent(a.command)
+              ? `Start a ${a.name} session — skips permission prompts, so it can edit and run anything in this project without asking`
+              : `Start a ${a.name} session`
+    if (mark === "not-on-path")
+        return `${base}\nNot found on your PATH. A shell alias or function still works, so this still runs.`
+    if (mark === "unchecked")
+        return `${base}\nDevDeck couldn't read your shell's PATH, so this wasn't checked.`
+    return base
 }

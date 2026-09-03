@@ -174,13 +174,14 @@ export function TerminalView(): JSX.Element {
     }, [])
 
     if (!activeProject) {
+        // An empty workspace never reaches here: App routes all eight views to
+        // <NoProjects/> while there are no projects. This is the narrow case of
+        // a workspace that HAS projects with none of them active, where the
+        // switcher is the entire answer - so it says that once, and teaches
+        // nothing else (F1 already lists every shortcut).
         return (
             <div className="empty-state">
-                <p>No project selected.</p>
-                <p className="muted">
-                    Press <kbd>Ctrl + K</kbd> to open the project switcher — add a folder from
-                    there, or drop one onto it. Press <kbd>F1</kbd> for all shortcuts.
-                </p>
+                <p className="muted">No project is open. Press Ctrl+K to pick one.</p>
             </div>
         )
     }

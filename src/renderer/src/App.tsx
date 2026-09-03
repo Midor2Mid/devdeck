@@ -14,6 +14,7 @@ import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
 import { NetworkPanel } from "./components/NetworkPanel"
+import { NoProjects } from "./components/NoProjects"
 import { paneAtIndex, pickInDirection, type PaneDir, type PaneRect } from "./paneNav"
 import { DECK_VIEWS } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
@@ -40,7 +41,6 @@ import { ReleaseBoard } from "./components/ReleaseBoard"
 import { StandupModal } from "./components/StandupModal"
 import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
-import { IntroTip } from "./components/IntroTip"
 import { ConfirmDialog } from "./components/ConfirmDialog"
 import { PromptDialog } from "./components/PromptDialog"
 import { TooltipLayer } from "./components/Tooltip"
@@ -348,7 +348,25 @@ export function App(): JSX.Element {
                     </RegionBoundary>
                     <PersistBlockedBar />
                     <div className="panels">
-                        {/* All panels stay mounted; visibility toggled so terminals keep running. */}
+                        {/* One guard above the whole panel stack: with no project,
+                            all eight views resolve to the same panel. Folding
+                            first contact into "the no-project empty state" would
+                            have left a stranger on Mission, whose empty state is
+                            a wall of every listening port on their machine.
+                            Nothing is running with zero projects, so unmounting
+                            the stack costs no terminal. */}
+                        {projects.length === 0 ? (
+                            <div className="panel" style={{ display: "flex" }}>
+                                <RegionBoundary
+                                    title="The welcome panel hit an error"
+                                    description="Add a project folder from the deck at the bottom, or reload when you get a chance."
+                                    resetKey={view}
+                                >
+                                    <NoProjects />
+                                </RegionBoundary>
+                            </div>
+                        ) : (
+                            <>
                         <div className="panel" style={{ display: view === "mission" ? "flex" : "none" }}>
                             <RegionBoundary
                                 title="The Mission view hit an error"
@@ -421,6 +439,8 @@ export function App(): JSX.Element {
                                 <NetworkPanel />
                             </RegionBoundary>
                         </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -453,7 +473,6 @@ export function App(): JSX.Element {
             {standupOpen && <StandupModal />}
             <PipelineBar />
             <Toasts />
-            <IntroTip />
             <ConfirmDialog />
             <PromptDialog />
             <TooltipLayer />

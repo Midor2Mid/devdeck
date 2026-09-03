@@ -34,6 +34,8 @@ function decodeTarget(v: string): BranchTarget | undefined {
 import { type GateMode, type StepGate, DEFAULT_GATE } from "../gate"
 import { deriveRemoteBindView } from "../remoteBindView"
 import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
+import { useProbe } from "../useProbe"
+import { rowMark, pathUnreadable, isBlankCommand } from "../probeView"
 import { Modal } from "./Modal"
 
 const THEME_LIST = Object.values(THEMES)
@@ -961,6 +963,9 @@ function PipelinesSection(): JSX.Element {
 
 function AgentsSection(): JSX.Element {
     const agents = useSettings((s) => s.agents)
+    // Fresh on mount, and again (debounced) whenever a command is edited - so a
+    // mark can never describe a command line the field no longer holds.
+    const { report, rechecking, recheck } = useProbe(agents)
     const setAgents = useSettings((s) => s.setAgents)
     const addRecommended = useSettings((s) => s.addRecommended)
     const agentIdleMs = useSettings((s) => s.agentIdleMs)
@@ -1014,9 +1019,22 @@ function AgentsSection(): JSX.Element {
                 session with prompts, orchestration and idle detection; in <b>Normal</b> mode it's a
                 plain shell that auto-runs the command (a dev server, a build…).
             </p>
+            {/* Once, not per row - and keyed off `pathHydrated` rather than off
+                "every result is unknown", because `unknown` has a second cause
+                (a relative-path command) that this sentence would misreport. */}
+            {pathUnreadable(report) && (
+                <p className="settings-hint">
+                    DevDeck couldn&rsquo;t read your shell&rsquo;s PATH, so none of these were
+                    checked.
+                </p>
+            )}
             {agents.map((a, i) => {
                 const overridden = !!a.apiKeyEnv && envSet[a.apiKeyEnv]
                 const normal = a.runMode === "normal"
+                const mark = rowMark(a, report)
+                // A blank NORMAL preset is not this fault: "open a plain shell"
+                // is a real thing to do. A blank agent card can run nothing.
+                const blankAgent = !normal && isBlankCommand(a.command)
                 return (
                     <div key={a.id} className="cmd-edit-card">
                         <div className="cmd-edit-top">
@@ -1065,6 +1083,24 @@ function AgentsSection(): JSX.Element {
                                 placeholder={normal ? "Dev Servers" : "AI Agents"}
                                 onChange={(e) => update(i, { category: e.target.value })}
                             />
+                            {/* The status, on the row it is about and right-aligned
+                                in its own column - unpilled, because Settings is a
+                                form and eight pills would compete with eight inputs.
+                                Its own column rather than beside the field: sharing
+                                the field's cell shrank the input a mark's width, so
+                                the command you were editing got truncated on exactly
+                                the rows that had something to say. Always rendered,
+                                empty when there is nothing to say, so the cells that
+                                follow keep their columns. A normal-mode preset never
+                                gets a mark - a shell line has no binary to look up. */}
+                            <span
+                                className={
+                                    "cmd-path-mark" + (mark?.qualified ? " qualified" : "")
+                                }
+                                data-tip={mark?.tip}
+                            >
+                                {mark?.text}
+                            </span>
                             {!normal && (
                                 <>
                                     <label>Resume</label>
@@ -1092,6 +1128,16 @@ function AgentsSection(): JSX.Element {
                                 </>
                             )}
                         </div>
+                        {blankAgent && (
+                            // No border on the input, ruled 2026-09-03: DESIGN.md
+                            // forbids a warning colour, and a blank command makes a
+                            // control inert rather than anything destructive.
+                            // The sentence carries it.
+                            <div className="agent-note">
+                                This command is blank, so its launcher card can&rsquo;t run
+                                anything.
+                            </div>
+                        )}
                         {!normal && overridden && (
                             <div className="agent-warn">
                                 ⚠ <b>{a.apiKeyEnv}</b> is set - {a.name} will bill pay-as-you-go
@@ -1105,6 +1151,15 @@ function AgentsSection(): JSX.Element {
             <div className="cmd-add-row">
                 <button onClick={() => add("agent")}>+ AI agent</button>
                 <button onClick={() => add("normal")}>+ Terminal command</button>
+                {/* Pending on the button, because this one re-spawns a login
+                    shell - 188ms here, seconds with a heavy profile. */}
+                <button
+                    disabled={rechecking}
+                    onClick={recheck}
+                    data-tip="Read your shell's PATH again and re-check every AI-agent command against it"
+                >
+                    {rechecking ? "Re-checking PATH…" : "Re-check PATH"}
+                </button>
                 {missing.length > 0 && (
                     <button
                         onClick={addRecommended}
