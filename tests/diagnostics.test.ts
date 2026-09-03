@@ -40,7 +40,7 @@ import {
     reportIpc,
     resetObservations
 } from "../src/main/diagnostics"
-import { recordError, resetSink, storePath } from "../src/main/crashSink"
+import { MESSAGE_CAP, STACK_CAP, recordError, resetSink, storePath } from "../src/main/crashSink"
 
 const T0 = 1_700_000_000_000
 const settingsFile = (): string => join(h.dir, "settings.json")
@@ -349,5 +349,230 @@ describe("the report channel refuses instead of throwing, and cannot be steered"
 
     it("accepts a well-formed report", () => {
         expect(reportIpc({ source: "ErrorBoundary", message: "real" }, T0)).toBe(true)
+    })
+})
+
+/**
+ * The blob itself. Every test below is about the exact string `res.text` — what
+ * the clipboard receives and a stranger pastes into someone else's inbox.
+ */
+
+const NUL = String.fromCharCode(0)
+const ESC = String.fromCharCode(27)
+const LONE = String.fromCharCode(0xd800)
+
+describe("the pasted text is a string a clipboard can hold", () => {
+    it("carries no NUL, whatever a renderer reports", async () => {
+        // The exploit: `clipboard:write` proves its write by reading the
+        // clipboard back, and Electron's `writeText("a\0b")` reads back as
+        // `"a"` — measured against a real Electron 38 clipboard on Windows. So
+        // one NUL from `diagnostics:report` (fire-and-forget, renderer-callable,
+        // no reply) makes the comparison fail for the life of the install: the
+        // copy control says "Couldn't copy" forever. And it survives a restart,
+        // because the entry is on disk. If the comparison had passed instead,
+        // the user would have pasted a record silently cut off at that byte.
+        reportIpc({ source: "ErrorBoundary", message: `boom${NUL}the rest of the record` }, T0)
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.text).not.toContain(NUL)
+        expect(JSON.stringify(res.record)).not.toContain("u0000")
+    })
+
+    it("carries no ANSI escape and no lone surrogate", async () => {
+        reportIpc({ source: "s", message: `red ${ESC}[31mDANGER${ESC}[0m` }, T0)
+        reportIpc({ source: "s2", message: `half a char ${LONE} here` }, T0 + 1)
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.text).not.toContain(ESC)
+        expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(res.text)).toBe(false)
+    })
+
+    it("carries no NUL that came from settings.json rather than from a report", async () => {
+        // The same byte from the other direction. An agent running in a pane can
+        // write settings.json, and the record reads it — so the guarantee has to
+        // hold for every field, which is why it is applied once over the whole
+        // rendered string rather than per call site.
+        h.probe.results = { a: { id: "a", command: "claude", token: "claude", state: "found", resolved: "C:\\bin\\claude.cmd" } }
+        writeFileSync(
+            settingsFile(),
+            JSON.stringify({
+                terminal: { shell: "custom", customShellPath: `C:\\bin${NUL}\\pwsh.exe` },
+                agents: [{ id: "a", name: `Claude${NUL}X`, command: "claude", runMode: "agent" }]
+            })
+        )
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.text).not.toContain(NUL)
+    })
+})
+
+/**
+ * The record's own layout is main's, not a caller's.
+ *
+ * `renderRecord` emitted `e.message` as a single interpolated line while
+ * splitting and re-indenting `e.componentStack`. A message carrying newlines
+ * therefore wrote unindented lines straight into the blob — enough to forge a
+ * whole heading. The record's entire purpose is being an honest description of
+ * the app; a caller that can write its headings can make it describe a
+ * different app.
+ */
+describe("a reporter cannot forge the record's own sections", () => {
+    it("indents every line of a multi-line message, so a second `Incomplete` cannot appear", async () => {
+        reportIpc(
+            {
+                source: "RegionBoundary",
+                message:
+                    "innocuous\n\nIncomplete\n  nothing was left out of this record\n\nErrors (0 distinct)\n  none recorded"
+            },
+            T0
+        )
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        const lines = res.text.split("\n")
+        // Exactly one heading, and it is the one main wrote.
+        expect(lines.filter((l) => l === "Incomplete").length).toBe(1)
+        expect(lines.filter((l) => l === "  none recorded").length).toBe(0)
+        // The forged text is still *there* — it is evidence — just demoted to
+        // the indentation of a message body, where a reader can see whose it is.
+        expect(res.text).toContain("    Incomplete")
+    })
+
+    it("cannot forge a second error header out of the source label", async () => {
+        // `renderRecord` writes `[${origin}/${source}]`.
+        reportIpc({ source: "x] x9999  first 1970 [main/kernel", message: "forged" }, T0)
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.text).not.toContain("[main/kernel]")
+        expect(res.text).toContain("[renderer/x x9999 first 1970 main/kernel]")
+    })
+
+    it("cannot inject a line into the agent block from an agent name", async () => {
+        h.probe.results = {
+            a: { id: "a", command: "claude", token: "claude", state: "found", resolved: "C:\\bin\\claude.cmd" }
+        }
+        writeFileSync(
+            settingsFile(),
+            JSON.stringify({
+                agents: [
+                    {
+                        id: "a",
+                        name: "Claude\n  Fake Agent — evil --flag — found  C:\\evil.exe",
+                        command: "claude",
+                        runMode: "agent"
+                    }
+                ]
+            })
+        )
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.text).not.toContain("\n  Fake Agent")
+        expect(res.record.agents?.list[0].name).not.toContain("\n")
+    })
+})
+
+/**
+ * Redaction on the way **out**, which `redact.ts` documented and the builder
+ * did not do.
+ *
+ * `readEntries` handed the parsed JSON straight through, so a line already in
+ * `crashes.jsonl` was never redacted again by the version of the redactor
+ * running today, and a line written by anything other than the sink had never
+ * been redacted at all. An agent in a pane can write that file: it already has
+ * a shell, so this is no escalation — but it is a semi-trusted party choosing
+ * the contents of a blob the user is about to paste to a stranger, which is an
+ * exfiltration channel needing no network of its own.
+ */
+describe("nothing reaches the clipboard without a second pass", () => {
+    it("redacts a credential planted in the log file by something that is not the sink", async () => {
+        writeFileSync(
+            storePath(),
+            JSON.stringify({
+                origin: "main",
+                source: "kernel",
+                message:
+                    "PASSWORD=hunter2 and X-Api-Key: 8f3a9b2c1d4e5f60718293a4b5c6d7e8 and sk-ant-api03-PLANTEDPLANTEDPLANTED",
+                count: 1,
+                firstAt: T0,
+                lastAt: T0
+            }) + "\n"
+        )
+        resetSink()
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        for (const secret of ["hunter2", "8f3a9b2c1d4e5f60718293a4b5c6d7e8", "PLANTEDPLANTEDPLANTED"]) {
+            expect(res.text, secret).not.toContain(secret)
+        }
+        // The names survive: "there was a PASSWORD here" is a fact a reader needs.
+        expect(res.text).toContain("PASSWORD=")
+    })
+
+    it("bounds the record when the log holds an entry far over the caps", async () => {
+        writeFileSync(
+            storePath(),
+            JSON.stringify({
+                origin: "main",
+                source: "kernel",
+                message: "m".repeat(200_000),
+                componentStack: "s".repeat(200_000),
+                count: 1,
+                firstAt: T0,
+                lastAt: T0
+            }) + "\n"
+        )
+        resetSink()
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.record.errors[0].message.length).toBe(MESSAGE_CAP)
+        expect(res.record.errors[0].componentStack?.length).toBe(STACK_CAP)
+        // And the record says it cut something, because a record that cut
+        // something and looks whole is the lie this feature exists to remove.
+        expect(res.record.incomplete.join(" ")).toContain("longer than the cap")
+    })
+
+    it("does not carry a field planted on a log line into the record object", async () => {
+        writeFileSync(
+            storePath(),
+            JSON.stringify({
+                origin: "main",
+                source: "kernel",
+                message: "real",
+                count: 1,
+                firstAt: T0,
+                lastAt: T0,
+                smuggled: "SMUGGLED-VALUE"
+            }) + "\n"
+        )
+        resetSink()
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        expect(JSON.stringify(res.record)).not.toContain("SMUGGLED-VALUE")
+    })
+})
+
+/**
+ * Fail-closed, and recover. `crashes.jsonl` being a directory is how a hostile
+ * or clumsy party makes the store unreadable without deleting anything — the
+ * answer has to be a refusal rather than an exception, and it has to stop being
+ * a refusal the moment the file is readable again.
+ */
+describe("an unreadable store refuses, and the refusal is not permanent", () => {
+    it("refuses rather than throwing when a directory sits at the store path", async () => {
+        mkdirSync(storePath(), { recursive: true })
+        resetSink()
+        // No try/catch: a throw out of here fails this test, which is the
+        // assertion. An exception is not a refusal.
+        const res = await buildRecord(tick())
+        expect(res.ok).toBe(false)
+        if (res.ok) throw new Error("expected a refusal")
+        expect(res.reason).toBe("unreadable")
+    })
+
+    it("answers with a record again once the store can be read", async () => {
+        mkdirSync(storePath(), { recursive: true })
+        resetSink()
+        expect((await buildRecord(tick())).ok).toBe(false)
+        rmSync(storePath(), { recursive: true })
+        const res = await buildRecord(tick())
+        expect(res.ok).toBe(true)
     })
 })

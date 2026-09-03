@@ -30,7 +30,7 @@ import { app } from "electron"
 import { join } from "path"
 import { appendFileSync, readFileSync } from "fs"
 import { atomicWrite } from "./atomic"
-import { redact } from "./redact"
+import { redact, sanitizeLabel, sanitizeText } from "./redact"
 import type { DiagnosticsError, DiagnosticsOrigin, DiagnosticsReport } from "../shared/diagnostics"
 
 /**
@@ -127,6 +127,55 @@ function clip(text: string, cap: number): { text: string; clipped: boolean } {
     return { text: text.slice(0, cap), clipped: true }
 }
 
+/**
+ * Put one entry through the caps, the sanitiser and the redactor, whatever it
+ * came from. Applied to a fresh report **and to every line read off disk**.
+ *
+ * The second half is the part that was missing. `readEntries` handed the parsed
+ * JSON straight out, so three things were true of any line already in
+ * `crashes.jsonl`:
+ *
+ * - **It was never redacted again.** Redaction happened on the way in, from
+ *   whichever version of `redact.ts` was installed when the line was written —
+ *   so a rule fixed today does nothing for a secret written yesterday, and a
+ *   line written by anything other than this function was never redacted at
+ *   all. An agent running in a pane has a shell and can write this file; that
+ *   is a semi-trusted party choosing the contents of a blob a user is about to
+ *   paste into a stranger's inbox.
+ * - **`MESSAGE_CAP` and `STACK_CAP` did not apply.** A 50 KB component stack on
+ *   disk became a 50 KB record, and nothing bounded the size of the clipboard
+ *   text.
+ * - **Fields nobody allow-listed rode along.** `isCrashEntry` is a shape check,
+ *   not a whitelist, so an extra key on a planted line reached the record
+ *   object the renderer receives. The record's headline claim is that it is
+ *   allow-listed rather than filtered; that was true of main's own fields and
+ *   false of the entries. Rebuilding the object field by field here is what
+ *   makes the claim true of the whole thing.
+ *
+ * `clipped` is sticky: it comes out true if it was already true or if this pass
+ * had to cut something, because the record's `incomplete` block promises to say
+ * when anything was cut and it must not un-say it.
+ */
+export function normalizeEntry(e: DiagnosticsError): DiagnosticsError {
+    const source = clip(redact(sanitizeLabel(e.source)) || "unknown", SOURCE_CAP)
+    const message = clip(redact(sanitizeText(e.message)), MESSAGE_CAP)
+    const rawStack = typeof e.componentStack === "string" ? e.componentStack : ""
+    const stack = rawStack ? clip(redact(sanitizeText(rawStack)), STACK_CAP) : null
+    const clipped = e.clipped || source.clipped || message.clipped || (stack?.clipped ?? false)
+    return {
+        // Named one by one. Nothing is spread, so a field on the input cannot
+        // become a field on the output by having been there.
+        origin: e.origin,
+        source: source.text,
+        message: message.text,
+        componentStack: stack?.text,
+        count: Number.isFinite(e.count) ? e.count : 1,
+        firstAt: Number.isFinite(e.firstAt) ? e.firstAt : 0,
+        lastAt: Number.isFinite(e.lastAt) ? e.lastAt : 0,
+        clipped: clipped ? true : undefined
+    }
+}
+
 /** Is this parsed line a usable entry? Applied on the way in and on the way out. */
 export function isCrashEntry(value: unknown): value is DiagnosticsError {
     if (!value || typeof value !== "object") return false
@@ -171,19 +220,23 @@ export function foldLines(lines: string[]): { entries: DiagnosticsError[]; skipp
             skipped++
             continue
         }
-        const key = entryKey(parsed)
+        // Normalised *before* it is keyed, so the key is computed on the shape
+        // this process would have written and a planted line cannot occupy a
+        // key that a real report can never collide with.
+        const entry = normalizeEntry(parsed)
+        const key = entryKey(entry)
         const prev = byKey.get(key)
         if (!prev) {
-            byKey.set(key, parsed)
+            byKey.set(key, entry)
             continue
         }
-        const newer = parsed.lastAt >= prev.lastAt ? parsed : prev
+        const newer = entry.lastAt >= prev.lastAt ? entry : prev
         byKey.set(key, {
             ...newer,
-            count: Math.max(prev.count, parsed.count),
-            firstAt: Math.min(prev.firstAt, parsed.firstAt),
-            lastAt: Math.max(prev.lastAt, parsed.lastAt),
-            clipped: prev.clipped || parsed.clipped ? true : undefined
+            count: Math.max(prev.count, entry.count),
+            firstAt: Math.min(prev.firstAt, entry.firstAt),
+            lastAt: Math.max(prev.lastAt, entry.lastAt),
+            clipped: prev.clipped || entry.clipped ? true : undefined
         })
     }
     return { entries: [...byKey.values()], skipped }
@@ -388,19 +441,33 @@ export function recordError(
 
     seedIfNeeded()
 
-    const source = clip(
-        redact(typeof report.source === "string" && report.source.trim() ? report.source.trim() : "unknown"),
-        SOURCE_CAP
-    )
-    const message = clip(redact(rawMessage), MESSAGE_CAP)
-    const rawStack = typeof report.componentStack === "string" ? report.componentStack.trim() : ""
-    const stack = rawStack ? clip(redact(rawStack), STACK_CAP) : null
-
+    // One decision point for the caps, the sanitiser and the redactor, shared
+    // with every line read back off disk. See `normalizeEntry`.
+    const normalized = normalizeEntry({
+        origin,
+        source: typeof report.source === "string" ? report.source.trim() : "",
+        message: rawMessage,
+        componentStack:
+            typeof report.componentStack === "string" && report.componentStack.trim()
+                ? report.componentStack.trim()
+                : undefined,
+        count: 1,
+        firstAt: now,
+        lastAt: now
+    })
+    // Checked **again**, after the sanitiser. A message of nothing but control
+    // characters is non-empty going in and empty coming out, and an entry with
+    // no message is exactly what the check above exists to refuse. A guard that
+    // runs before the transform that can invalidate it has not run.
+    if (!normalized.message) {
+        malformed++
+        return false
+    }
     const shape = {
         origin,
-        source: source.text,
-        message: message.text,
-        componentStack: stack?.text
+        source: normalized.source,
+        message: normalized.message,
+        componentStack: normalized.componentStack
     }
     const key = entryKey(shape)
     const existing = tracked.get(key)
@@ -427,15 +494,7 @@ export function recordError(
         return true
     }
 
-    const clipped = source.clipped || message.clipped || (stack?.clipped ?? false)
-    const entry: DiagnosticsError = {
-        ...shape,
-        count: 1,
-        firstAt: now,
-        lastAt: now,
-        clipped: clipped ? true : undefined
-    }
-    const t: Tracked = { entry, writtenAt: 0, dirty: true }
+    const t: Tracked = { entry: normalized, writtenAt: 0, dirty: true }
     tracked.set(key, t)
     appendEntry(t, now)
     // Evicting in memory as well as on read keeps the map from being a second,

@@ -19,6 +19,7 @@ vi.mock("electron", () => ({
 import {
     MAX_ENTRIES,
     MESSAGE_CAP,
+    STACK_CAP,
     RATE_MAX,
     RATE_WINDOW_MS,
     capEntries,
@@ -318,5 +319,183 @@ describe("what a kill costs is bounded, and it is bounded by the rate limit", ()
         const after = readEntries()
         if (!after.ok) throw new Error("unreadable")
         expect(after.entries[0].count).toBe(RATE_MAX)
+    })
+})
+
+/**
+ * Control characters, built rather than typed. A literal NUL in a test file is
+ * invisible in every diff and survives no round trip through tooling.
+ */
+const NUL = String.fromCharCode(0)
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+/** An unpaired high surrogate — half a character. */
+const LONE = String.fromCharCode(0xd800)
+const FFFD = String.fromCharCode(0xfffd)
+
+/**
+ * Sanitisation on the way in, and again on the way out.
+ *
+ * Both directions matter and only the first existed. The sink redacted a fresh
+ * report and then handed every line it read back off disk straight out of
+ * `JSON.parse` — no second redaction, no caps, and no field list.
+ */
+describe("what a report may put in the store, character by character", () => {
+    it("keeps a NUL out of the store — one byte otherwise breaks the clipboard forever", () => {
+        // Measured, not assumed: Electron's `clipboard.writeText("a\0b")` reads
+        // back as `"a"`. `clipboard:write` proves its write by comparing the
+        // read-back, so a NUL anywhere in the record makes every copy report
+        // failure for the life of the install — from `diagnostics:report`, a
+        // fire-and-forget channel a renderer can call directly.
+        expect(recordError("renderer", { source: "B", message: `boom${NUL}tail` }, T0)).toBe(true)
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.entries[0].message).toBe("boomtail")
+        // And not as a JSON escape either: the file is what the next session reads.
+        expect(readFileSync(storePath(), "utf8")).not.toContain("u0000")
+    })
+
+    it("keeps an ANSI escape and a lone surrogate out of the store", () => {
+        recordError("renderer", { source: "B", message: `red ${ESC}[31mX${ESC}[0m` }, T0)
+        recordError("renderer", { source: "B", message: `lone ${LONE} half` }, T0 + 1)
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        const messages = res.entries.map((e) => e.message)
+        expect(messages).toContain("red [31mX[0m")
+        expect(messages).toContain(`lone ${FFFD} half`)
+    })
+
+    it("refuses a message that is empty only AFTER sanitising, and counts it", () => {
+        // The pre-existing emptiness check runs before the transform that can
+        // invalidate it, so it has to be re-asked afterwards. A guard placed
+        // upstream of the step which can falsify it has not run.
+        const before = sinkStats().malformed
+        expect(recordError("renderer", { source: "B", message: `${NUL}${BEL}` }, T0)).toBe(false)
+        expect(sinkStats().malformed).toBe(before + 1)
+        expect(existsSync(storePath())).toBe(false)
+    })
+
+    it("flattens a source that tries to forge a second error line", () => {
+        // `renderRecord` writes `[${origin}/${source}]` — so a source carrying
+        // a `]` and a `[` writes a whole fictitious error line into the blob.
+        recordError(
+            "renderer",
+            { source: "x] x9999  first 1970 [main/kernel", message: "forged" },
+            T0
+        )
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.entries[0].source).not.toContain("[")
+        expect(res.entries[0].source).not.toContain("]")
+    })
+})
+
+/**
+ * Lines that were already on disk.
+ *
+ * Three things were true of any line in `crashes.jsonl` that this process did
+ * not write itself, and all three are now false:
+ *
+ * - it was never redacted again, so a redactor rule fixed today did nothing for
+ *   a secret written yesterday — and a line written by anything other than
+ *   `recordError` had never been redacted at all;
+ * - `MESSAGE_CAP` and `STACK_CAP` did not apply to it, so nothing bounded the
+ *   size of the record or of the clipboard text;
+ * - `isCrashEntry` is a shape check rather than a whitelist, so an extra field
+ *   on the line rode into the record object the renderer receives — while the
+ *   record's headline claim is that it is allow-listed rather than filtered.
+ *
+ * Who can write that file: an agent running in a pane. It has a shell, so this
+ * is not a privilege escalation — but it is a semi-trusted party choosing the
+ * contents of a blob the user is about to paste into a stranger's inbox, which
+ * is an exfiltration channel that needs no network of its own.
+ */
+describe("a line on disk is not trusted just because it parsed", () => {
+    const planted = {
+        origin: "main",
+        source: "kernel",
+        message: "ANTHROPIC_API_KEY=sk-ant-api03-PLANTEDPLANTEDPLANTED0123456789",
+        componentStack: "y".repeat(50_000),
+        count: 1,
+        firstAt: T0,
+        lastAt: T0 + 5,
+        extraFieldNobodyAllowListed: "SMUGGLED"
+    }
+
+    beforeEach(() => {
+        writeFileSync(storePath(), JSON.stringify(planted) + "\n")
+        resetSink()
+    })
+
+    it("redacts a credential that reached the file without going through the sink", () => {
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.entries[0].message).not.toContain("PLANTEDPLANTEDPLANTED")
+        expect(res.entries[0].message).toContain("ANTHROPIC_API_KEY=")
+    })
+
+    it("applies the caps to a line that arrived over-length, and says it clipped", () => {
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.entries[0].componentStack?.length).toBe(STACK_CAP)
+        expect(res.entries[0].clipped).toBe(true)
+    })
+
+    it("drops a field nobody allow-listed rather than carrying it into the record", () => {
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(JSON.stringify(res.entries)).not.toContain("SMUGGLED")
+        expect(JSON.stringify(res.entries)).not.toContain("extraFieldNobodyAllowListed")
+    })
+
+    it("skips a line whose timestamps are not numbers rather than putting NaN in the record", () => {
+        // JSON has no NaN, so this arrives as `null` and fails `isCrashEntry`.
+        // Asserted so a later widening of that predicate cannot quietly let a
+        // non-number into a field the record sorts and formats as a date.
+        writeFileSync(
+            storePath(),
+            JSON.stringify({ ...planted, count: NaN, firstAt: NaN, lastAt: NaN }) + "\n"
+        )
+        resetSink()
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.entries.length).toBe(0)
+        expect(res.skipped).toBe(1)
+    })
+
+    it("keeps a NUL planted on disk out of what it reads back", () => {
+        writeFileSync(
+            storePath(),
+            JSON.stringify({ ...planted, message: `disk${NUL}planted` }) + "\n"
+        )
+        resetSink()
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.entries[0].message).toBe("diskplanted")
+    })
+})
+
+/**
+ * The cap as an eviction primitive.
+ *
+ * A renderer can spend `MAX_ENTRIES` distinct reports and push a real error out
+ * of the record — 30 accepted per 10s window, so about fourteen seconds of
+ * work. That is not a hole to be closed: the log has to be bounded, and newest
+ * has to win, or a spinning loop buries the crash the user is looking at. The
+ * requirement is that the record **says** it happened, because a record that
+ * dropped the interesting error and looks whole is the lie this feature exists
+ * to remove.
+ */
+describe("evicting a real error is allowed, and is not allowed to be silent", () => {
+    it("reports the drop when a flood pushes the first error out", () => {
+        recordError("renderer", { source: "B", message: "THE REAL ERROR" }, T0)
+        for (let i = 0; i < MAX_ENTRIES + 5; i++) {
+            // A fresh window each time, so the rate limit is not what is under test.
+            recordError("renderer", { source: "B", message: `flood ${i}` }, T0 + (i + 1) * 20_000)
+        }
+        const res = readEntries()
+        if (!res.ok) throw new Error("unreadable")
+        expect(res.entries.map((e) => e.message)).not.toContain("THE REAL ERROR")
+        expect(res.dropped).toBeGreaterThan(0)
     })
 })

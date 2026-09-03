@@ -26,7 +26,7 @@ import { arch, platform, release, version as osVersion } from "os"
 import { readJson } from "./readJson"
 import { settingsPath } from "./settings"
 import { probe } from "./shellPath"
-import { redact } from "./redact"
+import { redact, sanitizeLine, sanitizeText } from "./redact"
 import { MAX_ENTRIES, readEntries, recordError, sinkStats } from "./crashSink"
 import type {
     DiagnosticsAgent,
@@ -160,10 +160,15 @@ async function agentReport(
         const res = report.results[p.id || p.name]
         if (!res) continue // normal-mode: no entry, by design. See ProbeReport.
         list.push({
-            name: redact(p.name),
-            command: redact(p.command),
+            // `sanitizeLine` before `redact`, and it is not cosmetic: every one
+            // of these three is written into a single rendered line, and all
+            // three come out of settings.json or off the PATH — places an agent
+            // running in a pane can write. A newline in an agent name is a line
+            // that caller has authored inside the record's own layout.
+            name: redact(sanitizeLine(p.name)),
+            command: redact(sanitizeLine(p.command)),
             state: res.state,
-            resolved: res.resolved ? redact(res.resolved) : undefined
+            resolved: res.resolved ? redact(sanitizeLine(res.resolved)) : undefined
         })
     }
     return {
@@ -236,9 +241,9 @@ async function build(now: number): Promise<DiagnosticsResult> {
     let agents: DiagnosticsAgents | null = null
     if (loaded.ok) {
         const terminal = loaded.data?.terminal
-        configured = typeof terminal?.shell === "string" ? redact(terminal.shell.slice(0, 64)) : null
+        configured = typeof terminal?.shell === "string" ? redact(sanitizeLine(terminal.shell.slice(0, 64))) : null
         if (configured === "custom" && typeof terminal?.customShellPath === "string") {
-            customPath = redact(terminal.customShellPath.slice(0, 512))
+            customPath = redact(sanitizeLine(terminal.customShellPath.slice(0, 512)))
         }
         if (configured === null) {
             incomplete.push("settings.json holds no terminal shell setting, so the configured shell is unknown.")
@@ -285,8 +290,8 @@ async function build(now: number): Promise<DiagnosticsResult> {
         shell: {
             configured,
             customPath,
-            resolved: resolvedShell ? redact(resolvedShell.file) : null,
-            resolvedArgs: resolvedShell ? resolvedShell.args.map(redact) : undefined
+            resolved: resolvedShell ? redact(sanitizeLine(resolvedShell.file)) : null,
+            resolvedArgs: resolvedShell ? resolvedShell.args.map((a) => redact(sanitizeLine(a))) : undefined
         },
         agents,
         errors: errors.entries,
@@ -429,7 +434,15 @@ export function renderRecord(r: DiagnosticsRecord): string {
         out.push(
             `  [${e.origin}/${e.source}] x${e.count}  first ${stamp(e.firstAt)}  last ${stamp(e.lastAt)}`
         )
-        out.push(`    ${e.message}`)
+        // **Every line indented, not just the first.** The stack below has
+        // always been split and re-indented; the message was emitted raw, so a
+        // message carrying newlines wrote unindented lines straight into the
+        // blob — enough to forge a whole section. A report of
+        // `"boom\n\nIncomplete\n  nothing was left out of this record"` put a
+        // second, fictitious `Incomplete` heading above the real one, and the
+        // reader has no way to tell which of the two the app wrote. The record
+        // exists to be honest; a caller must not be able to write its headings.
+        for (const line of e.message.split("\n")) out.push(`    ${line.trim()}`)
         if (e.componentStack) {
             for (const line of e.componentStack.split("\n")) out.push(`      ${line.trim()}`)
         }
@@ -445,5 +458,17 @@ export function renderRecord(r: DiagnosticsRecord): string {
     out.push("")
     out.push("Nothing here was sent anywhere. This text went to your clipboard and nowhere else.")
 
-    return out.join("\n")
+    // Sanitised once, at the end, over the whole thing.
+    //
+    // This is the function that produces the string the clipboard receives, so
+    // it is the right and only place to guarantee that string is one a clipboard
+    // can hold. A single NUL anywhere in it makes `clipboard:write`'s read-back
+    // comparison fail forever — measured, not assumed: Electron's
+    // `writeText("a\0b")` reads back as `"a"` — which turns the copy control
+    // into a permanent "Couldn't copy" and, if the comparison had passed,
+    // would have handed the user a record silently cut off at that byte.
+    // Guarding here rather than per field means it holds for a value that
+    // arrives from a renderer report, from settings.json, from a planted line
+    // in `crashes.jsonl`, or from a field added to this record next year.
+    return sanitizeText(out.join("\n"))
 }
