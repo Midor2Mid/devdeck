@@ -413,6 +413,16 @@ export function recordError(
         existing.dirty = true
         // The count is already right in memory; disk only has to catch up, and
         // ten thousand throws must not be ten thousand appends.
+        //
+        // What a **kill** costs, stated because `flushSink` only runs at
+        // teardown and an antivirus stop never reaches it: everything counted
+        // since this key's last append is lost. That is bounded by the rate
+        // limit, not by the loop — at most `RATE_MAX` reports per
+        // `RATE_WINDOW_MS` are accepted at all, so at most ~15 repeats of one
+        // key can accumulate inside a 5s throttle window. The entry itself, its
+        // message and its stack are already on disk from the first sighting; a
+        // count that reads 1 instead of 16 understates a storm but never hides
+        // one, and that is the trade being made.
         if (now - existing.writtenAt >= REPEAT_WRITE_MS) appendEntry(existing, now)
         return true
     }

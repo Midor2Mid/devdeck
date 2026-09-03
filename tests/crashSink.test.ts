@@ -293,3 +293,30 @@ describe("main's own errors use the same lane", () => {
         expect(res.entries[0].message).toContain("spawn failed")
     })
 })
+
+describe("what a kill costs is bounded, and it is bounded by the rate limit", () => {
+    it("cannot lose more than one window's worth of repeats", () => {
+        // `flushSink` runs at teardown, so a process that is KILLED — an
+        // antivirus stop, a task-manager end — never reaches it, and everything
+        // counted since the last append for that key is lost. The bound is the
+        // rate limit, not the loop: at most RATE_MAX reports are accepted per
+        // window, so a spinning renderer cannot make the on-disk count arbitrarily
+        // stale. The entry, its message and its stack are on disk from the first
+        // sighting regardless — only the count understates.
+        for (let i = 0; i < 10_000; i++) {
+            recordError("renderer", { source: "s", message: "loop" }, T0)
+        }
+        // No flushSink() call: this is what a kill would leave behind.
+        const written = readFileSync(storePath(), "utf8")
+            .split("\n")
+            .filter(Boolean)
+            .map((l) => JSON.parse(l).count as number)
+        expect(written.length).toBe(1)
+        expect(Math.max(...written)).toBe(1)
+        // In memory the truth is intact, and a clean quit writes it.
+        flushSink(T0)
+        const after = readEntries()
+        if (!after.ok) throw new Error("unreadable")
+        expect(after.entries[0].count).toBe(RATE_MAX)
+    })
+})
