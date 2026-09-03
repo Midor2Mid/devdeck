@@ -179,7 +179,7 @@ its own, so nothing else catches a type error.
 
 ### Terminal keyboard shortcuts
 
-A quick reference; press **F1** in the app for the complete, current list (global, terminal, and editor).
+A quick reference; press **F1** in the app for the complete, current list (global, terminal, editor, and database).
 
 | Shortcut | Action |
 |---|---|
