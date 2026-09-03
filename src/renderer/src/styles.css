@@ -4660,8 +4660,16 @@ button .ic,
     flex: 1;
     min-height: 0;
     display: flex;
-    align-items: center;
+    /* `center` overflows a slot shorter than the card, in BOTH directions, with
+       `overflow: visible` - so a crashed top bar (a ~44px row) put its heading
+       above the window top where it could not be read at all, and at 900x600 a
+       crashed Mission card's Copy diagnostics row was completely covered by the
+       Deck's card. The affordance became unreachable on the surface that needed
+       it. `start` plus scroll keeps every card inside its own slot; a card
+       taller than its slot scrolls instead of escaping. */
+    align-items: start;
     justify-content: center;
+    overflow: auto;
     padding: 24px;
     background: var(--bg);
 }

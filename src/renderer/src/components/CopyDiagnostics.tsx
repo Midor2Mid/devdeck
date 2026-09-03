@@ -114,6 +114,13 @@ export function useCopyDiagnostics(surface: DiagnosticsSurface): CopyDiagnostics
                     setFeedback("copied")
                     timer.current = setTimeout(() => setFeedback("idle"), COPIED_LABEL_MS)
                 } else {
+                    // Clear "refused" explicitly. Dropping only the fallback text
+                    // left the label reading `Couldn't copy` after a copy that
+                    // worked - contradicting the success toast beside it, and
+                    // removing the text the user had just been told to select by
+                    // hand. A control that reports a failure which did not happen
+                    // is the same lie as one that hides a failure that did.
+                    setFeedback("idle")
                     toast(DIAGNOSTICS_COPIED_TOAST)
                 }
             })
@@ -165,7 +172,7 @@ export function DiagnosticsNote({
             {state.fallback !== null && (
                 <>
                     <p className="diag-note">{DIAGNOSTICS_REFUSED}</p>
-                    <pre className="crash-msg" style={{ userSelect: "text" }}>
+                    <pre className="diag-record" style={{ userSelect: "text" }}>
                         {state.fallback}
                     </pre>
                 </>

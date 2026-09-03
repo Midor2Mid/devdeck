@@ -278,15 +278,34 @@ function registerIpc(): void {
     // Windows failure mode — another process holding the clipboard open — leaves
     // the call looking successful. Comparing what came back is the only thing
     // that actually knows.
-    ipcMain.handle("clipboard:write", (_e, text: unknown): boolean => {
+    //
+    // The write and its read-back are one critical section. They are not atomic
+    // against each other: two writes in flight with DIFFERENT text meant the
+    // second write landed before the first read-back, so the first call
+    // compared its own text against someone else's and reported failure for a
+    // write that had succeeded. Measured at nine false failures in ten parallel
+    // writes, and reachable by double-clicking Copy diagnostics - where each
+    // click's text differs because the record carries a timestamp. Serializing
+    // costs nothing (a clipboard write is microseconds) and removes a whole
+    // class of false negative from every caller of the bridge.
+    let clipboardChain: Promise<void> = Promise.resolve()
+    ipcMain.handle("clipboard:write", (_e, text: unknown): Promise<boolean> => {
         const value = String(text ?? "")
-        try {
-            clipboard.writeText(value)
-            return clipboard.readText() === value
-        } catch (err) {
-            console.error("[clipboard] write failed:", err)
-            return false
-        }
+        const run = clipboardChain.then((): boolean => {
+            try {
+                clipboard.writeText(value)
+                return clipboard.readText() === value
+            } catch (err) {
+                console.error("[clipboard] write failed:", err)
+                return false
+            }
+        })
+        // The chain must never reject or every later write inherits it.
+        clipboardChain = run.then(
+            () => undefined,
+            () => undefined
+        )
+        return run
     })
 
     // --- API client ---

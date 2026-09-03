@@ -33,15 +33,25 @@ export type DiagnosticsSurface = "about" | "root" | "region"
  * "sanitised", "safe" and "anonymous" would upgrade it into a guarantee and are
  * banned here by test.
  *
- * The two crash variants say nothing about PATH or agent presence, because a
- * crash record carries no probe run — the claim would have nothing behind it.
+ * The two crash variants used to say nothing about the shell or agent commands,
+ * on the stated grounds that "a crash record carries no probe run". That premise
+ * was false: `buildRecord()` takes no surface argument and there is exactly one
+ * record-building path, so every record - crash records included - carries a
+ * `Shell` and an `Agent commands` section. A reviewer copied from a real root
+ * crash card and read both back off the clipboard. The sentence was not lying
+ * about redaction; it was silent about a whole section that is in the blob,
+ * which fails §5.1's own rationale that a stranger deserves to know what they
+ * are pasting. Keeping the sections is the right call - a shell and an agent
+ * roster are exactly what someone diagnosing a crash needs - so the sentences
+ * now name them. **Acceptance criterion 48 rests on the false premise and needs
+ * re-ruling by `po`.**
  */
 export const DIAGNOSTICS_SENTENCE: Record<DiagnosticsSurface, string> = {
     about:
-        "Copies your DevDeck and OS version, your agent commands and whether each was found on your PATH, and the recent app log — file paths and command lines included, with API keys and tokens removed. Nothing is sent anywhere; it goes to your clipboard.",
-    root: "Copies this error, your DevDeck and OS version, and the recent app log — file paths and command lines included, with API keys and tokens removed. Nothing is sent anywhere.",
+        "Copies your DevDeck and OS version, your shell, your agent commands and whether each was found on your PATH, and the recent app log — file paths and command lines included, with API keys and tokens removed. Nothing is sent anywhere; it goes to your clipboard.",
+    root: "Copies this error, your DevDeck and OS version, your shell, your agent commands and whether each was found on your PATH, and the recent app log — file paths and command lines included, with API keys and tokens removed. Nothing is sent anywhere.",
     region:
-        "Copies this error, your versions and the recent log — paths included, secrets removed. Nothing is sent anywhere."
+        "Copies this error, your versions, your shell, your agent commands and their PATH result, and the recent log — paths included, secrets removed. Nothing is sent anywhere."
 }
 
 /** Replaces the sentence when main could not read its own log. */

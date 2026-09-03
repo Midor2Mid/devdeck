@@ -218,7 +218,7 @@ async function build(now: number): Promise<DiagnosticsResult> {
     }
     if (errors.skipped > 0) {
         incomplete.push(
-            `${errors.skipped} log line${errors.skipped === 1 ? "" : "s"} could not be parsed and were skipped.`
+            `${errors.skipped} log line${errors.skipped === 1 ? " could not be parsed and was" : "s could not be parsed and were"} skipped.`
         )
     }
     if (errors.entries.some((e) => e.clipped)) {

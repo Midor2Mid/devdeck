@@ -79,14 +79,22 @@ describe("the diagnostics sentence", () => {
         }
     })
 
-    it("does not claim a PATH result on a crash card", () => {
-        // The crash record carries no probe run, so a crash card that mentioned
-        // the PATH would be describing a section its blob does not have.
-        for (const s of ["root", "region"] as const) {
-            expect(DIAGNOSTICS_SENTENCE[s]).not.toContain("PATH")
-            expect(DIAGNOSTICS_SENTENCE[s].toLowerCase()).not.toContain("agent")
+    it("names every section the record actually builds, on all three surfaces", () => {
+        // This test used to assert the opposite - that a crash card must NOT
+        // mention PATH or agents, "because a crash record carries no probe run".
+        // That premise was false. `buildRecord()` takes no surface argument and
+        // there is one record-building path, so every record carries a Shell and
+        // an Agent commands section; a reviewer copied from a real root crash
+        // card and read both back off the clipboard. Silence about a section that
+        // IS in the blob fails the rationale the whole sentence exists to serve.
+        // The sections are worth keeping - a shell and an agent roster are what
+        // someone diagnosing a crash needs - so the sentences name them instead.
+        for (const s of ["about", "root", "region"] as const) {
+            const text = DIAGNOSTICS_SENTENCE[s]
+            expect(text.toLowerCase()).toContain("shell")
+            expect(text.toLowerCase()).toContain("agent")
+            expect(text).toContain("PATH")
         }
-        expect(DIAGNOSTICS_SENTENCE.about).toContain("found on your PATH")
     })
 
     it("never says a command was not installed", () => {

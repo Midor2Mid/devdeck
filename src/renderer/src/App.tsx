@@ -459,9 +459,13 @@ export function App(): JSX.Element {
             >
                 <Deck />
             </RegionBoundary>
-            {/* These three were the only overlays with no boundary, so a throw
-                in any of them still blanked the window - the exact failure the
-                region boundaries were added to stop. Each boundary sits INSIDE
+            {/* These three are the overlays a stranger reaches first, and a
+                throw in any of them blanked the whole window - the exact failure
+                the region boundaries were added to stop. The SEVENTEEN below
+                them are still bare and still blank the window; WorktreesModal
+                renders {project.name} unguarded and is how a reviewer produced a
+                root crash on purpose. Wrapping them is follow-up work, not a
+                thing this comment should imply is done. Each boundary sits INSIDE
                 its own conditional, so closing the crashed overlay unmounts the
                 boundary with it and reopening starts clean. Each therefore
                 needs a way out: a crashed modal has taken its own close button

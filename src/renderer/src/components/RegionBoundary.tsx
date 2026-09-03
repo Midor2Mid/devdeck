@@ -62,11 +62,27 @@ export class RegionBoundary extends Component<Props, State> {
         return { error }
     }
 
+    /**
+     * A boundary WITHOUT a `resetKey` never clears itself. Only `Try again`
+     * does.
+     *
+     * The previous version stored `props.resetKey ?? null` when it latched, so
+     * a boundary with no such prop recorded `null` — and on the very next
+     * render compared `undefined !== null`, which is true, and cleared the
+     * error. Deleting `resetKey={view}` therefore did not delete the reset: it
+     * widened the trigger from "the view changed" to "App re-rendered for any
+     * reason", and `App` re-renders on agent status, sessions, tabs and
+     * projects. A latched region then re-threw once per re-render, and 60 deck
+     * clicks turned one crash into 60 reports - 30 accepted, 30 refused by the
+     * sink's rate limit, which discards any OTHER error in that window and
+     * fills the record's own Incomplete block with an apology. That defeats the
+     * feature this boundary was wired into.
+     */
     static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
-        if (state.error && state.key !== undefined && props.resetKey !== state.key) {
-            return { error: null, key: undefined }
-        }
-        if (state.error && state.key === undefined) return { key: props.resetKey ?? null }
+        if (!state.error) return null
+        if (props.resetKey === undefined) return null
+        if (state.key === undefined) return { key: props.resetKey }
+        if (props.resetKey !== state.key) return { error: null, key: undefined }
         return null
     }
 
