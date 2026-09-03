@@ -25,7 +25,7 @@ export function StandupModal(): JSX.Element {
     const [repos, setRepos] = useState<WorklogRepo[]>([])
     const [text, setText] = useState("")
     const [loading, setLoading] = useState(false)
-    const [copied, setCopied] = useState(false)
+    const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle")
 
     const since = useMemo(() => {
         const r = RANGES.find((x) => x.id === rangeId) ?? RANGES[0]
@@ -72,13 +72,15 @@ export function StandupModal(): JSX.Element {
         generate()
     }, [generate])
 
-    const copy = (): void => {
+    const copy = async (): Promise<void> => {
         // The house clipboard, not `navigator.clipboard`: the renderer's deny-all
         // permission handler blocks that API (see TerminalPane's comment), so
-        // this reported "✓ Copied" for a copy that never happened.
-        window.api.clipboard.writeText(text)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        // this reported "✓ Copied" for a copy that never happened. Fixing the
+        // API left the second half of the defect - the tick was still printed
+        // without asking whether the write landed.
+        const ok = await window.api.clipboard.writeText(text)
+        setCopied(ok ? "ok" : "fail")
+        setTimeout(() => setCopied("idle"), ok ? 1500 : 2400)
     }
 
     const totalCommits = repos.reduce((n, r) => n + r.commits.length, 0)
@@ -108,7 +110,7 @@ export function StandupModal(): JSX.Element {
                     spellCheck={false}
                 />
                 <div className="standup-actions">
-                    <button className="accent" onClick={copy}>{copied ? "✓ Copied" : "Copy markdown"}</button>
+                    <button className="accent" onClick={copy}>{copied === "ok" ? "✓ Copied" : copied === "fail" ? "Couldn't copy" : "Copy markdown"}</button>
                     <span className="muted small">Commits are filtered to your git email per repo.</span>
                 </div>
             </div>

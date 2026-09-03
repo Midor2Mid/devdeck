@@ -220,7 +220,13 @@ function PromotePanel({
                         <button
                             className="btn-min"
                             disabled={!allChecked || commits.length === 0}
-                            onClick={() => { window.api.clipboard.writeText(cmds); setMsg("Commands copied.") }}
+                            onClick={async () => {
+                                // The bridge answers whether the write landed;
+                                // it used to be ignored, which made this line a
+                                // claim with nothing behind it.
+                                const ok = await window.api.clipboard.writeText(cmds)
+                                setMsg(ok ? "Commands copied." : "Couldn't reach the clipboard - nothing was copied.")
+                            }}
                         >
                             copy commands
                         </button>

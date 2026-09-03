@@ -7,6 +7,7 @@ import { useSettings } from "../settings"
 import { SHELL, useStore } from "../store"
 import { THEMES } from "../themes"
 import { exitNotice } from "../termExit"
+import { toast } from "../toast"
 import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
 
 const IS_WINDOWS = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
@@ -160,8 +161,24 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 if (k === "c") {
                     const sel = term.getSelection()
                     if (sel) {
-                        window.api.clipboard.writeText(sel)
-                        term.clearSelection()
+                        // Clearing the selection IS this copy's success signal -
+                        // the highlight vanishing is how the user learns it
+                        // worked. Do it only once the write is confirmed, or a
+                        // refused clipboard takes the selection away too and
+                        // leaves nothing to copy by hand.
+                        void window.api.clipboard.writeText(sel).then((ok) => {
+                            if (!ok) {
+                                toast("Couldn't reach the clipboard - your selection is still there")
+                                return
+                            }
+                            // The pane can be closed while the write is in
+                            // flight; xterm throws on a disposed terminal.
+                            try {
+                                term.clearSelection()
+                            } catch {
+                                /* pane went away mid-copy */
+                            }
+                        })
                     }
                     return false
                 }
@@ -175,8 +192,14 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         const onContextMenu = (e: MouseEvent): void => {
             e.preventDefault()
             const sel = term.getSelection()
-            // Right-click copies a selection if there is one, else pastes.
-            if (sel) window.api.clipboard.writeText(sel)
+            // Right-click copies a selection if there is one, else pastes. A
+            // silent copy has no success signal to withhold, so the only honest
+            // thing to add is the failure: without it the user walks away
+            // believing they hold text they do not.
+            if (sel)
+                void window.api.clipboard.writeText(sel).then((ok) => {
+                    if (!ok) toast("Couldn't reach the clipboard - nothing was copied")
+                })
             else pasteFromClipboard()
         }
         container.addEventListener("contextmenu", onContextMenu)

@@ -188,7 +188,7 @@ export function NetworkPanel(): JSX.Element {
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [filter, setFilter] = useState("")
     const [thisProjectOnly, setThisProjectOnly] = useState(false)
-    const [copied, setCopied] = useState(false)
+    const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle")
 
     // Load current status + backlog, and subscribe to live captures.
     useEffect(() => {
@@ -224,11 +224,13 @@ export function NetworkPanel(): JSX.Element {
     }
 
     const addr = `http://127.0.0.1:${port}`
-    const copyAddr = (): void => {
+    const copyAddr = async (): Promise<void> => {
         // See StandupModal: `navigator.clipboard` is denied in this renderer.
-        window.api.clipboard.writeText(addr)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1200)
+        // Await the answer: "copied!" over a write that never landed sends the
+        // user to paste an address they do not have.
+        const ok = await window.api.clipboard.writeText(addr)
+        setCopied(ok ? "ok" : "fail")
+        setTimeout(() => setCopied("idle"), ok ? 1200 : 2400)
     }
 
     const filtered = useMemo(() => {
@@ -275,7 +277,7 @@ export function NetworkPanel(): JSX.Element {
                     onClick={copyAddr}
                     data-tip={`Copy ${addr} — set HTTP_PROXY / HTTPS_PROXY to this`}
                 >
-                    {copied ? "copied!" : addr}
+                    {copied === "ok" ? "copied!" : copied === "fail" ? "couldn't copy" : addr}
                 </button>
 
                 <span className="spacer" />

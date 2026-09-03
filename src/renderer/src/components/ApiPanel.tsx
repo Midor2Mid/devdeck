@@ -248,7 +248,7 @@ export function ApiPanel(): JSX.Element {
     const [respTab, setRespTab] = useState<"body" | "headers" | "tests">("body")
     const [respPretty, setRespPretty] = useState(true)
     const [respWrap, setRespWrap] = useState(true)
-    const [copied, setCopied] = useState(false)
+    const [copied, setCopied] = useState<"idle" | "ok" | "fail">("idle")
     const [sentToAgent, setSentToAgent] = useState(false)
     const [sending, setSending] = useState(false)
     const sendToAgent = useStore((s) => s.sendToAgent)
@@ -530,13 +530,15 @@ export function ApiPanel(): JSX.Element {
         ])
     }
 
-    const copyBody = (): void => {
+    const copyBody = async (): Promise<void> => {
         // See StandupModal: `navigator.clipboard` is denied in this renderer, so
         // the try/catch here was catching every copy and the `setCopied` after it
-        // never ran. Nothing was copied and nothing said so.
-        window.api.clipboard.writeText(shownRespBody)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1400)
+        // never ran. Nothing was copied and nothing said so. The bridge now
+        // reports whether the write landed, so the label follows the fact
+        // instead of the intent.
+        const ok = await window.api.clipboard.writeText(shownRespBody)
+        setCopied(ok ? "ok" : "fail")
+        setTimeout(() => setCopied("idle"), ok ? 1400 : 2400)
     }
 
     // Hand the response to the focused agent session as context to reason about.
@@ -861,7 +863,11 @@ export function ApiPanel(): JSX.Element {
                                         Wrap
                                     </button>
                                     <button className="tool" onClick={copyBody} data-tip="Copy body">
-                                        {copied ? "Copied ✓" : "Copy"}
+                                        {copied === "ok"
+                                            ? "Copied ✓"
+                                            : copied === "fail"
+                                              ? "Couldn't copy"
+                                              : "Copy"}
                                     </button>
                                     <button className="tool" onClick={exportBody} data-tip="Save response body to a file">
                                         Export
