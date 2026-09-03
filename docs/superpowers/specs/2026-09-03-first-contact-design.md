@@ -856,3 +856,49 @@ user-writable directory ahead of `system32`.
   connection was proven, the hash was not captured off the wire), the 26.6s freeze
   watched inside Electron rather than in Node, real OS drag-and-drop, and the
   other 82 theme × style combinations.
+
+## Ruling — `po`, 2026-09-03: **met, with conditions**
+
+36 of 37 criteria pass; criterion 35 is retired for cause rather than failed.
+`po` re-checked the load-bearing claims against the tree rather than accepting
+the section above — the grid diff, both CSS fixes, the `DESIGN.md` addition, the
+absence of any `.cmd-edit-grid` media query, `.settings-modal`'s fixed 720px, and
+the security regression tests — and ran the suite live. Both amendments accepted:
+35 retired ("a layout collapse that literally cannot occur in this app"), 20
+recorded as in-session only ("correctly assigns no blame to this build").
+
+The *Copy diagnostics* exclusion was confirmed as the right cut, not scope-cutting
+for convenience: shipping a button that copies a record which does not exist would
+itself be the false-claim UI this codebase has been burned by.
+
+### Condition 1 — criterion 30's thinness is a tracked follow-up, not closed
+
+In Settings → Agents, `on PATH` and `unchecked` differ **only by the word**. The
+launcher carries three channels for the same distinction (icon, dashed rule, pill
+word); this surface carries one. It is a defensible form tradeoff — eight pills
+would compete with eight inputs — but it is closer to a real gap than "known
+thinness" implies, and it is the *second* surface expressing the state.
+
+**Owner:** whoever next touches Settings → Agents, or the marker grammar in
+`DESIGN.md`. **Not blocking.** Do not close this silently by re-reading the
+tradeoff; close it by adding a second channel or by deciding out loud that one
+word is enough on a form.
+
+### Condition 2 — `field` watches for the shell-mismatch false negative
+
+Hydration uses the platform default shell, not the pane's configured shell. A
+user whose panes run Git Bash, with an agent installed only there, sees
+`not on PATH` for something that works. The card still launches, so the failure
+is a **misleading label rather than a broken feature** — which is exactly the
+shape a beta user reports as "your app is wrong" without being able to say why.
+
+**Owner:** `field`, during the first beta round. This is the one accepted gap
+that produces user-visible *wrong information* rather than an absent feature, so
+it is the first thing to ask about if anyone says the launcher misread their
+setup. The fix, if it is ever needed, is hydrating per shell kind against a
+whitelist in main — never by spawning a renderer-supplied executable.
+
+### Condition 3 — no code changes required before shipping
+
+`po` found the three post-review fixes (`4339994`) and the two security fixes
+(`49c9f33`, `b5b7f54`) real, measured and regression-tested.

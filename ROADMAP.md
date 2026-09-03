@@ -32,7 +32,7 @@ milestone closes.
 | 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run; ends the Avast dependency in the release path | needs 4 |
 | 7 | Verify the approve/deny card on a **physical phone** | `qa` | The most distinctive thing in the product, and the worst first impression if it is broken. It has never rendered on real hardware | |
 | 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9. `PRODUCT.md`'s validation section is rewritten **here**, when there is a true sentence to replace the false one with | spec in progress |
-| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim | `field` | The evidence this whole milestone exists to get | |
+| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | |
 
 ### The two builds behind step 8
 
