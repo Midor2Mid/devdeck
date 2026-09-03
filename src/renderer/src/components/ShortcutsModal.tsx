@@ -1,52 +1,11 @@
 import { useEffect } from "react"
 import { DECK_VIEWS } from "./ViewKeys"
+import { shortcutGroups } from "../shortcuts"
 
-// A single source of truth for keyboard shortcuts, surfaced so users can discover
-// the (otherwise hidden) terminal/editor/global bindings. Keep in sync with the
-// handlers in App.tsx and TerminalView.tsx. The view-switch row is derived from
-// DECK_VIEWS so it can never drift from the real deck order.
-const GROUPS: { title: string; items: [string, string][] }[] = [
-    {
-        title: "Global",
-        items: [
-            ["Ctrl + K", "Switch project (then 1-9 to pick)"],
-            ["Ctrl + Shift + K", "Recent project - hold and tap to walk back"],
-            ["Ctrl + Shift + P", "Command palette"],
-            [
-                `Ctrl + 1 … ${DECK_VIEWS.length}`,
-                `Switch view (${DECK_VIEWS[0].name} … ${DECK_VIEWS[DECK_VIEWS.length - 1].name})`
-            ],
-            ["Ctrl + Shift + F", "Search across projects"],
-            ["Ctrl + Shift + B", "Build / test (.NET)"],
-            ["Ctrl + Shift + R", "Review changes"],
-            ["Ctrl + Shift + J", "Agents inbox"],
-            ["Ctrl + Tab", "Next session (shells included)"],
-            ["Ctrl + Shift + Tab", "Previous session"],
-            ["F1", "This shortcuts list"]
-        ]
-    },
-    {
-        title: "Terminal",
-        items: [
-            ["Ctrl + Shift + T", "New shell terminal"],
-            ["Ctrl + Shift + Enter", "New agent session"],
-            ["Ctrl + Shift + W", "Close active pane"],
-            ["Ctrl + Shift + \\", "Split right"],
-            ["Ctrl + Shift + -", "Split down"],
-            ["Ctrl + Shift + ]", "Next tab"],
-            ["Ctrl + Shift + [", "Previous tab"],
-            ["Ctrl + Shift + F", "Find in terminal"],
-            ["Ctrl + Shift + I", "Prompt composer"],
-            ["Alt + 1 … 9", "Jump to a session in this project (9 = the last)"],
-            ["Alt + arrows", "Move focus to the pane in that direction"],
-            ["Ctrl + Shift + Z", "Zoom the focused pane, and back"]
-        ]
-    },
-    {
-        title: "Editor",
-        items: [["Ctrl + S", "Save file"]]
-    }
-]
+// The list itself lives in ../shortcuts.ts, shared with Settings -> Shortcuts so
+// the two references cannot drift apart again. The view-switch row is derived
+// from DECK_VIEWS, so it can never claim a range the deck does not have.
+const GROUPS = shortcutGroups(DECK_VIEWS.map((v) => v.name))
 
 export function ShortcutsModal({ onClose }: { onClose: () => void }): JSX.Element {
     useEffect(() => {

@@ -16,6 +16,8 @@ import {
 import { useStore } from "../store"
 import { DiagnosticsNote, useCopyDiagnostics } from "./CopyDiagnostics"
 import { THEMES, STYLES } from "../themes"
+import { shortcutGroups } from "../shortcuts"
+import { DECK_VIEWS } from "./ViewKeys"
 import type { McpServer } from "../../../preload/index"
 import { MCP_CATALOG, addServer } from "../mcpCatalog"
 import { type Pipeline, type PipelineStep, type PipelineTrigger, type BranchTarget, isRunnable, moveItem } from "../pipeline"
@@ -2309,18 +2311,10 @@ const SHELLS: { value: ShellKind; label: string }[] = [
     { value: "custom", label: "Custom…" }
 ]
 
-const SHORTCUTS: [string, string][] = [
-    ["Ctrl+Shift+T", "New shell tab"],
-    ["Ctrl+Shift+Enter", "New Claude session"],
-    ["Ctrl+Shift+W", "Close focused pane"],
-    ["Ctrl+Shift+\\", "Split right"],
-    ["Ctrl+Shift+-", "Split down"],
-    ["Ctrl+Shift+] / [", "Next / previous tab"],
-    ["Ctrl+Shift+F", "Find in terminal"],
-    ["Ctrl+Shift+J", "Jump to the agent waiting on you"],
-    ["Ctrl+S", "Save file (editor)"],
-    ["Ctrl+Enter", "Run query (database)"]
-]
+// Same list the F1 overlay shows - see ../shortcuts.ts. This table used to be
+// its own hand-kept array and had fallen ten bindings and one renamed feature
+// behind it.
+const SHORTCUTS = shortcutGroups(DECK_VIEWS.map((v) => v.name))
 
 export function SettingsModal(): JSX.Element {
     const s = useSettings()
@@ -2574,18 +2568,23 @@ export function SettingsModal(): JSX.Element {
                     {section === "shortcuts" && (
                         <div className="settings-section">
                             <h3>Keyboard shortcuts</h3>
-                            <table className="shortcuts-table">
-                                <tbody>
-                                    {SHORTCUTS.map(([k, v]) => (
-                                        <tr key={k}>
-                                            <td>
-                                                <kbd>{k}</kbd>
-                                            </td>
-                                            <td>{v}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                            {SHORTCUTS.map((g) => (
+                                <div key={g.title}>
+                                    <h4>{g.title}</h4>
+                                    <table className="shortcuts-table">
+                                        <tbody>
+                                            {g.items.map(([k, v]) => (
+                                                <tr key={k}>
+                                                    <td>
+                                                        <kbd>{k}</kbd>
+                                                    </td>
+                                                    <td>{v}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ))}
                         </div>
                     )}
 
