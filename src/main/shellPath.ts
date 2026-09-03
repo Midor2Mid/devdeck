@@ -352,3 +352,28 @@ export async function probe(
         checkedAt: Date.now()
     }
 }
+
+/**
+ * The `probe:commands` IPC entry point, payload and all.
+ *
+ * The unwrapping lives here rather than in the handler's parameter list because
+ * `(_e, { requests, refresh }) => …` answers a payload that is not an object
+ * with a **`TypeError`**, and a guard that throws has not refused — it has
+ * failed to decide, upstream of the `sanitize` that was written to decide. This
+ * repo has already shipped that exact shape once, in a path guard that answered
+ * with a `TypeError` out of `path.resolve` instead of a verdict, and it was
+ * found by driving the app rather than by a test.
+ *
+ * Nothing here is reachable from the current renderer, whose bridge always sends
+ * an object literal, and `contextIsolation` means renderer code cannot reach
+ * `ipcRenderer` to send anything else. It is written this way so that the next
+ * caller — another preload entry, an MCP tool — inherits a refusal instead of an
+ * exception, and so the refusal is in a module a test can call.
+ *
+ * `refresh` is compared to `true` rather than coerced: `"false"`, `1` and `{}`
+ * are all truthy, and this is the one flag that spawns a shell.
+ */
+export function probeIpc(payload: unknown, run?: RunShell): Promise<ProbeReport> {
+    const o = (payload ?? {}) as Record<string, unknown>
+    return probe(o.requests, o.refresh === true, run)
+}

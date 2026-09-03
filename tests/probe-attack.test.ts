@@ -35,6 +35,7 @@ import {
     invalidateShellEnv,
     isHydrating,
     probe,
+    probeIpc,
     windowsPowerShell,
     type HydrationCommand,
     type Marks,
@@ -309,6 +310,44 @@ describe("the hydration spawn", () => {
         await probe(presets, false, first.run)
         await probe(presets, true, first.run)
         expect(first.calls()).toBe(2)
+    })
+})
+
+describe("the IPC payload itself", () => {
+    afterEach(() => invalidateShellEnv())
+
+    const stub: RunShell = async () => ""
+
+    it("refuses a payload that is not an object instead of throwing at it", async () => {
+        // The handler used to destructure `{ requests, refresh }` in its
+        // parameter list, so a payload of `null`, `undefined` or a string
+        // answered with a TypeError — upstream of the `sanitize` written to
+        // decide, and an exception is not a refusal. This repo has shipped that
+        // exact shape before: a path guard that answered with a TypeError out of
+        // `path.resolve` rather than a verdict.
+        for (const payload of [null, undefined, "requests", 42, [], true]) {
+            const rep = await probeIpc(payload, stub)
+            expect(rep.results, JSON.stringify(payload ?? null)).toEqual({})
+            expect(rep.pathHydrated).toBe(false)
+        }
+    })
+
+    it("only treats a literal `true` as a refresh", async () => {
+        // `refresh` is the one flag that spawns a shell, and `"false"`, `1`,
+        // `{}` and `[]` are all truthy.
+        let spawns = 0
+        const counting: RunShell = async () => {
+            spawns += 1
+            return ""
+        }
+        await probeIpc({ requests: [] }, counting)
+        expect(spawns).toBe(1)
+        for (const refresh of ["false", 1, {}, [], "true"]) {
+            await probeIpc({ requests: [], refresh }, counting)
+        }
+        expect(spawns).toBe(1)
+        await probeIpc({ requests: [], refresh: true }, counting)
+        expect(spawns).toBe(2)
     })
 })
 

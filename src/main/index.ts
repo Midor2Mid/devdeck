@@ -550,11 +550,11 @@ function registerIpc(): void {
     // The preset list lives in the renderer, so it comes in over the wire and
     // nothing about its shape is trusted; `probe` sanitises it. Only `runMode:
     // "agent"` presets get an answer at all.
-    ipcMain.handle(
-        "probe:commands",
-        (_e, { requests, refresh }: { requests: unknown; refresh?: boolean }) =>
-            shellpath.probe(requests, refresh === true)
-    )
+    // The payload is unwrapped inside `probeIpc`, not in this parameter list: a
+    // destructure here answers a non-object payload with a TypeError, which is
+    // not a refusal, and it does it upstream of the `sanitize` that exists to
+    // refuse. See the note on `probeIpc`.
+    ipcMain.handle("probe:commands", (_e, payload: unknown) => shellpath.probeIpc(payload))
 
     // --- Token usage + cost (parsed from Claude Code's local transcripts) ---
     ipcMain.handle("usage:tokens", (_e, sinceDays?: number) => usage.tokenUsage(sinceDays))
