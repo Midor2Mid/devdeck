@@ -31,7 +31,7 @@ milestone closes.
 | 5 | A one-page homepage: SignPath attribution, the code-signing policy, **Windows-only**, **single maintainer, PRs by invitation** | `marketing` / `docs-writer` | Step 4 — the application requires the attribution line and a published policy | |
 | 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run; ends the Avast dependency in the release path | needs 4 |
 | 7 | Verify the approve/deny card on a **physical phone** | `qa` | The most distinctive thing in the product, and the worst first impression if it is broken. It has never rendered on real hardware | |
-| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9. `PRODUCT.md`'s validation section is rewritten **here**, when there is a true sentence to replace the false one with | **half done** — probe + surfaces ruled *met* 2026-09-03; the diagnostics record is the next build |
+| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9. `PRODUCT.md`'s validation section is rewritten **here**, when there is a true sentence to replace the false one with | **done** — both halves ruled *met, with conditions* 2026-09-03 |
 | 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | |
 
 ### The two builds behind step 8
@@ -58,6 +58,41 @@ competitor feature should be built next**. These are DevDeck's own gaps.
   boundaries report to a `console.error` that is unreachable in a packaged app.
   The redactor ships in the same commit as the button, because a copy button
   without one hands a stranger a footgun.
+
+### Tracked follow-ups from the step-8 rulings
+
+Filed here rather than left as code comments, per `po`'s standard that a
+disclosed and tracked gap is a backlog item while an undisclosed one is a lie.
+
+- **Seventeen overlays still have no error boundary**, so a throw in any of them
+  blanks the whole window. `ExtendAgentModal`, `SearchModal`, `DotnetPanel`,
+  `ReviewPanel`, `ShortcutsModal`, `ActivityPanel`, `UsagePanel`,
+  `ProjectEnvModal`, `CommandsModal`, `ProjectIdentityModal`, `RecordingsModal`,
+  `WorktreesModal`, `ChangesModal`, `PrModal`, `WorkPanel`, `ReleaseBoard`,
+  `StandupModal` (`App.tsx:499-515`). **`WorktreesModal` is confirmed reachable**
+  — it renders `{project.name}` unguarded, which is how a reviewer produced a
+  root crash on purpose. The three a stranger meets first (Settings, the
+  switcher, the palette) are wrapped. `frontend-dev` / `technical-director`.
+- **A slot-aware sizing variant for a crashed top bar.** Region cards no longer
+  escape their slots or occlude each other, but on a slot shorter than the card
+  (~44px for the top bar's row) `Copy diagnostics` needs an in-card scroll.
+  `frontend-dev` / `design-reviewer`.
+- **In Settings → Agents, `on PATH` and `unchecked` differ only by the word.**
+  The launcher carries three channels for the same distinction; this surface
+  carries one. Close it by adding a channel or by deciding out loud that one word
+  is enough on a form — not by re-reading the tradeoff.
+- **The redactor's four known gaps**, to watch in beta reports rather than
+  pre-solve: URL- and base64-encoded secrets (decoding arbitrary text would
+  false-positive on every hash and cache path in the record); uncovered issuers
+  (SendGrid, Slack and Discord webhooks, Google OAuth); `AKIA` followed
+  immediately by an alphanumeric, since dropping the trailing word boundary
+  would widen the rule into base64 runs and commit SHAs; and space-separated
+  flag values (`mysql -p hunter2`), which are genuinely indistinguishable from a
+  positional argument. `field` / `security-engineer`.
+- **The report rate limit is a fixed window**, so 30 refusals at the end of one
+  window plus 30 at the start of the next is 60 in an instant. Promote to a
+  sliding window only if a beta report actually shows burst loss; the record
+  already declares refusals in its own `Incomplete` block.
 
 ### Behind those, in order
 

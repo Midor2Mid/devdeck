@@ -975,3 +975,73 @@ the bridge to return `Promise<boolean>`.
 - **"A real OS-level clipboard denial reaches the refused state."** 52 requires the plumbing to carry a real failure; provoking an actual clipboard lock or DLP hook on demand is not reproducible. Same shape as the antivirus gap. `field`.
 - **"200 log lines is the right cap."** No agreed target for "enough to diagnose, small enough to paste". Arbitrary until a beta report says otherwise. `field`.
 - **"The dedupe key is the right key."** 39 only requires identical throws to collapse. What counts as the same error for two throws differing by one stack frame is a design question, not a test — flagged to whoever writes the recorder.
+
+---
+
+## Ruling — `po`, 2026-09-03: **met, with conditions** (diagnostics record)
+
+Criteria 38–62 are met. `po` verified against the code rather than the report —
+ran the suite, ran the typecheck, and read the diffs in `a5d1fb9` and `451a44c`
+instead of trusting the commit messages describing them.
+
+Its standard for the gaps below, which is the one this project should keep:
+**an undisclosed gap is a lie; a disclosed and tracked one is a backlog item.**
+
+### Two criteria amended, both because they were wrong
+
+**48 — amended.** As written it required the crash-card sentence to omit PATH
+and agent mentions, on the premise that "the crash record carries no probe run".
+The premise was false: `buildRecord()` takes no surface argument, so every record
+carries `Shell` and `Agent commands`, and a reviewer read both back off the
+clipboard from a real root crash card. Satisfied literally, the criterion
+produced a sentence silent about a section that is in the blob — failing §5.1's
+rationale more directly than the thing it was written to prevent. It now reads:
+*the crash-card variant names every section the record actually contains and
+omits nothing that is in the blob; fails if any built section goes unmentioned.*
+`po` explicitly rejected the alternative — a surface-scoped record that drops
+those sections for crash contexts — on the grounds that "inventing a
+surface-scoped record just to keep a sentence short would have made the feature
+worse to satisfy a criterion that was wrong."
+
+**60 — amended.** Both of its fail conditions hold (the modal does not widen,
+the page does not scroll horizontally, the record `<pre>` scrolls internally),
+but the two buttons do **not** wrap at 900px because they fit. §5.4's prediction
+of a wrap was wrong. `flex-wrap: wrap` remains, so the row still degrades
+correctly if a longer locale string ever does not fit — the safety net exists
+without being exercised. Amended to drop the wrap prediction.
+
+### Conditions
+
+1. **The seventeen bare overlays are tracked work, not a comment.** A throw in
+   any of them still blanks the window, and `WorktreesModal` renders
+   `{project.name}` unguarded — confirmed reachable, and how a reviewer produced
+   a root crash deliberately. The code comment was corrected to say so, but
+   `po` requires this be filed where someone who is not reading that file will
+   find it. **Owner: `frontend-dev` / `technical-director`.** *(Discharged: it is
+   in `ROADMAP.md`'s live section.)*
+2. **`clipboard:write`'s non-string coercion must close before a second caller
+   lands.** It put `"[object Object]"` on the clipboard and returned `true`.
+   `po`: "it should not wait for the second caller to arrive before being
+   fixed." **Owner: `backend-dev`.** *(Discharged the same day: the handler now
+   refuses a non-string.)*
+3. **A slot-aware sizing variant for the top bar's crashed row** stays open and
+   non-blocking. The card no longer escapes its slot or occludes its
+   neighbours, but on a short slot `Copy diagnostics` needs an in-card scroll.
+   `po` called that "a real UX rough edge but not a false claim, and the better
+   fix correctly left open rather than half-done."
+   **Owner: `frontend-dev` / `design-reviewer`.**
+4. **The redactor's four documented gaps** — encoded secrets, uncovered
+   issuers, the `AKIA` word-boundary, space-separated flag values — are to be
+   *watched in beta reports*, not pre-solved. **Owner: `field` /
+   `security-engineer`.**
+5. **The fixed-window rate limiter** is promoted to a sliding window only if
+   beta traffic actually produces a burst-loss complaint. No action now; the
+   record self-reports refusals in `incomplete` rather than dropping them
+   silently, which was the actual requirement.
+
+### Scope confirmed
+
+Nothing is transmitted: no endpoint, no telemetry, no upload, no issue link.
+`buildRecord` returns text, the IPC handler only reads and returns it, and the
+clipboard write is the only side effect. Correct for a beta whose feedback path
+is a human channel `field` owns.

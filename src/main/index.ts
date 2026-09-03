@@ -290,7 +290,16 @@ function registerIpc(): void {
     // class of false negative from every caller of the bridge.
     let clipboardChain: Promise<void> = Promise.resolve()
     ipcMain.handle("clipboard:write", (_e, text: unknown): Promise<boolean> => {
-        const value = String(text ?? "")
+        // Refuse a non-string rather than coercing it. `String(text ?? "")` put
+        // "[object Object]" on the clipboard and returned `true` - a lie in a
+        // bridge that exists to be able to say no. Every caller today passes a
+        // string, so this changes nothing now; it is closed before a second
+        // caller arrives rather than after.
+        if (typeof text !== "string") {
+            console.error("[clipboard] refused a non-string write:", typeof text)
+            return Promise.resolve(false)
+        }
+        const value = text
         const run = clipboardChain.then((): boolean => {
             try {
                 clipboard.writeText(value)
