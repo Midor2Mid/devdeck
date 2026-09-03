@@ -902,3 +902,76 @@ whitelist in main — never by spawning a renderer-supplied executable.
 
 `po` found the three post-review fixes (`4339994`) and the two security fixes
 (`49c9f33`, `b5b7f54`) real, measured and regression-tested.
+
+---
+
+# Acceptance criteria — the diagnostics record
+
+Written by `po` on 2026-09-03, before implementation, continuing the numbering
+above so the two builds' criteria never collide. `qa` executes; `po` rules.
+
+Ground truth checked first, and one item changed the build: the clipboard bridge
+was `ipcRenderer.send` with **no reply path**, so nothing in the renderer could
+ever learn a write had failed — which would have made §5.3's "clipboard refused"
+state decorative, renderable on command but impossible to actually trigger. Six
+existing callers relied on that shape, several announcing "Copied" they could not
+verify. That is the 0.10.0 audit's defect one layer down. `backend-dev` changed
+the bridge to return `Promise<boolean>`.
+
+## 8 · The record — cap, dedupe, redact
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 38 | [must] The record is allow-listed field by field, not a filtered dump | inspection against §5's list | any field arrives that is not on the list — env vars, whole `settings.json`, project paths beyond what a stack already names |
+| 39 | [must] 10,000 identical throws yield **one** entry with a count, not 10,000 | unit | the array grows unbounded, or the key is message-only and merges two distinct component stacks into one |
+| 40 | [must] Capped at N by drop-oldest, with a machine-readable truncation marker the instant the cap is exceeded | unit at exactly N and N+1 | it grows past N, the oldest vanishes silently, or the marker appears before the cap trips |
+| 41 | [must] `sk-ant-…`, `gh[pousr]_…`, `AKIA…`, a JWT and a PEM block are each removed | unit, one case per shape | any shape survives — **including a prefix-only strip** that removes `sk-ant-` and leaves the token |
+| 42 | [must] An `.env`-shaped line loses its value and keeps its key | unit | the whole line is dropped (a reader can no longer tell which variable was set), or the value survives |
+| 43 | [must] Redaction does not touch a Windows path or a command line sitting beside a secret | unit — `C:\Users\<name>\AppData\Roaming\devdeck` and the real `claude --dangerously-skip-permissions` byte-identical after redaction, secret gone | the path is truncated, the username segment stripped, or the flags mangled. **A redactor that eats the paths is useless for the thing the record exists to explain** |
+| 44 | [must] The last pty exit code is the **most recent** one | unit over a sequence | it shows the first, or a value never emitted |
+
+## 9 · The sentence
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 45 | [must] "sanitised", "safe" and "anonymous" appear in none of the three variants | grep over the diff | any appears. Redaction is a mechanism; the copy must not upgrade it into a guarantee |
+| 46 | [must] The clause naming file paths and command lines as included precedes the reassurance, in source order | inspection | the reassurance comes first, or the inclusion clause is dropped. **A reader who stops halfway must have read the half that costs them** |
+| 47 | [must] Every variant contains "Nothing is sent anywhere" | inspection + run-app | any placement omits or paraphrases it |
+| 48 | [must] The crash-card variant names its two contents and **omits any PATH or agent-presence clause** | inspection of both literals | the crash-card sentence mentions PATH — a claim the crash record cannot back, since it carries no probe run |
+
+## 10 · The copy control's four states
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 49 | [must] Ready renders a ghost button reading exactly `Copy diagnostics` in all three placements | run-app | any placement is accent-filled, or the label differs |
+| 50 | [must] On the **root** crash card a successful copy swaps the label to `Copied` for ~2000ms and **no toast mounts** | run-app — force a root crash, assert no `.toast` ever appears | a toast appears, or the label never reverts |
+| 51 | [must] On the **region** card and in About, a successful copy fires the toast and the label does **not** change | run-app | the label swaps here too, or no toast appears |
+| 52 | [must] "Clipboard refused" is reachable through a real failed write | inspection that the bridge round-trips, plus a forced failure reaching the UI | the bridge stays one-way, in which case the state is decorative and no real failure could trigger it |
+| 53 | [must] On refusal the label reads `Couldn't copy` and a selectable `<pre>` appears holding the **actual record** | run-app via #52's path | the `<pre>` holds a placeholder or a description |
+| 54 | [must] When the record is unavailable the button takes a **real `disabled`** and the sentence is replaced | run-app with the record read forced to fail | it stays clickable, or shows the ready-state sentence. Offering to copy nothing and succeeding is worse than refusing |
+| 55 | [must] A truncated record renders its marker in the UI | run-app — trip the cap, open `Show what's copied` | the surface renders a partial record as complete |
+
+## 11 · Placement and layout
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 56 | [must] Root card: `Copy diagnostics` · `Try again` · `Reload` (accent) — `Reload` still the only filled control | run-app | a second accent appears, or the order differs |
+| 57 | [must] Region card: two ghost buttons, no accent | run-app | either is filled. A region crash is not the app's one thing to act on while seven views still work |
+| 58 | [must] About gains a `Diagnostics` block below the update hint, using existing section classes | run-app | it invents ad-hoc classes |
+| 59 | [must] `Show what's copied` reveals the literal record with the documented styling and caption | run-app + computed styles | it shows a summary, hard-codes a token, or drops the caption |
+| 60 | [must] At 900px the two buttons wrap and the `<pre>` scrolls inside itself | run-app at the minimum | the modal widens, or the page scrolls horizontally |
+
+## 12 · The two folded-in boundary defects
+
+| # | Criterion | Verified by | Fails if |
+|---|---|---|---|
+| 61 | [must] `Topbar` and `Deck` no longer reset on a view switch alone | run-app — force a throw, switch view | either still keys off `resetKey={view}` and clears or re-throws purely because the user changed views |
+| 62 | [must] `SettingsModal`, `ProjectSwitcher` and `CommandPalette` are each wrapped, so a throw no longer blanks the window | run-app, one run per surface | any falls through to the root boundary |
+
+## Rejected as unverifiable, and who owns each gap
+
+- **"A stranger reads the sentence and understands what is in the blob."** Comprehension, not a criterion. `field`, first beta round; 45–48 are the closest a test gets.
+- **"The redactor catches every secret shape."** An open set. The five named shapes are covered; a new shape is a pattern plus a regression test, not a re-litigation. `security-engineer` / `field`.
+- **"A real OS-level clipboard denial reaches the refused state."** 52 requires the plumbing to carry a real failure; provoking an actual clipboard lock or DLP hook on demand is not reproducible. Same shape as the antivirus gap. `field`.
+- **"200 log lines is the right cap."** No agreed target for "enough to diagnose, small enough to paste". Arbitrary until a beta report says otherwise. `field`.
+- **"The dedupe key is the right key."** 39 only requires identical throws to collapse. What counts as the same error for two throws differing by one stack frame is a design question, not a test — flagged to whoever writes the recorder.
