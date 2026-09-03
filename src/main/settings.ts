@@ -8,6 +8,18 @@ function storeFile(): string {
     return join(app.getPath("userData"), "settings.json")
 }
 
+/**
+ * Where the settings blob lives.
+ *
+ * Exported for `diagnostics.ts`, which must distinguish "settings.json is not
+ * there yet" from "settings.json is there and could not be read" - `loadSettings`
+ * collapses both into `null`, which is fine for a loader whose caller falls back
+ * to defaults and fatal for a record whose whole job is not to guess.
+ */
+export function settingsPath(): string {
+    return storeFile()
+}
+
 export function loadSettings(): unknown {
     try {
         return JSON.parse(readFileSync(storeFile(), "utf8"))

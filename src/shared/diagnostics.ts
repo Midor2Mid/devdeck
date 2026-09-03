@@ -70,7 +70,15 @@ export interface DiagnosticsAgent {
 export interface DiagnosticsAgents {
     /** False when the login-shell PATH could not be read; every state is then `unknown`. */
     pathHydrated: boolean
+    /**
+     * `runMode: "agent"` presets only. A normal-mode preset is a shell line, not
+     * a binary — probing its first token would score `npm` and mark a working
+     * `cd api && go run .` as absent — so it is counted below rather than being
+     * given a state it cannot honestly have.
+     */
     list: DiagnosticsAgent[]
+    /** How many presets were skipped for being normal-mode. Absence, stated. */
+    skippedNormalMode: number
 }
 
 /** A pty exit main actually observed. */
