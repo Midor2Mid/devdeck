@@ -343,6 +343,53 @@ under a *static figure* rather than a control — deliberately distinct from the
 2px solid accent underline that marks an active document tab. A dashed rule says
 "this number is qualified"; a solid accent rule says "this thing is selected".
 
+### Command presence marker
+
+A launcher card says what a control **will do**; this marker says whether it
+**can do it at all**. Three states, and the third is the reason the grammar
+exists: `not on PATH`, `unchecked`, and `no command set`. A card DevDeck
+resolved successfully is left alone — a healthy launcher does not grow by a
+pixel, so the marker only ever *adds*, and its absence is the honest default
+while a check is still in flight.
+
+Three channels, none of them hue:
+
+- **The icon desaturates.** `filter: grayscale(1) opacity(0.6)`, not `color`.
+  `color` does not mark an emoji-presentation glyph — it paints its own colours
+  and ignores the property — so a preset whose icon is a bolt kept a
+  full-strength accent-looking icon while the computed style claimed `--faint`.
+  Anything that marks an icon in this app must survive a glyph that brings its
+  own colours.
+- **A 1px dashed rule** under the command, reading the same way as the
+  attribution marker above: *this value is qualified*. Extended here from a
+  static figure to a pill and an input mark; still never accent, still never
+  solid, so it cannot be confused with the 2px solid accent underline that
+  means "selected".
+- **The word**, in a `.probe-tag` pill: `NOT ON PATH` or `UNCHECKED`. The word
+  is what survives a theme whose `--border` is nearly invisible against
+  `--bg-2` (Washi is ~1.25:1), which is why there are three channels and not
+  two.
+
+**`unchecked` is not a weaker `not on PATH`.** It means DevDeck could not read
+the shell's PATH, so it checked nothing — and it therefore **keeps the accent
+icon** and takes a *solid* pill border, because nothing about that card is
+qualified; only our knowledge is. Rendering the two the same way is the failure
+this grammar exists to prevent: absent, unknown and zero are three states.
+
+**A marker is not a gate.** A `not on PATH` card still launches, because a PATH
+walk cannot see a shell alias or a function — refusing would make DevDeck refuse
+something that works. The single exception is `no command set`, which is a fact
+about the preset rather than an inference about the machine; it uses
+`aria-disabled`, never `disabled`, so the click that goes to fix it still fires.
+
+Copy is part of the grammar: **"not found on your PATH"**, never "not
+installed". The pill reads `NOT ON PATH`, never `MISSING`.
+
+Section-level copy (the launcher's notice bar, the Settings hint) keys off
+whether PATH hydration succeeded — **not** off "every result is unknown".
+`unknown` has a second cause, a relative-path command, and an absolute path can
+resolve even when hydration failed.
+
 ### Notice bar
 
 A condition that outlives a toast gets a **notice bar** (`.notice-bar`), not a

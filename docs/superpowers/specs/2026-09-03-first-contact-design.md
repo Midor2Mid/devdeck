@@ -447,9 +447,21 @@ Section-level, once, not per row:
   button in a row that already exists; no new surface.
 - `found` / partial: no section line. The per-row marks say it.
 
-**At 900px** the settings modal is already `max-width`-constrained and the
-`.cmd-edit-grid` collapses to one column at its existing breakpoint. The status
-mark moves from right-of-field to a line under the field. No new breakpoint.
+> **CORRECTED 2026-09-03.** This paragraph asserted a breakpoint that does not
+> exist. `design-reviewer` and `qa` both checked: there is **no media query for
+> `.cmd-edit-grid` anywhere in `styles.css`** — the only non-reduced-motion one
+> is `max-width: 1180px`, which touches `.deck-view-name`. And the modal is
+> never `max-width`-constrained at 900px either: `.settings-modal` is
+> `width: 720px; max-width: 92vw`, and `92vw` of 900 is 828px, so it stays 720px.
+> The grid does **not** collapse and the mark does **not** move under the field
+> at any width this app can reach.
+>
+> What is true, measured at 900×600 after the grid fix: nothing is clipped and
+> nothing overlaps. The mark occupies a full-width row of its own beneath the
+> command it describes, at every width, which is why no breakpoint is needed
+> rather than why one exists. **Acceptance criterion 35 is therefore retired**:
+> it tested a code path that was never built. Its useful half — nothing clipped,
+> nothing overlapping at the documented minimum — is kept and passes.
 
 ---
 
@@ -744,3 +756,103 @@ record it copies does not exist yet; it ships with the diagnostics build.
 - **"The probe never delays the launcher paint."** A measurement with no agreed target, so any pass/fail line would be invented rather than derived. Owned by `performance-analyst`. Measured incidentally: 48 ms first call, 36 ms after, 188 ms on `Re-check`.
 - **All 84 theme × style combinations.** Owned by `design-reviewer`. Criterion 22 smoke-checks Washi + Bauhaus only.
 - **"The agent button warns before launching a `missing` preset."** Settled as a conscious gap by this file's own ruling; a criterion requiring it would reopen a closed decision.
+
+---
+
+# Verification outcome — 2026-09-03
+
+`qa` executed all 37 criteria across 24 `run-app` launches on scratch profiles;
+`design-reviewer` reviewed the diff against the 84-skin matrix;
+`security-engineer` attacked the IPC boundary. Their verdicts were **not as
+written**, **changes needed**, and **through** respectively. This section records
+what changed as a result. It is written after the fixes, so it is the current
+state, not a snapshot of the failure.
+
+## The purpose held
+
+**`unknown` never collapsed into `missing`.** Criteria 10, 19 and 26 pass on
+observation through `DEVDECK_FORCE_PATH_UNKNOWN=1`: distinct sentences, distinct
+pill, accent icon kept, distinct notice-bar action, and a `Re-check` that failed
+again left the identical bar standing rather than degrading to the missing copy.
+That is the one failure this build existed to prevent, and it does not happen.
+
+## Fixed after review
+
+- **The settings grid.** The PATH mark's fifth grid column broke every
+  agent preset's form: `Key env var`'s label landed in the mark's column and its
+  input was orphaned on a third row, which then sized column 1 to 173px and cost
+  the command field 56% of its width (162px → 71px). Found independently by
+  `design-reviewer` and `qa`. The mark now takes a full-width row of its own.
+  Measured after: four columns, command input 162px, label and input reunited.
+- **The emoji icon.** `color: var(--faint)` does not mark an emoji-presentation
+  glyph — it paints its own colours and ignores the property — so the *primary*
+  marker for `not on PATH` was invisible on any preset with an emoji icon,
+  including the author's own `claude-yolo`. Now `filter: grayscale(1)
+  opacity(0.6)`. Found by `qa`, which built a controlled found/missing grid of
+  emoji and text glyphs after noticing the computed style disagreed with the
+  screen. Recorded in `DESIGN.md` under *Command presence marker*.
+- **Criterion 28 — a healthy card grew with its neighbours.** A grid row
+  stretches every card to the tallest, so one marked card added ~22px to each
+  healthy card beside it. `align-items: start`. Measured after: healthy 92px,
+  marked 114px, same grid.
+
+## Criteria amended
+
+- **35 — retired.** It tested a breakpoint that never existed (see the
+  correction in §4.4). Its useful half, nothing clipped or overlapping at
+  900×600, is kept and passes.
+- **20 — passes in-session only, and that is a pre-existing limit.**
+  `settings.ts:801` restores the eight default presets when `agents` is empty, so
+  a user who deletes every preset sees the correct copy and gets the defaults
+  back on next launch. The state is handled correctly and is transient. Not
+  introduced here; not fixed here.
+- **30 — passes, with a known thinness.** `on PATH` and `unchecked` are
+  pixel-identical apart from the word in Settings → Agents. That is the spec's
+  own §4.4 table, and the word is a real channel, but a reader should know the
+  Settings surface leans on it harder than the launcher does.
+
+## Security findings, fixed in `49c9f33` and `b5b7f54`
+
+The probe reached the network and froze the main process. A UNC token in a
+preset command (`\\host\share\claude.exe`) made `statSync` open an outbound SMB
+session — authenticating as the logged-in user to whoever answers on 445 — and
+blocked the main thread for **26.6 seconds**, killing every window, every pty and
+the remote server, before answering `missing` about a host it never reached. Four
+spellings got through, and `\\?\C:\…` resolved `found`. The version with no
+attacker in it is the one that mattered: a corporate PATH containing a UNC entry,
+off VPN, would have done this on every launcher mount.
+
+Also fixed: a UNC entry in the user's PATH produced a false `missing` (a skipped
+entry now forbids that claim); 64 missing commands froze the loop ~8.4s (the walk
+is async with a per-batch budget); `refresh: true` spawned one PowerShell per
+concurrent call (they now join); and `powershell.exe` was named bare, so libuv
+resolved it through `process.env.PATH` — where entry 3 on this machine is a
+user-writable directory ahead of `system32`.
+
+## Known and accepted
+
+- **The hydration shell is the platform default**, not the user's configured pane
+  shell. A user whose panes run Git Bash gets a PowerShell-derived PATH, so a
+  Git-Bash-only agent reads `not on PATH`. `backend-dev` refused to spawn a
+  renderer-supplied executable, which is right. Because the marker does not gate,
+  the card still launches. Fix if it ever matters: hydrate per shell kind against
+  a whitelist in main.
+- **Two independent `useProbe` instances** (launcher and Settings) can be mounted
+  at once; `Re-check` in one leaves the other's sentence stale until it remounts.
+  Reasoned from code by `qa`, not observed — the force seam is fixed at launch, so
+  a mid-session hydration change could not be provoked.
+- **Tooltips cannot render mono.** `Tooltip.tsx` renders plain text, so the token
+  and resolved path inside the `not on PATH` tooltip are sans. §4.4 asked for
+  mono; the tooltip layer cannot do it.
+- **Washi's `--border` is ~1.25:1 against `--bg-2`**, so the dashed channel is
+  weak there. Inherited from that theme's existing tokens, not caused here. The
+  word and the icon carry the state at full contrast.
+- **The existence oracle is accepted, with a test saying so.** An absolute token
+  is statted with no confinement and a hit returns a canonicalised real path.
+  Confining the probe to project roots would be false confinement — an agent CLI
+  lives in `%APPDATA%\npm` — and the same bridge already exposes `fs:readDir`.
+- **Unproven, and labelled so:** a real antivirus killing hydration (every
+  `unknown` observed came from the dev seam), the NTLM capture itself (the SMB
+  connection was proven, the hash was not captured off the wire), the 26.6s freeze
+  watched inside Electron rather than in Node, real OS drag-and-drop, and the
+  other 82 theme × style combinations.
