@@ -72,7 +72,8 @@ never guesses.
    dialog. DevDeck opens it and lands on **Mission**, its overview screen
    (agent sessions, uncommitted changes across your projects, listening ports
    on this machine).
-2. Switch to **Terminal** — the third icon in the left rail, or `Ctrl+3`. With
+2. Switch to **Terminal** — the third view key in the deck along the bottom
+   of the window, or `Ctrl+3`. With
    no terminals yet it shows **+ New terminal**, plus one card per configured
    agent (**Claude**, **Claude Opus**, **Claude YOLO**, **Codex**, **Gemini**
    by default) and, if the folder has a `package.json`, one card per script in
@@ -147,7 +148,7 @@ its own, so nothing else catches a type error.
 
 ## What works today
 
-- **Projects sidebar** — add a folder as a project, switch the active project with one click. Persisted across restarts.
+- **Projects in the deck** — add a folder as a project; the deck along the bottom of the window carries one strip per project with its live sessions, and `Ctrl+K` switches between them. Persisted across restarts.
 - **Multi-terminal** — real shells via xterm.js + pty, tabbed, each spawned in the active project's directory.
 - **Split panes** — split any terminal right (⇆) or down (⇅) to see multiple terminals at once; close panes and the layout collapses cleanly.
 - **Multi-agent sessions** — configurable agent presets (Claude, Claude Opus, Claude YOLO, Codex, Gemini, or a custom command) launched per project, each with a type badge; `+` for the primary agent, `▾` menu for the rest (with resume). DevDeck checks each command against your shell's PATH and says so on the card, rather than launching into a pane that silently fails. Configure in Settings → Agents.
@@ -159,7 +160,7 @@ its own, so nothing else catches a type error.
 - **Git accounts** — define work/personal identities (name, email, custom SSH command) in Settings → Git and apply one per project (writes the repo's local `git config`).
 - **SSH hosts** — define SSH profiles in Settings → SSH and open a connected terminal from the terminal `▾` menu.
 - **MCP servers** — manage the active project's `.mcp.json` (command/args/env) from Settings → MCP, read by Claude Code and other agents.
-- **Agent awareness** — every agent session (across all projects) is listed in the sidebar with live status (working / idle / **needs attention**), an attention badge, and click-to-jump. Status is inferred from output activity + the terminal bell — no fragile output parsing.
+- **Agent awareness** — every agent session (across all projects) sits in its project's deck strip with live status (working / idle / **needs attention**), an attention badge, and click-to-jump. Status is inferred from output activity + the terminal bell — no fragile output parsing.
 - **Usage & cost** — a per-run ledger, priced from Claude Code's own transcripts (real tokens and USD, not an estimate), kept independent of whatever spent the money — deleting the card or pipeline that ran it doesn't delete the record.
 - **Send file → Claude** — from the editor, send the current file's `@path` into the last-focused Claude session.
 - **Sessions survive switches** — switching project/tab/pane keeps every pty running; panes re-attach and replay recent output (no lost work). Sessions end only when you close them.
@@ -172,7 +173,7 @@ its own, so nothing else catches a type error.
 - **Database** — per-project saved connections (PostgreSQL, MySQL, SQL Server & **SQLite**), Monaco SQL editor (`Ctrl+Enter` to run), table browser, results grid. SQLite uses a WASM driver (no native build) and reads/writes real `.db` files via a file picker. Passwords encrypted at rest (Electron `safeStorage`).
 - **Themes** — 7 color themes (Sumi, Washi, Slate, Graphite, Zen, Aurora, Neo) × 12 design styles, switchable independently in Settings → Appearance and applied across UI, terminal, and editor; default is Slate + Modern Pro.
 - **Diagnostics** — a capped, deduped, redacted crash log with a *Copy diagnostics* button on crash cards and in Settings → About, for handing someone the actual reason something broke. Nothing is sent anywhere; it goes to your clipboard, and the button tells you so.
-- **Settings** (⚙ in the sidebar) — Appearance, Terminal (default shell: PowerShell/cmd/Git Bash/WSL/custom + font), Editor (font/tab/wrap/minimap), Agents, AI (per-agent model + API key), Snippets, Pipelines, Git, SSH, MCP, Remote (mobile access), Proxy, Notifications, Shortcuts reference, About. Persisted to `settings.json`.
+- **Settings** (⚙ in the deck's tool cluster, bottom right) — Appearance, Terminal (default shell: PowerShell/cmd/Git Bash/WSL/custom + font), Editor (font/tab/wrap/minimap), Agents, AI (per-agent model + API key), Snippets, Pipelines, Git, SSH, MCP, Remote (mobile access), Proxy, Notifications, Shortcuts reference, About. Persisted to `settings.json`.
 - **Remote / mobile access** — turn on a token-guarded server (Settings → Remote) and open the shown URL/QR on your phone to view and drive your terminals + agent sessions, including approving or denying an agent's permission prompt from your phone. Off by default; bind is token-gated. For access *anywhere*, run [Tailscale](https://tailscale.com) on this PC and your phone (no public exposure) — the URL uses your Tailscale IP automatically when present.
 
 > **Security:** a remote terminal can run commands on this machine. Keep the token private, prefer Tailscale over any public tunnel, and disable Remote when you don't need it.
@@ -200,7 +201,7 @@ A quick reference; press **F1** in the app for the complete, current list (globa
 src/
 ├── main/        # Electron main process — pty spawning, project store, IPC handlers
 ├── preload/     # contextBridge — safe typed API exposed to the renderer
-└── renderer/    # React UI — workspace shell, sidebar, terminal/editor/api panels
+└── renderer/    # React UI — workspace shell, deck, terminal/editor/api panels
 ```
 
 - Terminals: `@lydell/node-pty` (main) ↔ `@xterm/xterm` (renderer), streamed over IPC.
