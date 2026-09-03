@@ -96,7 +96,10 @@ function safeSplit(raw: string): { clean: string; carry: string } {
 }
 
 /**
- * Emits "data" {id,data} and "exit" {id,exitCode,stale}.
+ * Emits "data" {id,data}, "exit" {id,exitCode,stale} and "spawn" {id,file,args}.
+ *
+ * "spawn" fires when a shell has been chosen and before it is launched, so a
+ * listener learns which executable was tried even when the launch throws.
  *
  * `stale` is true when the id had already been re-spawned before this
  * process's exit fired (a kill followed by a restart, or any other path that
@@ -215,6 +218,14 @@ export function createPty(opts: CreateOpts): void {
     if (sessions.get(id)?.kind === "live") return
 
     const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
+    // Announced before the spawn is attempted, and on the same emitter as
+    // "data" and "exit" rather than through an import of the diagnostics
+    // module. This is the ONE place that knows which shell won — the renderer's
+    // resolution or `defaultShell()` — and a listener that only wants to record
+    // it must not become a dependency this module carries. Emitting it before
+    // the try/catch is deliberate: a spawn that throws is exactly the case where
+    // knowing which file was tried is the whole diagnosis.
+    ptyEvents.emit("spawn", { id, file, args })
     let proc: nodePty.IPty
     try {
         proc = spawnShell(file, args, opts)

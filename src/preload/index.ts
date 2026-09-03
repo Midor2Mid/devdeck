@@ -12,6 +12,14 @@ import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 import type { Loaded } from "../shared/loaded"
 import type { ProbeReport, ProbeRequest, ProbeResult, ProbeState } from "../shared/probe"
+import type {
+    DiagnosticsAgent,
+    DiagnosticsAgents,
+    DiagnosticsError,
+    DiagnosticsRecord,
+    DiagnosticsReport,
+    DiagnosticsResult
+} from "../shared/diagnostics"
 import type { DecisionSnapshot, DecisionView } from "../shared/decision"
 
 // Re-exported as `RemoteDevice`: the renderer never sees (and never needs to
@@ -37,6 +45,19 @@ export type { DecisionView, DecisionSnapshot }
 // wiring into the preload bundle. `unknown` and `blank` are first-class answers
 // here - see the type's own comments before rendering any of the four.
 export type { ProbeReport, ProbeRequest, ProbeResult, ProbeState }
+// The diagnostics record's shape, from `shared/` for the same reason: building
+// it reads settings and walks the PATH, and a value import along that path would
+// drag `child_process` into the preload bundle. `DiagnosticsResult` is a union
+// on purpose - "I could not read my own log" is an answer, not an empty record,
+// and the copy control has to render it differently.
+export type {
+    DiagnosticsAgent,
+    DiagnosticsAgents,
+    DiagnosticsError,
+    DiagnosticsRecord,
+    DiagnosticsReport,
+    DiagnosticsResult
+}
 
 // Each terminal pane registers its own pty:data/pty:exit listener; raise the
 // cap so many open terminals don't trip Node's MaxListenersExceededWarning.
@@ -556,7 +577,19 @@ const api = {
     },
     clipboard: {
         readText: (): Promise<string> => ipcRenderer.invoke("clipboard:read"),
-        writeText: (text: string): void => ipcRenderer.send("clipboard:write", text)
+        /**
+         * Copy text, and say whether it landed.
+         *
+         * `true` means main wrote the text and read the same text back out. It
+         * used to be fire-and-forget, which made every "Copied" message in the
+         * app a claim with nothing behind it - and this bridge exists precisely
+         * BECAUSE `navigator.clipboard.writeText` is blocked by the renderer's
+         * deny-all permission handler, which is how four of those messages came
+         * to be lying in 0.10.0. A caller that shows a confirmation must await
+         * this; a caller that does not care may still ignore it.
+         */
+        writeText: (text: string): Promise<boolean> =>
+            ipcRenderer.invoke("clipboard:write", text)
     },
     mobile: {
         syncSessions: (sessions: RemoteSession[]): void =>
@@ -631,6 +664,44 @@ const api = {
          */
         commands: (requests: ProbeRequest[], refresh?: boolean): Promise<ProbeReport> =>
             ipcRenderer.invoke("probe:commands", { requests, refresh })
+    },
+    /**
+     * The diagnostics record - what a stranger pastes into a human's inbox.
+     *
+     * Nothing here transmits anything: `record()` builds a blob in main and
+     * hands it back, and the clipboard is the only place it goes. There is no
+     * endpoint, no upload and no issue link anywhere in this path.
+     */
+    diagnostics: {
+        /**
+         * Report a caught error. Fire-and-forget, like `ledger.append`, because
+         * this is called from inside an error boundary that has already failed
+         * once and must not be made to await anything.
+         *
+         * **This is not a file write.** Three bounded strings go over the wire;
+         * main decides the origin, the timestamp, the caps, the redaction, the
+         * dedupe key, the file, the line format and how many reports per second
+         * it will accept. There is no path or content parameter to steer, and
+         * the channel is rate-limited - a renderer in a loop cannot make main
+         * write unboundedly, it just fills a capped, deduped log.
+         */
+        report: (report: DiagnosticsReport): void =>
+            ipcRenderer.send("diagnostics:report", report),
+        /**
+         * The whole record, plus the exact text to put on the clipboard.
+         *
+         * `{ ok: false, reason: "unreadable" }` is a real answer and is NOT an
+         * empty record: it means the log exists and DevDeck could not read it,
+         * which is the state where the copy control must refuse rather than
+         * offer to copy nothing and succeed. An `ok` record with no errors is a
+         * healthy app and copies fine.
+         *
+         * `record.incomplete` is a list of sentences about what is partial or
+         * missing. It is required to be rendered - a record that dropped
+         * something and looks whole is the failure this feature exists to
+         * remove. An empty array means nothing was left out.
+         */
+        record: (): Promise<DiagnosticsResult> => ipcRenderer.invoke("diagnostics:record")
     },
     usage: {
         tokens: (sinceDays?: number): Promise<UsageSummary> =>

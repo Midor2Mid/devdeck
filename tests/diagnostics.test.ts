@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { writeFileSync, existsSync, rmSync, mkdirSync } from "fs"
+import { writeFileSync, existsSync, rmSync, mkdirSync, readdirSync } from "fs"
 import { join } from "path"
 
 const h = vi.hoisted(() => {
@@ -33,7 +33,13 @@ vi.mock("../src/main/shellPath", () => ({
     probe: async () => h.probe
 }))
 
-import { buildRecord, notePtyExit, noteShellSpawn, resetObservations } from "../src/main/diagnostics"
+import {
+    buildRecord,
+    notePtyExit,
+    noteShellSpawn,
+    reportIpc,
+    resetObservations
+} from "../src/main/diagnostics"
 import { recordError, resetSink, storePath } from "../src/main/crashSink"
 
 const T0 = 1_700_000_000_000
@@ -291,5 +297,57 @@ describe("nothing is transmitted", () => {
         expect(res.text).toContain("[renderer/EditorPanel] x2")
         expect(res.text).toContain("at EditorPanel")
         expect(res.text).toContain("Errors (1 distinct)")
+    })
+})
+
+describe("the report channel refuses instead of throwing, and cannot be steered", () => {
+    it("answers a non-object payload with a refusal, not a TypeError", () => {
+        // A guard that throws has not refused. This repo has shipped that shape
+        // before, in a path guard that answered with a TypeError out of
+        // `path.resolve` instead of a verdict.
+        for (const payload of [undefined, null, "a string", 42, [], true]) {
+            expect(() => reportIpc(payload, T0)).not.toThrow()
+            expect(reportIpc(payload, T0)).toBe(false)
+        }
+        expect(existsSync(storePath())).toBe(false)
+    })
+
+    it("ignores every field it did not ask for", async () => {
+        reportIpc(
+            {
+                source: "RegionBoundary",
+                message: "boom",
+                componentStack: "at Region",
+                // Everything below is a caller trying to steer the sink.
+                origin: "main",
+                path: "C:\Windows\System32\drivers\etc\hosts",
+                file: "../../evil.txt",
+                count: 999,
+                firstAt: 1,
+                lastAt: 2
+            },
+            T0
+        )
+        const res = await buildRecord(tick())
+        if (!res.ok) throw new Error("unreadable")
+        const e = res.record.errors[0]
+        // The origin is main's, not the caller's: a compromised renderer must
+        // not be able to attribute its error to the main process.
+        expect(e.origin).toBe("renderer")
+        expect(e.count).toBe(1)
+        expect(e.firstAt).toBe(T0)
+    })
+
+    it("writes to crashes.jsonl and to nothing else in userData", () => {
+        // The contract is "this writes one known file". A mock cannot show the
+        // absence of a write, so the directory itself is the assertion.
+        const before = readdirSync(h.dir).sort()
+        reportIpc({ source: "s", message: "one" }, T0)
+        const after = readdirSync(h.dir).sort()
+        expect(after.filter((f) => !before.includes(f))).toEqual(["crashes.jsonl"])
+    })
+
+    it("accepts a well-formed report", () => {
+        expect(reportIpc({ source: "ErrorBoundary", message: "real" }, T0)).toBe(true)
     })
 })

@@ -27,7 +27,7 @@ import { readJson } from "./readJson"
 import { settingsPath } from "./settings"
 import { probe } from "./shellPath"
 import { redact } from "./redact"
-import { MAX_ENTRIES, readEntries, sinkStats } from "./crashSink"
+import { MAX_ENTRIES, readEntries, recordError, sinkStats } from "./crashSink"
 import type {
     DiagnosticsAgent,
     DiagnosticsAgents,
@@ -296,6 +296,38 @@ async function build(now: number): Promise<DiagnosticsResult> {
     }
 
     return { ok: true, record, text: renderRecord(record) }
+}
+
+/**
+ * The `diagnostics:report` IPC entry point, payload and all.
+ *
+ * The unwrapping lives here rather than in the handler's parameter list because
+ * `(_e, { source, message }) => ...` answers a payload that is not an object
+ * with a **TypeError**, and a guard that throws has not refused — it has failed
+ * to decide, upstream of the coercion written to decide. This repo has shipped
+ * that exact shape twice: a path guard answering with a `TypeError` out of
+ * `path.resolve`, and the reason `probeIpc` is written the same way.
+ *
+ * **Note what is NOT a parameter.** No path, no filename, no timestamp, no
+ * origin, no format. The renderer contributes three bounded strings; everything
+ * that decides where the bytes go and what they look like belongs to main. That
+ * is what keeps the crash lane from being a general-purpose file-write
+ * primitive on the bridge.
+ */
+export function reportIpc(payload: unknown, now?: number): boolean {
+    const o = (payload ?? {}) as Record<string, unknown>
+    return recordError(
+        // Not taken from the payload. A compromised renderer can invoke this
+        // channel directly and must not be able to claim its error happened in
+        // main — an origin a caller can set is an origin that tells you nothing.
+        "renderer",
+        {
+            source: typeof o.source === "string" ? o.source : "",
+            message: typeof o.message === "string" ? o.message : "",
+            componentStack: typeof o.componentStack === "string" ? o.componentStack : undefined
+        },
+        now
+    )
 }
 
 // ---------------------------------------------------------------------------

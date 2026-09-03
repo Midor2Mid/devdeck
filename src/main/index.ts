@@ -50,6 +50,8 @@ import * as worklog from "./worklog"
 import * as pr from "./pr"
 import { loadWindowState, saveWindowState } from "./windowState"
 import * as updater from "./updater"
+import * as diagnostics from "./diagnostics"
+import * as crashSink from "./crashSink"
 import { closePrompt } from "./closePrompt"
 
 let mainWindow: BrowserWindow | null = null
@@ -182,7 +184,18 @@ function registerIpc(): void {
     ptyMgr.ptyEvents.on("data", (d) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("pty:data", d)
     })
+    // What shell actually launched, for the diagnostics record's resolved half.
+    // pty.ts is the only place that knows whether the renderer's resolution or
+    // `defaultShell()` won, and it announces it rather than importing a recorder.
+    ptyMgr.ptyEvents.on("spawn", (d: { file: string; args: string[] }) => {
+        diagnostics.noteShellSpawn(d.file, d.args)
+    })
     ptyMgr.ptyEvents.on("exit", (d: { id: string; exitCode: number; stale?: boolean }) => {
+        // Recorded for every exit including a stale one: a stale exit is still a
+        // process that really died with that code, and the diagnostics question
+        // is "what have this machine's panes been dying with", not "which id is
+        // live". The most recent always wins.
+        diagnostics.notePtyExit(d.exitCode)
         // A session that ended is not waiting on an answer any more, so its
         // decision goes with it — otherwise a card minted seconds before the
         // exit stays tappable and fires a keystroke at a dead pty. `stale` is a
@@ -249,7 +262,32 @@ function registerIpc(): void {
     // --- Clipboard (via Electron's module — the renderer's deny-all permission
     //     handler blocks navigator.clipboard, so terminal copy/paste routes here) ---
     ipcMain.handle("clipboard:read", () => clipboard.readText())
-    ipcMain.on("clipboard:write", (_e, text: string) => clipboard.writeText(String(text ?? "")))
+    // `handle`, not `on`, and it reports whether the write actually landed.
+    //
+    // This used to be fire-and-forget, which meant nothing in the renderer could
+    // ever learn that a copy had failed — so every "Copied" message in the app
+    // was a claim made without evidence. That is the defect the 0.10.0 audit
+    // already caught once, when four of them were lying because
+    // `navigator.clipboard.writeText` is blocked by this app's deny-all
+    // permission handler (which is why this bridge exists at all). A refused
+    // state the UI can render but nothing can trigger is the same lie one layer
+    // up, so the bridge has to be able to say no.
+    //
+    // The proof is a read-back rather than a return value: `clipboard.writeText`
+    // returns `void` and throws only for the grossest failures, while the real
+    // Windows failure mode — another process holding the clipboard open — leaves
+    // the call looking successful. Comparing what came back is the only thing
+    // that actually knows.
+    ipcMain.handle("clipboard:write", (_e, text: unknown): boolean => {
+        const value = String(text ?? "")
+        try {
+            clipboard.writeText(value)
+            return clipboard.readText() === value
+        } catch (err) {
+            console.error("[clipboard] write failed:", err)
+            return false
+        }
+    })
 
     // --- API client ---
     ipcMain.handle("http:send", (_e, req) => httpSend(req))
@@ -545,6 +583,41 @@ function registerIpc(): void {
 
     // --- Ambient system state (Docker + listening ports) ---
     ipcMain.handle("system:info", () => system.info())
+
+    // --- Diagnostics (a record for a clipboard; see main/diagnostics.ts) ---
+    //
+    // Two channels, in the `ledger` shape: a fire-and-forget `on` for the write
+    // and a `handle` for the read.
+    //
+    // **`diagnostics:report` is not a file write, and that is the whole design
+    // of this channel.** A compromised renderer can invoke any channel directly,
+    // so the crash lane must not hand it a way to put arbitrary bytes in an
+    // arbitrary place. It gets three bounded strings — a source label, a message
+    // and a component stack — and nothing else. Main owns the origin (a renderer
+    // cannot claim an error happened in main), the timestamp, the caps, the
+    // redaction, the dedupe key, the file path, the format of the line, and how
+    // many reports per second it will accept. There is no path parameter and no
+    // content parameter, so the worst a hostile renderer achieves is filling a
+    // rate-limited, capped, deduped, self-compacting log with strings of its
+    // choosing — which is what the channel is for.
+    //
+    // `on` rather than `handle` for the same reason as `ledger:append`: this is
+    // called from inside an error boundary that has already failed once, and an
+    // awaitable (therefore rejectable) call there would put the recorder between
+    // the user and their crash screen.
+    // The payload is unwrapped inside `reportIpc`, not in this parameter list:
+    // a destructure here answers a non-object payload with a TypeError, which is
+    // not a refusal. Same reasoning, and the same module-level home, as
+    // `probeIpc` — so the refusal is somewhere a test can call it.
+    ipcMain.on("diagnostics:report", (_e, payload: unknown) => {
+        diagnostics.reportIpc(payload)
+    })
+    // No arguments, deliberately: a parameter here would be a way to steer what
+    // the record contains or where it is read from, and the record's contents
+    // are supposed to be knowable in advance. Answers `{ ok: false }` when the
+    // log exists and could not be read — which is a different answer from an
+    // empty record, and the UI must render it differently.
+    ipcMain.handle("diagnostics:record", () => diagnostics.buildRecord())
 
     // --- Agent-CLI presence probe (a login-shell PATH walk; see main/shellPath.ts) ---
     // The preset list lives in the renderer, so it comes in over the wire and
@@ -940,6 +1013,25 @@ app.whenReady().then(() => {
     // it here means the first probe request finds the answer already cached
     // instead of waiting on a spawn while the launcher paints.
     shellpath.warmShellEnv()
+    // A renderer that died cannot report its own death, so main records it.
+    // This is the failure no error boundary can catch — a crashed or OOM-killed
+    // renderer leaves the window blank with nothing anywhere to say why — and it
+    // is the reason the sink accepts a `main` origin at all.
+    app.on("render-process-gone", (_e, _wc, details) => {
+        crashSink.recordMainError(
+            "render-process-gone",
+            new Error(`renderer ${details.reason}${details.exitCode ? ` (exit ${details.exitCode})` : ""}`)
+        )
+    })
+    app.on("child-process-gone", (_e, details) => {
+        // Only abnormal ends. A utility process exiting cleanly at shutdown is
+        // not evidence of anything and would fill the log with noise.
+        if (details.reason === "clean-exit") return
+        crashSink.recordMainError(
+            "child-process-gone",
+            new Error(`${details.type} ${details.reason}${details.exitCode ? ` (exit ${details.exitCode})` : ""}`)
+        )
+    })
     updater.initUpdater(() => mainWindow)
     // Best-effort check shortly after launch; failures (e.g. private repo) are
     // reported to the renderer but never block startup.
@@ -962,6 +1054,10 @@ function teardown(): void {
     tornDown = true
     // First, because it is the only step whose failure loses user data.
     recorder.flushAll()
+    // Counts that moved in memory but were held back by the repeat-write
+    // throttle. A loop still spinning when the user quits is exactly the case
+    // where the last state is the one worth having next session.
+    crashSink.flushSink()
     ptyMgr.killAll()
     db.closeAll()
     server.stop()
