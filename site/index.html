@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DevDeck — a terminal-first cockpit for one project at a time</title>
+<meta name="description" content="DevDeck is a Windows desktop cockpit built around a project: terminals, Claude/Codex/Gemini agent sessions, an editor, an API client, a database panel and network capture, all snapped to whichever folder you're in." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9' fill='none' stroke='%23eba65c' stroke-width='2.4' stroke-linecap='round' stroke-dasharray='48 60' transform='rotate(120 12 12)'/%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#0c0e13; --bg-2:#13161d; --bg-3:#0a0c11; --panel:#13161d;
+    --border:#252a35; --border-soft:#1d212a;
+    --text:#e7eaf1; --muted:#99a1b2; --faint:#737b8b;
+    --accent:#eba65c; --accent-soft:#f2bd83; --on-accent:#14110d;
+    --ok:#5fce8f; --danger:#e9786b; --clay:#c9906a;
+    --radius-sm:6px; --radius-md:8px; --radius-lg:12px;
+    --sans:"Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono:"Cascadia Mono", Consolas, "Courier New", monospace;
+    --maxw:860px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f4efe4; --bg-2:#ece5d6; --bg-3:#fbf7ee; --panel:#ece5d6;
+      --border:#d8cdb8; --border-soft:#e3dac8;
+      --text:#3a342b; --muted:#6f6757; --faint:#59533f;
+      --accent:#b07a4a; --accent-soft:#9c6a3d; --on-accent:#faf6ec;
+      --ok:#7f8c54; --danger:#b0563f; --clay:#a5714a;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.6 var(--sans); -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--accent); color:var(--on-accent)}
+  a{color:var(--accent-soft)}
+  a:hover{color:var(--accent)}
+  code, .mono{font-family:var(--mono)}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+  img{max-width:100%; display:block}
+
+  header.site{
+    border-bottom:1px solid var(--border-soft);
+    background:color-mix(in srgb, var(--bg) 92%, transparent);
+    position:sticky; top:0; backdrop-filter: blur(6px); z-index:10;
+  }
+  .nav{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px; max-width:var(--maxw); margin:0 auto; flex-wrap:wrap}
+  .brand{display:flex; align-items:center; gap:9px; font-weight:600; letter-spacing:.2px; color:var(--text); text-decoration:none}
+  .brand svg{color:var(--accent)}
+  .navlinks{display:flex; gap:22px; flex-wrap:wrap}
+  .navlinks a{color:var(--muted); text-decoration:none; font-size:13.5px}
+  .navlinks a:hover{color:var(--text)}
+
+  main{padding:64px 0 40px}
+  section{padding:56px 0; border-top:1px solid var(--border-soft)}
+  section:first-of-type{border-top:none; padding-top:0}
+  h1{font-size:34px; line-height:1.2; margin:0 0 14px; font-weight:600; letter-spacing:-.2px}
+  h2{font-size:20px; margin:0 0 18px; font-weight:600; color:var(--text)}
+  .kicker{color:var(--clay); font-size:13px; text-transform:uppercase; letter-spacing:1.2px; margin:0 0 12px; font-weight:600}
+  p{color:var(--muted); margin:0 0 16px; max-width:62ch}
+  p.lede{color:var(--text); font-size:16.5px; max-width:56ch}
+  .tags{display:flex; gap:8px; flex-wrap:wrap; margin:20px 0 28px}
+  .tag{
+    font-size:12.5px; font-family:var(--mono); color:var(--muted);
+    border:1px solid var(--border); border-radius:999px; padding:5px 12px;
+    background:var(--panel);
+  }
+  .cta-row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px;
+    font:600 14px var(--sans); text-decoration:none; cursor:pointer;
+    padding:10px 18px; border-radius:var(--radius-sm); border:1px solid transparent;
+  }
+  .btn-accent{background:var(--accent); color:var(--on-accent)}
+  .btn-accent:hover{background:var(--accent-soft)}
+  .btn-ghost{background:transparent; color:var(--text); border-color:var(--border)}
+  .btn-ghost:hover{border-color:var(--muted)}
+
+  .shot{
+    margin-top:40px; border:1px solid var(--border); border-radius:var(--radius-lg);
+    overflow:hidden; background:var(--bg-3); box-shadow:0 18px 48px -12px rgba(0,0,0,.35);
+  }
+  figcaption{color:var(--faint); font-size:12.5px; margin-top:10px; font-family:var(--mono)}
+
+  ul.feats{list-style:none; margin:0; padding:0; display:grid; gap:16px}
+  ul.feats li{border-top:1px solid var(--border-soft); padding-top:16px}
+  ul.feats li:first-child{border-top:none; padding-top:0}
+  ul.feats b{color:var(--text); font-weight:600}
+  ul.feats span{color:var(--muted)}
+
+  .note{
+    border:1px solid var(--border-soft); background:var(--panel);
+    border-radius:var(--radius-md); padding:16px 18px; margin:18px 0;
+    color:var(--muted); font-size:14px;
+  }
+  .note b{color:var(--text)}
+
+  .fact{border-left:2px solid var(--border); padding-left:16px; margin:22px 0}
+  .fact h3{margin:0 0 6px; font-size:14.5px; color:var(--text); font-weight:600}
+  .fact p{margin:0}
+
+  #code-signing .attrib-slot{
+    border:1px dashed var(--border); border-radius:var(--radius-md);
+    padding:14px 16px; color:var(--faint); font-size:13px; font-family:var(--mono);
+    margin:18px 0;
+  }
+
+  footer{border-top:1px solid var(--border-soft); padding:36px 0 56px}
+  .footwrap{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; color:var(--faint); font-size:13px}
+  .footwrap a{color:var(--faint)}
+  .footwrap a:hover{color:var(--text)}
+  .enso-mark{opacity:.6}
+
+  @media (max-width:600px){
+    h1{font-size:27px}
+    section{padding:44px 0}
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="nav">
+    <a class="brand" href="#top">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-dasharray="48 60" transform="rotate(120 12 12)"/>
+      </svg>
+      DevDeck
+    </a>
+    <nav class="navlinks">
+      <a href="#get-devdeck">Get DevDeck</a>
+      <a href="#code-signing">Code signing</a>
+      <a href="#contributing">Issues &amp; PRs</a>
+      <a href="https://github.com/Midor2Mid/devdeck">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap">
+
+    <section>
+      <p class="kicker">Windows desktop app</p>
+      <h1>A cockpit for the projects you already have.</h1>
+      <p class="lede">
+        DevDeck is a terminal-first workspace for developers who spend the day driving
+        Claude Code (or Codex, or Gemini) across more than one project. Pick a project
+        and everything — terminals, agent sessions, the editor, the API client, the
+        database panel — snaps to it. Multiple terminals and multiple agent sessions run
+        side by side, labeled, and keep running when you switch projects.
+      </p>
+
+      <div class="tags">
+        <span class="tag">Windows only</span>
+        <span class="tag">MIT licensed</span>
+        <span class="tag">Self-signed today · SignPath applied for</span>
+        <span class="tag">v0.12.0</span>
+      </div>
+
+      <div class="cta-row">
+        <a class="btn btn-accent" href="#get-devdeck">Get DevDeck</a>
+        <a class="btn btn-ghost" href="https://github.com/Midor2Mid/devdeck">View source</a>
+      </div>
+
+      <figure class="shot">
+        <img src="screenshot-terminal.png" alt="DevDeck's Terminal view: a real PowerShell pane running inside the app, mid-way through a git log command against DevDeck's own repository." loading="lazy" />
+      </figure>
+      <figcaption>The Terminal view — a real shell, spawned in a real project's folder. Not a mockup.</figcaption>
+    </section>
+
+    <section>
+      <p class="kicker">Where this is</p>
+      <h2>Not launched. Not asking for installs.</h2>
+      <p>
+        This page exists mainly to carry the code-signing policy below — it's a
+        requirement of applying for a trusted certificate, not a sign that DevDeck is
+        finished being tried. Nobody outside the machine that built it has run this app
+        yet. If that changes, it'll be a handful of people at a time, not an install
+        count. If you want to be one of them, say so on
+        <a href="https://github.com/Midor2Mid/devdeck/issues">Issues</a>.
+      </p>
+    </section>
+
+    <section>
+      <h2>What it does</h2>
+      <ul class="feats">
+        <li><b>Terminals.</b> <span>Multiple tabbed, split real shells — PowerShell, cmd, Git Bash, WSL — via a real pty, each rooted in a project's folder. Sessions survive a project switch; killing one is explicit.</span></li>
+        <li><b>Agent sessions.</b> <span>Launch Claude, Codex, Gemini or a custom CLI per project. Status (working / idle / needs attention) comes from output activity and the terminal bell, not from parsing what the agent prints.</span></li>
+        <li><b>Editor.</b> <span>Monaco: file tree, tabbed files, syntax highlighting, save. Not a replacement for a full IDE — no language servers, no debugger.</span></li>
+        <li><b>API client.</b> <span>A Postman-style request builder that sends from the main process, so there's no browser CORS wall. Collections, history, response tests, and cURL paste-to-parse.</span></li>
+        <li><b>Database.</b> <span>Saved connections for PostgreSQL, MySQL, SQL Server and SQLite. A SQL editor and a results grid. Passwords are encrypted at rest.</span></li>
+        <li><b>Network.</b> <span>A local capture proxy, plus an embedded browser with a comment mode that hands an agent the element, the console errors, and the failed requests around it.</span></li>
+        <li><b>Remote.</b> <span>An optional, token-gated web client so you can watch and drive a session from a phone. Off by default; nothing binds to the network until you turn it on.</span></li>
+      </ul>
+    </section>
+
+    <section id="get-devdeck">
+      <h2>Get DevDeck</h2>
+
+      <div class="fact">
+        <h3>Windows only</h3>
+        <p>
+          That's a position, not a gap. DevDeck runs on Windows because that's where
+          it gets used and the only platform it's ever been tested on. There's no
+          "macOS and Linux coming soon" — if that changes it'll be because a Mac or
+          Linux user showed up and said they needed it, not because it was always the plan.
+        </p>
+      </div>
+
+      <div class="fact">
+        <h3>Source and releases</h3>
+        <p>
+          Both live on <a href="https://github.com/Midor2Mid/devdeck">GitHub</a>. The
+          current version is <strong>0.12.0</strong> — see the
+          <a href="https://github.com/Midor2Mid/devdeck/blob/main/CHANGELOG.md">changelog</a>
+          for what actually shipped in it and every release before it.
+        </p>
+      </div>
+
+      <div class="note">
+        <b>About the installer:</b> builds today are signed with a personal, self-signed
+        certificate — enough to satisfy this one machine, and nothing more. Run one
+        anywhere else and Windows SmartScreen will warn you before you can open it,
+        because it has no reason yet to trust the signer. That's expected, not a bug.
+        See <a href="#code-signing">code signing policy</a> for what's being done about it.
+      </div>
+    </section>
+
+    <section id="code-signing">
+      <h2>Code signing policy</h2>
+
+      <p>
+        DevDeck's release builds are produced with <code>electron-builder</code> and
+        signed. Today that signature is a self-signed Authenticode certificate made on
+        the machine that builds them — it stops the loudest antivirus false positives
+        locally and is trusted by no other Windows install.
+      </p>
+
+      <p>
+        An application for a free, trusted certificate for open-source projects has
+        been filed with the <a href="https://signpath.org">SignPath Foundation</a>,
+        via <a href="https://about.signpath.io">SignPath.io</a>. That certificate has
+        <strong>not been granted yet.</strong> This section is where its required
+        attribution will go the day it is:
+      </p>
+
+      <div class="attrib-slot">
+        Reserved for SignPath's required attribution line once the certificate is
+        granted — not shown before then, because it isn't true yet.
+      </div>
+
+      <div class="fact">
+        <h3>Team roles</h3>
+        <p>
+          One person works on DevDeck. Raymond Tran writes, reviews, and merges
+          everything that ships — committer, reviewer and approver are the same person.
+          See <a href="https://github.com/Midor2Mid/devdeck/commits/main">the commit
+          history</a> for that in practice.
+        </p>
+      </div>
+
+      <div class="fact">
+        <h3>Privacy</h3>
+        <p>
+          DevDeck's Remote server is off by default, and requires a token even when
+          it's turned on. Its diagnostics record (Settings → About → Copy diagnostics)
+          is copied to your clipboard — it is never transmitted anywhere, by anything,
+          under any circumstance. The one thing DevDeck fetches on its own is a check
+          against GitHub's release feed at launch, to tell you if a newer version
+          exists; that request carries nothing about you or your project. Nothing else
+          leaves this app without you asking it to.
+        </p>
+      </div>
+    </section>
+
+    <section id="contributing">
+      <h2>Issues &amp; pull requests</h2>
+      <p>
+        Bug reports and problems go in
+        <a href="https://github.com/Midor2Mid/devdeck/issues">Issues</a> on GitHub.
+        Discussions are off — there's one maintainer, and a tracker is enough surface
+        for that.
+      </p>
+      <p>
+        Pull requests are welcome for exactly one thing: fixing behavior that's
+        already shipped. Open an issue first and it'll get a yes or no before you spend
+        time on a patch. This isn't where new features get decided — that happens
+        against the roadmap, not a PR queue.
+      </p>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap footwrap">
+    <span>
+      <svg class="enso-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="vertical-align:-2px">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+          stroke-dasharray="48 60" transform="rotate(120 12 12)"/>
+      </svg>
+      MIT licensed · © 2026 Raymond Tran
+    </span>
+    <a href="https://github.com/Midor2Mid/devdeck/blob/main/LICENSE">LICENSE</a>
+  </div>
+</footer>
+
+</body>
+</html>
