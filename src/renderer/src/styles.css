@@ -4676,6 +4676,75 @@ button .ic,
     line-height: 1.5;
 }
 
+/* Two buttons where there was one. No accent: a region crash is not the app's
+   one thing to act on while seven other views still work. */
+.region-crash-actions {
+    display: flex;
+    gap: var(--sp-sm);
+    margin-top: var(--sp-md);
+}
+
+/* ---------- Copy diagnostics ----------
+   Zero new tokens. The only marker here is form: the dashed rule that already
+   means "this value is qualified" everywhere else in the app, reused for a
+   record that is admitting it is partial. A warning colour would be a hue this
+   matrix cannot spare — in four of seven themes the accent IS amber or clay. */
+.diag-note {
+    margin: var(--sp-md) 0 0;
+    color: var(--faint);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-body);
+    max-width: 440px;
+}
+/* The region card is smaller and its copy is a line shorter; step the type down
+   with it rather than letting the note out-weigh the error above it. */
+.region-crash-card .diag-note {
+    margin: var(--sp-md) 0 0;
+    font-size: var(--fs-label);
+}
+.crash-card .diag-note {
+    margin: var(--sp-md) 0 0;
+}
+/* What the record says it left out, verbatim. Muted rather than faint: this is
+   the one part of the note that changes what the blob is worth. */
+.diag-incomplete {
+    margin: var(--sp-sm) 0 0;
+    padding: 2px 0 2px var(--sp-md);
+    border-left: 1px dashed var(--border-strong);
+    list-style: none;
+    color: var(--muted);
+    font-size: var(--fs-label);
+    line-height: var(--lh-body);
+    max-width: 440px;
+}
+.diag-incomplete li + li {
+    margin-top: var(--sp-xs);
+}
+/* `Show what's copied` — the literal text, scrolling inside itself so a long
+   line never widens the settings modal. */
+.diag-record {
+    margin: var(--sp-md) 0 0;
+    padding: var(--sp-sm) 10px;
+    max-height: 240px;
+    overflow: auto;
+    background: var(--bg-3);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius, 10px);
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-body);
+    color: var(--text);
+    user-select: text;
+    white-space: pre;
+}
+.diag-caption {
+    margin: var(--sp-sm) 0 0;
+    color: var(--faint);
+    font-size: var(--fs-label);
+    line-height: var(--lh-body);
+    max-width: 440px;
+}
+
 /* ---------- Activity drawer ---------- */
 .drawer-backdrop {
     position: fixed;
