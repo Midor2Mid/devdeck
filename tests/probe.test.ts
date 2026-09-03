@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
-import { join } from "path"
+import { isAbsolute, join } from "path"
 
 import { firstToken, probeCommand, probeRequests } from "../src/main/which"
 import {
@@ -27,91 +27,92 @@ const WIN = { platform: "win32" as NodeJS.Platform, pathext: ".COM;.EXE;.BAT;.CM
 const POSIX = { platform: "linux" as NodeJS.Platform }
 
 describe("firstToken", () => {
-    it("takes only the first token of a command line", () => {
+    it("takes only the first token of a command line", async () => {
         expect(firstToken("claude --dangerously-skip-permissions")).toBe("claude")
         expect(firstToken("  npm   run dev ")).toBe("npm")
     })
 
-    it("unwraps a quoted first token so a path with spaces stays one token", () => {
+    it("unwraps a quoted first token so a path with spaces stays one token", async () => {
         expect(firstToken('"C:\\Program Files\\ai\\claude.cmd" --continue')).toBe(
             "C:\\Program Files\\ai\\claude.cmd"
         )
         expect(firstToken("'/opt/my agents/claude' resume")).toBe("/opt/my agents/claude")
     })
 
-    it("answers empty for a blank command", () => {
+    it("answers empty for a blank command", async () => {
         expect(firstToken("")).toBe("")
         expect(firstToken("   \t \n ")).toBe("")
     })
 })
 
 describe("blank commands are their own answer", () => {
-    it("is `blank`, not `missing`, and carries no resolved path", () => {
+    it("is `blank`, not `missing`, and carries no resolved path", async () => {
         for (const cmd of ["", " ", "\t\n  "]) {
-            const r = probeCommand(cmd, { path: "/usr/bin", ...POSIX })
+            const r = await probeCommand(cmd, { path: "/usr/bin", ...POSIX })
             expect(r.state).toBe("blank")
             expect(r.token).toBe("")
             expect(r.resolved).toBeUndefined()
         }
     })
 
-    it("stays `blank` when PATH hydration failed, because it never needed a PATH", () => {
+    it("stays `blank` when PATH hydration failed, because it never needed a PATH", async () => {
         // The design decides `blank` before the probe is consulted: it is a fact
         // about the preset, and the only state that refuses to launch. A
         // hydration failure must not turn it into `unknown`.
-        expect(probeCommand("  ", { path: null, ...POSIX }).state).toBe("blank")
+        expect((await probeCommand("  ", { path: null, ...POSIX })).state).toBe("blank")
     })
 })
 
 describe("the PATHEXT walk (Windows)", () => {
-    it("resolves a bare `claude` to a directory holding only claude.cmd", () => {
+    it("resolves a bare `claude` to a directory holding only claude.cmd", async () => {
         // The single most likely real-world false negative: a global npm install
         // on Windows writes `claude.cmd` (and `claude.ps1`) and nothing named
         // exactly `claude`, so a bare-name stat would report `missing` for a
         // correctly installed CLI.
         const dir = dirWith("claude.cmd")
-        const r = probeCommand("claude --continue", { path: dir, ...WIN })
+        const r = await probeCommand("claude --continue", { path: dir, ...WIN })
         expect(r.state).toBe("found")
         expect(r.token).toBe("claude")
         expect(r.resolved!.toLowerCase().endsWith("claude.cmd")).toBe(true)
     })
 
-    it("resolves a bare name to a .ps1 shim, which PATHEXT does not list", () => {
+    it("resolves a bare name to a .ps1 shim, which PATHEXT does not list", async () => {
         // PowerShell adds .ps1 to its own command discovery, and panes run
         // PowerShell — so a .ps1-only shim runs and must not read as missing.
         const dir = dirWith("gemini.ps1")
-        expect(probeCommand("gemini", { path: dir, ...WIN }).state).toBe("found")
+        expect((await probeCommand("gemini", { path: dir, ...WIN })).state).toBe("found")
     })
 
-    it("does not double-extend a token that already carries a launchable extension", () => {
+    it("does not double-extend a token that already carries a launchable extension", async () => {
         const dir = dirWith("codex.cmd")
-        const r = probeCommand("codex.cmd", { path: dir, ...WIN })
+        const r = await probeCommand("codex.cmd", { path: dir, ...WIN })
         expect(r.state).toBe("found")
         expect(r.resolved!.toLowerCase().endsWith("codex.cmd")).toBe(true)
     })
 
-    it("does not report an extension-less file as found on Windows", () => {
+    it("does not report an extension-less file as found on Windows", async () => {
         // PowerShell will not execute it, so `found` would be a claim about
         // something that cannot run.
         const dir = dirWith("claude")
-        expect(probeCommand("claude", { path: dir, ...WIN }).state).toBe("missing")
+        expect((await probeCommand("claude", { path: dir, ...WIN })).state).toBe("missing")
     })
 
-    it("falls back to the standard PATHEXT set when the shell reported none", () => {
+    it("falls back to the standard PATHEXT set when the shell reported none", async () => {
         const dir = dirWith("claude.CMD")
-        expect(probeCommand("claude", { path: dir, platform: "win32" }).state).toBe("found")
+        const r = await probeCommand("claude", { path: dir, platform: "win32" })
+        expect(r.state).toBe("found")
     })
 })
 
 describe("missing", () => {
-    it("is only reachable with a hydrated PATH in hand, and carries no path", () => {
+    it("is only reachable with a hydrated PATH in hand, and carries no path", async () => {
         const dir = dirWith("something-else.cmd")
-        const r = probeCommand("claude", { path: dir, ...WIN })
+        const r = await probeCommand("claude", { path: dir, ...WIN })
         expect(r.state).toBe("missing")
         expect(r.resolved).toBeUndefined()
     })
 
-    it("survives unreadable and junk PATH entries instead of aborting the walk", () => {
+    it("survives unreadable and junk PATH entries instead of aborting the walk", async () => {
         const good = dirWith("claude.cmd")
         const path = [
             "",
@@ -120,50 +121,55 @@ describe("missing", () => {
             '"' + good + '"', // installers quote entries
             ""
         ].join(";")
-        expect(probeCommand("claude", { path, ...WIN }).state).toBe("found")
+        expect((await probeCommand("claude", { path, ...WIN })).state).toBe("found")
     })
 })
 
 describe("unknown", () => {
-    it("is the answer when hydration failed — never missing, never found", () => {
+    it("is the answer when hydration failed — never missing, never found", async () => {
         // `process.env.PATH` in this test process certainly resolves *something*
         // (node, npm). If the walk ever consulted main's own environment this
         // would come back `found`, which is the exact defect the module exists
         // to prevent.
         for (const cmd of ["node", "npm", "claude"]) {
-            const r = probeCommand(cmd, { path: null })
+            const r = await probeCommand(cmd, { path: null })
             expect(r.state).toBe("unknown")
             expect(r.resolved).toBeUndefined()
         }
     })
 
-    it("is the answer for a relative path, whose base directory is per-project", () => {
+    it("is the answer for a relative path, whose base directory is per-project", async () => {
         for (const cmd of ["./bin/claude", "bin/claude", "../tools/claude.exe"]) {
-            expect(probeCommand(cmd, { path: "/usr/bin", ...POSIX }).state).toBe("unknown")
+            const r = await probeCommand(cmd, { path: "/usr/bin", ...POSIX })
+            expect(r.state).toBe("unknown")
         }
-        expect(probeCommand(".\\bin\\claude", { path: "C:\\Windows", ...WIN }).state).toBe(
+        expect((await probeCommand(".\\bin\\claude", { path: "C:\\Windows", ...WIN })).state).toBe(
             "unknown"
         )
         // Drive-relative: same problem, same answer.
-        expect(probeCommand("C:claude", { path: "C:\\Windows", ...WIN }).state).toBe("unknown")
+        const drv = await probeCommand("C:claude", { path: "C:\\Windows", ...WIN })
+        expect(drv.state).toBe("unknown")
     })
 })
 
 describe("absolute and ~ tokens", () => {
-    it("stats an absolute token directly, with no PATH at all", () => {
+    it("stats an absolute token directly, with no PATH at all", async () => {
         const dir = dirWith("claude.cmd")
-        const hit = probeCommand(`"${join(dir, "claude.cmd")}" --continue`, { path: null, ...WIN })
+        const hit = await probeCommand(`"${join(dir, "claude.cmd")}" --continue`, {
+            path: null,
+            ...WIN
+        })
         expect(hit.state).toBe("found")
-        const miss = probeCommand(join(dir, "nope.cmd"), { path: null, ...WIN })
+        const miss = await probeCommand(join(dir, "nope.cmd"), { path: null, ...WIN })
         expect(miss.state).toBe("missing")
         expect(miss.resolved).toBeUndefined()
     })
 
-    it("expands a leading ~", () => {
+    it("expands a leading ~", async () => {
         const home = mkdtempSync(join(tmpdir(), "home-"))
         mkdirSync(join(home, "bin"))
         writeFileSync(join(home, "bin", "claude.cmd"), "shim")
-        const r = probeCommand("~/bin/claude.cmd", { path: null, home, ...WIN })
+        const r = await probeCommand("~/bin/claude.cmd", { path: null, home, ...WIN })
         expect(r.state).toBe("found")
         expect(r.token.startsWith("~")).toBe(false)
     })
@@ -172,12 +178,12 @@ describe("absolute and ~ tokens", () => {
 describe("POSIX execute bit", () => {
     it.skipIf(process.platform === "win32")(
         "does not call a non-executable file on the PATH found",
-        () => {
+        async () => {
             const dir = dirWith("claude")
             chmodSync(join(dir, "claude"), 0o644)
-            expect(probeCommand("claude", { path: dir, ...POSIX }).state).toBe("missing")
+            expect((await probeCommand("claude", { path: dir, ...POSIX })).state).toBe("missing")
             chmodSync(join(dir, "claude"), 0o755)
-            expect(probeCommand("claude", { path: dir, ...POSIX }).state).toBe("found")
+            expect((await probeCommand("claude", { path: dir, ...POSIX })).state).toBe("found")
         }
     )
 })
@@ -192,20 +198,20 @@ describe("probeRequests", () => {
         { id: "build", command: join(dir, "claude.cmd"), runMode: "normal" }
     ]
 
-    it("gives a normal-mode preset no entry at all — not `unknown`", () => {
+    it("gives a normal-mode preset no entry at all — not `unknown`", async () => {
         // A shell line has no binary to look up: probing `npm run dev` would
         // score `npm`, and `cd api && go run .` would read as absent. Absent
         // from the map is the only answer that does not lie about a shell line.
         const dir = dirWith("claude.cmd")
-        const res = probeRequests(requests(dir), { path: dir, ...WIN })
+        const res = await probeRequests(requests(dir), { path: dir, ...WIN })
         expect(res.dev).toBeUndefined()
         expect(res.build).toBeUndefined()
         expect(Object.keys(res).sort()).toEqual(["blank1", "claude", "claude-yolo", "gone"])
     })
 
-    it("keys by preset id and echoes the submitted command", () => {
+    it("keys by preset id and echoes the submitted command", async () => {
         const dir = dirWith("claude.cmd")
-        const res = probeRequests(requests(dir), { path: dir, ...WIN })
+        const res = await probeRequests(requests(dir), { path: dir, ...WIN })
         expect(res.claude.state).toBe("found")
         expect(res.claude.id).toBe("claude")
         expect(res.claude.command).toBe("claude")
@@ -218,9 +224,9 @@ describe("probeRequests", () => {
         expect(res.gone.state).toBe("missing")
     })
 
-    it("attaches a resolved path only to found results", () => {
+    it("attaches a resolved path only to found results", async () => {
         const dir = dirWith("claude.cmd")
-        const res = probeRequests(requests(dir), { path: dir, ...WIN })
+        const res = await probeRequests(requests(dir), { path: dir, ...WIN })
         for (const r of Object.values(res)) {
             if (r.state === "found") expect(typeof r.resolved).toBe("string")
             else expect(r.resolved).toBeUndefined()
@@ -231,9 +237,12 @@ describe("probeRequests", () => {
 describe("hydrationCommand", () => {
     const marks: Marks = { begin: "B-1", mid: "M-1", end: "E-1" }
 
-    it("asks PowerShell for the profile's PATH and never passes -NoProfile", () => {
+    it("asks PowerShell for the profile's PATH and never passes -NoProfile", async () => {
         const cmd = hydrationCommand("win32", marks)
-        expect(cmd.file).toBe("powershell.exe")
+        // Named absolutely. A bare name is resolved by libuv through
+        // `process.env.PATH`, whose leading entries are not all admin-owned.
+        expect(isAbsolute(cmd.file)).toBe(true)
+        expect(cmd.file.toLowerCase().endsWith("powershell.exe")).toBe(true)
         expect(cmd.args).toContain("-NoLogo")
         expect(cmd.args).toContain("-NonInteractive")
         expect(cmd.args).toContain("-EncodedCommand")
@@ -243,7 +252,7 @@ describe("hydrationCommand", () => {
         expect(cmd.args).not.toContain("-Command")
     })
 
-    it("encodes the script, so no quoting survives to be eaten on the way in", () => {
+    it("encodes the script, so no quoting survives to be eaten on the way in", async () => {
         const cmd = hydrationCommand("win32", marks)
         const script = Buffer.from(cmd.args[cmd.args.length - 1], "base64").toString("utf16le")
         expect(script).toContain("$env:PATH")
@@ -257,7 +266,7 @@ describe("hydrationCommand", () => {
         expect(script).not.toContain("Write-Output")
     })
 
-    it("uses a login shell on POSIX, and not an interactive one", () => {
+    it("uses a login shell on POSIX, and not an interactive one", async () => {
         const cmd = hydrationCommand("linux", marks)
         expect(cmd.args[0]).toBe("-l")
         expect(cmd.args[1]).toBe("-c")
@@ -265,7 +274,7 @@ describe("hydrationCommand", () => {
         expect(cmd.args[2]).toContain('"$PATH"')
     })
 
-    it("refuses a delimiter it did not generate", () => {
+    it("refuses a delimiter it did not generate", async () => {
         // The delimiters are the only strings in the module interpolated into a
         // shell script. This is the guard that keeps them generated.
         expect(() => hydrationCommand("win32", { ...marks, begin: '"; rm -rf /; #' })).toThrow()
@@ -293,12 +302,12 @@ describe("extractDelimited", () => {
             "trailing noise"
         ].join("\r\n")
 
-    it("ignores a profile's banner, MOTD and warnings on both sides", () => {
+    it("ignores a profile's banner, MOTD and warnings on both sides", async () => {
         expect(extractDelimited(out("C:\\a;C:\\b"), B, M)).toBe("C:\\a;C:\\b")
         expect(extractDelimited(out("C:\\a"), M, E)).toBe(".COM;.EXE")
     })
 
-    it("refuses a truncated stream instead of returning half a PATH", () => {
+    it("refuses a truncated stream instead of returning half a PATH", async () => {
         // The antivirus-kill shape: the shell died after printing the opening
         // marker and part of the value. A truncated PATH would produce
         // confident, wrong `missing` answers, so no closing marker means no
@@ -308,11 +317,11 @@ describe("extractDelimited", () => {
         expect(extractDelimited(`${B}\r\n${M}\r\n`, B, M)).toBeNull() // empty payload
     })
 
-    it("refuses output that never reached our marker", () => {
+    it("refuses output that never reached our marker", async () => {
         expect(extractDelimited("some unrelated program output", B, M)).toBeNull()
     })
 
-    it("rejoins a wrapped value rather than dropping part of it", () => {
+    it("rejoins a wrapped value rather than dropping part of it", async () => {
         // `[Console]::Out.WriteLine` emits one line, so more than one means
         // something downstream wrapped it. Joining cannot lose a PATH entry;
         // picking one line could.
@@ -323,7 +332,7 @@ describe("extractDelimited", () => {
 describe("hydrateShellEnv", () => {
     const good: RunShell = async (cmd) => {
         const script =
-            cmd.file === "powershell.exe"
+            cmd.file.toLowerCase().endsWith("powershell.exe")
                 ? Buffer.from(cmd.args[cmd.args.length - 1], "base64").toString("utf16le")
                 : cmd.args[2]
         const [begin] = /DDPATHBEGIN-[0-9A-F]+/.exec(script) ?? []
@@ -396,7 +405,7 @@ describe("probe (the IPC entry point)", () => {
     const dir = dirWith("claude.cmd")
     const hydrated: RunShell = async (cmd: HydrationCommand) => {
         const script =
-            cmd.file === "powershell.exe"
+            cmd.file.toLowerCase().endsWith("powershell.exe")
                 ? Buffer.from(cmd.args[cmd.args.length - 1], "base64").toString("utf16le")
                 : cmd.args[2]
         const [begin] = /DDPATHBEGIN-[0-9A-F]+/.exec(script) ?? []

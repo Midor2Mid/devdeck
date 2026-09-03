@@ -18,6 +18,7 @@
 
 import { execFile } from "child_process"
 import { randomBytes } from "crypto"
+import { join } from "path"
 import { probeRequests } from "./which"
 import type { ProbeReport, ProbeRequest } from "../shared/probe"
 
@@ -74,6 +75,31 @@ export interface ShellEnv {
 }
 
 /**
+ * `powershell.exe`, named absolutely.
+ *
+ * `execFile` with a bare name hands resolution to libuv's PATH search, which
+ * walks `process.env.PATH` in order — and on a real developer machine that PATH
+ * is not a list of admin-owned directories. The one this was written on has a
+ * user-writable application directory as its **third** entry, ahead of
+ * `C:\Windows\system32`; anything running as the user (an agent in a pane, a
+ * postinstall script) can drop a `powershell.exe` there and DevDeck will run it
+ * at app-ready, unattended, once per launch, forever. That is not a new
+ * capability for something that already has a shell — it is DevDeck electing to
+ * be the trigger — and naming the file costs nothing.
+ *
+ * `%SystemRoot%` rather than a literal `C:\Windows`, because Windows is not
+ * always on C:. With no `SystemRoot` at all we fall back to the bare name: a
+ * spawn that fails hydrates to `unknown`, which is the safe direction, and
+ * refusing to spawn anything in an environment that broken is the worse trade.
+ */
+export function windowsPowerShell(): string {
+    const root = process.env.SystemRoot || process.env.windir
+    return root
+        ? join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+        : "powershell.exe"
+}
+
+/**
  * The shell invocation that prints a delimited PATH and PATHEXT.
  *
  * Windows notes, all load-bearing:
@@ -116,7 +142,7 @@ export function hydrationCommand(platform: NodeJS.Platform, marks: Marks): Hydra
             `[Console]::Out.WriteLine("${end}")`
         ].join(";")
         return {
-            file: "powershell.exe",
+            file: windowsPowerShell(),
             args: [
                 "-NoLogo",
                 "-NonInteractive",
@@ -231,14 +257,38 @@ export async function hydrateShellEnv(
  */
 let cached: Promise<ShellEnv | null> | null = null
 
+/**
+ * Whether the cached promise is a spawn still in progress.
+ *
+ * This is what keeps `refresh` from being a spawn multiplier. `refresh`
+ * invalidates the cache, so N refreshes arriving before the first one answered
+ * used to invalidate N times and start N shells — and each shell runs the user's
+ * entire PowerShell profile. A component that re-checks in a loop, or one
+ * renderer bug, is then a fork bomb wearing a button. A refresh that lands while
+ * a hydration is already running joins it instead, and still gets a freshly read
+ * PATH, which is the whole promise of `Re-check`.
+ */
+let hydrating = false
+
 export function shellEnv(run?: RunShell): Promise<ShellEnv | null> {
-    if (!cached) cached = hydrateShellEnv(run)
+    if (!cached) {
+        hydrating = true
+        cached = hydrateShellEnv(run).finally(() => {
+            hydrating = false
+        })
+    }
     return cached
 }
 
 /** Drop the cache so the next `shellEnv()` re-spawns. The `Re-check` control. */
 export function invalidateShellEnv(): void {
     cached = null
+    hydrating = false
+}
+
+/** True while a hydration spawn is outstanding. Exposed so the cap can be tested. */
+export function isHydrating(): boolean {
+    return hydrating
 }
 
 /**
@@ -286,13 +336,15 @@ export async function probe(
     refresh = false,
     run?: RunShell
 ): Promise<ProbeReport> {
-    if (refresh) invalidateShellEnv()
+    // `&& !hydrating`: a refresh joins a spawn that is already outstanding rather
+    // than starting a second one. See `hydrating`.
+    if (refresh && !hydrating) invalidateShellEnv()
     const env = await shellEnv(run)
     return {
         // `path: null` when hydration failed, which is what makes every bare
         // command answer `unknown`. Substituting `process.env.PATH` here is the
         // one-line change that would turn this whole feature into a liar.
-        results: probeRequests(sanitize(requests), {
+        results: await probeRequests(sanitize(requests), {
             path: env?.path ?? null,
             pathext: env?.pathext
         }),
