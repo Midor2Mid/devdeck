@@ -1515,6 +1515,11 @@ button .ic,
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 10px;
+    /* Cards size to their own content. Without this a grid row stretches every
+       card to the tallest in it, so one marked card grew all of its healthy
+       neighbours by ~22px - and "a healthy launcher does not grow by a pixel"
+       is the rule this build is held to. */
+    align-items: start;
 }
 .launch-card {
     display: flex;
@@ -1580,6 +1585,15 @@ button .ic,
 .launch-card-offpath .launch-card-icon,
 .launch-card-nocmd .launch-card-icon {
     color: var(--faint);
+    /* `color` alone does not mark an emoji icon. An emoji-presentation glyph
+       paints its own colours and ignores the property, so a preset whose icon
+       is a bolt or a rocket kept a full-strength accent-looking icon while the
+       computed style claimed --faint - and this icon is the PRIMARY marker for
+       "not on PATH". The author's own claude-yolo preset uses one. The filter
+       desaturates and dims whatever the glyph paints, so the channel survives
+       both glyph kinds; text-presentation icons already at --faint only lose a
+       little weight, which is the same direction the mark is going anyway. */
+    filter: grayscale(1) opacity(0.6);
 }
 .launch-card-offpath .launch-card-cmd {
     border-bottom: 1px dashed var(--border);
@@ -2189,10 +2203,17 @@ button .ic,
 }
 .cmd-edit-grid {
     display: grid;
-    /* The fifth column is the PATH mark's, at the end of the Command row. It is
-       `auto`, so it costs nothing on a card that has no mark to show, and every
-       card's inputs keep the same widths either way. */
-    grid-template-columns: auto 1fr auto 1fr auto;
+    /* Four columns, and the PATH mark takes a full-width row of its own rather
+       than a fifth column. A fifth column looked cheaper and was not: the mark
+       is one DOM child among an ODD number of label/input pairs, so grid
+       auto-flow filled rows of five and every agent preset (Command, Category,
+       mark, Resume, Badge, Key env var = 11 items) wrapped wrong - the
+       `Key env var` label landed in the mark's column beside Badge and its
+       input was orphaned, unlabelled, on a third row. Column 1 is `auto`, so
+       that orphan then sized it to 173px and collapsed both `1fr` columns,
+       costing the command field 56% of its width. Never place an item into a
+       flow grid by counting on the item count staying even. */
+    grid-template-columns: auto 1fr auto 1fr;
     gap: 6px 8px;
     align-items: center;
     margin-top: 8px;
@@ -2220,6 +2241,9 @@ button .ic,
 /* No pill here: Settings is a form, and eight pills would compete with eight
    inputs. Same dashed-underline idiom as the launcher's qualified tag. */
 .cmd-path-mark {
+    /* Its own row, spanning the grid, right-aligned under the command it
+       describes - so it cannot disturb the label/input pairs around it. */
+    grid-column: 1 / -1;
     justify-self: end;
     white-space: nowrap;
     font-size: var(--fs-label);
