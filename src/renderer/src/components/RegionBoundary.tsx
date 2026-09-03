@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
+import { CopyDiagnostics } from "./CopyDiagnostics"
 
 interface Props {
     /** What broke, named the way the user names it ("The Database view"). */
@@ -54,6 +55,14 @@ export class RegionBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, info: ErrorInfo): void {
         console.error(`[devdeck] ${this.props.title} failed:`, error, info.componentStack)
+        // A region can latch broken behind a view nobody is looking at, which is
+        // the case the record was built for: without this report the only
+        // evidence of it lives in a devtools window nobody has open.
+        window.api.diagnostics.report({
+            source: `RegionBoundary: ${this.props.title}`,
+            message: error.message || String(error),
+            componentStack: info.componentStack ?? undefined
+        })
     }
 
     render(): ReactNode {
@@ -64,9 +73,14 @@ export class RegionBoundary extends Component<Props, State> {
                     <h3>{this.props.title}</h3>
                     <p className="muted">{this.props.description}</p>
                     <pre className="crash-msg">{this.state.error.message}</pre>
-                    <button onClick={() => this.setState({ error: null, key: undefined })}>
-                        Try again
-                    </button>
+                    <CopyDiagnostics
+                        surface="region"
+                        actions={
+                            <button onClick={() => this.setState({ error: null, key: undefined })}>
+                                Try again
+                            </button>
+                        }
+                    />
                 </div>
             </div>
         )

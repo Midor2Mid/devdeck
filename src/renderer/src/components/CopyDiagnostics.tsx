@@ -173,3 +173,33 @@ export function DiagnosticsNote({
         </>
     )
 }
+
+/**
+ * The whole affordance for a crash card: the actions row with `Copy
+ * diagnostics` first, then whatever that card's own actions are, then the note.
+ *
+ * The two cards differ only in their row class and their surface, so they share
+ * this rather than each growing a copy of the four states. Settings → About
+ * composes the hook directly instead, because its block also carries the
+ * `Show what's copied` toggle and does not use a crash card's shape.
+ */
+export function CopyDiagnostics({
+    surface,
+    actions
+}: {
+    surface: "root" | "region"
+    actions?: JSX.Element
+}): JSX.Element {
+    const state = useCopyDiagnostics(surface)
+    return (
+        <>
+            <div className={surface === "root" ? "crash-actions" : "region-crash-actions"}>
+                <button disabled={state.disabled} onClick={state.onClick}>
+                    {state.label}
+                </button>
+                {actions}
+            </div>
+            <DiagnosticsNote state={state} />
+        </>
+    )
+}
