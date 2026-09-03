@@ -16,6 +16,23 @@ interface Props {
      * agent every time you switch projects is worse than the crash.
      */
     resetKey?: string | null
+    /**
+     * Renders the card as a fixed overlay instead of filling its slot.
+     *
+     * A modal's boundary sits at the end of the app tree, not inside a panel:
+     * without this the card would take `flex: 1` in the app column and shove the
+     * deck off screen while claiming only one region had failed.
+     */
+    overlay?: boolean
+    /**
+     * An extra action beside `Try again`.
+     *
+     * A crashed modal has taken its own close button down with it, so the
+     * boundary around one has to supply the way out. Without it the card is a
+     * dead end and the only escape is a reload — which is the whole-app failure
+     * this boundary exists to avoid.
+     */
+    actions?: ReactNode
     children: ReactNode
 }
 
@@ -68,7 +85,7 @@ export class RegionBoundary extends Component<Props, State> {
     render(): ReactNode {
         if (!this.state.error) return this.props.children
         return (
-            <div className="region-crash">
+            <div className={this.props.overlay ? "region-crash overlay" : "region-crash"}>
                 <div className="region-crash-card">
                     <h3>{this.props.title}</h3>
                     <p className="muted">{this.props.description}</p>
@@ -76,9 +93,12 @@ export class RegionBoundary extends Component<Props, State> {
                     <CopyDiagnostics
                         surface="region"
                         actions={
-                            <button onClick={() => this.setState({ error: null, key: undefined })}>
-                                Try again
-                            </button>
+                            <>
+                                <button onClick={() => this.setState({ error: null, key: undefined })}>
+                                    Try again
+                                </button>
+                                {this.props.actions}
+                            </>
                         }
                     />
                 </div>

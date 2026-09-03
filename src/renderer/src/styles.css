@@ -4676,6 +4676,17 @@ button .ic,
     line-height: 1.5;
 }
 
+/* A boundary around a modal has no panel to fill, so its card floats where the
+   modal was. Same scrim and z-index as `.modal-backdrop`: a crashed modal is
+   still a modal, and the cockpit behind it is still there. */
+.region-crash.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: var(--scrim);
+    flex: none;
+}
+
 /* Two buttons where there was one. No accent: a region crash is not the app's
    one thing to act on while seven other views still work. */
 .region-crash-actions {

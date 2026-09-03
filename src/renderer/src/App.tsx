@@ -83,6 +83,8 @@ export function App(): JSX.Element {
     const openSwitcher = useStore((s) => s.openSwitcher)
     const closeSwitcher = useStore((s) => s.closeSwitcher)
     const paletteOpen = useStore((s) => s.paletteOpen)
+    const setPaletteOpen = useStore((s) => s.setPaletteOpen)
+    const closeSettings = useSettings((s) => s.closeSettings)
     const extendOpen = useStore((s) => s.extendOpen)
     const searchOpen = useStore((s) => s.searchOpen)
     const dotnetOpen = useStore((s) => s.dotnetOpen)
@@ -339,10 +341,14 @@ export function App(): JSX.Element {
         <div className="app">
             <div className="app-body">
                 <div className="main">
+                    {/* Deliberately no resetKey: the top bar is not view-scoped.
+                        Keying it on `view` meant a deterministic throw re-threw
+                        on every view switch, so the retry the prop exists to
+                        provide was the one action guaranteed to fail. `Try
+                        again` on the card is the honest retry here. */}
                     <RegionBoundary
                         title="The top bar hit an error"
                         description="Everything below it still works, and your sessions are still running. Use the deck at the bottom to move around."
-                        resetKey={view}
                     >
                         <Topbar />
                     </RegionBoundary>
@@ -444,16 +450,52 @@ export function App(): JSX.Element {
                     </div>
                 </div>
             </div>
+            {/* No resetKey, for the same reason as the top bar: the deck is
+                what you switch views WITH, so keying its reset on `view` made
+                every attempted retry re-throw. */}
             <RegionBoundary
                 title="The deck hit an error"
                 description="Your sessions are still running and the view above still works. Reload when you get a chance."
-                resetKey={view}
             >
                 <Deck />
             </RegionBoundary>
-            {settingsOpen && <SettingsModal />}
-            {switcherOpen && <ProjectSwitcher />}
-            {paletteOpen && <CommandPalette />}
+            {/* These three were the only overlays with no boundary, so a throw
+                in any of them still blanked the window - the exact failure the
+                region boundaries were added to stop. Each boundary sits INSIDE
+                its own conditional, so closing the crashed overlay unmounts the
+                boundary with it and reopening starts clean. Each therefore
+                needs a way out: a crashed modal has taken its own close button
+                down with it. */}
+            {settingsOpen && (
+                <RegionBoundary
+                    overlay
+                    title="Settings hit an error"
+                    description="The rest of the cockpit is untouched and your sessions are still running. Close this and your settings are as you left them."
+                    actions={<button onClick={closeSettings}>Close settings</button>}
+                >
+                    <SettingsModal />
+                </RegionBoundary>
+            )}
+            {switcherOpen && (
+                <RegionBoundary
+                    overlay
+                    title="The project switcher hit an error"
+                    description="Nothing changed and your sessions are still running. Close this and pick a project from the top bar instead."
+                    actions={<button onClick={closeSwitcher}>Close</button>}
+                >
+                    <ProjectSwitcher />
+                </RegionBoundary>
+            )}
+            {paletteOpen && (
+                <RegionBoundary
+                    overlay
+                    title="The command palette hit an error"
+                    description="No command ran and your sessions are still running. Close this and use the menus instead."
+                    actions={<button onClick={() => setPaletteOpen(false)}>Close</button>}
+                >
+                    <CommandPalette />
+                </RegionBoundary>
+            )}
             {extendOpen && <ExtendAgentModal />}
             {searchOpen && <SearchModal />}
             {dotnetOpen && <DotnetPanel />}
