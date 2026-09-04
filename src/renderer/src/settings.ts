@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { applyTheme, applyStyle, THEMES, type ThemeId, type StyleId } from "./themes"
+import { applyTheme, applyStyle, migrateAppearance, THEMES, type ThemeId, type StyleId } from "./themes"
 import type { Pipeline, PipelineTrigger } from "./pipeline"
 import type { KvRow } from "./components/KeyValueEditor"
 import type { SplitDir } from "./layout"
@@ -817,7 +817,10 @@ export const useSettings = create<SettingsState>((set, get) => {
                     environments: raw.environments ?? DEFAULTS.environments,
                     activeEnvId: raw.activeEnvId ?? DEFAULTS.activeEnvId,
                     collections: raw.collections ?? DEFAULTS.collections,
-                    appearance: { ...DEFAULTS.appearance, ...raw.appearance },
+                    // A settings.json written before the 84-skin cut can still name
+                    // a deleted theme or style; migrateAppearance lands those on the
+                    // defaults before anything else reads them.
+                    appearance: migrateAppearance({ ...DEFAULTS.appearance, ...raw.appearance }),
                     remote: {
                         enabled: legacyRemote?.enabled ?? DEFAULTS.remote.enabled,
                         port: legacyRemote?.port ?? DEFAULTS.remote.port,

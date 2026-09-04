@@ -2430,9 +2430,10 @@ export function SettingsModal(): JSX.Element {
                                 </div>
                             </div>
                             <p className="settings-hint">
-                                Seven themes - Slate, Sumi, Zen, Graphite, Aurora &amp; Neo (dark)
-                                and Washi (light) - each applied across the UI, terminal, and
-                                editor. Accent tints the one highlight color.
+                                Three themes - Slate and Sumi (dark) and Washi (light) - each
+                                applied across the UI, terminal, and editor. A style sets shape
+                                and depth on top of any theme. Accent tints the one highlight
+                                color.
                             </p>
                         </div>
                     )}

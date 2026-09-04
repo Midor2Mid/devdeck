@@ -1,7 +1,7 @@
 // Theme system: each theme is a full palette of the app's CSS custom properties
 // plus matching terminal (xterm) and editor (Monaco) colors. All wabi-sabi.
 
-export type ThemeId = "sumi" | "washi" | "zen" | "slate" | "graphite" | "aurora" | "neo"
+export type ThemeId = "sumi" | "washi" | "slate"
 
 export interface XtermTheme {
     background: string
@@ -105,29 +105,6 @@ const WASHI_VARS = {
     "--elev-3": "0 18px 48px -12px rgba(60,50,35,.20), 0 6px 16px rgba(60,50,35,.12)"
 }
 
-const ZEN_VARS = {
-    "--bg": "#17150f",
-    "--bg-2": "#1d1b14",
-    "--bg-3": "#100e0a",
-    "--panel": "#1d1b14",
-    "--border": "#2a261c",
-    "--border-soft": "#221f17",
-    "--text": "#ece5d2",
-    "--muted": "#a3987f",
-    "--faint": "#887e65",
-    "--accent": "#c2a878",
-    "--accent-soft": "#d8c39a",
-    "--on-accent": "#14110d",
-    "--moss": "#9aa56f",
-    "--clay": "#c79a6a",
-    "--ok": "#9aa56f",
-    "--danger": "#c2766a",
-    "--on-danger": "#14110d",
-    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
-    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
-    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
-}
-
 // Cool slate - modern neutral ground keeping the warm amber accent.
 const SLATE_VARS = {
     "--bg": "#0c0e13",
@@ -148,81 +125,6 @@ const SLATE_VARS = {
     "--clay": "#c9906a",
     "--ok": "#5fce8f",
     "--danger": "#e9786b",
-    "--on-danger": "#14110d",
-    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
-    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
-    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
-}
-
-// Graphite - a modern, cool near-black palette with a vivid indigo accent.
-// The contemporary counterpoint to the warm wabi-sabi themes (opt-in).
-const GRAPHITE_VARS = {
-    "--bg": "#0c0e12",
-    "--bg-2": "#13161c",
-    "--bg-3": "#090a0e",
-    "--panel": "#13161c",
-    "--border": "#242a33",
-    "--border-soft": "#1a1f27",
-    "--text": "#e7eaf0",
-    "--muted": "#9aa3b2",
-    "--faint": "#717b8a",
-    "--accent": "#7c83ff",
-    "--accent-soft": "#9ba0ff",
-    "--on-accent": "#14110d",
-    "--moss": "#56c98a",
-    "--clay": "#a78bfa",
-    "--ok": "#56c98a",
-    "--danger": "#f0616d",
-    "--on-danger": "#14110d",
-    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
-    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
-    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
-}
-
-// Aurora - a premium cool indigo night with a periwinkle accent that gradients
-// toward violet. Pairs with the Aurora Glass style (frosted glass + soft glow).
-const AURORA_VARS = {
-    "--bg": "#0a0e1a",
-    "--bg-2": "#111729",
-    "--bg-3": "#070a14",
-    "--panel": "#111729",
-    "--border": "#28304b",
-    "--border-soft": "#1a2138",
-    "--text": "#e9ecfb",
-    "--muted": "#9aa4c8",
-    "--faint": "#70799d",
-    "--accent": "#8ea2ff",
-    "--accent-soft": "#b6c2ff",
-    "--on-accent": "#14110d",
-    "--moss": "#5fd3b0",
-    "--clay": "#c79bff",
-    "--ok": "#5fd3b0",
-    "--danger": "#f0788f",
-    "--on-danger": "#14110d",
-    "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
-    "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
-    "--elev-3": "0 18px 48px -12px rgba(0,0,0,.55), 0 6px 16px rgba(0,0,0,.30)"
-}
-
-// Neo - a holographic near-black with a cyan primary and violet secondary.
-// Pairs with the Neo Holographic style (glowing edges, faint grid).
-const NEO_VARS = {
-    "--bg": "#06080f",
-    "--bg-2": "#0c1019",
-    "--bg-3": "#03050a",
-    "--panel": "#0c1019",
-    "--border": "#1c2740",
-    "--border-soft": "#141c2e",
-    "--text": "#dff3ff",
-    "--muted": "#86a0c0",
-    "--faint": "#647997",
-    "--accent": "#22d3ee",
-    "--accent-soft": "#67e8f9",
-    "--on-accent": "#14110d",
-    "--moss": "#34e5b0",
-    "--clay": "#a78bfa",
-    "--ok": "#34e5b0",
-    "--danger": "#fb7185",
     "--on-danger": "#14110d",
     "--elev-1": "0 1px 2px rgba(0,0,0,.24), 0 1px 1px rgba(0,0,0,.16)",
     "--elev-2": "0 4px 12px -2px rgba(0,0,0,.30), 0 2px 4px rgba(0,0,0,.20)",
@@ -325,134 +227,6 @@ export const THEMES: Record<ThemeId, Theme> = {
             white: "#e7eaf1",
             brightWhite: "#f6f8fc"
         }
-    },
-    graphite: {
-        id: "graphite",
-        label: "Graphite (modern)",
-        mode: "dark",
-        accent: "#7c83ff",
-        vars: { ...GRAPHITE_VARS, ...COMPACT },
-        monacoId: "devdeck-graphite",
-        termLineHeight: 1.15,
-        xterm: {
-            background: "#090a0e",
-            foreground: "#e7eaf0",
-            cursor: "#7c83ff",
-            cursorAccent: "#090a0e",
-            selectionBackground: "#252b3a",
-            black: "#090a0e",
-            brightBlack: "#646e7e",
-            red: "#f0616d",
-            brightRed: "#ff7d88",
-            green: "#56c98a",
-            brightGreen: "#74d9a1",
-            yellow: "#e0b85c",
-            brightYellow: "#edc878",
-            blue: "#6aa6ff",
-            brightBlue: "#8bbcff",
-            magenta: "#a78bfa",
-            brightMagenta: "#c0a9fc",
-            cyan: "#56cfd0",
-            brightCyan: "#7adedf",
-            white: "#e7eaf0",
-            brightWhite: "#f6f8fc"
-        }
-    },
-    zen: {
-        id: "zen",
-        label: "Zen (dark)",
-        mode: "dark",
-        accent: "#c2a878",
-        vars: { ...ZEN_VARS, ...AIRY },
-        monacoId: "devdeck-zen",
-        termLineHeight: 1.3,
-        xterm: {
-            background: "#100e0a",
-            foreground: "#ece5d2",
-            cursor: "#c2a878",
-            cursorAccent: "#100e0a",
-            selectionBackground: "#332d20",
-            black: "#100e0a",
-            brightBlack: "#5b5443",
-            red: "#c2766a",
-            brightRed: "#d18a7e",
-            green: "#9aa56f",
-            brightGreen: "#aeb985",
-            yellow: "#c2a878",
-            brightYellow: "#d8c39a",
-            blue: "#8593a3",
-            brightBlue: "#9aa8b8",
-            magenta: "#b09aac",
-            brightMagenta: "#c2aebf",
-            cyan: "#8aa6a6",
-            brightCyan: "#a0bcbc",
-            white: "#ece5d2",
-            brightWhite: "#f7f1e2"
-        }
-    },
-    aurora: {
-        id: "aurora",
-        label: "Aurora (glass)",
-        mode: "dark",
-        accent: "#8ea2ff",
-        vars: { ...AURORA_VARS, ...COMPACT },
-        monacoId: "devdeck-aurora",
-        termLineHeight: 1.15,
-        xterm: {
-            background: "#070a14",
-            foreground: "#e9ecfb",
-            cursor: "#8ea2ff",
-            cursorAccent: "#070a14",
-            selectionBackground: "#283154",
-            black: "#070a14",
-            brightBlack: "#5a6488",
-            red: "#f0788f",
-            brightRed: "#f794a6",
-            green: "#5fd3b0",
-            brightGreen: "#82e0c4",
-            yellow: "#f2c97d",
-            brightYellow: "#f7d89c",
-            blue: "#8ea2ff",
-            brightBlue: "#b6c2ff",
-            magenta: "#c79bff",
-            brightMagenta: "#d7b7ff",
-            cyan: "#6fd3e8",
-            brightCyan: "#97e1f0",
-            white: "#e9ecfb",
-            brightWhite: "#f6f8ff"
-        }
-    },
-    neo: {
-        id: "neo",
-        label: "Neo (holographic)",
-        mode: "dark",
-        accent: "#22d3ee",
-        vars: { ...NEO_VARS, ...COMPACT },
-        monacoId: "devdeck-neo",
-        termLineHeight: 1.15,
-        xterm: {
-            background: "#03050a",
-            foreground: "#dff3ff",
-            cursor: "#22d3ee",
-            cursorAccent: "#03050a",
-            selectionBackground: "#143046",
-            black: "#03050a",
-            brightBlack: "#4a5e7a",
-            red: "#fb7185",
-            brightRed: "#fd93a3",
-            green: "#34e5b0",
-            brightGreen: "#5ff0c6",
-            yellow: "#fde047",
-            brightYellow: "#fee784",
-            blue: "#38bdf8",
-            brightBlue: "#7dd3fc",
-            magenta: "#a78bfa",
-            brightMagenta: "#c4b2fd",
-            cyan: "#22d3ee",
-            brightCyan: "#67e8f9",
-            white: "#dff3ff",
-            brightWhite: "#f2fbff"
-        }
     }
 }
 
@@ -470,35 +244,43 @@ export function shade(hex: string, amt: number): string {
     )
 }
 
+/** The skin a fresh install gets. Must match `DEFAULTS.appearance` in settings.ts. */
+export const DEFAULT_THEME_ID: ThemeId = "slate"
+
+/**
+ * Resolve a persisted theme id to a theme, defaulting when it names none.
+ *
+ * 0.12.0 shipped seven themes; three survive. `settings.json` is untyped JSON on
+ * disk, so it can still name a deleted theme - or, hand-edited, no string at
+ * all - and indexing `THEMES` directly would hand `undefined` to applyTheme and
+ * paint an unstyled window. Ownership rather than truthiness, so "constructor"
+ * misses instead of resolving to an inherited function.
+ */
+export function resolveTheme(id: unknown): Theme {
+    return typeof id === "string" && Object.prototype.hasOwnProperty.call(THEMES, id)
+        ? THEMES[id as ThemeId]
+        : THEMES[DEFAULT_THEME_ID]
+}
+
 /** Apply a theme's CSS variables, then override the accent (user choice). */
 export function applyTheme(id: ThemeId, accent?: string): void {
-    const theme = THEMES[id] ?? THEMES.sumi
+    const theme = resolveTheme(id)
     const root = document.documentElement
     for (const [k, v] of Object.entries(theme.vars)) root.style.setProperty(k, v)
     const ac = accent || theme.accent
     root.style.setProperty("--accent", ac)
     // Light themes read better with a darker accent-soft; dark themes a lighter one.
     root.style.setProperty("--accent-soft", shade(ac, theme.mode === "light" ? -0.18 : 0.18))
-    root.dataset.theme = id
+    // The resolved id, not the requested one - the attribute must never name a
+    // theme the palette above did not actually apply.
+    root.dataset.theme = theme.id
 }
 
 // ---------- Design styles (shape / depth / type - independent of color) ----------
 // A *style* sets how surfaces feel: corner radius, border weight, depth, and
 // typography. It layers on top of the color themes above (style × theme are
 // orthogonal). The CSS lives under `[data-style="..."]` in styles.css.
-export type StyleId =
-    | "wabi"
-    | "minimal"
-    | "neon"
-    | "flat"
-    | "bauhaus"
-    | "crt"
-    | "modern"
-    | "lacquer"
-    | "modernplus"
-    | "aurora"
-    | "neo"
-    | "kinetic"
+export type StyleId = "wabi" | "modern"
 
 export interface DesignStyle {
     id: StyleId
@@ -512,64 +294,42 @@ export const STYLES: Record<StyleId, DesignStyle> = {
         label: "Wabi-sabi",
         description: "Warm, soft, generous - the original feel."
     },
-    minimal: {
-        id: "minimal",
-        label: "Modern Minimal",
-        description: "Crisp small radii, flat surfaces, tight spacing - Linear/Vercel-style."
-    },
-    neon: {
-        id: "neon",
-        label: "Neon",
-        description: "Glassy panels, glowing accents & scanlines. Best on a dark theme - set a cyan accent for classic neon."
-    },
-    flat: {
-        id: "flat",
-        label: "Flat Vector",
-        description: "Friendly & product-y: big rounded corners, soft elevation, filled accent buttons."
-    },
-    bauhaus: {
-        id: "bauhaus",
-        label: "Bauhaus",
-        description: "Bold & structural: hard square corners, heavy frames, hard offset shadows, uppercase type."
-    },
-    crt: {
-        id: "crt",
-        label: "Phosphor CRT",
-        description: "Retro terminal: monospace everything, scanlines, phosphor glow. Set a green accent on a dark theme."
-    },
     modern: {
         id: "modern",
         label: "Modern Pro",
         description: "Contemporary product UI: clean 8px radii, subtle elevation, tight grotesk type, line icons. Pairs with Slate."
-    },
-    lacquer: {
-        id: "lacquer",
-        label: "Lacquer",
-        description: "Opulent urushi gloss: frosted-glass surfaces, gilded gradient buttons, a soft accent glow and deep layered shadows. Elegant, not flashy."
-    },
-    modernplus: {
-        id: "modernplus",
-        label: "Modern+",
-        description: "Contemporary & alive: crisp radii, hairline borders with soft elevation, vivid filled accent buttons, focus rings and snappy hover/press micro-interactions. Pairs with Graphite."
-    },
-    aurora: {
-        id: "aurora",
-        label: "Aurora Glass",
-        description: "Premium frosted glass: translucent blurred panels, a gradient accent CTA, soft glow on active elements and lifting hovers. Pairs with the Aurora theme."
-    },
-    neo: {
-        id: "neo",
-        label: "Neo Holographic",
-        description: "Sci-fi cockpit: glowing luminous edges, a faint dot grid, neon accent stripes and a pulse on attention. Pairs with the Neo theme (cyan + violet)."
-    },
-    kinetic: {
-        id: "kinetic",
-        label: "Kinetic Minimal",
-        description: "Restrained color, alive with motion: spring hovers that lift, an animated sliding active indicator, and smooth easing throughout. Linear-style polish on any theme."
     }
+}
+
+/** The style a fresh install gets. Must match `DEFAULTS.appearance` in settings.ts. */
+export const DEFAULT_STYLE_ID: StyleId = "modern"
+
+/** Resolve a persisted style id to a style, defaulting when it names none. See resolveTheme. */
+export function resolveStyle(id: unknown): DesignStyle {
+    return typeof id === "string" && Object.prototype.hasOwnProperty.call(STYLES, id)
+        ? STYLES[id as StyleId]
+        : STYLES[DEFAULT_STYLE_ID]
 }
 
 /** Apply a design style (sets the `data-style` attribute the CSS keys off). */
 export function applyStyle(id: StyleId): void {
-    document.documentElement.dataset.style = STYLES[id] ? id : "wabi"
+    document.documentElement.dataset.style = resolveStyle(id).id
+}
+
+/**
+ * Coerce a persisted appearance block onto skins that still exist.
+ *
+ * Resolving inside applyTheme/applyStyle is not enough on its own: the store
+ * keeps whatever settings.json said, and every other reader indexes THAT -
+ * the Monaco panels' `THEMES[theme].monacoId`, the xterm palette, the accent
+ * Reset button. Left alone, a 0.12.0 profile naming a deleted skin paints a
+ * correct window that the Appearance picker then shows as nothing-selected,
+ * and throws the first time a terminal asks for its palette.
+ *
+ * The accent is deliberately not touched. It is a user choice that outlives
+ * the theme it was first defaulted from, and we cannot tell a picked colour
+ * from an inherited one - so we keep it rather than silently discard it.
+ */
+export function migrateAppearance<T extends { theme: ThemeId; style: StyleId }>(appearance: T): T {
+    return { ...appearance, theme: resolveTheme(appearance.theme).id, style: resolveStyle(appearance.style).id }
 }

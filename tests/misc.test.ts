@@ -3,19 +3,12 @@ import { shade, THEMES, STYLES } from "../src/renderer/src/themes"
 import { sshCommand } from "../src/renderer/src/settings"
 
 describe("design styles", () => {
+    // The surviving set is asserted in tests/themeFallback.test.ts, together with
+    // the fallback a settings.json naming one of the ten deleted styles needs.
     it("registers all design styles with labels", () => {
-        expect(Object.keys(STYLES).sort()).toEqual(["aurora", "bauhaus", "crt", "flat", "kinetic", "lacquer", "minimal", "modern", "modernplus", "neo", "neon", "wabi"])
-        expect(STYLES.minimal.label).toBe("Modern Minimal")
-        expect(STYLES.neon.label).toBe("Neon")
-        expect(STYLES.flat.label).toBe("Flat Vector")
-        expect(STYLES.bauhaus.label).toBe("Bauhaus")
-        expect(STYLES.crt.label).toBe("Phosphor CRT")
+        expect(Object.keys(STYLES).sort()).toEqual(["modern", "wabi"])
+        expect(STYLES.wabi.label).toBe("Wabi-sabi")
         expect(STYLES.modern.label).toBe("Modern Pro")
-        expect(STYLES.lacquer.label).toBe("Lacquer")
-        expect(STYLES.modernplus.label).toBe("Modern+")
-        expect(STYLES.aurora.label).toBe("Aurora Glass")
-        expect(STYLES.neo.label).toBe("Neo Holographic")
-        expect(STYLES.kinetic.label).toBe("Kinetic Minimal")
     })
 
     it("includes the Slate modern color theme", () => {
@@ -24,18 +17,11 @@ describe("design styles", () => {
         expect(THEMES.slate.vars["--bg"]).toBe("#0c0e13")
     })
 
-    it("includes the Graphite modern theme", () => {
-        expect(THEMES.graphite).toBeTruthy()
-        expect(THEMES.graphite.mode).toBe("dark")
-        expect(THEMES.graphite.accent).toBe("#7c83ff")
-        expect(THEMES.graphite.monacoId).toBe("devdeck-graphite")
-    })
-
-    it("includes the Aurora and Neo themes", () => {
-        expect(THEMES.aurora.mode).toBe("dark")
-        expect(THEMES.aurora.monacoId).toBe("devdeck-aurora")
-        expect(THEMES.neo.accent).toBe("#22d3ee")
-        expect(THEMES.neo.monacoId).toBe("devdeck-neo")
+    it("includes the Sumi and Washi themes", () => {
+        expect(THEMES.sumi.mode).toBe("dark")
+        expect(THEMES.sumi.monacoId).toBe("devdeck-sumi")
+        expect(THEMES.washi.mode).toBe("light")
+        expect(THEMES.washi.monacoId).toBe("devdeck-washi")
     })
 })
 
