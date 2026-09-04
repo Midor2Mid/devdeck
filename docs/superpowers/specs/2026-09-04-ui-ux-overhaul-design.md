@@ -85,7 +85,7 @@ Executes first. Everything below it is cheaper afterwards, and it removes roughl
 
 | Surface | Approx. lines | Why it fails the product's own test |
 |---|---|---|
-| Network view — `NetworkPanel.tsx` + `main/proxy.ts` + Settings → Proxy | ~713 | A general-purpose forward proxy for arbitrary client traffic. No agent edge. **`browserNet.ts` survives** — it feeds the `→ Agent` payload and passes the test |
+| Network view — `NetworkPanel.tsx` + `main/proxy.ts` | ~713 | A general-purpose forward proxy for arbitrary client traffic. No agent edge. **`browserNet.ts` survives** — it feeds the `→ Agent` payload and the MCP tools, and is wired through its own `browser:net*` channels |
 | `ReleaseBoard` + its permanent `DeckStatus` icon | 282 | A deployment tracker, and a *team* artifact in a single-developer cockpit |
 | `StandupModal` | 119 | A single developer does not have a standup |
 | `DotnetPanel` | 148 | Jumps to `file:line` — helps you *author*. Also stack-specific in a stack-agnostic product |
@@ -105,6 +105,17 @@ subsequent UI change roughly an order of magnitude cheaper to verify, and the ne
 six months are UI change and beta reports. It also materially shrinks an
 8,716-line `styles.css`. **It is reversible — the CSS is in git.** Do not replace it
 with a "more themes coming" note.
+
+**Correction to the ruling, found while planning (2026-09-04).** The kill list as
+originally written said "`NetworkPanel.tsx` + `main/proxy.ts` + **Settings → Proxy**",
+treating those as one feature. They are not. There are **three** unrelated modules
+with `proxy` in the name:
+
+| Module | What it is | Verdict |
+|---|---|---|
+| `main/proxy.ts` | The local HTTP forward **capture** proxy behind the Network view | **Delete** — this is the one the ruling means |
+| `main/netproxy.ts` + Settings → Proxy | **Corporate proxy support.** Its heading is literally `<h3>Corporate proxy</h3>`. Applies an upstream proxy to the main process env so every spawned terminal and child — npm, git, dotnet, gh — inherits it, with `NODE_EXTRA_CA_CERTS` for a TLS-intercepting CA | **KEEP.** Unrelated to the Network view. Deleting it would remove the thing that makes agents and package managers work at all behind a corporate firewall — which is a plausible environment for the target user |
+| `main/browserNet.ts` | Captures network + console from the embedded webview over CDP | **Keep**, as the ruling says. Confirmed separable: its own `browser:netAttach/netGet/netDetach` channels plus the `browserPages`/`consoleLog`/`networkLog` MCP tools |
 
 **Explicitly NOT cut**, so nobody re-litigates: API, Database, Browser, Editor.
 Each carries a `→ Agent` edge and answers *did the agent's change actually work*.
