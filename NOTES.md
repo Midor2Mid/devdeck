@@ -71,6 +71,37 @@ The maker shared shipped features + reasoning (Vietnamese). Highlights for DevDe
 - **Mobile attach:** add screenshots / attach files from the phone in Remote Control. (Complex in our model — terminals can't ingest images directly; would need to upload to desktop, save into the project, and reference the path / or rely on agent image support. Parked with plan.)
 - **Slash `/` commands / skills** in the prompt composer (symmetric to our `@file` mentions). Ambiguous whether it means agent-passthrough slash-commands or user-defined snippets — lean toward **user-defined prompt snippets** inserted by `/name` (generic, reusable). Next batch.
 
+## Beta — external users (step 9)
+
+**State on 2026-09-04: nobody has been contacted. This section is empty on
+purpose, and its emptiness is the honest state of external validation.** Every
+quote above this line is the author's own, which makes it a design note rather
+than evidence (`PRODUCT.md` → Validation).
+
+This is where the evidence goes. Materials for running it — who to approach, the
+message, the install-watching protocol, the session template, and the success /
+failure / kill criteria fixed in advance — are in `docs/beta/`.
+
+**Rules for this section.** Their sentence, in quotation marks, with the date.
+Never a reconstruction: a quote that was not received does not exist. What they
+*did*, what they *said* and what the author *thinks it means* stay in three
+separate parts of each record. A user who installed it and never opened it again
+is recorded here too — silence is the strongest signal available and the easiest
+to leave out.
+
+### Funnel
+
+States: invited · installed · used (a recorded session exists) · silent · gone.
+
+| id | Who (as they chose to be named) | Archetype | Reached via | Shell | State | Session record |
+|---|---|---|---|---|---|---|
+| — | *none yet* | | | | | |
+
+### Session records
+
+None. Records are appended below, oldest first, using
+`docs/beta/04-session-record-template.md`.
+
 ## Dogfooding — v0.1.0 (started 2026-06-27)
 
 First installable build shipped (`release/DevDeck Setup 0.1.0.exe` + portable `DevDeck 0.1.0.exe`). **Now stop adding features and use it for real work** — let friction drive the backlog (success metric #1: becomes the daily driver for ≥1 week).
