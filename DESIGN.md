@@ -5,7 +5,7 @@ description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
   describe the default identity (Slate theme + Modern Pro style); the app ships
-  several swappable themes and styles that re-bind these same tokens.
+  three swappable themes and two styles that re-bind these same tokens.
 colors:
   bg: "#0c0e13"
   surface: "#13161d"
@@ -89,12 +89,15 @@ Settings → Appearance, and both re-bind the tokens in this file. The tokens he
 encode the **default identity — Slate (cool dark) + Modern Pro** — but the same
 component definitions hold under every theme/style:
 
-- **Themes (color):** Slate (dark, default), Sumi (warm dark), Washi (light),
-  Zen (airy dark), Graphite (cool dark, indigo accent), Aurora (cool indigo
-  glass), Neo (holographic cyan/violet).
-- **Styles (shape/depth/type):** Modern Pro (default), Wabi-sabi, Modern Minimal,
-  Neon, Flat Vector, Bauhaus, Phosphor CRT, Modern+, Lacquer, Aurora Glass,
-  Neo Holographic, Kinetic Minimal.
+- **Themes (color):** Slate (dark, default), Sumi (warm dark), Washi (light).
+- **Styles (shape/depth/type):** Modern Pro (default), Wabi-sabi.
+
+  Cut from seven themes and twelve styles on 2026-09-04. Four themes (Zen,
+  Graphite, Aurora, Neo) and ten styles (Modern Minimal, Neon, Flat Vector,
+  Bauhaus, Phosphor CRT, Modern+, Lacquer, Aurora Glass, Neo Holographic,
+  Kinetic Minimal) were removed, because every UI change had to be verified
+  against all 84 combinations and that cost was being paid on every change.
+  The CSS is in git if one is ever wanted back.
 
 A **global motion layer** underlies all of them: floating surfaces ease/scale
 in, interactions give press feedback, and everything is disabled under
@@ -183,7 +186,8 @@ read the UI.
 ## Shapes
 
 Radii step **sm 6 · md 8 · lg 12** — controls at sm, panels at md, modals/cards at
-lg. Corner radius is itself a style dial (Bauhaus is 0, Flat Vector is generous).
+lg. Corner radius is itself a style dial: Wabi-sabi keeps the softer default,
+Modern Pro tightens it (7 / 10 / 12px on controls, panels and cards).
 
 - **Icons:** one inline-SVG line set (`components/Icon.tsx`) — a 24 grid, 1.75
   stroke, `currentColor`. No Unicode glyphs or emoji in chrome.

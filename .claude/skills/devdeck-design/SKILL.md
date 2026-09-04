@@ -18,7 +18,7 @@ have:
 1. `DESIGN.md` — the contract. Machine-readable tokens in frontmatter, canonical
    rationale in the body. **This is the source of truth**, including the
    active-state grammar and badge-tier tables.
-2. `src/renderer/src/themes.ts` — the 7 color themes. Each is a `*_VARS` map that
+2. `src/renderer/src/themes.ts` — the 3 color themes. Each is a `*_VARS` map that
    re-binds the same token names.
 3. `src/renderer/src/styles.css` — the `:root` token block at the top, then the
    `[data-style="…"]` blocks, one per style.
@@ -38,15 +38,18 @@ have:
 
 DevDeck is **multi-skin by design**: a *theme* (color) and a *style*
 (shape/depth/type) are independent, swappable axes, and both re-bind the same
-tokens. That means **7 themes × 12 styles = 84 combinations**, and a change that
-looks right in Slate + Modern Pro can be invisible or broken in Washi + Bauhaus.
+tokens. That means **3 themes × 2 styles = 6 combinations**, and a change that
+looks right in Slate + Modern Pro can be invisible or broken in Washi + Wabi-sabi.
+(This was 7 × 12 = 84 until 2026-09-04; the matrix was cut deliberately, because
+verifying every UI change against 84 skins is what made each one expensive. The
+rule below is unchanged — only the arithmetic moved.)
 
 Practical consequences, all of which are easy to get wrong:
 
 - **A hard-coded color or size is a bug**, not a shortcut — it survives the theme
   switch and becomes the one element that doesn't change.
 - **Never encode state in color alone.** Themes recolor everything; only *form*
-  (dot, pill, stripe, underline, glyph, icon) survives all 84 combinations. See
+  (dot, pill, stripe, underline, glyph, icon) survives all 6 combinations. See
   DESIGN.md's active-state grammar for which form axis belongs to which kind of
   active — they're deliberately not interchangeable.
 - **There is no warning/attention color token, on purpose.** The default accent is
@@ -128,7 +131,7 @@ a fourth signal on a ~24px row makes all four harder to read, not the new one
 easier. Density has a ceiling and DevDeck is near it in the places that matter.
 
 If a competitor or reference does something DevDeck doesn't, the useful question
-is never "how do we match it" — it's "does this survive 84 skins, and what does
+is never "how do we match it" — it's "does this survive all 6 skins, and what does
 it cost the calm". Frequently the honest answer is that their version works
 because their accent is blue, or because they set everything in mono, and the
 pattern doesn't port.

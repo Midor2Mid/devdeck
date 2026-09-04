@@ -130,7 +130,7 @@ unpacked from the asar archive automatically (see the `build` field in
 ## Checking a change actually works
 
 ```bash
-npm test                  # 1,530 unit tests
+npm test                  # 1,518 unit tests
 npm run verify:terminal    # drives the DEV build over CDP: 15 checks
 npm run build && npm run verify:packaged   # drives the PACKAGED app: 4 checks
 ```
@@ -154,7 +154,7 @@ its own, so nothing else catches a type error.
 - **Multi-agent sessions** — configurable agent presets (Claude, Claude Opus, Claude YOLO, Codex, Gemini, or a custom command) launched per project, each with a type badge; `+` for the primary agent, `▾` menu for the rest (with resume). DevDeck checks each command against your shell's PATH and says so on the card, rather than launching into a pane that silently fails. Configure in Settings → Agents.
 - **Task board + dispatch rules** — cards move through doing/review/done on real evidence (a snapshot of the project's git state, not just a quiet terminal); a Dispatch button routes a card to an agent by rule (title match, glob, or project) instead of always picking the first preset.
 - **Prompt composer** — `Ctrl+Shift+I` opens a rich prompt box with `@file` and `/snippet` autocomplete (snippets defined in Settings) to compose and send to the focused agent session.
-- **Terminal layouts** — four ways to arrange sessions: **Tabs**, a **Dashboard grid** of every terminal in the project, a free-form **Canvas** you pan and position by hand, and an **Overview** across every project at once.
+- **Terminal layouts** — three ways to arrange sessions: **Tabs**, a **Dashboard grid** of every terminal in the project, and an **Overview** across every project at once.
 - **Project groups + switcher** — organize projects into collapsible groups; `Ctrl+K` opens a searchable launchpad grid of all projects with live session counts.
 - **Status bar** — active project, git branch + uncommitted-change count, **git identity** (click to switch account), attention flag, remote indicator.
 - **Git accounts** — define work/personal identities (name, email, custom SSH command) in Settings → Git and apply one per project (writes the repo's local `git config`).
@@ -171,7 +171,7 @@ its own, so nothing else catches a type error.
 - **Browser** — embedded web browser with a **Comment Mode**: click any element to annotate it, then send grouped feedback to your focused agent — element selector + note + URL, recent **console errors/warnings**, captured **network requests** (failed/4xx/5xx), and a **page screenshot**.
 - **Editor** — Monaco-powered: file tree, multi-file tabs, syntax highlighting, dirty indicators, `Ctrl+S` to save.
 - **Database** — per-project saved connections (PostgreSQL, MySQL, SQL Server & **SQLite**), Monaco SQL editor (`Ctrl+Enter` to run), table browser, results grid. SQLite uses a WASM driver (no native build) and reads/writes real `.db` files via a file picker. Passwords encrypted at rest (Electron `safeStorage`).
-- **Themes** — 7 color themes (Sumi, Washi, Slate, Graphite, Zen, Aurora, Neo) × 12 design styles, switchable independently in Settings → Appearance and applied across UI, terminal, and editor; default is Slate + Modern Pro.
+- **Themes** — 3 color themes (Slate, Sumi, Washi) × 2 design styles (Modern Pro, Wabi-sabi), switchable independently in Settings → Appearance and applied across UI, terminal, and editor; default is Slate + Modern Pro.
 - **Diagnostics** — a capped, deduped, redacted crash log with a *Copy diagnostics* button on crash cards and in Settings → About, for handing someone the actual reason something broke. Nothing is sent anywhere; it goes to your clipboard, and the button tells you so.
 - **Settings** (⚙ in the deck's tool cluster, bottom right) — Appearance, Terminal (default shell: PowerShell/cmd/Git Bash/WSL/custom + font), Editor (font/tab/wrap/minimap), Agents, AI (per-agent model + API key), Snippets, Pipelines, Git, SSH, MCP, Remote (mobile access), Corporate proxy, Notifications, Shortcuts reference, About. Persisted to `settings.json`.
 - **Remote / mobile access** — turn on a token-guarded server (Settings → Remote) and open the shown URL/QR on your phone to view and drive your terminals + agent sessions, including approving or denying an agent's permission prompt from your phone. Off by default; bind is token-gated. For access *anywhere*, run [Tailscale](https://tailscale.com) on this PC and your phone (no public exposure) — the URL uses your Tailscale IP automatically when present.

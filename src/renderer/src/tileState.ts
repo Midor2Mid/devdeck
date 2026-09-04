@@ -75,7 +75,7 @@ export interface TileState {
     /**
      * A glyph that differs per state. DESIGN.md requires state to read in FORM
      * as well as colour: --clay and --danger are a shade apart in Sumi and
-     * Washi, and the tile has to stay legible in all 84 skins.
+     * Washi, and the tile has to stay legible in all 6 skins.
      */
     mark: string
     tone: TileTone
