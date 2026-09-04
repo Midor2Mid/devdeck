@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
+import { useSettings, isUnsafeAgent } from "../settings"
 import {
     getTail,
     getFullTail,
@@ -50,6 +51,8 @@ export function MissionControl(): JSX.Element {
     // Mission view actually being active so timers don't run in other views.
     const view = useStore((s) => s.view)
     const projects = useStore((s) => s.projects)
+    const activeId = useStore((s) => s.activeId)
+    const newTab = useStore((s) => s.newTab)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
     const setActiveProject = useStore((s) => s.setActiveProject)
     const openChanges = useStore((s) => s.openChanges)
@@ -72,6 +75,12 @@ export function MissionControl(): JSX.Element {
     // boardTasks, on a component that already re-renders once a second.
     const boardTasks = useStore((s) => s.boardTasks)
     const pipelineRun = useStore((s) => s.pipelineRun)
+    // Both are stable slices; the primary agent and the active project are
+    // derived below, outside any selector, for the getSnapshot reason above.
+    const agents = useSettings((s) => s.agents)
+    const openSettings = useSettings((s) => s.openSettings)
+    const primaryAgent = agents.find((a) => a.runMode !== "normal") ?? agents[0]
+    const activeProject = projects.find((p) => p.id === activeId)
     void tabsByProject
     void agentStatus
     void termAgents
@@ -264,6 +273,48 @@ export function MissionControl(): JSX.Element {
     // question again.
     const attention = resolved.filter((r) => wantsYou(r.input, now, !!seen[r.s.termId])).length
 
+    /**
+     * The AGENTS empty state's one control — the only accent on this screen.
+     *
+     * Three states, because there are three. A project with an agent command
+     * gets the act itself; a project with none gets the place to configure one
+     * (DevDeck runs CLIs the user installs, so "start an agent" would be a
+     * button that cannot keep its word); and with no active project there is no
+     * cwd to spawn into, so `newTab` would no-op silently and nothing is
+     * offered instead of a control that lies.
+     *
+     * `primaryAgent` matches the terminal tab bar's `+ <agent>` definition, so
+     * the two controls that both say they start "the" agent start the same one.
+     * The keyboard chord is deliberately NOT cited here: it resolves the primary
+     * agent differently (`agents[0]`), and naming it would claim an equivalence
+     * that does not hold until that is reconciled.
+     */
+    let startControl: JSX.Element | null = null
+    if (activeProject && primaryAgent) {
+        const risk = isUnsafeAgent(primaryAgent.command)
+            ? ` This one skips permission prompts, so it can edit and run anything in ${activeProject.name} without asking.`
+            : ""
+        startControl = (
+            <button
+                className="accent"
+                onClick={() => newTab(primaryAgent.id)}
+                data-tip={`Starts ${primaryAgent.name} in ${activeProject.name} and switches to the terminal.${risk}`}
+            >
+                Start a {primaryAgent.name} session
+            </button>
+        )
+    } else if (activeProject) {
+        startControl = (
+            <button
+                className="accent"
+                onClick={() => openSettings("agents")}
+                data-tip="DevDeck runs agent CLIs you install yourself. Add one and it becomes a launch card."
+            >
+                Set up an agent command
+            </button>
+        )
+    }
+
     return (
         <div className="mission">
             <div className="mission-section">
@@ -274,9 +325,24 @@ export function MissionControl(): JSX.Element {
                     </span>
                 </div>
                 {totalAgents === 0 ? (
-                    <div className="muted mission-empty">
-                        No agent sessions running. Start one from the deck (＋) or the command palette.
-                    </div>
+                    <>
+                        {/* The prose this replaced pointed at an icon-only ＋ on
+                            the deck and at "the command palette", neither of
+                            which a stranger can name - and Task 13 lands a new
+                            project on Terminal, so the way to reach this state
+                            is now to arrive on Mission with nothing running.
+                            Written against CommandLauncher's empty state: say
+                            what is true, then give the act its own control. */}
+                        <div className="muted mission-empty">
+                            No agent sessions yet. Start one and it appears here as a tile you can
+                            watch and reply to, from whichever project it is running in.
+                        </div>
+                        {/* An unclassed block wrapper on purpose: .mission-section
+                            is a column flex, so a bare button would stretch to
+                            the full width of the pane. This keeps it intrinsic
+                            and left-aligned with the section, and adds no CSS. */}
+                        <div>{startControl}</div>
+                    </>
                 ) : (
                     <div className="mission-grid">
                         {resolved.map(({ s, prompt, st }) => {
