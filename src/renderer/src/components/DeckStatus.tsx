@@ -12,7 +12,6 @@ export function DeckStatus(): JSX.Element {
     const project = useStore((s) => s.activeProject())
     const sessions = useStore((s) => s.sessions)
     const remoteEnabled = useSettings((s) => s.remote.enabled)
-    const setReleaseOpen = useStore((s) => s.setReleaseOpen)
     const openChanges = useStore((s) => s.openChanges)
     const gitAccounts = useSettings((s) => s.gitAccounts)
     // Stable slices only — the awaited Set below is derived in the component
@@ -222,16 +221,6 @@ export function DeckStatus(): JSX.Element {
             {remoteEnabled && (
                 <span className="sb-item sb-remote" data-tip="Remote access enabled" data-tip-pos="top">
                     <Icon name="broadcast" size={12} />
-                </span>
-            )}
-            {project && (
-                <span
-                    className="sb-item sb-identity"
-                    data-tip="Release board — promote Dev → UAT → PROD"
-                    data-tip-pos="top"
-                    onClick={() => setReleaseOpen(true)}
-                >
-                    <Icon name="release" size={12} />
                 </span>
             )}
         </div>

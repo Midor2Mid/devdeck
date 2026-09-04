@@ -280,8 +280,6 @@ interface AppState extends Persisted {
     startWork: (item: WorkItem, opts?: { worktree?: boolean }) => Promise<void>
 
     // Release board
-    releaseOpen: boolean
-    setReleaseOpen: (open: boolean) => void
 
     // Standup / worklog
     standupOpen: boolean
@@ -1120,7 +1118,6 @@ export const useStore = create<AppState>((set, get) => {
         changesTarget: null,
         prTarget: null,
         workOpen: false,
-        releaseOpen: false,
         standupOpen: false,
         pipelineRun: null,
         pipelineResume: false,
@@ -1726,7 +1723,6 @@ export const useStore = create<AppState>((set, get) => {
         closePr: () => set({ prTarget: null }),
 
         setWorkOpen: (workOpen) => set({ workOpen }),
-        setReleaseOpen: (releaseOpen) => set({ releaseOpen }),
         setStandupOpen: (standupOpen) => set({ standupOpen }),
 
         startReview: async (lensIds) => {

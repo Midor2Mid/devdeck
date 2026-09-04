@@ -31,7 +31,6 @@ export type IconName =
     | "help"
     | "plus"
     | "user"
-    | "release"
     | "flag"
     | "broadcast"
     | "code"
@@ -206,13 +205,6 @@ const P: Record<IconName, JSX.Element> = {
         <>
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
-        </>
-    ),
-    release: (
-        <>
-            <circle cx="12" cy="12" r="9" />
-            <path d="m16 12-4-4-4 4" />
-            <path d="M12 16V8" />
         </>
     ),
     flag: (

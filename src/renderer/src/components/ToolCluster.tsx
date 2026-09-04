@@ -19,7 +19,6 @@ export function ToolCluster(): JSX.Element {
             { label: "Work", onClick: () => s.setWorkOpen(true) },
             { label: "Activity", onClick: () => s.setActivityOpen(true) },
             { label: "Standup", onClick: () => s.setStandupOpen(true) },
-            { label: "Release", onClick: () => s.setReleaseOpen(true) },
             { separator: true },
             { label: "Keyboard shortcuts (F1)", onClick: () => s.setShortcutsOpen(true) }
         ])

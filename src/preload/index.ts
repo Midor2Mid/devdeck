@@ -361,30 +361,6 @@ export interface WorklogRepo {
     commits: WorklogCommit[]
 }
 
-export interface ReleaseStage {
-    id: string
-    name: string
-    ref: string
-}
-export interface ReleaseConfig {
-    stages: ReleaseStage[]
-    checklist: string[]
-}
-export interface ReleaseCommit {
-    sha: string
-    subject: string
-    author: string
-    when: string
-}
-export interface StageStatus {
-    id: string
-    name: string
-    ref: string
-    found: boolean
-    commit: ReleaseCommit | null
-    aheadOfNext: number
-}
-
 export interface Worktree {
     path: string
     branch: string
@@ -822,17 +798,6 @@ const api = {
     worklog: {
         collect: (repos: { name: string; path: string }[], sinceISO: string): Promise<WorklogRepo[]> =>
             ipcRenderer.invoke("worklog:collect", { repos, sinceISO })
-    },
-    release: {
-        config: (repo: string): Promise<ReleaseConfig> => ipcRenderer.invoke("release:config", repo),
-        saveConfig: (repo: string, config: ReleaseConfig): Promise<ReleaseConfig> =>
-            ipcRenderer.invoke("release:saveConfig", { repo, config }),
-        status: (repo: string, stages: ReleaseStage[]): Promise<StageStatus[]> =>
-            ipcRenderer.invoke("release:status", { repo, stages }),
-        pending: (repo: string, target: string, source: string): Promise<ReleaseCommit[]> =>
-            ipcRenderer.invoke("release:pending", { repo, target, source }),
-        tag: (repo: string, name: string, ref: string): Promise<{ ok: boolean; error?: string }> =>
-            ipcRenderer.invoke("release:tag", { repo, name, ref })
     },
     work: {
         getConfig: (): Promise<WorkConfigPublic> => ipcRenderer.invoke("work:getConfig"),

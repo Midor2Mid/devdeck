@@ -36,7 +36,6 @@ import { WorktreesModal } from "./components/WorktreesModal"
 import { ChangesModal } from "./components/ChangesModal"
 import { PrModal } from "./components/PrModal"
 import { WorkPanel } from "./components/WorkPanel"
-import { ReleaseBoard } from "./components/ReleaseBoard"
 import { StandupModal } from "./components/StandupModal"
 import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
@@ -100,7 +99,6 @@ export function App(): JSX.Element {
     const changesTarget = useStore((s) => s.changesTarget)
     const prTarget = useStore((s) => s.prTarget)
     const workOpen = useStore((s) => s.workOpen)
-    const releaseOpen = useStore((s) => s.releaseOpen)
     const standupOpen = useStore((s) => s.standupOpen)
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
@@ -499,7 +497,6 @@ export function App(): JSX.Element {
             {changesTarget && <ChangesModal />}
             {prTarget && <PrModal />}
             {workOpen && <WorkPanel />}
-            {releaseOpen && <ReleaseBoard />}
             {standupOpen && <StandupModal />}
             <PipelineBar />
             <Toasts />
