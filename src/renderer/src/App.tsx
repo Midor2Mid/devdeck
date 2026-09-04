@@ -21,7 +21,6 @@ import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
 import { ExtendAgentModal } from "./components/ExtendAgentModal"
 import { SearchModal } from "./components/SearchModal"
-import { DotnetPanel } from "./components/DotnetPanel"
 import { ReviewPanel } from "./components/ReviewPanel"
 import { MissionControl } from "./components/MissionControl"
 import { TaskBoard } from "./components/TaskBoard"
@@ -84,7 +83,6 @@ export function App(): JSX.Element {
     const closeSettings = useSettings((s) => s.closeSettings)
     const extendOpen = useStore((s) => s.extendOpen)
     const searchOpen = useStore((s) => s.searchOpen)
-    const dotnetOpen = useStore((s) => s.dotnetOpen)
     const reviewOpen = useStore((s) => s.reviewOpen)
     const shortcutsOpen = useStore((s) => s.shortcutsOpen)
     const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
@@ -192,13 +190,6 @@ export function App(): JSX.Element {
                 e.preventDefault()
                 e.stopPropagation()
                 s.setSearchOpen(!s.searchOpen)
-                return
-            }
-            if (mod && e.shiftKey && e.code === "KeyB") {
-                e.preventDefault()
-                e.stopPropagation()
-                const s = useStore.getState()
-                s.setDotnetOpen(!s.dotnetOpen)
                 return
             }
             if (mod && e.shiftKey && e.code === "KeyR") {
@@ -482,7 +473,6 @@ export function App(): JSX.Element {
             )}
             {extendOpen && <ExtendAgentModal />}
             {searchOpen && <SearchModal />}
-            {dotnetOpen && <DotnetPanel />}
             {reviewOpen && <ReviewPanel />}
             {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
             {activityOpen && <ActivityPanel />}

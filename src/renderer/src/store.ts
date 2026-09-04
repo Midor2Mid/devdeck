@@ -302,8 +302,6 @@ interface AppState extends Persisted {
     setExtendOpen: (open: boolean) => void
     searchOpen: boolean
     setSearchOpen: (open: boolean) => void
-    dotnetOpen: boolean
-    setDotnetOpen: (open: boolean) => void
     reviewOpen: boolean
     setReviewOpen: (open: boolean) => void
     /** Spawn one agent session per lens to review the working-tree changes. */
@@ -1119,7 +1117,6 @@ export const useStore = create<AppState>((set, get) => {
         paletteOpen: false,
         extendOpen: false,
         searchOpen: false,
-        dotnetOpen: false,
         reviewOpen: false,
         shortcutsOpen: false,
         draggingTabId: null,
@@ -1356,7 +1353,6 @@ export const useStore = create<AppState>((set, get) => {
         setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
         setExtendOpen: (extendOpen) => set({ extendOpen }),
         setSearchOpen: (searchOpen) => set({ searchOpen }),
-        setDotnetOpen: (dotnetOpen) => set({ dotnetOpen }),
         setReviewOpen: (reviewOpen) => set({ reviewOpen }),
         setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
 

@@ -33,7 +33,6 @@ import * as gitpat from "./gitpat"
 import * as projectenv from "./projectenv"
 import * as netproxy from "./netproxy"
 import * as search from "./search"
-import * as dotnet from "./dotnet"
 import * as system from "./system"
 import * as shellpath from "./shellPath"
 import * as usage from "./usage"
@@ -599,12 +598,6 @@ function registerIpc(): void {
 
     // --- Cross-project search --- (confined to registered project roots)
     ipcMain.handle("search:code", (_e, { query }: { query: string }) => search.code(query))
-
-    // --- .NET build/test --- (confined to the given project root)
-    ipcMain.handle("dotnet:run", (_e, { root, mode }: { root: string; mode: "build" | "test" }) => {
-        guardPath(root)
-        return dotnet.run(root, mode)
-    })
 
     // --- Ambient system state (Docker + listening ports) ---
     ipcMain.handle("system:info", () => system.info())

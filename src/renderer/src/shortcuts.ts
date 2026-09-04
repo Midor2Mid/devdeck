@@ -45,7 +45,6 @@ export function shortcutGroups(viewNames: string[]): ShortcutGroup[] {
                 // it switches to Terminal on the way.
                 ["Ctrl + Shift + I", "Prompt composer (switches to Terminal)"],
                 ["Ctrl + Shift + F", "Search across projects (outside the Terminal view)"],
-                ["Ctrl + Shift + B", "Build / test (.NET)"],
                 ["Ctrl + Shift + R", "Review changes"],
                 ["F1", "This shortcuts list"]
             ]

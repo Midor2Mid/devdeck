@@ -136,8 +136,8 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
         const isAppChord = (e: KeyboardEvent): boolean => {
             if (e.code === "Tab") return true // Ctrl+Tab / Ctrl+Shift+Tab — cycle sessions
             if (e.shiftKey) {
-                // Ctrl+Shift+ P palette · F search/find · B build · R review · J jump · K prev project
-                return ["KeyP", "KeyF", "KeyB", "KeyR", "KeyJ", "KeyK"].includes(e.code)
+                // Ctrl+Shift+ P palette · F search/find · R review · J jump · K prev project
+                return ["KeyP", "KeyF", "KeyR", "KeyJ", "KeyK"].includes(e.code)
             }
             if (e.code === "KeyK") return true // Ctrl+K — project switcher
             return /^Digit[1-9]$/.test(e.code) // Ctrl+1..9 — switch view

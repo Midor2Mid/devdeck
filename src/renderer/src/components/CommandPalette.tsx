@@ -150,7 +150,6 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:search", section: "Actions", title: "Search across projects", kbd: "Ctrl+Shift+F", run: () => store.setSearchOpen(true) })
         cmds.push({ id: "act:pending", section: "Actions", title: "Jump to the agent waiting longest", kbd: "Ctrl+Shift+J", run: () => store.jumpToPending() })
         cmds.push({ id: "act:tasks", section: "Actions", title: "Task board", kbd: "Ctrl+2", run: () => store.setView("tasks") })
-        cmds.push({ id: "act:dotnet", section: "Actions", title: "Build / test (.NET)", kbd: "Ctrl+Shift+B", run: () => store.setDotnetOpen(true) })
         cmds.push({ id: "act:review-panel", section: "Actions", title: "Review changes — agent panel", kbd: "Ctrl+Shift+R", run: () => store.setReviewOpen(true) })
         cmds.push({ id: "act:zoom", section: "Actions", title: "Zoom the focused pane", kbd: "Ctrl+Shift+Z", run: () => { store.setView("terminal"); store.toggleZoomPane() } })
         cmds.push({ id: "act:reopen", section: "Actions", title: "Reopen the last closed session", run: () => store.reopenLastClosed() })
