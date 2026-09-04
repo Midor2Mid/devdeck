@@ -214,6 +214,43 @@ component changes:
   while one that repaints in place with a bare `\r` reads as silent — so read
   it for pace, not for progress.
 
+### Disabled controls
+
+**A disabled control must still say what it is and why it is off.** Both halves,
+always — the identity and the reason — and in words a stranger can read without
+knowing the app.
+
+This is a rule and not a note because of where it failed. On first run all seven
+deck view keys were `disabled` with **both `data-tip` and `aria-label` null**, and
+Chromium dispatches no mouse *or* focus events from a disabled button — so those
+seven glyphs could not be named by hovering, by Tab, or by a screen reader, at
+the very first moment of the product. The control that most needs explaining is
+the one that is off, and `disabled` is precisely the state that removes every
+means of asking.
+
+What that means in practice:
+
+- **Prefer `aria-disabled` to `disabled`** for anything a stranger might need
+  named. It keeps the control focusable and hoverable, still announces
+  "unavailable", and lets its `data-tip` and label be read. Guard the handler
+  instead — `Enter`/`Space` on a focused button still fires a click. `disabled`
+  is right only where the control needs no explaining.
+- **Carry the form.** `button:disabled { opacity: .4 }` stops applying, so the
+  dimmed state must be restored on the `[aria-disabled="true"]` selector, and the
+  hover brightening withdrawn: a control that lights up under the cursor is
+  claiming it will do something.
+- **The reason is per-control, not per-group.** A single sentence on the
+  container was what the deck shipped instead, and it named none of the seven
+  things it covered.
+- **A keyboard chord may not reach a control the pointer cannot.** The same
+  condition that greys a control gates its shortcut, read from one predicate so
+  the two cannot drift. `Ctrl+1..N` bypassed the deck's disabled state and moved
+  the topbar to "Terminal" while the first-run panel stayed up — the app naming a
+  view it was not showing.
+- An `aria-label` must be **permanent**, not conditional on being enabled, and it
+  must survive a visible label collapsing at narrow widths: `display: none` takes
+  the text out of the accessibility tree with it.
+
 ### Active-state grammar
 
 Every "active" is marked in **form**, and each kind of active has its own marker,
@@ -429,3 +466,4 @@ A machine-readable value inside the sentence (a filename, a path) is set in
 - No gratuitous gradients, no emoji as section markers, no everything-centered.
 - Don't let decoration fight legibility — if a flourish costs scan-speed, cut it.
 - Don't hard-code a color/size in a component when a token exists.
+- Don't ship a disabled control that cannot say what it is and why it is off.

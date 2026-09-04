@@ -6224,6 +6224,26 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .deck-view:hover {
     color: var(--text);
 }
+/* The keys carry `aria-disabled`, not `disabled`, so that a key with no
+   project can still be hovered, focused and named (see ViewKeys.tsx). That
+   loses `button:disabled { opacity: .4 }`, so the same form is restored here -
+   and the hover brightening is withdrawn, because a control that lights up
+   under the cursor is claiming it will do something. */
+.deck-view[aria-disabled="true"] {
+    opacity: 0.4;
+    cursor: default;
+}
+.deck-view[aria-disabled="true"]:hover {
+    color: var(--muted);
+}
+/* Focusable now means focus-ringed, and the base ring is the accent - which
+   would put seven accents on the first screen of the app, all on controls that
+   cannot act. The ring keeps its existence and its shape (the base rule allows
+   a style to change only the shape) and gives up only the colour: form carries
+   "you are here", the accent stays reserved for "you can act here". */
+.deck-view[aria-disabled="true"]:focus-visible {
+    outline-color: var(--text);
+}
 .deck-view.on {
     color: var(--text);
     box-shadow: inset 0 -2px 0 var(--accent);

@@ -19,6 +19,21 @@ export const DECK_VIEWS: { view: MainView; icon: IconName; name: string; group?:
 /** Index of the first verify key — where the group hairline is drawn. */
 const FIRST_VERIFY = DECK_VIEWS.findIndex((v) => v.group === "verify")
 
+/** Why the keys are off, in the words shown on the key itself. */
+const OFF_REASON = "open a project to use the views"
+
+/**
+ * Whether the view keys can act.
+ *
+ * Exported because `Ctrl+1..N` in App.tsx must answer this the same way the
+ * buttons do, and it did not: the chord bypassed the disabled state entirely,
+ * so on first run it moved the topbar to "Terminal" while the first-run panel
+ * stayed up and no key lit. One predicate, two callers, no room to drift.
+ */
+export function viewKeysLive(projects: { id: string }[]): boolean {
+    return projects.length > 0
+}
+
 export function ViewKeys(): JSX.Element {
     const view = useStore((s) => s.view)
     const setView = useStore((s) => s.setView)
@@ -27,20 +42,14 @@ export function ViewKeys(): JSX.Element {
     // spins forever, so the whole file keeps to slices as a habit.
     const projects = useStore((s) => s.projects)
     // With no project every view resolves to the same panel, so a live key
-    // would be a control that visibly does nothing. Disabled carries the form
-    // through the existing `button:disabled { opacity: .4 }`, and NO key takes
-    // the accent underline - nothing on screen may claim to be active.
-    const off = projects.length === 0
+    // would be a control that visibly does nothing. NO key takes the accent
+    // underline while off - nothing on screen may claim to be active.
+    const off = !viewKeysLive(projects)
     return (
         <div
             className="deck-views"
             role="tablist"
             aria-label="Main view"
-            // On the GROUP, not the keys: Chromium dispatches no mouse events
-            // from a disabled button, so a data-tip on one would never show.
-            // One shared sentence is what the design asks for anyway.
-            data-tip={off ? "Add a project to use the views." : undefined}
-            data-tip-pos="top"
         >
             {DECK_VIEWS.map((v, i) => (
                 <button
@@ -52,11 +61,27 @@ export function ViewKeys(): JSX.Element {
                         (i === FIRST_VERIFY ? " group-start" : "")
                     }
                     role="tab"
-                    disabled={off}
+                    // `aria-disabled`, not `disabled`, and that is the whole
+                    // fix: Chromium dispatches no mouse OR focus events from a
+                    // disabled button, so on first run - every key off - these
+                    // seven glyphs could not be named by hovering, by Tab, or
+                    // by a screen reader, at the first moment of the product.
+                    // aria-disabled keeps the key focusable and hoverable and
+                    // still announces "unavailable", so the tip and the label
+                    // below can be read; the guard on the click is what makes
+                    // it inert (Enter/Space on a focused button still fires).
+                    aria-disabled={off || undefined}
                     aria-selected={!off && view === v.view}
-                    data-tip={off ? undefined : `${v.name} (Ctrl+${i + 1})`}
+                    // Permanent, in both states, and it survives the label
+                    // collapsing at narrow widths - `display: none` takes the
+                    // visible text out of the accessibility tree with it.
+                    aria-label={off ? `${v.name} - ${OFF_REASON}` : `${v.name} (Ctrl+${i + 1})`}
+                    data-tip={off ? `${v.name} - ${OFF_REASON}` : `${v.name} (Ctrl+${i + 1})`}
                     data-tip-pos="top"
-                    onClick={() => setView(v.view)}
+                    onClick={() => {
+                        if (off) return
+                        setView(v.view)
+                    }}
                 >
                     <Icon name={v.icon} size={16} />
                     <span className="deck-view-name">{v.name}</span>

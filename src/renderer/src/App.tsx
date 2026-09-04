@@ -15,7 +15,7 @@ import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
 import { NoProjects } from "./components/NoProjects"
 import { paneAtIndex, pickInDirection, type PaneDir, type PaneRect } from "./paneNav"
-import { DECK_VIEWS } from "./components/ViewKeys"
+import { DECK_VIEWS, viewKeysLive } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
 import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
@@ -273,11 +273,17 @@ export function App(): JSX.Element {
                 return
             }
             // Ctrl+1..N — switch main view (indexed into the deck view order).
+            // Gated on the same predicate the keys are, because it was not: on
+            // first run the chord moved the topbar to "Terminal" while the
+            // first-run panel stayed up and no key lit, so the app named a view
+            // it was not showing. A chord may not reach a control the pointer
+            // cannot.
             if (mod && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
                 const idx = Number(e.code.slice(5)) - 1
                 const v = DECK_VIEWS[idx]?.view
                 if (v) {
                     e.preventDefault()
+                    if (!viewKeysLive(useStore.getState().projects)) return
                     useStore.getState().setView(v)
                     return
                 }
