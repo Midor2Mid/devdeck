@@ -159,7 +159,7 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:usage", section: "Actions", title: "AI usage — tokens & cost", run: () => store.setUsageOpen(true) })
         cmds.push({ id: "act:pipelines", section: "Actions", title: "Edit pipelines…", run: () => openSettings("pipelines") })
         cmds.push({ id: "act:settings", section: "Actions", title: "Open Settings", run: () => openSettings() })
-        cmds.push({ id: "act:addproject", section: "Actions", title: "Add project…", run: () => store.addProject() })
+        cmds.push({ id: "act:addproject", section: "Actions", title: "Open folder…", kbd: "Ctrl+O", run: () => store.addProject() })
         cmds.push({ id: "act:extend", section: "Actions", title: "Extend agent — skills & agents…", run: () => store.setExtendOpen(true) })
         for (const p of pipelines)
             cmds.push({

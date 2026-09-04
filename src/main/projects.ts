@@ -87,7 +87,10 @@ export function listProjects(): ProjectStore {
 
 export async function addProject(win: BrowserWindow): Promise<ProjectStore> {
     const res = await dialog.showOpenDialog(win, {
-        title: "Add a project folder",
+        // The dialog's own title is the fifth label this one act used to ship.
+        // No ellipsis here: an ellipsis promises a further dialog, and this IS
+        // the dialog.
+        title: "Open folder",
         properties: ["openDirectory"]
     })
     const store = load()

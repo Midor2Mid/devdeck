@@ -6183,16 +6183,23 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     color: var(--accent);
     border-color: var(--accent);
 }
+/* The deck's no-project control. Borderless it read as a caption rather than a
+   button, on the one surface a stranger with nothing open is looking at. It
+   takes .deck-add's dashed treatment - the established "this slot is empty and
+   you can fill it" idiom on this bar - and deliberately NOT an accent fill: the
+   first-run panel above it already spends the frame's one accent. */
 .deck-empty {
     background: transparent;
-    border: none;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius, 7px);
     color: var(--faint);
     cursor: pointer;
     font-size: 12px;
-    padding: 0 6px;
+    padding: 3px 10px;
 }
 .deck-empty:hover {
-    color: var(--text);
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 .deck-bar {

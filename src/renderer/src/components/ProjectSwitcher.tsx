@@ -8,7 +8,7 @@ import { switcherEmpty } from "../probeView"
 
 /**
  * Full-window launchpad for switching and managing projects: a searchable grid
- * of cards with an "Add folder" button, per-card context menu, and OS
+ * of cards with an `Open folder…` button, per-card context menu, and OS
  * folder-drop to add. Type to filter, arrows to move, Enter to open.
  * Opened with Ctrl+K.
  */
@@ -160,8 +160,17 @@ export function ProjectSwitcher(): JSX.Element {
                             setSel(0)
                         }}
                     />
-                    <button className="switcher-add" data-tip="Add a project folder" onClick={addProject}>
-                        + Add folder
+                    {/* One verb for one act: this button, the palette entry, the
+                        deck control, Ctrl+O and the OS dialog's own title all read
+                        `Open folder`. Adding a folder always activates it -
+                        `addProject` adopts main's activeId - so "add" was naming a
+                        distinction the app does not have. */}
+                    <button
+                        className="switcher-add"
+                        data-tip="Open a folder as a project (Ctrl+O)"
+                        onClick={addProject}
+                    >
+                        Open folder…
                     </button>
                 </div>
                 <div className="switcher-grid" ref={gridRef}>
@@ -224,7 +233,7 @@ export function ProjectSwitcher(): JSX.Element {
  */
 function emptyText(projectCount: number, q: string): JSX.Element {
     const e = switcherEmpty(projectCount, q)
-    if (e.kind === "no-projects") return <>No projects yet. Add a folder to start.</>
+    if (e.kind === "no-projects") return <>No projects yet. Open a folder to start.</>
     if (e.kind === "none-to-show") return <>No projects to show.</>
     // The query is a machine-readable value inside a sentence, so it is mono -
     // and it wraps, so a pasted Windows path cannot widen the modal.

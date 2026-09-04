@@ -11,7 +11,7 @@ import { probeLine, type ProbeLine } from "../probeView"
  * distraction with no project open — Mission's loudest object is a list of
  * every listening port on the machine — so `App` routes all of them here and
  * this panel is the whole screen. One object on a void, with the ensō behind
- * it, and `Open a project folder` as the only accent on it.
+ * it, and `Open folder…` as the only accent on it.
  *
  * The probe line is why a stranger will not click into silence later: it says
  * whether the agent CLIs DevDeck runs are actually on the PATH a pane will get.
@@ -33,7 +33,7 @@ export function NoProjects(): JSX.Element {
                     editor and git status, one folder at a time.
                 </p>
                 <button className="accent" onClick={() => void addProject()}>
-                    Open a project folder
+                    Open folder…
                 </button>
                 <p className="first-run-pre">
                     DevDeck runs agent CLIs you install yourself — <code>claude</code>,{" "}

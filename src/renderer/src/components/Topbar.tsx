@@ -42,7 +42,7 @@ export function Topbar(): JSX.Element {
                     data-tip={
                         project
                             ? `${project.path} · Ctrl+K switch · Ctrl+Shift+K recent (hold to cycle)`
-                            : "Open a project (Ctrl+K)"
+                            : "Choose a project (Ctrl+K)"
                     }
                     data-tip-pos="bottom"
                 >

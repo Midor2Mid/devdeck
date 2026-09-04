@@ -19,7 +19,6 @@ export function Deck(): JSX.Element {
     void agentStatus
     void termAgents
     void termNames
-    void projects
 
     const active = projects.find((p) => p.id === activeId)
     const strips = deriveDeckStrips(
@@ -31,12 +30,30 @@ export function Deck(): JSX.Element {
         <div className="deck">
             <div className="deck-strips">
                 {strips.length === 0 ? (
-                    <button
-                        className="deck-empty"
-                        onClick={() => useStore.getState().openSwitcher()}
-                    >
-                        Add or open a project
-                    </button>
+                    // No strip means no active project, which has two causes and
+                    // needs two different controls. The label used to say "Add or
+                    // open a project" and did neither: it opened the switcher,
+                    // putting the folder dialog three hops away, and on a first
+                    // run that switcher is empty. With nothing to choose between,
+                    // this goes straight to the dialog; with projects on file but
+                    // none active, choosing is the act and the dialog would be
+                    // the wrong one. Dashed, never accent-filled - the accent CTA
+                    // already lives on the panel above and there is one per frame.
+                    projects.length === 0 ? (
+                        <button
+                            className="deck-empty"
+                            onClick={() => void useStore.getState().addProject()}
+                        >
+                            Open folder…
+                        </button>
+                    ) : (
+                        <button
+                            className="deck-empty"
+                            onClick={() => useStore.getState().openSwitcher()}
+                        >
+                            Choose a project
+                        </button>
+                    )
                 ) : (
                     strips.map((s) => <ProjectStrip key={s.projectId} strip={s} />)
                 )}
