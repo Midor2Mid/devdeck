@@ -2,11 +2,24 @@ import { useState } from "react"
 import { useStore } from "../store"
 import { PALETTE, PALETTE_KEYS } from "../projectIdentity"
 import { ProjectChip } from "./ProjectChip"
-import { Modal } from "./Modal"
+import { Modal, ModalBoundary } from "./Modal"
 
 /** Edit a project's optional emoji/color identity overrides. Opened from the
  *  project context menu via store.identityEditorProject (mirrors ProjectEnvModal). */
 export function ProjectIdentityModal(): JSX.Element | null {
+    const close = useStore((s) => s.setIdentityEditorProject)
+    return (
+        <ModalBoundary
+            title="The project identity window hit an error"
+            description="Nothing was saved: this project's emoji and colour are exactly as they were. Your sessions are still running."
+            onClose={() => close(null)}
+        >
+            <ProjectIdentityBody />
+        </ModalBoundary>
+    )
+}
+
+function ProjectIdentityBody(): JSX.Element | null {
     const projectId = useStore((s) => s.identityEditorProject)
     const project = useStore((s) => s.projects.find((p) => p.id === projectId))
     const setMeta = useStore((s) => s.setProjectMeta)

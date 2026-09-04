@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 import { DECK_VIEWS } from "./ViewKeys"
 import { shortcutGroups } from "../shortcuts"
+import { ModalBoundary } from "./Modal"
 
 // The list itself lives in ../shortcuts.ts, shared with Settings -> Shortcuts so
 // the two references cannot drift apart again. The view-switch row is derived
@@ -8,6 +9,18 @@ import { shortcutGroups } from "../shortcuts"
 const GROUPS = shortcutGroups(DECK_VIEWS.map((v) => v.name))
 
 export function ShortcutsModal({ onClose }: { onClose: () => void }): JSX.Element {
+    return (
+        <ModalBoundary
+            title="The keyboard shortcuts window hit an error"
+            description="This window is a reference only, so nothing changed. Your terminals and agent sessions are still running."
+            onClose={onClose}
+        >
+            <ShortcutsBody onClose={onClose} />
+        </ModalBoundary>
+    )
+}
+
+function ShortcutsBody({ onClose }: { onClose: () => void }): JSX.Element {
     useEffect(() => {
         const h = (e: KeyboardEvent): void => {
             if (e.key === "Escape") onClose()

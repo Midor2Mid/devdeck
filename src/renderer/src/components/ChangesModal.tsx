@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { useStore } from "../store"
 import { useSettings, aiModeAgents } from "../settings"
-import { Modal } from "./Modal"
+import { Modal, ModalBoundary } from "./Modal"
 import { ipcMessage } from "../../../shared/ipcError"
 import type { ChangeFile } from "../../../preload/index"
 
@@ -33,6 +33,19 @@ function DiffView({ patch }: { patch: string }): JSX.Element {
 }
 
 export function ChangesModal(): JSX.Element | null {
+    const close = useStore((s) => s.closeChanges)
+    return (
+        <ModalBoundary
+            title="The changes window hit an error"
+            description="Nothing was staged, committed, discarded or pushed. Your terminals and agent sessions are still running, and the view behind this window still works."
+            onClose={() => close()}
+        >
+            <ChangesBody />
+        </ModalBoundary>
+    )
+}
+
+function ChangesBody(): JSX.Element | null {
     const target = useStore((s) => s.changesTarget)
     const close = useStore((s) => s.closeChanges)
     const aiOnDiff = useStore((s) => s.aiOnDiff)

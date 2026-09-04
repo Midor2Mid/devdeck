@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useStore } from "../store"
 import { useSettings, type SavedCommand } from "../settings"
-import { Modal } from "./Modal"
+import { Modal, ModalBoundary } from "./Modal"
 
 /**
  * Per-project saved commands: arbitrary shell one-liners (e.g. `docker compose
@@ -9,6 +9,19 @@ import { Modal } from "./Modal"
  * from package.json scripts (auto-detected) and prompt snippets (agent text).
  */
 export function CommandsModal(): JSX.Element {
+    const close = useStore((s) => s.setCommandsEditorProject)
+    return (
+        <ModalBoundary
+            title="The saved-commands editor hit an error"
+            description="Nothing was written: this project's saved commands are exactly as they were. Your sessions are still running."
+            onClose={() => close(null)}
+        >
+            <CommandsBody />
+        </ModalBoundary>
+    )
+}
+
+function CommandsBody(): JSX.Element {
     const projectId = useStore((s) => s.commandsEditorProject)!
     const close = useStore((s) => s.setCommandsEditorProject)
     const project = useStore((s) => s.projects.find((p) => p.id === projectId))

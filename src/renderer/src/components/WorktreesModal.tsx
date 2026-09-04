@@ -1,15 +1,33 @@
 import { useEffect, useState } from "react"
 import { useStore, SHELL } from "../store"
 import { useSettings } from "../settings"
-import { Modal } from "./Modal"
+import { Modal, ModalBoundary } from "./Modal"
 import type { Worktree } from "../../../preload/index"
 
 /**
  * Manage git worktrees for the active project. Spin up an agent (or shell) in a
  * fresh worktree so parallel sessions on one repo don't collide, review a
  * worktree's changes, or remove it when done.
+ *
+ * The body is private and the export is its boundary — see ModalBoundary for
+ * why the wrapper has to be a separate component. This window is the one a
+ * reviewer produced a whole-window whitescreen from on purpose, by removing the
+ * project it renders while it was open.
  */
 export function WorktreesModal(): JSX.Element {
+    const close = useStore((s) => s.setWorktreesOpen)
+    return (
+        <ModalBoundary
+            title="The Worktrees window hit an error"
+            description="No worktree was created or removed, your terminals and agent sessions are still running, and every view behind this window still works."
+            onClose={() => close(false)}
+        >
+            <WorktreesBody />
+        </ModalBoundary>
+    )
+}
+
+function WorktreesBody(): JSX.Element {
     const close = useStore((s) => s.setWorktreesOpen)
     const project = useStore((s) => s.activeProject())
     const newAgentInWorktree = useStore((s) => s.newAgentInWorktree)

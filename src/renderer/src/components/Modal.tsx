@@ -1,4 +1,53 @@
 import { useEffect, useRef } from "react"
+import { RegionBoundary } from "./RegionBoundary"
+
+/**
+ * The boundary a modal wraps ITSELF in.
+ *
+ * A React boundary only catches throws from its DESCENDANTS, so one placed
+ * inside a modal's own `return` cannot catch that modal's own render — which is
+ * where these crashes actually are (WorktreesModal reads `project.name` off a
+ * project that can go away under it, and that throw blanked the whole window).
+ * Each modal therefore exports a thin wrapper that renders this, and keeps its
+ * real body in a private component alongside. That makes the boundary the
+ * body's parent without needing an edit at every App.tsx call site.
+ *
+ * `overlay` and a Close action are not options here: a crashed modal has taken
+ * its own Escape handler and its own close button down with it, so the card has
+ * to be the way out or the only escape left is the whole-app reload this
+ * boundary exists to avoid.
+ *
+ * No `resetKey`. Every one of these overlays is mounted inside its own
+ * conditional in `App`, so closing the crashed window unmounts the boundary
+ * with it and reopening starts clean — which is the honest retry. A resetKey
+ * that cleared on any App re-render is the bug RegionBoundary documents.
+ */
+export function ModalBoundary({
+    title,
+    description,
+    onClose,
+    closeLabel = "Close",
+    children
+}: {
+    /** What broke, named the way the user names the window. */
+    title: string
+    /** What is still true. This copy is read while trusting it, so it must be. */
+    description: string
+    onClose: () => void
+    closeLabel?: string
+    children: React.ReactNode
+}): JSX.Element {
+    return (
+        <RegionBoundary
+            overlay
+            title={title}
+            description={description}
+            actions={<button onClick={onClose}>{closeLabel}</button>}
+        >
+            {children}
+        </RegionBoundary>
+    )
+}
 
 /** Shared modal shell: backdrop-close, Escape-close, role=dialog + aria-modal,
  *  autofocus + focus trap, focus restore on unmount. Replaces the hand-rolled

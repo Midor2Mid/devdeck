@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore } from "../store"
+import { ModalBoundary } from "./Modal"
 import type { SearchHit } from "../../../preload/index"
 
 /**
@@ -7,6 +8,19 @@ import type { SearchHit } from "../../../preload/index"
  * Enter/click to open the file at its line in the editor. Opened with Ctrl+Shift+F.
  */
 export function SearchModal(): JSX.Element {
+    const close = useStore((s) => s.setSearchOpen)
+    return (
+        <ModalBoundary
+            title="Search hit an error"
+            description="No file was opened and nothing was changed. Your terminals and agent sessions are still running, and the view behind this window still works."
+            onClose={() => close(false)}
+        >
+            <SearchBody />
+        </ModalBoundary>
+    )
+}
+
+function SearchBody(): JSX.Element {
     const close = useStore((s) => s.setSearchOpen)
     const openInEditor = useStore((s) => s.openInEditor)
 

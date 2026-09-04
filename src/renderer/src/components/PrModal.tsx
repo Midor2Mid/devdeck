@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import { Icon } from "./Icon"
-import { Modal } from "./Modal"
+import { Modal, ModalBoundary } from "./Modal"
 import type { RemoteInfo } from "../../../preload/index"
 
 /**
@@ -11,6 +11,19 @@ import type { RemoteInfo } from "../../../preload/index"
  * the ticket → branch → review → PR loop.
  */
 export function PrModal(): JSX.Element | null {
+    const close = useStore((s) => s.closePr)
+    return (
+        <ModalBoundary
+            title="The pull-request window hit an error"
+            description="No branch was pushed and no pull request was opened. Your sessions are still running, and nothing in the repository changed."
+            onClose={() => close()}
+        >
+            <PrBody />
+        </ModalBoundary>
+    )
+}
+
+function PrBody(): JSX.Element | null {
     const target = useStore((s) => s.prTarget)
     const close = useStore((s) => s.closePr)
     const aiOnDiff = useStore((s) => s.aiOnDiff)

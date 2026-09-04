@@ -1,8 +1,21 @@
 import { useEffect, useState } from "react"
 import { useSettings } from "../settings"
 import { parseImport, type ImportResult } from "../importers"
+import { ModalBoundary } from "./Modal"
 
 export function ImportModal({ onClose }: { onClose: () => void }): JSX.Element {
+    return (
+        <ModalBoundary
+            title="The import window hit an error"
+            description="Nothing was imported: your collections are exactly as they were."
+            onClose={onClose}
+        >
+            <ImportBody onClose={onClose} />
+        </ModalBoundary>
+    )
+}
+
+function ImportBody({ onClose }: { onClose: () => void }): JSX.Element {
     useEffect(() => {
         const h = (e: KeyboardEvent): void => {
             if (e.key === "Escape") onClose()

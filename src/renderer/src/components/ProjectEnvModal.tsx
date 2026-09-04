@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
 import { KeyValueEditor, type KvRow, emptyRow, rowsFromPairs } from "./KeyValueEditor"
-import { Modal } from "./Modal"
+import { Modal, ModalBoundary } from "./Modal"
 
 /**
  * Per-project environment variables, injected into every terminal / agent
@@ -9,6 +9,19 @@ import { Modal } from "./Modal"
  * process (DPAPI) - the plaintext only lives here while this editor is open.
  */
 export function ProjectEnvModal(): JSX.Element {
+    const close = useStore((s) => s.setEnvEditorProject)
+    return (
+        <ModalBoundary
+            title="The project environment editor hit an error"
+            description="Nothing was saved: this project's environment variables are exactly as they were. Your sessions are still running."
+            onClose={() => close(null)}
+        >
+            <ProjectEnvBody />
+        </ModalBoundary>
+    )
+}
+
+function ProjectEnvBody(): JSX.Element {
     const projectId = useStore((s) => s.envEditorProject)!
     const close = useStore((s) => s.setEnvEditorProject)
     const project = useStore((s) => s.projects.find((p) => p.id === projectId))

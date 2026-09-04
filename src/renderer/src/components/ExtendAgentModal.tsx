@@ -1,11 +1,24 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { Modal } from "./Modal"
+import { Modal, ModalBoundary } from "./Modal"
 import type { CatalogEntry, DiscoveredItem, InstalledItem, ItemKind, ExtendScope } from "../../../preload/index"
 
 type Tab = "skill" | "agent"
 
 export function ExtendAgentModal(): JSX.Element {
+    const close = useStore((s) => s.setExtendOpen)
+    return (
+        <ModalBoundary
+            title="The skills & agents window hit an error"
+            description="Nothing was installed or removed. Your terminals and agent sessions are still running, and the view behind this window still works."
+            onClose={() => close(false)}
+        >
+            <ExtendAgentBody />
+        </ModalBoundary>
+    )
+}
+
+function ExtendAgentBody(): JSX.Element {
     const close = useStore((s) => s.setExtendOpen)
     const project = useStore((s) => s.activeProject())
     const projectPath = project?.path ?? ""
