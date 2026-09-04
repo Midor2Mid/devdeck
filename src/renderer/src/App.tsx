@@ -13,7 +13,6 @@ import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
 import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
-import { NetworkPanel } from "./components/NetworkPanel"
 import { NoProjects } from "./components/NoProjects"
 import { paneAtIndex, pickInDirection, type PaneDir, type PaneRect } from "./paneNav"
 import { DECK_VIEWS } from "./components/ViewKeys"
@@ -145,12 +144,6 @@ export function App(): JSX.Element {
     // React state on this path: it fires per status flip and the tiles read it
     // synchronously on their own 1s tick.
     useEffect(() => window.api.decisions.onChanged(setDecisions), [])
-
-    // Tell the capture proxy which project is active, so it can tag traffic.
-    const activeId = useStore((s) => s.activeId)
-    useEffect(() => {
-        window.api.proxy.setProject(activeId)
-    }, [activeId])
 
     useEffect(() => {
         return window.api.mobile.onNew(({ projectId }) =>
@@ -434,15 +427,6 @@ export function App(): JSX.Element {
                                 resetKey={view}
                             >
                                 <BrowserPanel />
-                            </RegionBoundary>
-                        </div>
-                        <div className="panel" style={{ display: view === "network" ? "flex" : "none" }}>
-                            <RegionBoundary
-                                title="The Network view hit an error"
-                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
-                                resetKey={view}
-                            >
-                                <NetworkPanel />
                             </RegionBoundary>
                         </div>
                             </>

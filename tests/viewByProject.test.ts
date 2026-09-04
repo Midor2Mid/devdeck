@@ -77,13 +77,13 @@ describe("a project remembers its view", () => {
     })
 
     it("keeps the current view when arriving at a project it has never seen", async () => {
-        stubApi({ ok: true, data: { view: "network", viewByProject: { p1: "network" } } })
+        stubApi({ ok: true, data: { view: "browser", viewByProject: { p1: "browser" } } })
         await useStore.getState().init()
 
         // p2 has no remembered place; the stage must not move under the user.
         await useStore.getState().setActiveProject("p2")
 
-        expect(useStore.getState().view).toBe("network")
+        expect(useStore.getState().view).toBe("browser")
     })
 
     it("drops a persisted view this build does not know", async () => {

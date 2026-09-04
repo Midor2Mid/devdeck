@@ -7,11 +7,10 @@ export const DECK_VIEWS: { view: MainView; icon: IconName; name: string; group?:
     { view: "terminal", icon: "terminal", name: "Terminal" },
     // Verification tools: where you check what an agent did. Grouped apart so the
     // deck reads supervision-first, without costing anyone a keystroke — the
-    // order (and so Ctrl+1..8) is unchanged.
+    // order (and so Ctrl+1..7) is unchanged.
     { view: "api", icon: "send", name: "API", group: "verify" },
     { view: "database", icon: "database", name: "Database" },
     { view: "browser", icon: "appWindow", name: "Browser" },
-    { view: "network", icon: "globe", name: "Network" },
     { view: "editor", icon: "code", name: "Editor" }
 ]
 

@@ -56,7 +56,7 @@ import { createRunRecorder } from "./runRecorder"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
-export type MainView = "mission" | "tasks" | "terminal" | "editor" | "api" | "database" | "browser" | "network"
+export type MainView = "mission" | "tasks" | "terminal" | "editor" | "api" | "database" | "browser"
 // working = producing output; waiting = finished a turn, your move (soft);
 // attention = rang the bell / blocked on input, needs you now (loud); idle = quiet.
 export type AgentStatus = "working" | "idle" | "attention" | "waiting"
@@ -406,10 +406,6 @@ interface AppState extends Persisted {
     dragPayload: string | null
     setDragPayload: (text: string | null) => void
 
-    // A request handed from the Network panel to the API client to load (runtime-only).
-    pendingApiRequest: SavedRequest | null
-    setPendingApiRequest: (req: SavedRequest | null) => void
-
     // A file+line handed from cross-project search to the editor to open (runtime-only).
     pendingEditorOpen: { path: string; line?: number } | null
     openInEditor: (projectId: string, path: string, line?: number) => void
@@ -507,8 +503,7 @@ const MAIN_VIEWS: readonly MainView[] = [
     "editor",
     "api",
     "database",
-    "browser",
-    "network"
+    "browser"
 ]
 
 const isMainView = (v: unknown): v is MainView =>
@@ -1139,7 +1134,6 @@ export const useStore = create<AppState>((set, get) => {
         shortcutsOpen: false,
         draggingTabId: null,
         dragPayload: null,
-        pendingApiRequest: null,
         pendingEditorOpen: null,
         agentStatus: {},
         seen: {},
@@ -2738,7 +2732,6 @@ export const useStore = create<AppState>((set, get) => {
 
         setDraggingTabId: (draggingTabId) => set({ draggingTabId }),
         setDragPayload: (dragPayload) => set({ dragPayload }),
-        setPendingApiRequest: (pendingApiRequest) => set({ pendingApiRequest }),
 
         openInEditor: (projectId, path, line) => {
             void get().setActiveProject(projectId)

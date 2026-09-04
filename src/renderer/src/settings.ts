@@ -320,9 +320,6 @@ export interface AppSettings {
         port: number
         token: string
     }
-    network: {
-        port: number
-    }
     /** Upstream corporate proxy, injected into spawned terminals + child processes. */
     proxy: {
         enabled: boolean
@@ -506,9 +503,6 @@ const DEFAULTS: AppSettings = {
         port: 8787,
         token: ""
     },
-    network: {
-        port: 8899
-    },
     proxy: {
         enabled: false,
         url: "",
@@ -569,7 +563,6 @@ interface SettingsState extends AppSettings {
      */
     restartServer: () => Promise<void>
     setMcpServer: (patch: Partial<AppSettings["mcpServer"]>) => void
-    setNetwork: (patch: Partial<AppSettings["network"]>) => void
     setProxy: (patch: Partial<AppSettings["proxy"]>) => void
     setNotifications: (patch: Partial<AppSettings["notifications"]>) => void
     setWorkspacePresets: (presets: WorkspacePreset[]) => void
@@ -630,7 +623,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             console.warn("[settings] save requested before load() completed - dropped")
             return
         }
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId } = get()
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId } = get()
         // Re-attach an unconfirmed legacy token so it survives THIS write too
         // - not just the one migration flush() was supposed to make happen.
         // Any other setting changing (a theme tweak, a new snippet) calls
@@ -638,7 +631,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         // no-token `remote` shape to disk and the legacy value would be gone
         // for good on the next launch, with nothing left to retry.
         const remoteOut = unmigratedLegacyToken ? { ...remote, token: unmigratedLegacyToken } : remote
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote: remoteOut, mcpServer, network, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId })
+        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote: remoteOut, mcpServer, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -841,7 +834,6 @@ export const useSettings = create<SettingsState>((set, get) => {
                         tls: legacyRemote?.tls ?? DEFAULTS.remote.tls
                     },
                     mcpServer: { ...DEFAULTS.mcpServer, ...raw.mcpServer },
-                    network: { ...DEFAULTS.network, ...raw.network },
                     proxy: { ...DEFAULTS.proxy, ...raw.proxy },
                     notifications: { ...DEFAULTS.notifications, ...raw.notifications },
                     workspacePresets: raw.workspacePresets ?? DEFAULTS.workspacePresets,
@@ -990,10 +982,6 @@ export const useSettings = create<SettingsState>((set, get) => {
                 return { mcpServer }
             })
             applyMcpServer()
-            persist()
-        },
-        setNetwork: (patch) => {
-            set((s) => ({ network: { ...s.network, ...patch } }))
             persist()
         },
         setProxy: (patch) => {

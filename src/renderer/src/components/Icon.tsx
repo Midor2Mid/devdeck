@@ -38,7 +38,6 @@ export type IconName =
     | "send"
     | "database"
     | "appWindow"
-    | "globe"
     | "more"
     | "inbox"
     | "chart"
@@ -251,13 +250,6 @@ const P: Record<IconName, JSX.Element> = {
         <>
             <rect x="2" y="4" width="20" height="16" rx="2" />
             <line x1="2" y1="9" x2="22" y2="9" />
-        </>
-    ),
-    globe: (
-        <>
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
         </>
     ),
     more: (

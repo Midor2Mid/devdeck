@@ -28,7 +28,6 @@ import * as mcptools from "./mcptools"
 import * as checks from "./checks"
 import * as skills from "./skills"
 import * as browserNet from "./browserNet"
-import * as proxy from "./proxy"
 import * as aikeys from "./aikeys"
 import * as gitpat from "./gitpat"
 import * as projectenv from "./projectenv"
@@ -881,17 +880,6 @@ function registerIpc(): void {
         return recorder.loadRecording(path)
     })
 
-    // --- Network capture proxy (local HTTP forward proxy) ---
-    proxy.proxyEvents.on("capture", (c) => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("proxy:capture", c)
-    })
-    ipcMain.handle("proxy:start", (_e, port: number) => proxy.start(port))
-    ipcMain.handle("proxy:stop", () => proxy.stop())
-    ipcMain.handle("proxy:status", () => proxy.status())
-    ipcMain.handle("proxy:list", () => proxy.list())
-    ipcMain.handle("proxy:clear", () => proxy.clear())
-    ipcMain.on("proxy:setProject", (_e, id: string | null) => proxy.setProject(id))
-
     // --- Browser network capture (CDP on the webview's webContents) ---
     ipcMain.handle("browser:netAttach", (_e, id: number) => browserNet.attach(id))
     ipcMain.handle("browser:netGet", (_e, id: number) => browserNet.getRecent(id))
@@ -1090,7 +1078,6 @@ function teardown(): void {
     db.closeAll()
     server.stop()
     void mcpserver.stop()
-    proxy.stop()
 }
 
 app.on("before-quit", () => {
