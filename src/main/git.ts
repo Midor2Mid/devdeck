@@ -28,7 +28,7 @@ export interface PullResult {
     error?: string
 }
 
-// `maxBuffer` matches changes.ts and worklog.ts. execFile defaults to 1 MB, and
+// `maxBuffer` matches changes.ts. execFile defaults to 1 MB, and
 // `-uall` prints every untracked path where `-unormal` printed one line per
 // directory - so a project with a large unignored tree could now overflow it,
 // land on the failure path, and wear a permanent "couldn't check" chip.

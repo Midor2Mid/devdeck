@@ -521,9 +521,9 @@ export function ApiPanel(): JSX.Element {
     }
 
     const copyBody = async (): Promise<void> => {
-        // See StandupModal: `navigator.clipboard` is denied in this renderer, so
-        // the try/catch here was catching every copy and the `setCopied` after it
-        // never ran. Nothing was copied and nothing said so. The bridge now
+        // `navigator.clipboard` is denied in this renderer, so the try/catch
+        // here was catching every copy and the `setCopied` after it never ran.
+        // Nothing was copied and nothing said so. The bridge now
         // reports whether the write landed, so the label follows the fact
         // instead of the intent.
         const ok = await window.api.clipboard.writeText(shownRespBody)

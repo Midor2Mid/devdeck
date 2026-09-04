@@ -279,12 +279,6 @@ interface AppState extends Persisted {
     setWorkOpen: (open: boolean) => void
     startWork: (item: WorkItem, opts?: { worktree?: boolean }) => Promise<void>
 
-    // Release board
-
-    // Standup / worklog
-    standupOpen: boolean
-    setStandupOpen: (open: boolean) => void
-
     // Agent pipelines (runtime-only)
     pipelineRun: PipelineRun | null
     /** Transient signal: set by resumePipeline to release a paused checkpoint. */
@@ -1118,7 +1112,6 @@ export const useStore = create<AppState>((set, get) => {
         changesTarget: null,
         prTarget: null,
         workOpen: false,
-        standupOpen: false,
         pipelineRun: null,
         pipelineResume: false,
         switcherOpen: false,
@@ -1723,7 +1716,6 @@ export const useStore = create<AppState>((set, get) => {
         closePr: () => set({ prTarget: null }),
 
         setWorkOpen: (workOpen) => set({ workOpen }),
-        setStandupOpen: (standupOpen) => set({ standupOpen }),
 
         startReview: async (lensIds) => {
             const proj = get().activeProject()

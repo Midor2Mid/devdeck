@@ -18,7 +18,6 @@ export function ToolCluster(): JSX.Element {
         contextMenu(e, [
             { label: "Work", onClick: () => s.setWorkOpen(true) },
             { label: "Activity", onClick: () => s.setActivityOpen(true) },
-            { label: "Standup", onClick: () => s.setStandupOpen(true) },
             { separator: true },
             { label: "Keyboard shortcuts (F1)", onClick: () => s.setShortcutsOpen(true) }
         ])
