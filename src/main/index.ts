@@ -47,6 +47,7 @@ import { loadWindowState, saveWindowState } from "./windowState"
 import * as updater from "./updater"
 import * as diagnostics from "./diagnostics"
 import * as crashSink from "./crashSink"
+import { redact, sanitizeLine } from "./redact"
 import { closePrompt } from "./closePrompt"
 
 let mainWindow: BrowserWindow | null = null
@@ -54,6 +55,165 @@ let mainWindow: BrowserWindow | null = null
 let quitDecided = false
 /** Latched by `teardown()`, so the two paths into it cannot both run it. */
 let tornDown = false
+/**
+ * Latched by the crash backstop, so a second throw cannot start the sequence a
+ * second time. An exception raised *by* the backstop — inside `teardown()`, or
+ * from the modal itself — re-enters this handler, and without the latch that is
+ * a dialog stacked on a dialog and a process that never finishes dying.
+ */
+let backstopFired = false
+
+/** The longest error text the modal will carry. See `crashLine`. */
+const CRASH_LINE_CAP = 300
+
+/**
+ * One redacted line describing a throw, for the modal.
+ *
+ * Redacted for the same reason the record is: this string is on the user's
+ * screen and therefore in whatever screenshot they send on, and an error
+ * message is one of the places a token most often turns up. Capped and
+ * flattened to a single line because a native message box given a 50 KB detail
+ * is one nobody can read or dismiss.
+ */
+function crashLine(err: unknown): string {
+    const e = err as Error | undefined
+    const raw = e?.message ? `${e.name ?? "Error"}: ${e.message}` : String(err)
+    const one = redact(sanitizeLine(raw))
+    return one.length > CRASH_LINE_CAP ? `${one.slice(0, CRASH_LINE_CAP)}...` : one
+}
+
+/**
+ * The backstop behind every main-process guard in this app.
+ *
+ * **It is not a fix and must never be treated as one.** The pty cwd check is
+ * the fix for the crash that motivated this; this exists for the *next*
+ * unanticipated throw, the one nobody wrote a guard for. What it buys is that
+ * the throw becomes evidence a stranger can hand back, instead of Electron's
+ * "A JavaScript error occurred in the main process" — a sentence that names no
+ * cause, offers no action and leaves nothing behind on disk.
+ *
+ * **It quits. That is the decision, and continuing was the alternative.**
+ * An `uncaughtException` has unwound the stack to an arbitrary frame, so every
+ * invariant that was mid-update is left half-updated. In this app that is not
+ * abstract: essentially every store here is `load(); mutate; save()` from this
+ * process, and a throw between the mutate and the save followed by a *later*
+ * successful save writes the half-mutated object over a good file. That is the
+ * workspace-destroying failure this codebase already survived once. A handler
+ * that swallows the throw and carries on also makes the app assert it is
+ * healthy when it does not know that, which is the exact class of false claim
+ * the diagnostics record exists to remove. Quitting is also what Electron's own
+ * default does, so this replaces the *dialog*, not the outcome.
+ *
+ * It quits **through `teardown()`**, not through `process.exit`: the pty trees,
+ * the sqlite handles, the WS server and the sink's unflushed repeat counts all
+ * need the same shutdown a normal quit gets. A crash is the worst moment to
+ * leave a process tree running.
+ *
+ * Nothing here transmits anything. The record goes to `crashes.jsonl` in
+ * userData and to the clipboard when the user asks for it, and nowhere else.
+ */
+function installCrashBackstop(): void {
+    process.on("uncaughtException", (err) => {
+        if (backstopFired) return
+        backstopFired = true
+
+        // The record first, before anything else is given a chance to fail.
+        // `recordMainError` redacts and appends synchronously for a key it has
+        // not seen, so the evidence is already on disk if this process is killed
+        // before the user dismisses the modal — which on this machine is a real
+        // possibility, not a hypothetical (Avast).
+        try {
+            crashSink.recordMainError("uncaughtException", err)
+        } catch {
+            // A sink that cannot write must not be the reason the user gets no
+            // dialog at all. The record is the better outcome; the dialog is the
+            // one the user is actually waiting on.
+        }
+
+        // Before the modal, not after: `teardown()` flushes the sink and stops
+        // the children, and both must happen even if the modal is never
+        // dismissed. `quitDecided` keeps the close prompt from asking "3 agents
+        // are still running" on the way out of a crash.
+        quitDecided = true
+        try {
+            teardown()
+        } catch {
+            // Nothing in teardown is worth blocking the exit for.
+        }
+
+        try {
+            // `showMessageBoxSync` before `app` is ready throws; a throw during
+            // startup is exactly a case this has to survive, so it is checked
+            // rather than assumed.
+            if (app.isReady()) {
+                const options: Electron.MessageBoxSyncOptions = {
+                    type: "error",
+                    title: "DevDeck",
+                    message: "DevDeck hit an error it could not recover from.",
+                    detail: [
+                        crashLine(err),
+                        "",
+                        // The affordance is named because it is the whole point
+                        // of this dialog, and it is named as it exists *after* a
+                        // relaunch: the app is closing, so the button on screen
+                        // right now is not the one to press. The crash is on
+                        // disk, so the record built next session contains it.
+                        'This has been written to DevDeck\'s diagnostics record. Reopen DevDeck, then Settings -> About -> "Copy diagnostics" to put the whole record on your clipboard and paste it to whoever is helping you.',
+                        "",
+                        "Nothing is sent anywhere. The clipboard is the only way this leaves your machine."
+                    ].join("\n"),
+                    buttons: ["Close DevDeck"],
+                    defaultId: 0,
+                    noLink: true
+                }
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    dialog.showMessageBoxSync(mainWindow, options)
+                } else {
+                    dialog.showMessageBoxSync(options)
+                }
+            }
+        } catch {
+            // A modal that cannot be shown must not turn a crash into a hang.
+        }
+
+        // `app.exit` rather than `app.quit`: teardown has already run, and quit
+        // would re-enter the window `close` handler on a process whose state is
+        // by definition undefined.
+        app.exit(1)
+    })
+
+    /**
+     * Rejections are recorded and are **not** fatal, and both halves are
+     * deliberate.
+     *
+     * A rejection did not unwind anything. One async chain produced a value
+     * nobody read; the process's own state is intact, which is the entire basis
+     * on which `uncaughtException` above decides to quit and this one decides
+     * not to. Main is also full of deliberately fire-and-forget work —
+     * `void updater.check()`, the decision refresh, `void mcpserver.stop()` —
+     * and closing DevDeck because an update check could not reach GitHub would
+     * be strictly worse than what ships today.
+     *
+     * **Registering this listener suppresses Node's default**, which since Node
+     * 15 is to re-raise the rejection as an uncaught exception. That is the
+     * behaviour change, stated plainly: an unhandled rejection that would have
+     * taken the app down now lands in the diagnostics record instead, and the
+     * app keeps running. That trade is only defensible because the record makes
+     * the failure visible — a silent catch here would be the lie.
+     */
+    process.on("unhandledRejection", (reason) => {
+        try {
+            crashSink.recordMainError("unhandledRejection", reason)
+        } catch {
+            // Same reasoning as above: the backstop never becomes the crash.
+        }
+    })
+}
+
+// Installed at module scope, before `app.whenReady()`: a throw inside
+// `registerIpc()` or `createWindow()` is precisely the kind this has to catch,
+// and a handler registered inside the ready callback would be too late for it.
+installCrashBackstop()
 
 /**
  * Renderer hardening (per the electron-best-practices security checklist):
