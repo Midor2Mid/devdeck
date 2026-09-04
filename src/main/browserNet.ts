@@ -2,8 +2,9 @@ import { webContents } from "electron"
 
 // Captures network *and* console activity from the embedded <webview> via the
 // Chrome DevTools Protocol (attached in the main process to the webview's
-// webContents). Both buffers feed the Network panel and the MCP tools that let
-// an agent read what the page actually did.
+// webContents). Both buffers feed the Browser panel's `-> Agent` payload and
+// the MCP tools that let an agent read what the page actually did. (They fed the
+// Network view too, until 4a5c936 deleted it - this module is not that proxy.)
 export interface NetEntry {
     method: string
     url: string

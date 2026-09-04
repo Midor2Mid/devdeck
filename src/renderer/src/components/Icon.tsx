@@ -8,7 +8,6 @@ import type { JSX } from "react"
 export type IconName =
     | "terminal"
     | "folder"
-    | "work"
     | "activity"
     | "list"
     | "settings"
@@ -37,13 +36,11 @@ export type IconName =
     | "database"
     | "appWindow"
     | "more"
-    | "inbox"
     | "chart"
     | "bookOpen"
     | "pause"
     | "restart"
     | "download"
-    | "arrowLeft"
     | "close"
 
 const P: Record<IconName, JSX.Element> = {
@@ -54,14 +51,6 @@ const P: Record<IconName, JSX.Element> = {
         </>
     ),
     folder: <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />,
-    work: (
-        <>
-            <rect x="8" y="2" width="8" height="4" rx="1" />
-            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
-            <path d="M9 12h6" />
-            <path d="M9 16h6" />
-        </>
-    ),
     activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />,
     list: (
         <>
@@ -177,12 +166,6 @@ const P: Record<IconName, JSX.Element> = {
             <path d="M5 21h14" />
         </>
     ),
-    arrowLeft: (
-        <>
-            <line x1="19" y1="12" x2="5" y2="12" />
-            <polyline points="12 19 5 12 12 5" />
-        </>
-    ),
     close: (
         <>
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -257,12 +240,6 @@ const P: Record<IconName, JSX.Element> = {
             <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
             <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
             <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
-        </>
-    ),
-    inbox: (
-        <>
-            <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
         </>
     ),
     chart: (

@@ -188,20 +188,11 @@ select:focus {
 .usage-live-agent {
     font-variant-numeric: tabular-nums;
 }
-.sb-left,
-.sb-right {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
 .sb-item {
     display: inline-flex;
     align-items: center;
     gap: 5px;
     white-space: nowrap;
-}
-.sb-project {
-    color: var(--text);
 }
 .sb-changes {
     color: var(--accent-soft);
@@ -1262,12 +1253,6 @@ button .ic,
 .crumb-sep {
     color: var(--faint);
 }
-.crumb-proj {
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 .cmd-pill {
     margin-left: auto;
     display: flex;
@@ -1965,27 +1950,6 @@ button .ic,
     font-size: 12px;
     line-height: 1.5;
 }
-.settings-warn {
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
-    border: 1px solid var(--danger);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-bottom: 16px;
-    font-size: 12px;
-    line-height: 1.6;
-    color: var(--text);
-}
-.agents-head,
-.agent-edit-row {
-    display: grid;
-    grid-template-columns: 1fr 1.1fr 0.9fr 0.7fr 1.2fr 22px;
-    gap: 6px;
-    align-items: center;
-}
-.agent-edit-row .warn-field {
-    border-color: var(--danger);
-    color: var(--danger);
-}
 .agent-warn {
     font-size: 11px;
     line-height: 1.5;
@@ -1995,20 +1959,6 @@ button .ic,
     border-radius: 6px;
     padding: 6px 9px;
     margin: 0 0 8px;
-}
-.agents-head {
-    font-size: 10px;
-    letter-spacing: 1px;
-    color: var(--faint);
-    margin-bottom: 6px;
-}
-.agent-edit-row {
-    margin-bottom: 6px;
-}
-.agent-edit-row input {
-    width: 100%;
-    font-size: 12px;
-    padding: 4px 6px;
 }
 .row-remove {
     border: none;
@@ -2020,7 +1970,7 @@ button .ic,
     background: transparent;
 }
 /* Agent routing rules: an ordered list (enable · kind · pattern · agent ·
-   move · remove), same row shape as .agent-edit-row/.pipe-step above. */
+   move · remove), same row shape as .pipe-step above. */
 .rule-list {
     margin: 4px 0 10px;
 }
@@ -3480,16 +3430,6 @@ button .ic,
 }
 .status.error {
     color: var(--danger);
-}
-.resp-body {
-    margin: 0;
-    padding: 14px;
-    overflow: auto;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
 }
 .resp-error {
     padding: 14px;
@@ -6456,12 +6396,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     color: var(--muted);
     border-color: var(--border-soft);
     background: transparent;
-}
-/* Buttons that pair a line-icon with a short text label. */
-.has-ico {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
 }
 .topbar-proj-btn {
     display: flex;
