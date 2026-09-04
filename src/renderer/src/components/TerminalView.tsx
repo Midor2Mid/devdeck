@@ -437,7 +437,7 @@ export function TerminalView(): JSX.Element {
                                 ref={launchCaretRef}
                                 className="term-launch-caret"
                                 aria-label={`${primaryAgent.name} launch options`}
-                                data-tip="Launch options — worktree"
+                                data-tip="Launch options — start in a new git worktree"
                                 onClick={() => setLaunchOptsOpen((v) => !v)}
                             >
                                 <Icon name="chevronDown" size={11} />
@@ -532,13 +532,20 @@ export function TerminalView(): JSX.Element {
                                                     type="button"
                                                     role="menuitem"
                                                     className="agent-menu-resume"
+                                                    // Icon-only, so it needs a
+                                                    // name of its own: a
+                                                    // data-tip does not exist
+                                                    // for a screen reader or
+                                                    // for a keyboard walk of
+                                                    // this menu.
+                                                    aria-label={`Resume ${a.name}`}
                                                     data-tip={`Resume (${a.command} ${a.resumeArgs})`}
                                                     onClick={() => {
                                                         newTab(a.id, `${a.command} ${a.resumeArgs}`)
                                                         setMenuOpen(false)
                                                     }}
                                                 >
-                                                    <span className="term-launch-glyph">↻</span>
+                                                    <Icon name="restart" size={12} />
                                                 </button>
                                             )}
                                         </div>
