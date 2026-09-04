@@ -40,7 +40,7 @@ more is a way of not asking for the authorisation.
 | 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run without meeting SmartScreen; ends the Avast dependency in the release path | **blocked on 4** |
 | 7 | Verify the approve/deny card on a **physical phone** — and in the same sitting the four things CDP cannot observe (the native folder dialog, and `addProjectByPath` failing silently on a bad path; `F1`/`Ctrl+K` via real keys; the "none found on your PATH" state; the crash card), plus a look at the phone client's own palette | `qa` (a human at the keyboard) | Step 9's first impression. The most distinctive thing in the product has **never rendered on real hardware**, and 0.11.0/0.11.1 exist as tags precisely because it was never published | **not started — needs a human, and blocked on nothing else.** Moved ahead of 4 in wall-clock order 2026-09-04: it is the only remaining step needing neither the remote nor an authorisation, and it can start today against the signed build already in `release/` |
 | 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9 | **done** — both halves ruled *met, with conditions* 2026-09-03, shipped in 0.12.0. Its outstanding condition, `PRODUCT.md`'s validation rewrite, was closed by row **I** on 2026-09-04 (`aa50500`) |
-| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | **not started — needs a human.** Needs 4 and 6 for an installer a stranger will run, and 7 so the phone card is not the first impression that breaks |
+| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | **not started — needs a human. Nobody has been contacted.** Materials drafted 2026-09-04: `docs/beta/` (archetypes, recruiting message, install-watch protocol, session template, criteria, shell-mismatch watch); destination `NOTES.md` → "Beta — external users (step 9)", deliberately empty. Three blockers, none of them code: **a build from current `main`** (`release/` holds 0.12.0, which predates every fix in row I including the freeze), **a delivery path** (repo private, newest published release `v0.10.0`, so README's "download from Releases" is a dead end for an outsider), and **one reply address** (no issues on a private repo; diagnostics is clipboard-only by design, so a stranger's failure reaches the author only if they are asked to paste it). `field` dissents on the dependency: hand-delivering a verified build with SHA-256s to 5–10 *named* people needs neither 4 nor 6, and whether SmartScreen actually stops them is a pre-registered prediction (kill criterion K4) — i.e. the way to find out if the certificate is urgent instead of assuming it. 7 still gates the phone card being demoed at all. |
 
 ### The order, in wall-clock terms
 
@@ -190,18 +190,21 @@ Four audits produced findings the 25-task plan deferred with triggers. **No
 trigger moved** — every one of them waits on a recorded first session, which is
 step 9. Three things did change:
 
-- **BEFORE the 0.13.0 cut — the labelled deck has never been measured at the
-  app's own minimum window width.** The spec ordered `minWidth: 900 → 1040` "in
-  the same commit as the labels", justified on three measurements: Bauhaus 978px,
-  CRT 916px, Flat 935px. **Phase 1 deleted all three of those skins**, and
-  `src/main/index.ts:292` is still `minWidth: 900`. So the justification
-  evaporated and the change correctly did not ship — but **the six surviving
-  skins (sumi/washi/slate × wabi/modern) have never been measured with labels
-  on.** If any exceeds 900px, the labels clip or wrap at the smallest window the
-  app permits, on the one control the whole overhaul was about, and nobody would
-  notice on a wide monitor. One `run-app` pass: window to 900px, screenshot the
-  deck in all six skins. `qa` / `design-reviewer`. Cheap, and it can invalidate
-  the headline change.
+- ~~**BEFORE the 0.13.0 cut — measure the labelled deck at `minWidth`.**~~
+  **CLOSED, and it was already done** — corrected 2026-09-04 after this row was
+  written. The spec ordered `minWidth: 900 → 1040` justified on Bauhaus 978px,
+  CRT 916px and Flat 935px; Phase 1 deleted all three, so the change correctly
+  did not ship. But the six survivors were **not** left unmeasured: `d82d9cc`
+  re-measured them in the running app and records the numbers in its own commit
+  message — the labelled key row is **590.45px, identical in all six skins**
+  (Chromium's UA stylesheet resets `letter-spacing` on `button`, so Modern Pro's
+  tracking never reaches a deck key), and row + tools + bar chrome is 782.45px
+  against the ~886px of CSS width a 900px window actually gives the page. Twelve
+  measurements — each skin at 900px and at 1386px — no key clipped, no bar,
+  topbar or document overflow. `minWidth: 900` stands **on evidence**, not by
+  omission. What 900 does cost is the status region, which is why the collapse
+  drops the verify group's labels first. Kept here rather than deleted, because
+  a plan that quietly loses a closed item is how the same work gets ordered twice.
 - **BEFORE the 0.13.0 cut — re-run `qa`'s D6.** Double-clicking `+ Claude`
   launched two agents. The spawning state shipped, which gives feedback but does
   not debounce. These are paid CLIs: if it still reproduces, one stray
