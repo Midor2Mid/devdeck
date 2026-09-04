@@ -558,10 +558,21 @@ function registerIpc(): void {
             const key = aikeys.getKey(opts.agentId)
             if (key) env[opts.keyEnv] = key
         }
+        // Whether this id already had output BEFORE the create decides if the
+        // replay below is a re-attach or an echo. A spawn that fails writes its
+        // corpse notice during `createPty` and emits it live on the shared `data`
+        // event - to every window and every remote client - so replaying the
+        // buffer afterwards printed the notice a SECOND time, beneath the
+        // "[process exited: 1]" line that came between them. Only a session that
+        // existed before this call has a screen worth re-sending.
+        const prior = ptyMgr.getBuffer(opts.id)
         ptyMgr.createPty({ ...opts, env })
         // Replay the buffer to the requesting window (per-client re-attach).
+        // Read AFTER the create, because a restart over a corpse clears it and
+        // must not re-print the dead process's screen over the live one.
         const buf = ptyMgr.getBuffer(opts.id)
-        if (buf && !e.sender.isDestroyed()) e.sender.send("pty:data", { id: opts.id, data: buf })
+        if (buf && prior && !e.sender.isDestroyed())
+            e.sender.send("pty:data", { id: opts.id, data: buf })
     })
     // --- Pipeline file-triggers ---
     triggers.onTriggerFired((triggerId) => {
