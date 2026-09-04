@@ -11,88 +11,273 @@ The vision is all-in-one. The build is sequenced into milestones so there's a us
 ## Next — the path to 5–10 real users
 
 **Everything below Milestone 1 is history.** This section is the only live plan;
-read it first. Ordered by `product-director` on 2026-09-03 against the standing
-decision recorded in the Decisions log: the ambition is **a product with users**,
-and the next milestone is **5–10 real external users** — not a public launch and
-not revenue.
+read it first. Ordered by `product-director` on 2026-09-03 and **re-ordered
+2026-09-04**, against the standing decision in the Decisions log: the ambition is
+**a product with users**, and the next milestone is **5–10 real external users** —
+not a public launch and not revenue.
 
 The one test every item passes: *does this get a stranger closer to running
 DevDeck and saying something back?* Work that does not is **not yet**, however
-good it is. Nobody outside the author's machine has ever opened this app, so
-there is no external evidence about anything yet, and that is the gap the
-milestone closes.
+good it is.
+
+**What changed on 2026-09-04, and it is the important sentence in this file: the
+milestone is no longer blocked on engineering.** A mid-milestone interrupt
+(row **I**) deleted six surfaces, 78 skins and the crash that bricked the app,
+and labelled the path a stranger walks. What remains is **two human acts** — one
+authorisation from the owner (step 4) and one person at a keyboard holding a
+phone (step 7) — plus the work that hangs off them. No agent can move either.
+Writing more code will not make this milestone move, and any proposal to write
+more is a way of not asking for the authorisation.
 
 | # | Step | Owner | Unblocks | State |
 |---|---|---|---|---|
 | 1 | `LICENSE` (MIT) + a provenance audit of every vendored file | `release-eng` / `technical-director` | The SignPath application, which cannot be filed without it | **done** 2026-09-02 |
-| 2 | Scrub the tracked tree and its history of employer and client identifiers | `docs-writer` / `technical-director` | The public flip. **The irreversible step** — publishing a client's project names cannot be undone | **done** 2026-09-02 |
+| 2 | Scrub the tracked tree and its history of employer and client identifiers | `docs-writer` / `technical-director` | The public flip. **The irreversible step** | **done** 2026-09-02 — and it is *why* step 4 is a deletion. Verified 2026-09-04: local history is clean (`git log --all -- .claude/skills/apple-design/` is empty; every remaining identifier lives in `.superpowers/`, `.remember/` and `.claude/settings.local.json`, all gitignored). But `origin/main` is an ancestor of `HEAD`, so the pre-strip objects were force-pushed over and **remain on the remote, retrievable by SHA**. They are harmless while the repo is private and unforked; they become permanent the instant it flips |
 | 3 | Rewrite the competitor kill-lists in a register that survives publication | `docs-writer` / `product-director` | The public flip | **done** 2026-09-02 |
-| 4 | Delete + recreate the remote, push clean history, then flip public and file with SignPath Foundation | `release-eng` | A certificate that clears SmartScreen; the release feed; the updater | needs 1–3 and 5 in draft |
-| 5 | A one-page homepage: SignPath attribution, the code-signing policy, **Windows-only**, **single maintainer, PRs by invitation** | `marketing` / `docs-writer` | Step 4 — the application requires the attribution line and a published policy | **drafted** 2026-09-03 — `site/index.html`, self-contained, no build step. Carries a real screenshot (Terminal view, driven live via `run-app`, not a mockup). The SignPath attribution line is **not asserted** — the certificate isn't granted, so `#code-signing` holds a marked, empty slot for it plus the team-roles and privacy statements SignPath's terms require now. Not yet deployed (no Pages URL exists before step 6) and not yet linked from anywhere public. |
-| 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run; ends the Avast dependency in the release path | needs 4 |
-| 7 | Verify the approve/deny card on a **physical phone** | `qa` | The most distinctive thing in the product, and the worst first impression if it is broken. It has never rendered on real hardware | |
-| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9. `PRODUCT.md`'s validation section is rewritten **here**, when there is a true sentence to replace the false one with | **done** — both halves ruled *met, with conditions* 2026-09-03 |
-| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | |
+| **I** | **Interrupt — the UI/UX overhaul.** Not one of steps 1–9. It arrived mid-milestone as a user request to "enhance massively the UI/UX"; `product-director` ruled *against* an overhaul and prescribed **deletions plus a small number of proven fixes**, and that is what shipped, in full: the folder-moved crash fixed at three levels; Network view + capture proxy, ReleaseBoard, StandupModal, DotnetPanel, terminal recording and Canvas all deleted; Mission's ports wall collapsed; **84 skins → 6**; 8 view keys → 7; every deck key labelled; disabled keys made readable; an application menu with `Ctrl+O` and a **visible** menu bar; one verb (`Open folder…`); drag-and-drop that animated but never worked, fixed; a three-state folder probe so a moved folder is attributed instead of misreported by three separate features; 10 modals behind boundaries; `Claude YOLO` → `Claude (no permission prompts)` with a `SKIPS PROMPTS` marker; the worktree default off; a spawning state. Spec `docs/superpowers/specs/2026-09-04-ui-ux-overhaul-design.md`, plan `docs/superpowers/plans/2026-09-04-ui-ux-overhaul.md`, four audits in `docs/superpowers/brainstorm/2026-09-04-ui-ux/` | `pm` → `frontend-dev` / `backend-dev` → `qa` / `design-reviewer` | The half of step 8 that step 8 did not do, `PRODUCT.md`'s validation rewrite, and roughly every later UI change (six skins to verify instead of 84) | **done** 2026-09-04 — 37 commits, tests 1,536 → **1,610** (128 files), typecheck zero, tree clean. **Unpublished.** See *The 0.13.0 ruling* |
+| 4 | **Delete + recreate the remote** (same owner and name), push clean history, flip public, file with SignPath Foundation | `release-eng` | Everything that is left. A certificate that clears SmartScreen; the release feed; the updater; step 5's deploy; step 6; the installer step 9 hands a stranger | **NOT STARTED — blocked on the owner's authorisation.** Not on 1–3, which are done, and not on 5, which is drafted. It is one irreversible act nobody but the owner may authorise. Priced in *What step 4 costs* |
+| 5 | A one-page homepage: SignPath attribution, the code-signing policy, **Windows-only**, **single maintainer, PRs by invitation** | `marketing` / `docs-writer` | Step 4 — the application requires the attribution line and a published policy | **drafted and content-complete** 2026-09-03 — `site/index.html`, self-contained, no build step, carries a real `run-app` screenshot rather than a mockup. The SignPath attribution line is **not asserted** (the certificate isn't granted); `#code-signing` holds a marked, empty slot for it plus the team-roles and privacy statements SignPath's terms require now. **Undeployed:** Pages needs the public flip, i.e. **step 4** — *not* step 6, as this row wrongly said until 2026-09-04. Deploying it is the first thing that happens after 4 |
+| 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run without meeting SmartScreen; ends the Avast dependency in the release path | **blocked on 4** |
+| 7 | Verify the approve/deny card on a **physical phone** — and in the same sitting the four things CDP cannot observe (the native folder dialog, and `addProjectByPath` failing silently on a bad path; `F1`/`Ctrl+K` via real keys; the "none found on your PATH" state; the crash card), plus a look at the phone client's own palette | `qa` (a human at the keyboard) | Step 9's first impression. The most distinctive thing in the product has **never rendered on real hardware**, and 0.11.0/0.11.1 exist as tags precisely because it was never published | **not started — needs a human, and blocked on nothing else.** Moved ahead of 4 in wall-clock order 2026-09-04: it is the only remaining step needing neither the remote nor an authorisation, and it can start today against the signed build already in `release/` |
+| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9 | **done** — both halves ruled *met, with conditions* 2026-09-03, shipped in 0.12.0. Its outstanding condition, `PRODUCT.md`'s validation rewrite, was closed by row **I** on 2026-09-04 (`aa50500`) |
+| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | **not started — needs a human.** Needs 4 and 6 for an installer a stranger will run, and 7 so the phone card is not the first impression that breaks |
 
-### The two builds behind step 8
+### The order, in wall-clock terms
 
-Both came out of the 2026-09-02 competitor triage, whose verdict was that **no
-competitor feature should be built next**. These are DevDeck's own gaps.
+The table is numbered as it was ordered. This is the sequence to execute.
 
-- **A three-state agent-CLI presence probe** (~1.5 days). The app stops offering
-  to run things that do not exist. `found | missing | unknown`, resolved against
-  the **hydrated login-shell PATH** — main's `process.env.PATH` is not the pane's,
-  because panes spawn PowerShell with the user's profile, so resolving against
-  main's PATH would report `missing` for an agent the terminal runs perfectly.
-  Resolution is an `fs.stat` walk with `PATHEXT`, never a spawned `where`/`which`
-  per probe (privilege-management software gates each spawn). Hydration failure
-  answers `unknown`. Today `pty.ts` types the agent command into a live shell, so
-  a missing `claude` yields a shell error inside a pane already registered as an
-  agent session and rendered as `waiting` — **the app says an agent is running
-  when no agent ever started.**
-- **A failure a stranger can hand you** (~2 days). One capped, deduped,
-  **redacted** record in the existing user-data directory, plus a *Copy
-  diagnostics* affordance on the crash card and in Settings → About. Nothing is
-  transmitted: no endpoint, no telemetry, no log upload. Today there is no log
-  file anywhere — `app.getPath("logs")` is never called — and eleven error
-  boundaries report to a `console.error` that is unreachable in a packaged app.
-  The redactor ships in the same commit as the button, because a copy button
-  without one hands a stranger a footgun.
+1. **Cut 0.13.0 locally** — version bump, a `CHANGELOG.md` entry rolling up
+   0.11.0 / 0.11.1 / 0.12.0 / 0.13.0, tag, `npm run package:signed`.
+   `release-eng` + `marketing`. **Unblocks:** step 7 has something to test, and
+   the beta has a version number. **Do not publish it** — see the ruling below.
+2. **Step 7's human sitting** — the phone card on real hardware, the four
+   CDP-blind observations, the phone-client palette look. `qa`. **Unblocks:** the
+   beta's first impression. It needs nothing from anyone else, so it must not
+   wait behind an authorisation.
+3. **Ask for step 4's authorisation, with the price attached.** Priced below; the
+   owner rules. **Unblocks:** everything remaining.
+4. **Step 4, in one sitting:** harvest (below) → delete → recreate as
+   `Midor2Mid/devdeck` → push clean history and tags → flip public → file with
+   SignPath. `release-eng`. The delete and the flip are the **same** sitting: a
+   flip before the delete publishes the identifiers, and "we deleted it
+   afterwards" is not a fact about what was published.
+5. **Deploy `site/index.html` to Pages** and link it from the README.
+   `marketing`.
+6. **Step 6** — CI plus SignPath in the release path. `release-eng`.
+7. **Publish 0.13.0** as the new remote's first release: Setup + Portable +
+   **blockmap + `latest.yml`**, because `electron-updater` reads that manifest and
+   a beta you cannot update is a beta you cannot fix.
+8. **Step 9** — recruit, one at a time. `field`.
 
-### Tracked follow-ups from the step-8 rulings
+**Left off this list on purpose:** every feature; every residual in *Added on
+2026-09-04* except the three rows marked *before the cut*; and any further UI work
+at all. The milestone has enough product and no distribution.
 
-Filed here rather than left as code comments, per `po`'s standard that a
-disclosed and tracked gap is a backlog item while an undisclosed one is a lie.
+### The 0.13.0 ruling (2026-09-04)
 
-- **Seventeen overlays still have no error boundary**, so a throw in any of them
-  blanks the whole window. `ExtendAgentModal`, `SearchModal`, `DotnetPanel`,
-  `ReviewPanel`, `ShortcutsModal`, `ActivityPanel`, `UsagePanel`,
-  `ProjectEnvModal`, `CommandsModal`, `ProjectIdentityModal`, `RecordingsModal`,
-  `WorktreesModal`, `ChangesModal`, `PrModal`, `WorkPanel`, `ReleaseBoard`,
-  `StandupModal` (`App.tsx:499-515`). **`WorktreesModal` is confirmed reachable**
-  — it renders `{project.name}` unguarded, which is how a reviewer produced a
-  root crash on purpose. The three a stranger meets first (Settings, the
-  switcher, the palette) are wrapped. `frontend-dev` / `technical-director`.
+**Cut 0.13.0 now. Publish nothing until step 4 has landed. Then 0.13.0 is the new
+remote's first published release, and it is what a beta user installs.**
+
+The facts it is ruled on:
+
+- The last **published** release is **0.10.0** (2026-08-29). `v0.11.0`, `v0.11.1`
+  and `v0.12.0` are tags only. There are **42 unreleased commits**.
+- **Across 14 published releases and 28 installers, the lifetime download count
+  is 1** — and that one is `latest.yml` on 0.10.0, i.e. an updater poll, almost
+  certainly from this machine. Measured 2026-09-04 with
+  `gh release view <tag> --json assets`. Zero issues, zero stars, repo private.
+
+**Cut it, because a changelog is perishable.** 42 commits and four versions of
+prose have to be written by the people who did the work, while they still
+remember it, and a tag costs nothing. `release/` already holds a signed 0.12.0,
+so the packaging path is known to work; 0.13.0 re-runs it.
+
+**Do not publish it to the current remote, because step 4 deletes that remote.**
+A 0.13.0 release on `Midor2Mid/devdeck` today is a fifteenth release destroyed by
+the very next step, and a `latest.yml` on a feed that stops existing. Publishing
+into a repo you have decided to delete is work that deletes itself.
+
+**Do not publish it anywhere yet, because the only installer that exists is
+signed `CN=DevDeck Dev`.** A stranger who runs it meets SmartScreen — the exact
+wall this milestone exists to remove, and the wall step 6 removes. Spending a
+first impression on a security warning buys "is this safe?" instead of a first
+session, which is the one thing the milestone is trying to buy.
+
+**On the crash fix, which is the strongest argument for shipping and still does
+not carry it.** A project whose folder moved crashed the main process *and*
+persisted the failed tab, so every later launch died before the UI loaded, with
+hand-editing userData as the only recovery. That is as bad as a defect gets. Then
+ask who it protects: nobody has ever downloaded a DevDeck installer. It protects
+**the first stranger**, so its deadline is the beta install, not this week — and
+it will be in that install either way. The crash fix sets the *floor* for what
+may ship. It does not set the date.
+
+**On the phone card, which argues the same direction.** It is unverified on
+hardware (step 7). An unproven distinctive feature is an argument against a wider
+audience and *for* the narrow one this milestone already chose.
+
+**The update path survives the delete**, and this is the thing to check rather
+than assume: `package.json` → `build.publish` names
+`{ provider: github, owner: Midor2Mid, repo: devdeck }`, so recreating under the
+**same owner and name** restores a byte-identical feed URL. `electron-updater` on
+an existing install reads the new `latest.yml` and offers 0.13.0. The only loss is
+differential download — the old blockmaps are gone, so it falls back to a full
+download. Nobody is on an old version, so that costs nothing today, and it must
+stay true tomorrow: **if step 4 ever changes the owner or the repo name, every
+installed DevDeck silently stops updating.**
+
+**0.13.0's notes must roll up four versions** (0.11.0, 0.11.1, 0.12.0, 0.13.0),
+exactly as 0.10.0's notes rolled up 0.9.0 / 0.9.1 / 0.10.0. There is precedent in
+this repo and `marketing` should reuse it. `CHANGELOG.md` is not that text — see
+the harvest item below.
+
+### What step 4 costs, priced (2026-09-04)
+
+The roadmap ordered step 4 without pricing it. Priced: **deleting and recreating
+the remote destroys 14 published releases and their 28 attached installers.**
+
+**Take the trade.** The two sides are not close:
+
+- **Given up:** binaries **no human has ever downloaded** — lifetime total across
+  all 14 releases is 1 download, of a 346-byte manifest. Zero issues, zero stars,
+  no forks. And they are reproducible: every tag from `v0.1.0` to `v0.12.0` is an
+  ancestor of `HEAD`, so any historical version can be checked out and packaged
+  again.
+- **Bought:** not publishing an employer's and a client's identifiers,
+  permanently, at the moment of the flip. GitHub keeps unreachable objects
+  retrievable by SHA, so a force-push leaves the pre-scrub commits on the remote.
+  Only deleting the repository removes them.
+
+**The sequencing matters more than the trade.** Those objects are harmless right
+now — the repo is private and unforked, so exposure is zero. The delete is
+therefore not remediation of a live leak; it is a **precondition of the flip**,
+and it belongs in the same sitting.
+
+**Harvest before the delete — and none of it is an installer:**
+
+1. **The release-note bodies of all 14 published releases.** Verified 2026-09-04
+   that these are **not** in `CHANGELOG.md`: six of eight distinctive paragraphs
+   in 0.10.0's body appear nowhere in this repo, including the install
+   instructions, the SmartScreen warning, and the multi-version rollup framing.
+   ~16 KB across 0.5.0–0.5.9, 0.6.0, 0.7.12, 0.8.0, 0.10.0. It is the **only
+   prior art for how this product has ever described itself to an outsider**, and
+   `marketing` needs it for 0.13.0's notes. One `gh release view --json body`
+   loop. `release-eng` writes it under `docs/release/`; `marketing` uses it.
+2. **The download counts and the publication timeline**, before they cease to
+   exist. This is the only external-engagement data DevDeck has ever generated,
+   and its value is precisely that it is **zero** — that number is evidence for
+   `PRODUCT.md`'s validation section and for every future argument about what
+   distribution is worth. Once the releases are gone, "nobody ever downloaded
+   it" becomes an assertion instead of a measurement.
+3. **Nothing else.** Skip the 0.10.0 binaries (~230 MB): `release/` already holds
+   a signed 0.12.0, which is strictly more useful, and `release/` is gitignored,
+   so it survives every remote operation.
+
+**One gate `release-eng` must run before `git push --tags`**, because the failure
+mode is republishing exactly what the delete removed. Verified safe today — every
+tag is an ancestor of `HEAD`, so no tag reaches a stripped object — but it is one
+command and it must be re-checked at push time, not assumed:
+
+```
+for t in $(git tag); do git merge-base --is-ancestor "$t" HEAD || echo "UNSAFE: $t"; done
+```
+
+It must print nothing.
+
+### Added on 2026-09-04 — what the milestone needs that it did not on 2026-09-03
+
+Four audits produced findings the 25-task plan deferred with triggers. **No
+trigger moved** — every one of them waits on a recorded first session, which is
+step 9. Three things did change:
+
+- **BEFORE the 0.13.0 cut — the labelled deck has never been measured at the
+  app's own minimum window width.** The spec ordered `minWidth: 900 → 1040` "in
+  the same commit as the labels", justified on three measurements: Bauhaus 978px,
+  CRT 916px, Flat 935px. **Phase 1 deleted all three of those skins**, and
+  `src/main/index.ts:292` is still `minWidth: 900`. So the justification
+  evaporated and the change correctly did not ship — but **the six surviving
+  skins (sumi/washi/slate × wabi/modern) have never been measured with labels
+  on.** If any exceeds 900px, the labels clip or wrap at the smallest window the
+  app permits, on the one control the whole overhaul was about, and nobody would
+  notice on a wide monitor. One `run-app` pass: window to 900px, screenshot the
+  deck in all six skins. `qa` / `design-reviewer`. Cheap, and it can invalidate
+  the headline change.
+- **BEFORE the 0.13.0 cut — re-run `qa`'s D6.** Double-clicking `+ Claude`
+  launched two agents. The spawning state shipped, which gives feedback but does
+  not debounce. These are paid CLIs: if it still reproduces, one stray
+  double-click costs a beta user money, and that moves it from cosmetic to a
+  defect. One observation, not a build. `qa`.
+- **ADDED to the pre-beta build — `projects.json` unreadable is still read by
+  zero renderer code.** Verified 2026-09-04: no project-facing renderer code
+  reads `ProjectStore.unreadable`, which main sets diligently. A corrupt or
+  locked `projects.json` therefore presents as *"you have no projects"*, and every
+  project action silently no-ops **forever**, with no explanation anywhere. This
+  is the same defect class the last two releases were spent removing — absent,
+  unknown and zero are three states — it is a first-five-minutes failure with no
+  recovery, and the repo already holds the working precedent
+  (`PersistBlockedBar` handles the `workspace.json` equivalent properly). It
+  survived a 25-task plan because no task owned it. `frontend-dev` /
+  `technical-director`. **This is the only build work being added.**
+
+**Ruled *not yet*, with triggers, so nobody re-opens them:**
+
+- **The seeded preset icons are still `✳ ✦ ⚡ ◆ ◇ ▶ ⚒ ✓`**
+  (`settings.ts:242-258`) — a direct violation of fixed point 7 of the spec that
+  shipped today, by the product's own defaults. It is decoration; the beta will
+  not fail on it, and it is not worth pre-flip verification budget across six
+  skins. **Trigger: the first beta screenshot.**
+- **Path dedupe is exact string equality** (`main/projects.ts`), so `C:\Repos\Foo`
+  and `c:\repos\foo` become two project cards. **Trigger: a beta user does it.**
+- **In Settings → Agents, `on PATH` and `unchecked` still differ only by the
+  word** — verified still open; the string does not appear in `SettingsModal.tsx`,
+  while the launcher carries three channels for the same distinction. Close it by
+  adding a channel or by deciding out loud that one word is enough on a form —
+  not by re-reading the tradeoff. **Not a beta blocker.**
 - **A slot-aware sizing variant for a crashed top bar.** Region cards no longer
-  escape their slots or occlude each other, but on a slot shorter than the card
-  (~44px for the top bar's row) `Copy diagnostics` needs an in-card scroll.
-  `frontend-dev` / `design-reviewer`.
-- **In Settings → Agents, `on PATH` and `unchecked` differ only by the word.**
-  The launcher carries three channels for the same distinction; this surface
-  carries one. Close it by adding a channel or by deciding out loud that one word
-  is enough on a form — not by re-reading the tradeoff.
+  escape their slots, but on a slot shorter than the card (~44px for the top
+  bar's row) `Copy diagnostics` needs an in-card scroll. `frontend-dev` /
+  `design-reviewer`.
 - **The redactor's four known gaps**, to watch in beta reports rather than
   pre-solve: URL- and base64-encoded secrets (decoding arbitrary text would
   false-positive on every hash and cache path in the record); uncovered issuers
   (SendGrid, Slack and Discord webhooks, Google OAuth); `AKIA` followed
-  immediately by an alphanumeric, since dropping the trailing word boundary
-  would widen the rule into base64 runs and commit SHAs; and space-separated
-  flag values (`mysql -p hunter2`), which are genuinely indistinguishable from a
-  positional argument. `field` / `security-engineer`.
+  immediately by an alphanumeric, since dropping the trailing word boundary would
+  widen the rule into base64 runs and commit SHAs; and space-separated flag
+  values (`mysql -p hunter2`), genuinely indistinguishable from a positional
+  argument. `field` / `security-engineer`.
 - **The report rate limit is a fixed window**, so 30 refusals at the end of one
   window plus 30 at the start of the next is 60 in an instant. Promote to a
   sliding window only if a beta report actually shows burst loss; the record
   already declares refusals in its own `Incomplete` block.
+- **Deck geometry, the new-project → new-terminal mechanics, starter-command
+  discoverability, the tasks board / pipelines UI** — all deferred on triggers
+  only step 9 can move (five recorded first sessions; two of the first five
+  hesitate; asked a second time). Re-checked 2026-09-04: none moved.
+- **A guided tour / onboarding modal** — refused, not deferred. The fix for "the
+  app explains itself once" is self-describing empty states, not a modal
+  dismissed in two seconds.
+
+**And one thing the skin cut must not be spent on.** 84 → 6 makes every future UI
+change roughly an order of magnitude cheaper to verify. That saving is the
+*point*, not a budget for a seventh skin. The first proposal to add a theme
+because "we can afford it now" is spending the only thing the cut bought.
+**Refused in advance.**
+
+### Closed 2026-09-04
+
+- **The 17 unguarded overlays** — closed. Four were deleted outright
+  (`DotnetPanel`, `RecordingsModal`, `ReleaseBoard`, `StandupModal`) and the
+  remainder sit behind their own boundary (`8b89409`). `WorktreesModal`, the one
+  confirmed to blank the window, is among them.
+- **`PRODUCT.md`'s false validation claim** — closed (`aa50500`). It now says, in
+  its own words, that no external user has ever run this app.
+- **The `Ctrl+O` menu-bar question**, which the spec insisted be decided
+  explicitly rather than by default — decided: `autoHideMenuBar: false`
+  (`index.ts:301`). The bar is visible, and a visible menu bar is itself a
+  discoverability affordance for a stranger.
+- **The two builds behind step 8** — the three-state agent-CLI presence probe and
+  the diagnostics record both shipped in 0.12.0. See `CHANGELOG.md`.
+- **`Ctrl+1..8` bypassing the disabled view keys** — closed (`App.tsx:219`).
 
 ### Behind those, in order
 
@@ -106,8 +291,10 @@ which turns per-session cost from an attribution into a receipt and makes
 Every feature: cost surfacing, quota, context fill, terminal colour, launch
 templates, the `+Claude` menu. **Trigger: three users installed.** Also off:
 turning `remote.enabled` on (its own trigger stands), macOS and Linux (the 5–10
-are recruited on Windows or not recruited), and a sixth competitor study —
-permanently.
+are recruited on Windows or not recruited), a sixth competitor study —
+permanently — and, added 2026-09-04, **any further UI or motion work before step
+9**. Not one item on the path to ten users is a UI item that is not already named
+in this section.
 
 ---
 
@@ -197,7 +384,18 @@ permanently.
 - CUT: full **native** mobile app. The only thing native buys over the web client is
   plain `ws://` without a secure-context rule. Not worth an app.
 
-## Milestone 4 — Network debugging ✅ (2026-06-28)
+## Milestone 4 — Network debugging ✅ (2026-06-28) — **DELETED 2026-09-04**
+
+> **This milestone no longer exists in the product.** `NetworkPanel.tsx` and
+> `main/proxy.ts` were deleted after 0.12.0 (`4a5c936`): a general-purpose forward
+> proxy for arbitrary client traffic, with no agent edge, costing more to carry
+> than it returned. Two things that share the word survive and are unrelated:
+> `main/browserNet.ts` (CDP capture on the embedded webview, feeds the `→ Agent`
+> payload and the MCP tools) and `main/netproxy.ts` — **Settings → Corporate
+> proxy**, which applies an upstream proxy to every child DevDeck spawns so npm,
+> git and `gh` work behind a corporate firewall. That one was nearly deleted by
+> conflation with this milestone and was deliberately **kept**. Record below is
+> history only.
 
 - [x] Local HTTP proxy to capture requests/responses (`src/main/proxy.ts`) — loopback-only forward proxy, off by default; full HTTP capture with gzip/deflate/br body decode; HTTPS via CONNECT tunneled end-to-end (encrypted, metadata only — no MITM)
 - [x] Request list + inspector (`NetworkPanel.tsx`) — live list (method/status/host/path/time/size); inspector tabs for request/response headers + bodies (JSON pretty-printed)
@@ -254,7 +452,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 
 ## Milestone 10 — themes, polish & perf ✅ (2026-06-27)
 
-- [x] **Theme system** — Sumi (dark, default), Washi (light), Zen (airy dark); picker in Settings → Appearance; applied across UI (CSS vars), terminal (xterm) and editor (Monaco). User chose mockups from generated PNGs first.
+- [x] **Theme system** (Zen deleted 2026-09-04; the surviving set is Sumi/Washi/Slate × Wabi-sabi/Modern Pro — **6 skins, down from 84**, `148154b`) — Sumi (dark), Washi (light), Zen (airy dark); picker in Settings → Appearance; applied across UI (CSS vars), terminal (xterm) and editor (Monaco). User chose mockups from generated PNGs first.
 - [x] Accent customization derives `--accent-soft` as a proper tint (lighter on dark, darker on light)
 - [x] **Perf:** debounced disk persistence (was writing on every composer keystroke / accent drag)
 - [x] Theme-aware scrollbars
@@ -272,7 +470,10 @@ From studying the 1DevTool reference (video + 1devtool.com):
 - [x] **Prompt snippets** — `/name` autocomplete in the composer (user-defined in Settings → Snippets)
 - [x] **Dashboard grid layout** — toggle the terminal area between Tabs and a grid of all the project's terminals at once (persisted)
 
-## Milestone 13 — Canvas layout ✅ (2026-06-27)
+## Milestone 13 — Canvas layout ✅ (2026-06-27) — **DELETED 2026-09-04**
+
+> Deleted (`9eac56a`), with its connectors and persisted positions: a third
+> terminal layout doing what Grid does. Two layouts is a choice; three is a hobby.
 
 - [x] **Canvas** terminal layout — free-form board: drag terminal cards anywhere, pan the surface; positions persisted. Third layout alongside Tabs + Grid.
 
@@ -320,8 +521,8 @@ The reference feature set is fully covered. Remaining ideas are open-ended (term
 From a live-app design review against the wabi-sabi north star:
 - [x] **Ensō brand mark** — a real single-stroke ensō (`Enso.tsx`) for the rail logo + sidebar wordmark, replacing the placeholder "D" and the spinner-like ring
 - [x] **Empty-state ensō watermark** — a faint accent ensō behind empty panels so they read as intentional space; muted/faint text contrast lifted to WCAG AA across themes; Settings modal backdrop now dims + blurs
-- [x] **Terminal toolbar declutter** — grouped into create / layout / pane clusters; secondary tools (record, recordings, worktrees, review changes) moved into a `⋯` overflow; 13 → 10 controls
-- [x] **Lacquer style** — a new opt-in design style (Settings → Appearance → Style): frosted-glass surfaces, gilded gradient accent buttons, soft accent glow on active tabs / rail / ensō, deep layered shadows, plus an animated sheen sweep + breathing ensō glow (honors `prefers-reduced-motion`). Additive — existing styles and the default are unchanged.
+- [x] **Terminal toolbar declutter** — grouped into create / layout / pane clusters; secondary tools (record, recordings — both deleted 2026-09-04, `51383af` — worktrees, review changes) moved into a `⋯` overflow; 13 → 10 controls
+- [x] **Lacquer style** — **deleted 2026-09-04** in the 84 → 6 skin cut — a new opt-in design style (Settings → Appearance → Style): frosted-glass surfaces, gilded gradient accent buttons, soft accent glow on active tabs / rail / ensō, deep layered shadows, plus an animated sheen sweep + breathing ensō glow (honors `prefers-reduced-motion`). Additive — existing styles and the default are unchanged.
 - [x] **Local signed builds** — `npm run cert:make` + `npm run package:signed` produce a self-signed Authenticode build (personal-use) to avoid unsigned-binary AV false positives; shipped as the signed **v0.4.2** release.
 
 ## Milestone 22 — AI settings ✅ (2026-06-29)
@@ -381,7 +582,9 @@ Shipped as **v0.5.0** (signed), plus follow-on hardening:
 
 ## Milestone 26 — modern look & motion ✅ (2026-07-01)
 
-A "more modern / creative / future" pass, all opt-in (calm default unchanged):
+A "more modern / creative / future" pass, all opt-in (calm default unchanged).
+**Aurora Glass, Neo Holographic and Kinetic Minimal were all deleted 2026-09-04**
+in the 84 → 6 skin cut; the animated rail and the global motion layer survive:
 - [x] **Animated rail** — the icon rail glides between collapsed/expanded; labels fade+slide, the toggle chevron sweeps › ↔ ‹.
 - [x] **Global motion layer** — modals pop, backdrops fade, the drawer slides, menus pop; buttons/chips get press feedback. Pure-additive; `prefers-reduced-motion` disables it.
 - [x] **Aurora Glass** — theme (cool-indigo) + style (frosted glass, gradient accent, soft glow).
@@ -480,3 +683,5 @@ degrade that file type to plaintext with no error anywhere.
 | 2026-09-02 | **The distribution refusal is reversed, and distribution is now the milestone.** `.superpowers/roadmap-2026-09-01/A2-long-arc.md` §4 lists *"Distribution, in any form"* (`:245`) and *"Code signing, `electron-updater`, and published GitHub releases"* (`:285`) as **Unthinkable**. Both are **superseded**, one day later, by the owner's standing decisions of 2026-09-02 (`.claude/agents/TEAM.md`): the ambition is a product with users and the next milestone is **5–10 real external users**. A public repo, an OSI-approved licence, a trustworthy certificate, a published release with `latest.yml`, first-run instructions, a feedback path, and a homepage carrying SignPath's required attribution are therefore **ordered work**, not refusals. **What survives from A2:** the **empty-table test** itself (`:33`) — a surface whose store has never held a row is not a feature — plus Unthinkable **#3** (no fifth strategy memo), **#4** (no sixteenth settings section) and **#6** (no second ledger). **What does not survive is that test's evidence base:** the only `settings.json` it can read belongs to the one person who has ever run this app, so an empty store proves *"he did not use it"* and never *"nobody wants it"*. Keep the test as a test; stop citing one machine's stores as market evidence until there are five to ten of them. | A2's argument was that 1DevTool got ~3,000 installs and ~20 active users, so distribution only enlarges the denominator of an adoption failure. That is sound about a **launch** and wrong about **this** milestone, which is 5–10 named users rather than 3,000 anonymous installs. The gate is not marketing, it is **trust**: the build is self-signed and trusted on exactly one machine, so a stranger meets a SmartScreen wall before forming any opinion at all, and a refusal to sign is a refusal to ever be evaluated. A2's own strongest sentence — that zero external validation exists — is the argument *for* getting some; until it does, every refusal in `.superpowers/` reasons about users from a sample of one, A2's included. **Cost of the reversal:** the licence to hard-code one shell, fight one antivirus and delete a feature the day its owner stops using it is spent; a signed release path, an issue tracker and a support surface arrive in its place. |
 | 2026-09-02 | **Compaction proximity is unavailable, deliberately — and the question is now closed.** Measured, not assumed: across **516** transcripts under `~/.claude/projects`, `"context_window"` appears in **0** files and `"rate_limits"` in **0**. The transcript does carry the **numerator** (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens` on the last assistant line) and an exact record that a compaction **already happened** (`isCompactSummary` / `compact_boundary` — 7 of 516 files). It does not carry the **denominator**. The only channel that would deliver real limits to a third-party client is the **`statusLine` slot in the user's own CLI config**, and writing into `~/.claude/settings.json` is the **vendor-config write retired on 2026-09-01** (`.superpowers/roadmap-2026-09-01/A1-near-term.md:284`). So: *"this session has compacted"* is reportable; *"this session is about to compact"* is **not**, and is not to be re-proposed. | A gauge whose denominator DevDeck holds and the vendor changes without telling it is the signal-that-can-lie failure, and it would lie hardest in exactly the eight-hour session it exists to protect. Reading the fill without the limit is the honest half and is already available; inventing the limit is not worth a write into a config the user edits by hand — which A1 refused on stronger grounds than this one. |
 | 2026-08-31 | No split, docked or multi-pane stage. One main view at a time; a project remembers which one. | Prompted by 1DevTool (terminal + browser + DB on one screen). Disqualifying on mechanism, not taste: `TerminalPane` resizes the pty to the pane, so a half-width stage halves `cols`, the agent wraps its permission prompt, and `detectApproval`'s `(esc)` + tail-position rules stop matching — Approve/Deny then vanishes from the tile, the Overview row **and** the phone, silently. Evidence for the pain was nil (no user quote anywhere asks for two views at once). Full argument: `.superpowers/1devtool-2026-08-31/T1-verdict.md`. |
+| 2026-09-04 | **Cut 0.13.0; publish nothing until step 4 lands.** Then 0.13.0 is the new remote's first published release, with Setup, Portable, blockmap and `latest.yml`. | Measured, not assumed: across **14 published releases and 28 installers the lifetime download count is 1** — a 346-byte `latest.yml` poll on 0.10.0, almost certainly from this machine (`gh release view <tag> --json assets`, 2026-09-04). So there is no installed base, and the crash fix that bricks the app for anyone who moves a project folder — the strongest argument for shipping — protects only the *first stranger*, whose install is after step 6. Publishing to the current remote is worse than useless: step 4 deletes it, so the release and its updater feed would be destroyed by the very next step. And the only installer that exists is signed `CN=DevDeck Dev`, so it spends a first impression on a SmartScreen warning — the exact wall this milestone exists to remove. Cutting the tag is still right now, because 42 commits of changelog prose is perishable and must be written by the people who did the work. |
+| 2026-09-04 | **Step 4's price is accepted: destroy 14 published releases and 28 installers rather than leave pre-scrub objects on a repo that is about to go public.** Harvest the 14 release-note bodies and the download counts first; harvest no binaries. | GitHub keeps unreachable objects retrievable by SHA, so a force-push leaves the commits carrying employer and client identifiers on the remote; only deleting the repository removes them. Against that: binaries no human has ever downloaded, 0 issues, 0 stars, 0 forks, and every tag from `v0.1.0` to `v0.12.0` is an ancestor of `HEAD`, so any version can be rebuilt. The delete is not remediation of a live leak — the repo is private and unforked, so exposure is zero today — it is a **precondition of the flip**, and belongs in the same sitting. Two things are genuinely unrecoverable and neither is code: the 14 release-note bodies (verified **not** in `CHANGELOG.md` — 6 of 8 distinctive paragraphs in 0.10.0's body appear nowhere in this repo), which are the only prior art for how this product has described itself to an outsider; and the download counts, whose value is precisely that they are zero. `build.publish` names `Midor2Mid/devdeck`, so recreating under the **same owner and name** keeps the updater feed URL byte-identical — changing either silently stops every installed DevDeck from updating. |
