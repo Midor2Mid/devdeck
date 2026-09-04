@@ -73,7 +73,7 @@ export interface AppNotification {
     text: string
 }
 
-export type ActivityKind = "start" | "attention" | "close" | "record" | "pipeline"
+export type ActivityKind = "start" | "attention" | "close" | "pipeline"
 export interface ActivityEvent {
     id: string
     ts: number
@@ -253,11 +253,6 @@ interface AppState extends Persisted {
     setIdentityEditorProject: (projectId: string | null) => void
 
     // Terminal record & replay (runtime-only)
-    recordingTermId: string | null
-    setRecordingTermId: (id: string | null) => void
-    recordingsOpen: boolean
-    setRecordingsOpen: (open: boolean) => void
-    noteRecording: (termId: string, label: string) => void
 
     // Worktrees + change review (runtime-only)
     worktreesOpen: boolean
@@ -1104,8 +1099,6 @@ export const useStore = create<AppState>((set, get) => {
         envEditorProject: null,
         commandsEditorProject: null,
         identityEditorProject: null,
-        recordingTermId: null,
-        recordingsOpen: false,
         worktreesOpen: false,
         changesTarget: null,
         prTarget: null,
@@ -1664,9 +1657,6 @@ export const useStore = create<AppState>((set, get) => {
             })
             persist()
         },
-        setRecordingTermId: (recordingTermId) => set({ recordingTermId }),
-        setRecordingsOpen: (recordingsOpen) => set({ recordingsOpen }),
-        noteRecording: (termId, label) => pushActivity("record", termId, label),
 
         setWorktreesOpen: (worktreesOpen) => set({ worktreesOpen }),
         openChanges: (cwd, label) => set({ changesTarget: { cwd, label } }),
@@ -2464,28 +2454,6 @@ export const useStore = create<AppState>((set, get) => {
                         closedAt: Date.now()
                     })
                 })
-            }
-
-            // If this pane was recording, persist the recording before it dies.
-            //
-            // `rec.stop` is an `ipcMain.handle` that can reject two ways, and the
-            // clear used to run unconditionally on the same tick: the UI marked
-            // the recording saved at the exact moment the only copy of the events
-            // could be being dropped. It is sent before `pty.kill` deliberately -
-            // both cross the same channel in order, so the recorder sees the stop
-            // while its pty is still alive.
-            if (s.recordingTermId === termId) {
-                const label = ownerTab?.name ?? "session"
-                void window.api.rec
-                    .stop(termId, label)
-                    .catch((e: Error) => {
-                        // The pane is already gone, so there is nothing left to
-                        // retry from: clear the indicator, but say what happened
-                        // rather than claim a file exists. Main still holds the
-                        // events, and `flushAll()` gets one more attempt on quit.
-                        get().noteRecording(termId, `${label} · not saved: ${e.message}`)
-                    })
-                    .finally(() => set({ recordingTermId: null }))
             }
             window.api.pty.kill(termId)
             forget(termId)

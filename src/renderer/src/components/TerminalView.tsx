@@ -76,15 +76,11 @@ export function TerminalView(): JSX.Element {
     // resume into without one. This is a necessary but no longer sufficient
     // condition for the launcher bar — see the draft check at its render site.
     const hasAgentSession = useStore((s) => s.agentSessions().length > 0)
-    const recordingTermId = useStore((s) => s.recordingTermId)
-    const setRecordingTermId = useStore((s) => s.setRecordingTermId)
-    const setRecordingsOpen = useStore((s) => s.setRecordingsOpen)
     const setWorktreesOpen = useStore((s) => s.setWorktreesOpen)
     const newAgentInWorktree = useStore((s) => s.newAgentInWorktree)
     const [launchOptsOpen, setLaunchOptsOpen] = useState(false)
     const launchCaretRef = useRef<HTMLButtonElement>(null)
     const openChanges = useStore((s) => s.openChanges)
-    const noteRecording = useStore((s) => s.noteRecording)
     const activePaneId = useStore((s) => (s.activeId ? s.activePaneByProject[s.activeId] : undefined))
     const zoomedPane = useStore((s) => s.zoomedPane)
     const toggleZoomPane = useStore((s) => s.toggleZoomPane)
@@ -184,31 +180,6 @@ export function TerminalView(): JSX.Element {
                 <p className="muted">No project is open. Press Ctrl+K to pick one.</p>
             </div>
         )
-    }
-
-    const recordingActive = !!activePaneId && recordingTermId === activePaneId
-
-    const toggleRecord = async (): Promise<void> => {
-        const s = useStore.getState()
-        if (!activeId) return
-        const pane = s.activePane(activeId) ?? (activeTab ? firstLeaf(activeTab.root) : undefined)
-        if (!pane) return
-        const label = activeTab?.name ?? "session"
-        if (recordingTermId === pane) {
-            // Clear the indicator only once the file exists. A rejected stop now
-            // leaves the events in main and the pane still marked as recording,
-            // which is the truth - the alternative told the user it was saved.
-            try {
-                const meta = await window.api.rec.stop(pane, label)
-                setRecordingTermId(null)
-                if (meta) noteRecording(pane, `${label} · recorded (${meta.events} frames)`)
-            } catch (e) {
-                noteRecording(pane, `${label} · not saved: ${(e as Error).message}`)
-            }
-        } else if (!recordingTermId) {
-            await window.api.rec.start(pane, activeProject.path)
-            setRecordingTermId(pane)
-        }
     }
 
     const commitRename = (): void => {
@@ -623,7 +594,7 @@ export function TerminalView(): JSX.Element {
                         <button
                             className="icon-action"
                             onClick={() => setToolsOpen((v) => !v)}
-                            data-tip="More - record, recordings, worktrees, review changes"
+                            data-tip="More - worktrees, review changes"
                         >
                             <Icon name="more" />
                         </button>
@@ -631,36 +602,6 @@ export function TerminalView(): JSX.Element {
                             <>
                                 <div className="menu-backdrop" onClick={() => setToolsOpen(false)} />
                                 <div className="agent-menu">
-                                    <div className="agent-menu-row">
-                                        <span
-                                            className={
-                                                "agent-menu-name" +
-                                                (!!recordingTermId && !recordingActive
-                                                    ? " disabled"
-                                                    : "")
-                                            }
-                                            onClick={() => {
-                                                if (!!recordingTermId && !recordingActive) return
-                                                toggleRecord()
-                                                setToolsOpen(false)
-                                            }}
-                                        >
-                                            <Icon name="record" size={13} />
-                                            {recordingActive ? "Stop recording" : "Record terminal"}
-                                        </span>
-                                    </div>
-                                    <div className="agent-menu-row">
-                                        <span
-                                            className="agent-menu-name"
-                                            onClick={() => {
-                                                setRecordingsOpen(true)
-                                                setToolsOpen(false)
-                                            }}
-                                        >
-                                            <Icon name="play" size={14} />
-                                            Recordings
-                                        </span>
-                                    </div>
                                     <div className="agent-menu-row">
                                         <span
                                             className="agent-menu-name"

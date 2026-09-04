@@ -37,7 +37,6 @@ import * as system from "./system"
 import * as shellpath from "./shellPath"
 import * as usage from "./usage"
 import * as ledger from "./ledger"
-import * as recorder from "./recorder"
 import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
 import * as worktrees from "./worktrees"
@@ -822,27 +821,6 @@ function registerIpc(): void {
         }
     )
 
-    // --- Terminal record & replay ---
-    // `projectPath` is guarded and captured at *start*: the recorder then owns
-    // the destination, `rec:stop` needs nothing from the renderer, and a quit
-    // can flush a recording the renderer is no longer around to place.
-    ipcMain.handle("rec:start", (_e, { termId, projectPath }: { termId: string; projectPath: string }) => {
-        guardPath(projectPath)
-        return recorder.startRecording(termId, projectPath)
-    })
-    ipcMain.handle("rec:stop", (_e, { termId, label }: { termId: string; label: string }) =>
-        recorder.stopRecording(termId, label)
-    )
-    ipcMain.handle("rec:active", (_e, termId: string) => recorder.isRecording(termId))
-    ipcMain.handle("rec:list", (_e, projectPath: string) => {
-        guardPath(projectPath)
-        return recorder.listRecordings(projectPath)
-    })
-    ipcMain.handle("rec:load", (_e, path: string) => {
-        guardPath(path)
-        return recorder.loadRecording(path)
-    })
-
     // --- Browser network capture (CDP on the webview's webContents) ---
     ipcMain.handle("browser:netAttach", (_e, id: number) => browserNet.attach(id))
     ipcMain.handle("browser:netGet", (_e, id: number) => browserNet.getRecent(id))
@@ -1031,8 +1009,6 @@ app.whenReady().then(() => {
 function teardown(): void {
     if (tornDown) return
     tornDown = true
-    // First, because it is the only step whose failure loses user data.
-    recorder.flushAll()
     // Counts that moved in memory but were held back by the repeat-write
     // throttle. A loop still spinning when the user quits is exactly the case
     // where the last state is the one worth having next session.

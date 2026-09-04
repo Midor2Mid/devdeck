@@ -14,7 +14,6 @@ export type IconName =
     | "settings"
     | "search"
     | "pencil"
-    | "record"
     | "play"
     | "gitBranch"
     | "check"
@@ -94,7 +93,6 @@ const P: Record<IconName, JSX.Element> = {
         </>
     ),
     pencil: <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />,
-    record: <circle cx="12" cy="12" r="7" fill="currentColor" stroke="none" />,
     play: <polygon points="6 4 19 12 6 20 6 4" />,
     gitBranch: (
         <>

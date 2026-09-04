@@ -4,7 +4,6 @@ const ICON: Record<ActivityKind, string> = {
     start: "▸",
     attention: "⚑",
     close: "×",
-    record: "⏺",
     pipeline: "⇥"
 }
 

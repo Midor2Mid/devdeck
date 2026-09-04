@@ -29,7 +29,6 @@ import { UsagePanel } from "./components/UsagePanel"
 import { ProjectEnvModal } from "./components/ProjectEnvModal"
 import { CommandsModal } from "./components/CommandsModal"
 import { ProjectIdentityModal } from "./components/ProjectIdentityModal"
-import { RecordingsModal } from "./components/RecordingsModal"
 import { PipelineBar } from "./components/PipelineBar"
 import { WorktreesModal } from "./components/WorktreesModal"
 import { ChangesModal } from "./components/ChangesModal"
@@ -91,7 +90,6 @@ export function App(): JSX.Element {
     const envEditorProject = useStore((s) => s.envEditorProject)
     const commandsEditorProject = useStore((s) => s.commandsEditorProject)
     const identityEditorProject = useStore((s) => s.identityEditorProject)
-    const recordingsOpen = useStore((s) => s.recordingsOpen)
     const worktreesOpen = useStore((s) => s.worktreesOpen)
     const changesTarget = useStore((s) => s.changesTarget)
     const prTarget = useStore((s) => s.prTarget)
@@ -480,7 +478,6 @@ export function App(): JSX.Element {
             {envEditorProject && <ProjectEnvModal />}
             {commandsEditorProject && <CommandsModal />}
             {identityEditorProject && <ProjectIdentityModal />}
-            {recordingsOpen && <RecordingsModal />}
             {worktreesOpen && <WorktreesModal />}
             {changesTarget && <ChangesModal />}
             {prTarget && <PrModal />}
