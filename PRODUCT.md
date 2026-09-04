@@ -1,44 +1,70 @@
 # DevDeck
 
-> A command deck for terminal-first, Claude-driven development — multiple terminals, fast project switching, an editor, an API client, and network debugging, all in one window. For me (a developer who lives in the Claude CLI), first.
+> A command deck for terminal-first, AI-CLI-driven development — multiple terminals, agent sessions (Claude, Codex, Gemini), fast project switching, an editor, an API client, and a database client in one window. For me (a developer who lives in agent CLIs), first.
 
 ## The problem
 
-- **Who has this problem?** Me — a developer whose day is spent in the terminal driving the Claude CLI across several projects at once. (Likely shared by other terminal-first / AI-CLI-first developers.)
-- **What is the pain?** My workflow is fragmented across tools: a terminal emulator for shells + Claude CLI, an IDE for editing, Postman for API calls, and yet another tool for network debugging. Switching projects means re-`cd`-ing everywhere, re-opening tabs, and losing context. Running several Claude sessions in parallel across projects is clumsy — I lose track of which terminal is which.
-- **How do they solve it today?** Windows Terminal (tabs/panes) + VS Code + Postman/Insomnia + browser devtools/Wireshark, juggled manually. Each is good alone; none knows about "the project I'm working on" as a single switchable context.
-- **Why is now the right time?** My work has shifted to be overwhelmingly Claude-CLI-driven. The terminal is the cockpit now, so a tool built *around* the terminal (not around the file tree, like an IDE) fits how I actually work.
+- **Who has this problem?** Me — a developer whose day is spent in the terminal driving agent CLIs across several projects at once. (Likely shared by other terminal-first / AI-CLI-first developers. "Likely" is doing real work in that sentence — see Validation.)
+- **What is the pain?** My workflow is fragmented across tools: a terminal emulator for shells and agent sessions, an IDE for editing, Postman for API calls, a separate GUI for databases. Switching projects means re-`cd`-ing everywhere, re-opening tabs, and losing context. Running several agent sessions in parallel across projects is clumsy — I lose track of which terminal is which, and of which one is waiting on me.
+- **How do they solve it today?** Windows Terminal (tabs/panes) + VS Code + Postman/Insomnia + a database GUI, juggled manually. Each is good alone; none knows about "the project I'm working on" as a single switchable context, and none of them can tell me which agent needs an answer.
+- **Why is now the right time?** My work has shifted to be overwhelmingly agent-CLI-driven. The terminal is the cockpit now, so a tool built *around* the terminal (not around the file tree, like an IDE) fits how I actually work.
 
 ## The value proposition
 
-- **What we offer:** One window where a **project** is the unit of context. Pick a project and every panel — terminals, editor, API client — snaps to it. Run many terminals (and many Claude CLI sessions) side by side, labeled and persistent.
-- **Why it's better than the status quo:** No more re-`cd`-ing and re-opening across three apps. Terminal-first layout (the terminal is a first-class citizen, not a drawer at the bottom). Deep Claude CLI affordances: one-click "new Claude session" per project, labeled panes, session awareness.
-- **What we deliberately are NOT doing (for now):** Not replacing VS Code for heavy editing. Not a full IDE with language servers/debuggers. Not a Wireshark-grade packet analyzer. Not cross-platform-polished — Windows-first, since that's where I work.
+- **What we offer:** One window where a **project** is the unit of context. Pick a project and every panel — terminals, editor, API client, database client, task board — snaps to it. Run many terminals and many agent sessions side by side, labeled and persistent, with one screen that shows every live agent across every project and which of them is waiting on you.
+- **Why it's better than the status quo:** No more re-`cd`-ing and re-opening across four apps. Terminal-first layout (the terminal is a first-class citizen, not a drawer at the bottom). Agent-CLI affordances no terminal emulator has: one-click new session per project, per-session labels, and a supervision surface that answers "who needs me" once, in one place.
+- **What we deliberately are NOT doing:**
+    - Not replacing VS Code for heavy editing; no language servers, no debugger.
+    - **No network capture.** A Network view and a local capture proxy were built and then deleted after 0.12.0 — they cost more to carry than they returned. (What survives under that name is unrelated: applying a corporate upstream proxy to the processes DevDeck spawns, so `npm` and `git` work behind one.)
+    - **Not cross-platform.** Windows only, on purpose, because DevDeck drives a real Windows shell and a real pty. macOS and Linux are not planned.
+    - Not a hosted service. No account and no telemetry; diagnostics go to the clipboard, not to a server. The one thing that leaves the machine is the phone approve/deny surface, which you pair yourself over your own network.
 
-## Validation (do this before building much)
+## Validation
 
-- [x] Talked to / observed at least a few real potential users → **I am the user.** Validation = does it become my daily driver?
-- [x] Confirmed the pain is real and frequent → Yes; experienced daily.
-- [x] Confirmed they'd use (or pay for) a solution → I'll use it daily if it works; that's the bar.
-- **Evidence / quotes:** *"most of my works are on terminal using claude cli so I hope this tool can also allow me to easily switch between projects and have multiple terminal active at the same time"* — me, 2026-06-26.
+**No external user has ever run this app.** Not one install off this machine,
+not one recorded first session, not one sentence from anybody who is not its
+author. That is the honest state of validation for this product, and it is
+embarrassing on purpose: the whole of the current milestone exists to change it.
+
+- [x] The pain is real and frequent — experienced daily, by one person.
+- [x] That person is the author, so every design call in this repo has been
+      ruled on by the only user, against their own habits. That is a fast way
+      to build and a bad way to know anything.
+- [ ] **Anybody else has run it.** Open, and the only item on this list that
+      can tell a tool apart from a habit.
+- **Evidence / quotes:** exactly one, from the author — *"most of my works are
+  on terminal using claude cli so I hope this tool can also allow me to easily
+  switch between projects and have multiple terminal active at the same time"*
+  (2026-06-26). A quote from the person who wrote the code is a design note,
+  not evidence.
+
+**The milestone is 5–10 real users**, recruited one at a time, every install
+watched and every first session recorded verbatim (`ROADMAP.md`, step 9). Not a
+public launch, not revenue, not a number on a page. Until those sessions exist,
+every claim in this document about what DevDeck is worth to anyone other than
+its author is a hypothesis with n=1.
 
 ## Success metrics
 
-How will we know it's working?
+How will we know it's working? The first three are the author's own bar, and
+every one of them can be true of a tool nobody else can use — they were the
+whole of this section until 2026-09-04, which was the defect.
 
-1. **It becomes my daily driver** — I open DevDeck instead of Windows Terminal for ≥1 full week of real work.
-2. **Project switch is fast** — switching active project + spinning up its terminals takes < 5 seconds and zero manual `cd`.
-3. **Parallel Claude sessions are legible** — I can run ≥3 Claude CLI sessions across projects without losing track of which is which.
+1. **It becomes my daily driver** — I open DevDeck instead of Windows Terminal for a full week of real work.
+2. **Project switch is fast** — switching active project and spinning up its terminals takes < 5 seconds and zero manual `cd`.
+3. **Parallel agent sessions are legible** — I can run ≥3 agent sessions across projects without losing track of which is which, or of which one is blocked on me.
+4. **Somebody else gets it running, and says something back** — 5–10 users, each install watched, each first session recorded verbatim. The one metric nothing in this repo can move on its own, and the one with no data at all.
 
 ## Scope
 
-- **Platform(s):** Windows desktop (primary). Electron, so macOS/Linux are technically reachable later.
-- **Tech stack:** Electron + electron-vite + React + TypeScript. Terminals: xterm.js + `@lydell/node-pty` (prebuilt binaries — no native compiler needed). Editor: Monaco. Layout: `allotment` resizable split panes. HTTP client: Node `undici`/fetch in main process.
-- **MVP = the smallest thing that delivers value:** Multi-terminal + project switcher (see `ROADMAP.md`). Everything else (editor, API client, network inspect) layers onto the same workspace shell.
+- **Platform(s):** Windows desktop, only. Electron, but macOS and Linux are not planned — see the value proposition.
+- **Tech stack:** Electron + electron-vite + React + TypeScript. Terminals: xterm.js + `@lydell/node-pty` (prebuilt binaries — no native compiler needed). Editor: Monaco. Layout: `allotment` resizable split panes. HTTP client and database drivers run in the main process (`mssql`, `mysql2`, `pg`, `node-sqlite3-wasm`).
+- **MVP = the smallest thing that delivers value:** Multi-terminal + project switcher (see `ROADMAP.md`). Everything else — editor, API client, database client, agent supervision — layers onto the same workspace shell.
 
 ## Open questions / risks
 
+- **n=1 design.** The largest risk in this document, and the reason the current milestone is recruitment rather than features. Six surfaces and 78 of 84 skins have been built and then deleted; each was defensible to its only user at the time. There is no way to tell a real requirement from the author's habit without somebody else's first five minutes.
 - **Native module (pty) on Windows** — mitigated by using `@lydell/node-pty` (ships prebuilt binaries). If it ever fails, fallback is `node-pty-prebuilt-multiarch` or ConPTY directly.
-- **Scope creep** — "all-in-one" is the vision, but the terminal/project core must be excellent first or the rest is lipstick. Sequencing enforced via ROADMAP milestones.
-- **Deep Claude CLI integration is fragile** — parsing CLI output couples us to its format. Start with UI affordances over a plain pty; only parse output where it's clearly stable.
-- **Performance** — many live terminals + Monaco in one Electron window. Watch memory; lazy-mount panels.
+- **Scope creep** — "all-in-one" is the vision, but the terminal/project core must be excellent first or the rest is lipstick. The post-0.12.0 deletions are what enforcing this costs once it has been deferred.
+- **Agent-CLI integration is fragile** — reading CLI output couples us to its format, and the approval prompt DevDeck parses is the most valuable and most brittle thing it does. Prefer UI affordances over a plain pty; only parse output where it is clearly stable, and never let a parse failure render as a confident answer.
+- **Performance** — many live terminals plus Monaco in one Electron window. Watch memory; lazy-mount panels.
