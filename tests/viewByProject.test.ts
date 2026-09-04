@@ -76,13 +76,23 @@ describe("a project remembers its view", () => {
         expect(useStore.getState().view).toBe("editor")
     })
 
-    it("keeps the current view when arriving at a project it has never seen", async () => {
+    // This assertion used to read `browser` - "the stage must not move under the
+    // user". It was reversed deliberately: a project with no remembered place has
+    // nothing for Browser (or Mission, or Editor) to show, and Terminal is the
+    // one screen that says what this project can run. See resolveViewFor. The
+    // cost is one moved stage per project, once; the case it fixes is the first
+    // folder a stranger ever opens.
+    it("lands on Terminal when arriving at a project it has never seen", async () => {
         stubApi({ ok: true, data: { view: "browser", viewByProject: { p1: "browser" } } })
         await useStore.getState().init()
 
-        // p2 has no remembered place; the stage must not move under the user.
         await useStore.getState().setActiveProject("p2")
 
+        expect(useStore.getState().view).toBe("terminal")
+
+        // And the project that DID have a remembered place still gets it back -
+        // the change is scoped to first contact.
+        await useStore.getState().setActiveProject("p1")
         expect(useStore.getState().view).toBe("browser")
     })
 
@@ -98,8 +108,11 @@ describe("a project remembers its view", () => {
 
         expect(useStore.getState().viewByProject.p2).toBeUndefined()
 
+        // Dropped, so p2 is now a project with no recorded view - which lands on
+        // Terminal. What matters here is that `seance` was not honoured and the
+        // stage is not blank.
         await useStore.getState().setActiveProject("p2")
-        expect(useStore.getState().view).toBe("mission")
+        expect(useStore.getState().view).toBe("terminal")
     })
 
     it("leaves a project remembering where it was when a jump changes project and view at once", async () => {

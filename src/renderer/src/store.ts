@@ -540,6 +540,43 @@ const rememberView = (
 ): Record<string, MainView> =>
     projectId ? { ...s.viewByProject, [projectId]: view } : s.viewByProject
 
+/**
+ * Which view a project opens on.
+ *
+ * A project DevDeck has recorded a view for returns to it — that is the whole
+ * of the remembering feature and it is untouched. A project with NO recorded
+ * view lands on Terminal, and deliberately not on the global `view`: the
+ * fresh-install default is `mission`, so opening your first folder used to
+ * drop you on the supervision screen with nothing to supervise. Terminal is
+ * `CommandLauncher`, the only screen that answers all three of a stranger's
+ * questions — what is this for, what do I press, what could go wrong.
+ *
+ * The global `view` is not a parameter because it is not consulted: keeping it
+ * in the signature would document a branch that does not exist. This changes
+ * first contact only.
+ */
+export const resolveViewFor = (projectId: string, s: Pick<AppState, "viewByProject">): MainView =>
+    s.viewByProject[projectId] ?? "terminal"
+
+/**
+ * The view to sit on after a path that ADDS a project rather than switching to
+ * one.
+ *
+ * `addProject`/`addProjectByPath` take `activeId` straight from main's reply
+ * and never touched `view`, so the landing rule at the switch seam missed the
+ * one case it exists for: the first folder a stranger opens.
+ *
+ * The view only moves when the active project actually moved. Both callers
+ * resolve with the store unchanged when the folder dialog is cancelled or the
+ * path is already open as the active project, and neither of those may pull
+ * the stage out from under someone.
+ */
+const viewAfterAdd = (
+    s: Pick<AppState, "viewByProject" | "activeId" | "view">,
+    store: { activeId: string | null }
+): MainView =>
+    store.activeId && store.activeId !== s.activeId ? resolveViewFor(store.activeId, s) : s.view
+
 export const useStore = create<AppState>((set, get) => {
     // No save may run until `init()` has applied whatever workspace.json holds
     // (or confirmed there is none, on a fresh install). Same guard as
@@ -1286,7 +1323,11 @@ export const useStore = create<AppState>((set, get) => {
 
         addProject: async () => {
             const store = await window.api.projects.add()
-            set({ projects: store.projects, activeId: store.activeId })
+            set((s) => ({
+                projects: store.projects,
+                activeId: store.activeId,
+                view: viewAfterAdd(s, store)
+            }))
         },
 
         removeProject: async (id) => {
@@ -1318,9 +1359,9 @@ export const useStore = create<AppState>((set, get) => {
             const s = get()
             const mru = recordMru(s.projectMru, id)
             // A project you have been in before restores its own view; one you
-            // have never opened keeps the view you are in, so arriving somewhere
-            // new never moves the stage out from under you.
-            set({ activeId: id, projectMru: mru, view: s.viewByProject[id] ?? s.view })
+            // have never opened lands on Terminal, where the launcher can say
+            // what this project can run. See resolveViewFor.
+            set({ activeId: id, projectMru: mru, view: resolveViewFor(id, s) })
             persist()
             try {
                 localStorage.setItem(MRU_KEY, JSON.stringify(mru))
@@ -1384,7 +1425,11 @@ export const useStore = create<AppState>((set, get) => {
 
         addProjectByPath: async (path) => {
             const store = await window.api.projects.addPath(path)
-            set({ projects: store.projects, activeId: store.activeId })
+            set((s) => ({
+                projects: store.projects,
+                activeId: store.activeId,
+                view: viewAfterAdd(s, store)
+            }))
         },
 
         openSwitcher: () => set({ switcherOpen: true }),
