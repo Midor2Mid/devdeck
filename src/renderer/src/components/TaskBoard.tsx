@@ -176,8 +176,9 @@ function CardDispatch({
 }
 
 /**
- * Per-project task board: create task cards, dispatch one to an agent (in its own
- * worktree by default), and track it across Todo · Doing · Review · Done.
+ * Per-project task board: create task cards, dispatch one to an agent (in the
+ * project itself, or in its own git worktree if you ask for one), and track it
+ * across Todo · Doing · Review · Done.
  *
  * A dispatched card auto-moves to Review on EVIDENCE that its agent produced
  * something — file changes since the session started — not merely because the
@@ -223,7 +224,10 @@ export function TaskBoard(): JSX.Element {
     const aiAgents = useMemo(() => aiModeAgents(agents), [agents])
 
     const [draft, setDraft] = useState("")
-    const [worktree, setWorktree] = useState(true)
+    // Off by default: dispatching a card is the act the button names, and
+    // creating a git worktree in a sibling folder is a second one nobody asked
+    // for. Opt in per board session via the checkbox in the Todo column.
+    const [worktree, setWorktree] = useState(false)
 
     // Price dispatched cards when the board opens, when one is dispatched, and
     // when its agent settles or it finishes.
@@ -300,13 +304,19 @@ export function TaskBoard(): JSX.Element {
                                     }}
                                 />
                                 <div className="board-add-foot">
+                                    {/* Said in words, and off until asked for.
+                                        It was labelled "worktree" and checked
+                                        by default, so every dispatch silently
+                                        created a git worktree in a sibling
+                                        folder - a side effect on disk behind a
+                                        single lowercase noun. */}
                                     <label className="board-wt">
                                         <input
                                             type="checkbox"
                                             checked={worktree}
                                             onChange={(e) => setWorktree(e.target.checked)}
                                         />
-                                        worktree
+                                        Give the agent its own worktree
                                     </label>
                                     <button className="accent" onClick={add} disabled={!draft.trim()}>
                                         Add

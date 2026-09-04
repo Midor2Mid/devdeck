@@ -93,6 +93,41 @@ export interface Collection {
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
 
+/**
+ * What each shell choice is called on screen. One map, because the shell menu,
+ * Settings and a pane's own "Starting …" line all name the same five things and
+ * three independent copies of the list is how they drift apart.
+ */
+export const SHELL_LABELS: Record<ShellKind, string> = {
+    powershell: "PowerShell",
+    cmd: "Command Prompt",
+    gitbash: "Git Bash",
+    wsl: "WSL",
+    custom: "Custom shell"
+}
+
+/**
+ * What a pane names while it has asked for a process and heard nothing back.
+ *
+ * An agent pane names the preset the user clicked ("Claude") rather than the
+ * shell underneath it: that is the thing they asked for, and it is the one that
+ * takes the measured ~12s. A plain shell names the shell. `agentId` is "" for a
+ * shell pane, and stands in as the name for an agent whose preset was deleted
+ * since launch - the id is still the thing being started, and beats naming a
+ * shell the user never picked.
+ *
+ * `shell` is typed loose on purpose: it arrives from persisted state, so an
+ * unknown kind is reachable and must not print `undefined` at the user.
+ */
+export function startingLabel(
+    agentId: string,
+    preset: { name: string } | undefined,
+    shell: string
+): string {
+    if (agentId) return preset?.name.trim() || agentId
+    return SHELL_LABELS[shell as ShellKind] ?? "shell"
+}
+
 /** How a startup command runs when launched. */
 export type RunMode = "agent" | "normal"
 
@@ -136,6 +171,49 @@ export function aiModeAgents(agents: AgentPreset[]): AgentPreset[] {
 }
 
 /**
+ * The one agent that the terminal's `+ <agent>` button and Ctrl+Shift+Enter
+ * both start.
+ *
+ * They used to compute it independently - the button skipped normal-mode
+ * presets, the chord took `agents[0]` - so the moment a normal-mode command sat
+ * first in Settings, a button and a keystroke advertised as the same thing
+ * started two different processes. One function, called from both. Returns
+ * undefined when there is nothing to start, which is also when the button is
+ * not rendered: the chord does nothing rather than guessing at a command.
+ */
+export function primaryAgentPreset(agents: AgentPreset[]): AgentPreset | undefined {
+    return aiModeAgents(agents)[0] ?? agents[0]
+}
+
+/**
+ * Whether a one-click Resume has anything to resume for `preset` in a project
+ * that has held the agent sessions in `pastAgentIds`.
+ *
+ * `resumeArgs` is a continuation flag (`claude --continue`): it reattaches to
+ * whatever conversation the CLI itself last recorded in that directory. So it
+ * only means something once a session running the SAME command has existed
+ * here - offering it on a project with no history is a control for a thing that
+ * does not exist, and it fails in the agent's own words rather than DevDeck's.
+ *
+ * Matched on the command, not the preset id, because several presets share one
+ * (Claude and Claude Opus are both `claude`, and either one's session is what
+ * `claude --continue` will pick up). An id with no surviving preset cannot be
+ * shown to have run this command, so it does not count as history.
+ */
+export function canResumePreset(
+    preset: AgentPreset | undefined,
+    agents: AgentPreset[],
+    pastAgentIds: string[]
+): boolean {
+    if (!preset?.resumeArgs) return false
+    const cmd = preset.command.trim()
+    // A preset with no command has nothing to resume, and matching on "" would
+    // let any other command-less preset count as its history.
+    if (!cmd) return false
+    return pastAgentIds.some((id) => agents.find((a) => a.id === id)?.command.trim() === cmd)
+}
+
+/**
  * The curated starter set. Ships as the default for a fresh install and is the
  * source for the "Add recommended" action, which merges any of these an existing
  * config is missing. Model-pinned/skip-permissions variants exist to pair with
@@ -163,7 +241,16 @@ export function missingRecommended(agents: AgentPreset[]): AgentPreset[] {
 export const RECOMMENDED_COMMANDS: AgentPreset[] = [
     { id: "claude", name: "Claude", command: "claude", resumeArgs: "--continue", badge: "CLAUDE", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✳", category: "AI Agents" },
     { id: "claude-opus", name: "Claude Opus", command: "claude", resumeArgs: "--continue", badge: "OPUS", apiKeyEnv: "ANTHROPIC_API_KEY", model: "claude-opus-4-8", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "✦", category: "AI Agents" },
-    { id: "claude-yolo", name: "Claude YOLO", command: "claude --dangerously-skip-permissions", resumeArgs: "", badge: "YOLO", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "⚡", category: "AI Agents" },
+    // Named for what it does, not for the mood of doing it: this preset runs
+    // `--dangerously-skip-permissions`, so the agent edits and runs anything in
+    // the project without asking. The name is the safety control here, and it
+    // is the only place the risk is stated before the click. Kept in the
+    // starter set deliberately (it pairs with worktrees) and labelled loudly.
+    // Renaming it does NOT reach an existing install - `agents` is persisted,
+    // and overwriting a name the user may have chosen would be worse - so the
+    // durable marking is `isUnsafeAgent(command)`, which every surface derives
+    // from the command line at render time.
+    { id: "claude-yolo", name: "Claude (no permission prompts)", command: "claude --dangerously-skip-permissions", resumeArgs: "", badge: "BYPASS", apiKeyEnv: "ANTHROPIC_API_KEY", model: "", modelEnv: "ANTHROPIC_MODEL", runMode: "agent", icon: "⚡", category: "AI Agents" },
     { id: "codex", name: "Codex", command: "codex", resumeArgs: "resume", badge: "CODEX", apiKeyEnv: "OPENAI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◆", category: "AI Agents" },
     { id: "gemini", name: "Gemini", command: "gemini", resumeArgs: "", badge: "GEMINI", apiKeyEnv: "GEMINI_API_KEY", model: "", modelEnv: "", runMode: "agent", icon: "◇", category: "AI Agents" },
     { id: "dev", name: "Dev server", command: "npm run dev", resumeArgs: "", badge: "", apiKeyEnv: "", model: "", modelEnv: "", runMode: "normal", icon: "▶", category: "Dev Servers" },
