@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
-import { useSettings, isUnsafeAgent } from "../settings"
+import { useSettings, isUnsafeAgent, primaryAgentPreset } from "../settings"
 import {
     getTail,
     getFullTail,
@@ -79,7 +79,7 @@ export function MissionControl(): JSX.Element {
     // derived below, outside any selector, for the getSnapshot reason above.
     const agents = useSettings((s) => s.agents)
     const openSettings = useSettings((s) => s.openSettings)
-    const primaryAgent = agents.find((a) => a.runMode !== "normal") ?? agents[0]
+    const primaryAgent = primaryAgentPreset(agents)
     const activeProject = projects.find((p) => p.id === activeId)
     void tabsByProject
     void agentStatus
@@ -127,7 +127,13 @@ export function MissionControl(): JSX.Element {
             for (const p of projects) {
                 window.api.git
                     .status(p.path)
-                    .then((g) => on && setChanges((prev) => ({ ...prev, [p.id]: g.isRepo ? g.changes : 0 })))
+                    // `g.changes` is already the honest answer in all four cases -
+                    // a count, 0 for a folder that is simply not a repo, and null
+                    // when the count is unknown (a failed `git status`, or a cwd
+                    // that does not resolve). `g.isRepo ? g.changes : 0` threw the
+                    // null away, because a missing folder is ALSO isRepo:false,
+                    // and reported 0 uncommitted changes for a folder that is gone.
+                    .then((g) => on && setChanges((prev) => ({ ...prev, [p.id]: g.changes })))
                     // The IPC itself failing is the same unknown as a failed
                     // `git status` inside it — record it, don't leave the row
                     // showing the last number as though it were current.
@@ -283,11 +289,13 @@ export function MissionControl(): JSX.Element {
      * cwd to spawn into, so `newTab` would no-op silently and nothing is
      * offered instead of a control that lies.
      *
-     * `primaryAgent` matches the terminal tab bar's `+ <agent>` definition, so
-     * the two controls that both say they start "the" agent start the same one.
-     * The keyboard chord is deliberately NOT cited here: it resolves the primary
-     * agent differently (`agents[0]`), and naming it would claim an equivalence
-     * that does not hold until that is reconciled.
+     * `primaryAgent` comes from `primaryAgentPreset`, the one definition the
+     * terminal tab bar's `+ <agent>` button and `Ctrl+Shift+Enter` also use, so
+     * all three controls that claim to start "the" agent start the same one.
+     * Until 14efcb5 the chord resolved `agents[0]` instead, and this comment
+     * recorded that the chord was deliberately not cited because the
+     * equivalence did not hold. It holds now; the history is kept because the
+     * omission it explains would otherwise look like an oversight.
      */
     let startControl: JSX.Element | null = null
     if (activeProject && primaryAgent) {
@@ -498,10 +506,11 @@ export function MissionControl(): JSX.Element {
 
             <div className="mission-section">
                 <div className="mission-head">
-                    <span className="section-label">REVIEW QUEUE</span>
-                    {/* Lists any uncommitted work (see the empty-state copy below) —
-                        it can't tell AI-written changes from hand-written ones. */}
-                    <span className="muted small">uncommitted changes awaiting review</span>
+                    <span className="section-label">Uncommitted changes</span>
+                    {/* The title now says what the list is, so the subtitle carries
+                        only what the title cannot: this counts hand-written and
+                        AI-written work alike, because git cannot tell them apart. */}
+                    <span className="muted small">hand-written and agent-written alike</span>
                 </div>
                 {reviewRows.length === 0 ? (
                     <div className="muted mission-empty">No uncommitted changes across your projects.</div>

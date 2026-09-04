@@ -35,7 +35,7 @@ export function shortcutGroups(viewNames: string[]): ShortcutGroup[] {
                 // Also File -> Open Folder... in the application menu, which is
                 // where a stranger looks first; the menu replays this chord
                 // rather than owning a second path to the same dialog.
-                ["Ctrl + O", "Open a project folder"],
+                ["Ctrl + O", "Open a folder as a project"],
                 ["Ctrl + K", "Switch project (then 1-9 to pick)"],
                 ["Ctrl + Shift + K", "Recent project - hold and tap to walk back"],
                 ["Ctrl + Shift + P", "Command palette"],

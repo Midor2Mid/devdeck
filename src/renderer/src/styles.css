@@ -1680,23 +1680,6 @@ button .ic,
        against a distant ancestor and lands clipped at the window edge. */
     position: relative;
 }
-.term-launch-resume {
-    font-size: 12px;
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-}
-.term-launch-resume:hover {
-    background: color-mix(in srgb, var(--accent) 26%, transparent);
-    color: var(--accent);
-}
-/* ↻ has no Inter glyph, so it falls back to a symbol font whose taller metrics
-   grow the line box — pinning the inline box keeps this the same height as
-   "+ Claude" beside it. */
-.term-launch-resume .term-launch-glyph {
-    display: inline-block;
-    line-height: 1;
-}
 .action-sep {
     width: 1px;
     height: 18px;

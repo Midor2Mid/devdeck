@@ -7,6 +7,7 @@ import {
     commitIdleMs,
     idleFieldValue,
     IDLE_MIN,
+    SHELL_LABELS,
     type ShellKind,
     type GitAccount,
     type AgentPreset,
@@ -2303,13 +2304,19 @@ function ProxySection(): JSX.Element {
 
 const ACCENT_PRESETS = ["#b8895c", "#8c9a68", "#7fa0a0", "#a98ba5", "#c4855d", "#9a8c98"]
 
-const SHELLS: { value: ShellKind; label: string }[] = [
-    { value: "powershell", label: "PowerShell" },
-    { value: "cmd", label: "Command Prompt" },
-    { value: "gitbash", label: "Git Bash" },
-    { value: "wsl", label: "WSL" },
-    { value: "custom", label: "Custom…" }
-]
+/**
+ * The shell picker, derived from `SHELL_LABELS` so a new `ShellKind` cannot be
+ * added to the union and forgotten here - this was the third hand-kept copy of
+ * the same list.
+ *
+ * `custom` keeps its own label: the record names a *running* shell ("Starting
+ * Custom shell..."), while this is a menu entry whose ellipsis promises a text
+ * field. Same value, two jobs, so the strings are deliberately not shared.
+ */
+const SHELL_PICKER_LABELS: Partial<Record<ShellKind, string>> = { custom: "Custom…" }
+const SHELLS: { value: ShellKind; label: string }[] = (
+    Object.keys(SHELL_LABELS) as ShellKind[]
+).map((value) => ({ value, label: SHELL_PICKER_LABELS[value] ?? SHELL_LABELS[value] }))
 
 // Same list the F1 overlay shows - see ../shortcuts.ts. This table used to be
 // its own hand-kept array and had fallen ten bindings and one renamed feature

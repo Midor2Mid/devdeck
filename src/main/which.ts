@@ -379,7 +379,8 @@ async function probeWithDeadline(
  * card; the absence of a key is what keeps those cards unmarked.
  *
  * Lookups are memoised **by first token**, not by command line: the stock preset
- * list resolves `claude` three times — Claude, Claude Opus, and Claude YOLO,
+ * list resolves `claude` three times — Claude, Claude Opus, and Claude (no
+ * permission prompts),
  * whose command line is `claude --dangerously-skip-permissions` and whose lookup
  * is therefore identical. `id` and `command` are re-attached per request so each
  * result still echoes exactly what was submitted.

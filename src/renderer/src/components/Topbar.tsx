@@ -30,7 +30,7 @@ export function Topbar(): JSX.Element {
     const runOff =
         folder === "missing"
             ? "This project's folder isn't there right now."
-            : "No runnable project type detected"
+            : "No start command found — DevDeck looks for a package.json, a .sln/.csproj, or a go.mod in this folder."
 
     return (
         <div className="topbar">

@@ -28,7 +28,9 @@ export function ReviewPanel(): JSX.Element {
             setLoading(true)
             window.api.git
                 .status(activeProject.path)
-                .then((g) => setChanges(g.isRepo ? g.changes : 0))
+                // See MissionControl: main already distinguishes 0 from unknown, and
+                // the ternary discarded the null for a folder that is not there.
+                .then((g) => setChanges(g.changes))
                 .catch(() => setChanges(null))
                 .finally(() => setLoading(false))
         } else {
