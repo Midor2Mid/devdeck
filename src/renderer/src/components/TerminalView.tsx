@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
+import { shouldLaunch } from "../launchGuard"
 import {
     useSettings,
     sshCommand,
@@ -417,14 +418,23 @@ export function TerminalView(): JSX.Element {
                     {/* One label for one act: the launcher's own button says
                         "New terminal" too, and the two are visible within a
                         second of each other. */}
-                    <button onClick={() => newTab(SHELL)} data-tip="New terminal (Ctrl+Shift+T)">
+                    <button
+                        onClick={() => {
+                            if (shouldLaunch(SHELL)) newTab(SHELL)
+                        }}
+                        data-tip="New terminal (Ctrl+Shift+T)"
+                    >
                         New terminal
                     </button>
                     {primaryAgent && (
                         <span className="term-launch">
                             <button
                                 className="accent term-launch-new"
-                                onClick={() => newTab(primaryAgent.id)}
+                                // The money case: a double-click here started two
+                                // paid CLI processes. See launchGuard.
+                                onClick={() => {
+                                    if (shouldLaunch(primaryAgent.id)) newTab(primaryAgent.id)
+                                }}
                                 data-tip={`New ${primaryAgent.name} session (Ctrl+Shift+Enter)`}
                             >
                                 + {primaryAgent.name}

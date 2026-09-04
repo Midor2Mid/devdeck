@@ -1,5 +1,6 @@
 import { useSettings, isUnsafeAgent, missingRecommended, type AgentPreset } from "../settings"
 import { useStore, SHELL } from "../store"
+import { shouldLaunch } from "../launchGuard"
 import { toast } from "../toast"
 import { useProbe } from "../useProbe"
 import { cardMark, canLaunch, launcherNotice, type CardMark } from "../probeView"
@@ -27,7 +28,13 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
     const { report, rechecking, recheck } = useProbe(agents)
     const notice = launcherNotice(agents, report)
 
+    const launchShell = (): void => {
+        if (shouldLaunch(SHELL)) newTab(SHELL)
+    }
+
     const launch = (a: AgentPreset): void => {
+        // Swallows the second half of a double-click; see launchGuard.
+        if (!shouldLaunch(a.id)) return
         if (a.runMode === "normal") newTab(SHELL, a.command || undefined, a.name)
         else newTab(a.id)
     }
@@ -108,7 +115,7 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
             <div className="launcher-actions">
                 {/* One label for one act: the terminal tab bar's button says
                     "New terminal" too. */}
-                <button onClick={() => newTab(SHELL)}>New terminal</button>
+                <button onClick={() => launchShell()}>New terminal</button>
                 {missing.length > 0 && (
                     <button
                         onClick={() => {
@@ -203,7 +210,7 @@ function cardTip(a: AgentPreset, mark: CardMark): string {
               ? `Start a ${a.name} session — skips permission prompts, so it can edit and run anything in this project without asking`
               : `Start a ${a.name} session`
     if (mark === "not-on-path")
-        return `${base}\nNot found on your PATH. A shell alias or function still works, so this still runs.`
+        return `${base}\nNot found in PowerShell's PATH, which is the one DevDeck reads. It still runs from a shell that has it - Git Bash or WSL - or through an alias.`
     if (mark === "unchecked")
         return `${base}\nDevDeck couldn't read your shell's PATH, so this wasn't checked.`
     return base

@@ -53,8 +53,9 @@ function probeSentence(line: ProbeLine): JSX.Element | null {
     if (line.kind === "none-found")
         return (
             <>
-                None were found on your PATH. A shell alias or function still works — but if a
-                launch does nothing, this is why.
+                None were found in PowerShell&rsquo;s PATH, which is the one DevDeck reads.
+                They still run from a shell that has them &mdash; Git Bash or WSL &mdash; or
+                through an alias. But if a launch does nothing, this is why.
             </>
         )
     if (line.kind === "unhydrated")
