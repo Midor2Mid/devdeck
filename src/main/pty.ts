@@ -1,5 +1,6 @@
 import * as nodePty from "@lydell/node-pty"
 import { EventEmitter } from "events"
+import { statSync } from "fs"
 import { spawnSync } from "child_process"
 import { createHash } from "crypto"
 import { cleanTail, lastLines, CARRY_MAX, OSC, CSI, OTHER } from "../shared/tail"
@@ -194,21 +195,54 @@ export function bufferOf(id: string): { buffer: string; exitCode: number | undef
 }
 
 /**
+ * The directory the child will actually be started in.
+ *
+ * Resolved once and passed to both the pre-spawn check and the spawn itself, so
+ * the path that gets validated is provably the path node-pty receives. A session
+ * with no `cwd` still lands somewhere real — the check has to cover that fallback
+ * too, because a bogus USERPROFILE crashes exactly the same way.
+ */
+function resolveCwd(opts: CreateOpts): string {
+    return opts.cwd || process.env.USERPROFILE || process.cwd()
+}
+
+/**
  * The spawn itself, isolated so its option block stays readable next to the
  * failure handling in `createPty`.
  */
-function spawnShell(file: string, args: string[], opts: CreateOpts): nodePty.IPty {
+function spawnShell(file: string, args: string[], opts: CreateOpts, cwd: string): nodePty.IPty {
     return nodePty.spawn(file, args, {
         // `xterm-color` is a legacy 8-colour terminfo — a CLI that trusts TERM
         // caps itself at 16 colours, which is a big part of why agent output
         // looks washed out. Windows/conpty ignores `name`, but it *is* TERM on
         // macOS and Linux, so this matters as soon as we ship there.
         name: "xterm-256color",
-        cwd: opts.cwd || process.env.USERPROFILE || process.cwd(),
+        cwd,
         cols: opts.cols ?? 80,
         rows: opts.rows ?? 24,
         env: terminalEnv(opts.env)
     })
+}
+
+/**
+ * Report a session that never started, through the SAME surface a real death
+ * uses: a corpse holding the reason, one `data` event so an attached pane prints
+ * it now, and one `exit` event so every consumer (the exit record, the tile, the
+ * remote client) learns this session is over instead of waiting forever.
+ *
+ * Shared by both pre-flight failures — missing shell and missing cwd — because
+ * two copies of this drift, and the half that drifts is the half a pane silently
+ * stops replaying.
+ */
+function reportDead(id: string, notice: string): void {
+    sessions.set(id, { kind: "dead", buffer: notice, exitCode: 1, diedAt: Date.now() })
+    // The corpse's buffer is the notice text, not whatever a prior process left
+    // behind at this id — the tail must match, or getTail would show a dead
+    // process's screen under a corpse that displays this one.
+    tails.set(id, cleanTail("", notice, TAIL_CAP))
+    rawCarry.delete(id)
+    ptyEvents.emit("data", { id, data: notice })
+    ptyEvents.emit("exit", { id, exitCode: 1, stale: false })
 }
 
 export function createPty(opts: CreateOpts): void {
@@ -218,6 +252,49 @@ export function createPty(opts: CreateOpts): void {
     if (sessions.get(id)?.kind === "live") return
 
     const { file, args } = opts.shell?.file ? opts.shell : defaultShell()
+
+    // node-pty's Windows agent throws for a missing cwd from inside
+    // `WindowsPtyAgent._completePtyConnection` ("Cannot create process, error
+    // code: 267") - ASYNCHRONOUSLY, outside the try/catch below, which is why
+    // that catch (added for the synchronous missing-SHELL throw) never saw it and
+    // the throw landed on Electron's fatal main-process dialog and took the whole
+    // app down. Widening the catch cannot reach it. Checking first is the only
+    // place this can be caught at all.
+    //
+    // `isDirectory()` rather than mere existence: a path that resolves to a FILE
+    // makes statSync succeed and node-pty throw the same way.
+    const cwd = resolveCwd(opts)
+    let cwdOk = false
+    try {
+        cwdOk = statSync(cwd).isDirectory()
+    } catch {
+        // A stat that THROWS (permission denied, an unmounted drive, a path
+        // longer than the OS accepts) is not proof the folder is gone. It is,
+        // however, proof we cannot hand it to node-pty and survive, so it takes
+        // the same refusal - the notice says what we can see, not what we guess.
+        cwdOk = false
+    }
+    if (!cwdOk) {
+        // Deliberately BEFORE the "spawn" notice below: that event feeds the
+        // diagnostics record's "what shell actually launched" half, and nothing
+        // launched here. The copy names the folder and says nothing about the
+        // shell, which in this case is fine — sending the user to Settings ->
+        // Terminal to repair a working shell is a wrong diagnosis, and the
+        // missing-shell branch's copy does exactly that.
+        reportDead(
+            id,
+            [
+                "",
+                "DevDeck could not start this terminal.",
+                `  folder: ${cwd}`,
+                "That folder isn't there right now. It may have been moved or renamed,",
+                "or be on a drive that isn't connected.",
+                ""
+            ].join("\r\n")
+        )
+        return
+    }
+
     // Announced before the spawn is attempted, and on the same emitter as
     // "data" and "exit" rather than through an import of the diagnostics
     // module. This is the ONE place that knows which shell won — the renderer's
@@ -228,7 +305,7 @@ export function createPty(opts: CreateOpts): void {
     ptyEvents.emit("spawn", { id, file, args })
     let proc: nodePty.IPty
     try {
-        proc = spawnShell(file, args, opts)
+        proc = spawnShell(file, args, opts, cwd)
     } catch (e) {
         // Experiment E2 (2026-08-29): `nodePty.spawn` throws synchronously for a
         // missing or non-executable shell ("File not found: <path>"), and the
@@ -246,18 +323,7 @@ export function createPty(opts: CreateOpts): void {
             "Pick a different shell in Settings -> Terminal, or fix the path there.",
             ""
         ].join("\r\n")
-        // Through the SAME surface a real death uses: a corpse holding the
-        // reason, one data event so an attached pane prints it now, and one exit
-        // event so every consumer (the exit record, the tile, the remote client)
-        // learns this session is over instead of waiting forever.
-        sessions.set(id, { kind: "dead", buffer: notice, exitCode: 1, diedAt: Date.now() })
-        // The corpse's buffer is the notice text, not whatever a prior process
-        // left behind at this id — the tail must match, or getTail would show a
-        // dead process's screen under a corpse that displays this one.
-        tails.set(id, cleanTail("", notice, TAIL_CAP))
-        rawCarry.delete(id)
-        ptyEvents.emit("data", { id, data: notice })
-        ptyEvents.emit("exit", { id, exitCode: 1, stale: false })
+        reportDead(id, notice)
         return
     }
     const live: Live = { kind: "live", proc, buffer: "", agentId: opts.agentId }
