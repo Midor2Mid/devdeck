@@ -85,6 +85,17 @@ export interface Project {
 export interface ProjectStore {
     projects: Project[]
     activeId: string | null
+    /**
+     * True when `projects.json` exists but could not be read.
+     *
+     * Main latches this (`main/projects.ts`) and refuses to save over a store
+     * it could not read, so every mutator becomes a silent no-op for the
+     * session. It was absent from this interface, which is why no renderer code
+     * read it: the flag arrived over IPC and the type said it did not exist.
+     * Without it an unreadable store is indistinguishable from a fresh install
+     * - the user is shown "you have no projects" and every add silently fails.
+     */
+    unreadable?: boolean
 }
 export interface DirEntry {
     name: string

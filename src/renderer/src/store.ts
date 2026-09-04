@@ -1255,6 +1255,23 @@ export const useStore = create<AppState>((set, get) => {
                 console.error("[store] workspace.json unreadable - persistence disabled")
                 return
             }
+            // `projects.json` present but unreadable: main has latched it and will
+            // not save over a store it could not read, so adding or removing a
+            // project is a silent no-op for the whole session - and the list
+            // comes back empty, which renders as a fresh install. Same bar the
+            // workspace case uses, and deliberately WITHOUT its early return:
+            // the workspace is fine, so tabs and layout still persist, and the
+            // projects that could not be read are simply not there to show.
+            if (store.unreadable) {
+                set({
+                    persistBlocked: {
+                        file: "projects.json",
+                        message:
+                            "could not be read, so adding, removing and reordering projects is off for this session. Your existing projects are not lost - DevDeck just cannot see them right now."
+                    }
+                })
+                console.error("[store] projects.json unreadable - project mutations disabled")
+            }
             const w =
                 (ws.ok
                     ? (ws.data as (Partial<Persisted> & { termKinds?: Record<string, string> }) | null)
