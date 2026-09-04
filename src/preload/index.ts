@@ -8,6 +8,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron"
 // letting the two sides drift (the exact gap that hid Task 3's regression).
 import type { BindMode } from "../main/guards"
 import type { FolderState, RelocateResult } from "../main/projects"
+import type { MenuCommand } from "../main/index"
 import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
@@ -33,6 +34,9 @@ export type { BindMode, PublicRemoteDevice as RemoteDevice }
 // two as one is the defect this type exists to prevent - read the type's own
 // comment in main/projects.ts before rendering any of them.
 export type { FolderState, RelocateResult }
+// The application menu's one command shape. Type-only, so importing it from
+// main/index does not drag main into the preload bundle.
+export type { MenuCommand }
 // `Loaded<T>` crosses the bridge intact: the renderer has to distinguish "no
 // workspace yet" from "there is one and we could not read it" to know whether
 // saving over it is safe. Collapsing the two is what destroyed workspaces.
@@ -448,6 +452,24 @@ const api = {
             } catch {
                 return ""
             }
+        }
+    },
+    /**
+     * The application menu, which lives in main and acts in the renderer.
+     *
+     * Two directions, one purpose: the renderer pushes its MRU order so File ->
+     * Open Recent can be in recency order at all (main only knows when a
+     * project was added), and main pushes back the one command a menu click
+     * cannot perform for itself. Without this channel Open Recent could not be
+     * built, which is why the first version of the menu shipped without it.
+     */
+    menu: {
+        setRecent: (list: { id: string; name: string }[]): void =>
+            ipcRenderer.send("menu:setRecent", list),
+        onCommand: (cb: (cmd: MenuCommand) => void): (() => void) => {
+            const handler = (_e: unknown, cmd: MenuCommand): void => cb(cmd)
+            ipcRenderer.on("menu:command", handler)
+            return () => ipcRenderer.removeListener("menu:command", handler)
         }
     },
     workspace: {

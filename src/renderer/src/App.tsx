@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useStore } from "./store"
 import { nextSession } from "./deck"
+import { orderByMru } from "./projectMru"
 import { setDecisions } from "./missionTail"
 import { useSettings } from "./settings"
 import { useToasts, toast } from "./toast"
@@ -103,6 +104,8 @@ export function App(): JSX.Element {
     const agentStatus = useStore((s) => s.agentStatus)
     const termAgents = useStore((s) => s.termAgents)
     const projects = useStore((s) => s.projects)
+    const projectMru = useStore((s) => s.projectMru)
+    const activeId = useStore((s) => s.activeId)
     const sessions = useStore((s) => s.sessions)
     const newTabIn = useStore((s) => s.newTabIn)
     const addProjectByPath = useStore((s) => s.addProjectByPath)
@@ -223,6 +226,39 @@ export function App(): JSX.Element {
             window.removeEventListener("focus", tick)
         }
     }, [projects])
+
+    /**
+     * File -> Open Recent, in both directions.
+     *
+     * The order is the renderer's: `projectMru` is where a switch is recorded,
+     * and `projects.json` knows only when a project was added - so a submenu
+     * built in main would have been in the wrong order while calling itself
+     * Recent. The active project is left out; it is already open, and its
+     * entry would be a no-op at the top of the list.
+     */
+    useEffect(() => {
+        const s = useStore.getState()
+        const ids = orderByMru(
+            projects.map((p) => p.id),
+            s.projectMru
+        ).filter((id) => id !== s.activeId)
+        const byId = new Map(projects.map((p) => [p.id, p.name]))
+        window.api.menu.setRecent(ids.map((id) => ({ id, name: byId.get(id) as string })))
+    }, [projects, projectMru, activeId])
+
+    useEffect(() => {
+        return window.api.menu.onCommand((cmd) => {
+            if (cmd.command !== "project:activate") return
+            // Validated here rather than trusted: the menu was built from a
+            // list this window sent, but it can be a rebuild behind (a project
+            // removed while the menu was open), and `setActiveProject` would
+            // otherwise point `activeId` at a project that no longer exists.
+            const s = useStore.getState()
+            if (s.projects.some((p) => p.id === cmd.projectId)) {
+                void s.setActiveProject(cmd.projectId)
+            }
+        })
+    }, [])
 
     // Main's classification, straight into missionTail's module cache — no
     // React state on this path: it fires per status flip and the tiles read it

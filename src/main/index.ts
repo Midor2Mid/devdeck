@@ -349,6 +349,24 @@ function createWindow(): void {
 }
 
 /**
+ * The one command channel from the menu to the renderer.
+ *
+ * Deliberately a single named channel with a discriminated payload rather than
+ * one channel per menu item: the renderer registers one listener, and adding a
+ * menu act does not widen the bridge. Everything main can ask for this way is
+ * something the renderer already does on its own.
+ */
+export interface MenuCommand {
+    command: "project:activate"
+    projectId: string
+}
+
+function sendMenuCommand(cmd: MenuCommand): void {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send("menu:command", cmd)
+}
+
+/**
  * Replay one of the renderer's own chords, from the menu.
  *
  * The menu lives in this process; every act it offers lives in the other one.
@@ -370,6 +388,18 @@ function sendChord(keyCode: string, modifiers: Array<"control" | "shift"> = ["co
     wc.sendInputEvent({ type: "keyDown", keyCode, modifiers })
     wc.sendInputEvent({ type: "keyUp", keyCode, modifiers })
 }
+
+/**
+ * The renderer's own most-recently-used project order, for File -> Open Recent.
+ *
+ * Main cannot derive this: recency lives in the renderer's `projectMru` (that
+ * is where a switch is recorded), and `projects.json` knows only when a project
+ * was ADDED. A submenu built from the file would have been in the wrong order
+ * while calling itself Recent, so the previous menu deliberately shipped
+ * without one. The renderer pushes the order instead, and the menu is rebuilt
+ * when it changes.
+ */
+let recentProjects: { id: string; name: string }[] = []
 
 /** Version facts for Help -> About. Nothing here leaves the machine. */
 function aboutDetail(): string {
@@ -426,6 +456,22 @@ function buildAppMenu(): void {
                     accelerator: "CmdOrCtrl+K",
                     registerAccelerator: false,
                     click: () => sendChord("k")
+                },
+                {
+                    label: "Open &Recent",
+                    // Disabled rather than empty: an item that opens a blank
+                    // popup says nothing about why it is blank.
+                    enabled: recentProjects.length > 0,
+                    submenu: recentProjects.map((p) => ({
+                        label: p.name,
+                        // The renderer activates it, not main: `setActiveProject`
+                        // records MRU, restores that project's remembered view
+                        // and persists - main writing `activeId` on its own
+                        // would move the window's state behind its back. A
+                        // project whose folder is missing still activates, the
+                        // same as everywhere else: a marker is not a gate.
+                        click: () => sendMenuCommand({ command: "project:activate", projectId: p.id })
+                    }))
                 },
                 { type: "separator" },
                 { label: "E&xit", role: "quit" }
@@ -546,6 +592,24 @@ function registerIpc(): void {
     // Takes no path from the renderer: it probes the projects already in the
     // store, so this cannot be asked whether an arbitrary path exists.
     ipcMain.handle("projects:probe", () => projects.probeProjects())
+    // The renderer owns recency; the menu only renders it. Capped and coerced
+    // because a menu label is a string and nothing here should be able to grow
+    // the File menu without bound.
+    ipcMain.on("menu:setRecent", (_e, list: { id: string; name: string }[]) => {
+        const next = (Array.isArray(list) ? list : [])
+            .slice(0, 8)
+            .map((p) => ({ id: String(p?.id ?? ""), name: String(p?.name ?? "") }))
+            .filter((p) => p.id && p.name)
+        // Rebuilding the whole menu is the only way Electron offers to change a
+        // submenu, so skip it when nothing actually moved - this fires on every
+        // project switch.
+        const same =
+            next.length === recentProjects.length &&
+            next.every((p, i) => p.id === recentProjects[i].id && p.name === recentProjects[i].name)
+        if (same) return
+        recentProjects = next
+        buildAppMenu()
+    })
     ipcMain.handle("projects:relocate", (_e, id: string) =>
         projects.relocateProject(id, mainWindow!)
     )
