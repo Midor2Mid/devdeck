@@ -517,7 +517,16 @@ describe("the client page carries the decision card (Task 7)", () => {
         const html = await page()
         expect(html).toContain("t:'choice'")
         expect(html).toContain("decisionId:p.id")
-        expect(html).toContain("p.options[Number(b.getAttribute('data-i'))].send")
+        // Two assertions rather than one, because the single expression this
+        // used to look for -- `p.options[Number(...)].send` inline in the
+        // sendMsg call -- had to be split: the tap handler now reads the option
+        // BEFORE it re-renders the card, and the re-render detaches the very
+        // button whose `data-i` the old form read afterwards. The property this
+        // test exists to pin is unchanged and still fully covered: the token
+        // comes out of `p.options`, which is main's own record, and is never a
+        // string this page composed.
+        expect(html).toContain("var opt=p.options[Number(b.getAttribute('data-i'))]")
+        expect(html).toContain("send:opt.send")
     })
 
     it("guards the second tap and reports a refusal in the server's words", async () => {

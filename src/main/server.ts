@@ -774,7 +774,7 @@ const CLIENT_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<meta name="theme-color" content="#181725" />
+<meta name="theme-color" content="#211f1c" />
 <title>DevDeck Remote</title>
 <link rel="stylesheet" href="/xterm.css" />
 <style>
@@ -789,9 +789,9 @@ const CLIENT_HTML = `<!doctype html>
      for anything that does not know dvh. */
   #app{display:flex;flex-direction:column;height:100vh;height:100dvh}
   header{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--bd)}
-  header .brand{font-weight:600;letter-spacing:1px;color:var(--ac)}
+  header .brand{font-weight:600;letter-spacing:1px;color:var(--ac);flex:none}
   header button{background:transparent;border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:6px 12px;font-size:15px}
-  #status{margin-left:auto;font-size:12px;color:var(--mu)}
+  #status{margin-left:auto;font-size:12px;color:var(--mu);flex:none;white-space:nowrap}
   #list{flex:1;overflow:auto;padding:10px}
   .proj{font-size:11px;letter-spacing:1px;color:var(--mu);margin:14px 6px 6px}
   .sess{display:flex;align-items:center;gap:10px;padding:14px;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px;background:var(--bg2)}
@@ -806,15 +806,29 @@ const CLIENT_HTML = `<!doctype html>
   .badge{font-size:9px;letter-spacing:1px;color:var(--clay);border:1px solid var(--bd);border-radius:5px;padding:2px 6px}
   .new{color:var(--clay);border-color:var(--clay)!important}
   #term-view{flex:1;display:none;flex-direction:column;min-height:0}
-  #term{flex:1;min-height:0;background:var(--bg3);padding:6px}
+  /* overflow:hidden, because xterm sizes .xterm to rows x cell-height and
+     nothing refits it when the decision card appears. On a short viewport
+     (a phone in landscape: #term measured 12px tall against a 120px canvas)
+     the canvas overflowed and painted 114px of terminal output straight over
+     the card's question and raw excerpt, while Approve/Deny stayed tappable -
+     you could answer a prompt you could not read. Clipping the terminal is
+     the lesser harm; refitting it would resize the HOST pty (see fit()). */
+  #term{flex:1;min-height:0;overflow:hidden;background:var(--bg3);padding:6px}
   #bar{display:flex;gap:6px;padding:8px;background:var(--bg2);border-top:1px solid var(--bd)}
   #bar input{flex:1;background:var(--bg3);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:10px;font-size:15px}
   #bar button,.keys button{background:var(--bg3);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:10px 12px}
-  .keys{display:flex;gap:6px;padding:0 8px 8px;background:var(--bg2);overflow-x:auto}
+  .keys{display:flex;gap:6px;padding:0 8px 8px;background:var(--bg2);overflow-x:auto;flex:none}
   .keys button{flex:none;font-size:13px;color:var(--mu)}
   .empty{color:var(--mu);text-align:center;padding:40px 20px;line-height:1.6}
-  nav#nav{display:flex;gap:4px;margin-left:8px}
-  nav#nav button{padding:5px 10px;font-size:13px;color:var(--mu);border-color:transparent}
+  /* flex:1 + min-width:0 + its own overflow, or the five tabs push #status
+     off the right edge of every portrait phone: the header's content was a
+     fixed 431px against a 320-390px viewport, so the whole PAGE scrolled
+     sideways and 'disconnected - retrying' - the one thing that explains a
+     tap that did nothing - was never on screen. The tabs scroll inside the
+     header now; the brand and the status never move. */
+  nav#nav{display:flex;gap:4px;margin-left:8px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+  nav#nav::-webkit-scrollbar{display:none}
+  nav#nav button{flex:none;padding:5px 10px;font-size:13px;color:var(--mu);border-color:transparent}
   nav#nav button.active{color:var(--tx);border-color:var(--bd)}
   #http-view,#db-view,#files-view,#ai-view{flex:1;display:none;flex-direction:column;min-height:0;overflow:auto;padding:12px;gap:8px}
   #http-view .row{display:flex;gap:6px;margin-bottom:8px}
@@ -837,10 +851,13 @@ const CLIENT_HTML = `<!doctype html>
   /* The pending-decision card. Sits above the quick keys so the answer is the
      nearest thing to your thumb, and shows the raw screen under the parsed
      question - the question is the string an agent controls. */
-  #decision{background:var(--bg2);padding:0 8px}
+  /* flex:none: the answer is never what gets squeezed when the column runs
+     short. Before this the quick-keys row was compressed from 45px to 8px on
+     a 320px-wide phone. */
+  #decision{background:var(--bg2);padding:0 8px;flex:none}
   #decision .card{border:1px solid var(--ac);border-radius:10px;padding:10px;margin:8px 0;background:var(--bg3)}
   #decision .q{font-weight:600;margin-bottom:6px;line-height:1.35}
-  #decision .tail{margin:0 0 8px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;color:var(--mu);font-family:monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:30dvh;overflow:auto}
+  #decision .tail{margin:0 0 8px;padding:8px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;color:var(--mu);font-family:monospace;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:30vh;max-height:30dvh;overflow:auto}
   #decision .acts{display:flex;gap:8px}
   #decision .acts button{flex:1;min-height:44px;border-radius:8px;font-size:15px;font-weight:600}
   #decision .acts .approve{background:var(--ac);color:#14110d;border:none}
@@ -959,7 +976,7 @@ const CLIENT_HTML = `<!doctype html>
   // The decision currently on screen, whether a tap is in flight, and the last
   // thing the server said about one. 'submitting' is the double-tap guard: a
   // second tap is how the wrong digit reaches a live agent.
-  var pendingId=null, submitting=false, dnote='', dnoteBad=false, dnoteTimer=null;
+  var pendingId=null, submitting=false, dnote='', dnoteBad=false, dnoteTimer=null, submitTimer=null;
 
   // Ask for OS-notification permission on the first user gesture (browsers
   // require one). Notifications only fire on a secure context (https / Tailscale
@@ -1003,7 +1020,13 @@ const CLIENT_HTML = `<!doctype html>
     // this same-origin upgrade request.
     ws = new WebSocket(proto + '://' + location.host + '/ws');
     ws.onopen = function(){ statusEl.textContent = 'connected'; };
-    ws.onclose = function(){ statusEl.textContent = 'disconnected - retrying'; setTimeout(connect, 1500); };
+    ws.onclose = function(){
+      statusEl.textContent = 'disconnected - retrying';
+      // A tap in flight when the socket died has an unknown fate: it may have
+      // been written to the pty before the close, or never have arrived.
+      if(submitting){ clearSubmit(); setNote('Connection dropped - the answer may not have arrived. Check the terminal.', true); }
+      setTimeout(connect, 1500);
+    };
     ws.onmessage = function(e){
       var m = JSON.parse(e.data);
       if(m.t === 'sessions'){
@@ -1015,7 +1038,7 @@ const CLIENT_HTML = `<!doctype html>
         // Three-valued on purpose. A binary success/failure invites a retry, and
         // a retry is how the wrong digit reaches a live agent - so anything that
         // is not an accepted answer says what happened, in the server's words.
-        submitting=false;
+        clearSubmit();
         if(m.outcome === 'accepted') setNote('Answered ✓', false);
         else setNote(m.reason || 'Response unconfirmed - check the terminal before answering again.', true);
       }
@@ -1083,11 +1106,47 @@ const CLIENT_HTML = `<!doctype html>
 
   // What the server said about the last tap. Kept outside the card because the
   // card is gone by the time an accepted answer is worth confirming.
-  function setNote(msg, bad){
+  function setNote(msg, bad, sticky){
     dnote=msg; dnoteBad=!!bad;
     if(dnoteTimer) clearTimeout(dnoteTimer);
-    dnoteTimer=setTimeout(function(){ dnote=''; renderDecision(); }, 6000);
+    dnoteTimer=null;
+    // 'Sending…' is sticky: it has to stay up until the server answers, and
+    // the answer can be slower than six seconds on a phone link.
+    if(!sticky) dnoteTimer=setTimeout(function(){ dnote=''; renderDecision(); }, 6000);
     renderDecision();
+  }
+
+  // A tap that is never answered must not leave the only two answer buttons
+  // dead. Before this, a silent server or a socket that dropped mid-tap left
+  // 'submitting' true forever: the card stayed on screen, the link came back,
+  // and both buttons were greyed out with nothing said - the prompt was
+  // unanswerable from the phone until you navigated away and back.
+  //
+  // Re-enabling is safe, and it is main's once-only rule that makes it safe:
+  // consumeDecision refuses a second spend of the same decision id
+  // ('Already answered.') and refuses one whose screen has moved ('moved-on'),
+  // so a second tap can never put a second keystroke into the agent. What the
+  // note has to be honest about is that the first tap's fate is unknown.
+  function clearSubmit(){
+    if(submitTimer){ clearTimeout(submitTimer); submitTimer=null; }
+    submitting=false;
+  }
+  function armSubmitTimeout(){
+    if(submitTimer) clearTimeout(submitTimer);
+    submitTimer=setTimeout(function(){
+      submitTimer=null;
+      if(!submitting) return;
+      submitting=false;
+      setNote('Response unconfirmed - check the terminal before answering again.', true);
+    }, 10000);
+  }
+
+  // Keep the raw excerpt showing its NEWEST end. Called on render and again on
+  // resize: a rotation re-lays-out the box without re-rendering the card, and a
+  // scrollTop set against the old height then sits mid-excerpt.
+  function pinTail(){
+    var t=document.querySelector('#decision .tail');
+    if(t) t.scrollTop=t.scrollHeight;
   }
 
   // The card for the attached session's pending decision, if it has one.
@@ -1117,14 +1176,30 @@ const CLIENT_HTML = `<!doctype html>
     }
     if(dnote) html+='<div class="dnote'+(dnoteBad?' bad':'')+'">'+esc(dnote)+'</div>';
     el.innerHTML=html;
+    // The excerpt is 16 lines in a box that fits about 12, and it opened at the
+    // TOP - so the oldest line was on screen and the option lines, including the
+    // '(esc)' one that Deny actually sends, were below the fold of an inner
+    // scroll box that looks like static text. Show the newest end, which is the
+    // part the answer is about.
+    pinTail();
     if(!p) return;
     [].forEach.call(el.querySelectorAll('.acts button'),function(b){
       b.onclick=function(){
         if(submitting) return;
-        submitting=true; renderDecision();
+        // Read the option BEFORE the re-render below detaches this button.
+        var opt=p.options[Number(b.getAttribute('data-i'))];
+        // sendMsg is a silent no-op on a closed socket, which on a phone link is
+        // the common case rather than the rare one. Saying so beats greying the
+        // buttons out over a message that was never sent.
+        if(!ws || ws.readyState!==1){ setNote('Not connected - nothing was sent. Check the terminal.', true); return; }
+        submitting=true;
+        armSubmitTimeout();
+        // Sticky, and it renders: a tap with no feedback at all is what makes
+        // someone tap again.
+        setNote('Sending…', false, true);
         // 'send' is one of main's own recorded tokens, echoed back - never a
         // string this page composed.
-        sendMsg({t:'choice',id:attachedId,decisionId:p.id,send:p.options[Number(b.getAttribute('data-i'))].send});
+        sendMsg({t:'choice',id:attachedId,decisionId:p.id,send:opt.send});
       };
     });
   }
@@ -1149,7 +1224,7 @@ const CLIENT_HTML = `<!doctype html>
     term.open(document.getElementById('term'));
     term.onData(function(d){ sendMsg({t:'input',id:id,data:d}); });
     attachedId=id; sendMsg({t:'attach',id:id});
-    dnote=''; renderDecision();
+    clearSubmit(); dnote=''; renderDecision();
     setTimeout(fit,60);
   }
 
@@ -1164,7 +1239,7 @@ const CLIENT_HTML = `<!doctype html>
   };
   document.getElementById('inp').addEventListener('keydown',function(e){ if(e.key==='Enter'){ document.getElementById('send').click(); }});
   [].forEach.call(document.querySelectorAll('.keys button'),function(b){ b.onclick=function(){ if(attachedId) sendMsg({t:'input',id:attachedId,data:b.getAttribute('data-k')}); }; });
-  window.addEventListener('resize',function(){ if(attachedId) fit(); });
+  window.addEventListener('resize',function(){ if(attachedId){ fit(); pinTail(); } });
 
   // ----- Files (browse + edit + save) -----
   function loadTree(path){ fcur=path; sendMsg({t:'fs:tree',path:path}); }
