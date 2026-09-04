@@ -14,6 +14,13 @@
 
 - **`npm run typecheck` must stay at zero errors.** The build does not typecheck. Run it before every commit.
 - **`npm test` must stay green.** It is 1,536 specs. Phase 1 deletes code that some specs cover — deleting those specs *with* their code is correct; silently letting the count drop without saying so is not. Every deletion task states its expected test-count delta.
+- **A test-count delta is only meaningful on a tree no other agent is touching.**
+  Measured on `main` at 6792b81: **1,536 passed, 1 skipped**. During wave 1 the
+  Task 1 agent measured 1,548 and concluded the baseline was stale — it was not.
+  A concurrently-running agent had an untracked `tests/themeFallback.test.ts` on
+  disk, and vitest runs every test file it finds, committed or not. Before quoting
+  a delta, run `git status --short` and confirm no untracked test files belong to
+  someone else. Two agents in one working tree cannot both report counts.
 - **A green suite proves nothing about a deletion.** There are no component tests, and ~99 hand-written `window.api` stubs are cast through `unknown`, so renaming or removing an IPC channel leaves every suite green. Deletions are verified by grepping bare channel names and by driving the built app.
 - **No component tests. No `.test.tsx`.** `vitest.config.ts` is `environment: "node"`. Logic testable in isolation gets a unit test; anything else gets a `run-app` observation. Do not add a DOM environment.
 - **`run-app` requires a scratch profile.** A real DevDeck holds Electron's single-instance lock, so always pass `{ debugPort: <unique>, userDataDir: "<scratch>/udata-<task>" }` or the renderer target never appears. A scratch dir also gives the true zero-projects first-run state.
