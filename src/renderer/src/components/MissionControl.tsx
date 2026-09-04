@@ -15,7 +15,30 @@ import { buildOwnership, type OwnershipMap } from "../ownership"
 import { nextChangedCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
 import { resolveTileState, wantsYou } from "../tileState"
+import { Icon } from "./Icon"
 import type { SystemInfo } from "../../../preload/index"
+
+// Whether the ports wall is open, persisted across view switches + restarts
+// (localStorage, the same lightweight store OverviewView's group folding and the
+// project MRU use - no workspace-schema change needed). Default CLOSED: this is
+// ambient machine state with no agent edge, and eighteen port pills belonging to
+// Steam and SQL Server were the loudest object on a stranger's first project
+// screen. Someone who wants it open only has to say so once.
+const PORTS_OPEN_KEY = "devdeck.missionPortsOpen"
+function loadPortsOpen(): boolean {
+    try {
+        return localStorage.getItem(PORTS_OPEN_KEY) === "1"
+    } catch {
+        return false
+    }
+}
+function savePortsOpen(open: boolean): void {
+    try {
+        localStorage.setItem(PORTS_OPEN_KEY, open ? "1" : "0")
+    } catch {
+        /* storage unavailable - ignore */
+    }
+}
 
 /**
  * The supervision home: every live agent across all projects as a tile (status +
@@ -130,6 +153,12 @@ export function MissionControl(): JSX.Element {
         }
     }, [view])
     const showSystem = !!sys && (sys.docker.length > 0 || sys.ports.length > 0)
+    const [portsOpen, setPortsOpen] = useState<boolean>(loadPortsOpen)
+    const togglePorts = (): void =>
+        setPortsOpen((prev) => {
+            savePortsOpen(!prev)
+            return !prev
+        })
 
     // Every listening socket used to get its own chip — two dozen of them, mostly
     // OS noise in the dynamic/ephemeral range (49152+ on Windows) plus whatever
@@ -468,32 +497,53 @@ export function MissionControl(): JSX.Element {
             {showSystem && (
                 <div className="mission-section">
                     <div className="mission-head">
-                        <span className="section-label">SYSTEM</span>
-                        <span className="muted small">containers &amp; listening ports</span>
+                        {/* Sentence case, unlike the uppercase labels above it, and
+                            deliberately: "SYSTEM" named an internal concept, and a
+                            stranger read it as "something about my system is wrong". */}
+                        <span className="section-label">Ports in use on this PC</span>
+                        <button
+                            className="btn-min"
+                            aria-expanded={portsOpen}
+                            aria-label={
+                                portsOpen
+                                    ? "Hide ports in use on this PC"
+                                    : "Show ports in use on this PC"
+                            }
+                            onClick={togglePorts}
+                        >
+                            <Icon name={portsOpen ? "chevronDown" : "chevronRight"} size={12} />{" "}
+                            {portsOpen ? "hide" : "show"}
+                        </button>
                     </div>
-                    <div className="mission-system">
-                        {sys!.docker.map((c) => (
-                            <span key={"d" + c.name} className="mission-chip" data-tip={c.ports || c.status}>
-                                <span className="mission-chip-dot ok" /> {c.name}
-                                <span className="muted small"> {c.status}</span>
-                            </span>
-                        ))}
-                        {devPorts.map((p) => (
-                            <span key={"p" + p.port} className="mission-chip" data-tip={`pid ${p.pid}`}>
-                                :{p.port}
-                            </span>
-                        ))}
-                        {otherPorts.length > 0 && (
-                            <span
-                                className="mission-chip muted"
-                                data-tip={`Ephemeral / high ports (${EPHEMERAL_FROM}+), usually not dev servers: ${otherPorts
-                                    .map((p) => p.port)
-                                    .join(", ")}`}
-                            >
-                                +{otherPorts.length} more
-                            </span>
-                        )}
-                    </div>
+                    {/* Shown whether or not the wall is open - collapsed, it is what
+                        tells you what "show" would reveal, and that these ports are
+                        not DevDeck's. */}
+                    <div className="muted small">every process listening right now, not only DevDeck</div>
+                    {portsOpen && (
+                        <div className="mission-system">
+                            {sys!.docker.map((c) => (
+                                <span key={"d" + c.name} className="mission-chip" data-tip={c.ports || c.status}>
+                                    <span className="mission-chip-dot ok" /> {c.name}
+                                    <span className="muted small"> {c.status}</span>
+                                </span>
+                            ))}
+                            {devPorts.map((p) => (
+                                <span key={"p" + p.port} className="mission-chip" data-tip={`pid ${p.pid}`}>
+                                    :{p.port}
+                                </span>
+                            ))}
+                            {otherPorts.length > 0 && (
+                                <span
+                                    className="mission-chip muted"
+                                    data-tip={`Ephemeral / high ports (${EPHEMERAL_FROM}+), usually not dev servers: ${otherPorts
+                                        .map((p) => p.port)
+                                        .join(", ")}`}
+                                >
+                                    +{otherPorts.length} more
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
