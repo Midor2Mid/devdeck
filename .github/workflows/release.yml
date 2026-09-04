@@ -1,0 +1,338 @@
+# The release build, moved off one machine.
+#
+# WHY. Until this existed, a DevDeck release could only be produced on the
+# author's laptop, and the laptop was not a reliable release machine: Avast's
+# Behavior Shield kills `powershell.exe`, electron-builder shells out to
+# PowerShell for the code-signing certificate lookup, and signing therefore
+# broke repeatedly until `powershell.exe` was added to Avast's *Allowed apps*
+# list. A build a stranger can trust cannot depend on one machine's antivirus
+# settings. This runs the whole thing on a clean windows-latest runner.
+#
+# windows-latest and nothing else, for the same reason `check.yml` gives: DevDeck
+# is a Windows-first Electron app and the NSIS target only builds here.
+#
+# WHAT THIS PRODUCES TODAY: **unsigned** artifacts. See the SignPath block near
+# the bottom - the certificate has not been granted yet, so signing is skipped,
+# every step of it is inert, and the draft release says so in its own body. That
+# is deliberate. What must never happen is an unsigned artifact published as if
+# it were signed.
+#
+# THE LOCAL PATH IS UNCHANGED. `npm run package:signed` still self-signs with
+# `CN=DevDeck Dev` out of the current user's certificate store, and is still the
+# only way to get a build this machine trusts. This workflow does not replace it
+# until a real certificate exists.
+
+name: release
+
+on:
+  # Only a three-part version tag. `v0.13` or `v0.13.0-rc1` will not trigger it,
+  # because electron-updater's manifest and the artifact names are built from
+  # package.json's version and the two must agree exactly.
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  # A dispatch run builds and verifies everything and creates NO release: the
+  # artifacts land as workflow artifacts instead. This is how to prove the
+  # pipeline works without publishing anything, and it is the only part of this
+  # file that can be exercised before ROADMAP step 4 lands.
+  workflow_dispatch:
+
+# Needed to create the draft release and attach assets. Nothing else is granted.
+permissions:
+  contents: read
+
+concurrency:
+  # Two runs racing on one tag would fight over the same release assets.
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # gh release create / upload
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the patch, not `22`, because this is the build that ships.
+      # The repo's dependency floor is `^20.19 || >=22.12` (vite 7 / electron 43);
+      # 22.23.2 is the version every local build and the whole test suite has
+      # actually been run on. Bumping it is a deliberate edit, not a drift.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.2"
+          cache: npm
+
+      # A tag that disagrees with package.json produces artifacts named after
+      # one version inside a release named after another, and an updater
+      # manifest that points at a file nobody uploaded. Fail here, not there.
+      - name: Tag agrees with package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          Write-Host "tag=$tag package.json=$version"
+          if ($tag -ne "v$version") {
+              throw "tag $tag does not match package.json version $version - retag or bump, do not release this"
+          }
+
+      - name: Install (locked)
+        run: npm ci
+
+      # The two gates, in this order. Typecheck covers `tests/` as well, so a
+      # test that has drifted from the types it exercises fails here rather than
+      # passing green.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # ---------------------------------------------------------------------
+      # Is a real signing credential available? Answered once, here, because
+      # `secrets` cannot be read from a step's `if:` expression - only from
+      # `env`. Every SignPath step below keys off this output instead.
+      # ---------------------------------------------------------------------
+      - name: Signing credential present?
+        id: signing
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        run: |
+          $enabled = -not [string]::IsNullOrWhiteSpace($env:SIGNPATH_API_TOKEN)
+          "enabled=$($enabled.ToString().ToLower())" | Out-File $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($enabled) {
+              Write-Host "SIGNPATH_API_TOKEN is set - artifacts will be submitted for signing."
+          } else {
+              Write-Host "SIGNPATH_API_TOKEN is NOT set - artifacts will be UNSIGNED and the release stays a draft."
+          }
+
+      - name: Build (electron-vite)
+        run: npx electron-vite build
+
+      # The CI packaging config is generated from package.json's `build` block so
+      # the two cannot drift, with signing switched off and the publisher name
+      # blanked. Read scripts/ci-builder-config.mjs for why this is a generated
+      # file rather than `-c.win.signExecutable=false` on the command line: that
+      # override arrives as the string "false" and silently does nothing.
+      - name: Generate the CI packaging config
+        env:
+          # Set this repository VARIABLE the day the certificate is granted: the
+          # exact CN of the granted cert. It is written into the packaged app's
+          # resources/app-update.yml, and electron-updater REFUSES any update
+          # whose Authenticode publisher does not equal it. Left empty, the
+          # unsigned build ships no publisher claim at all, which is correct for
+          # an unsigned build.
+          PUBLISHER_NAME: ${{ vars.SIGNPATH_PUBLISHER_NAME }}
+        run: |
+          if ($env:PUBLISHER_NAME -and "${{ steps.signing.outputs.enabled }}" -eq "true") {
+              node scripts/ci-builder-config.mjs electron-builder.ci.json --publisher-name "$env:PUBLISHER_NAME"
+          } else {
+              node scripts/ci-builder-config.mjs electron-builder.ci.json
+          }
+          Get-Content electron-builder.ci.json
+
+      # `--publish never`: this workflow decides what gets uploaded and when, not
+      # electron-builder's tag heuristics. latest.yml is still written, because
+      # electron-builder generates the update manifest from the `publish` block
+      # in the config regardless of whether it uploads anything.
+      - name: Package (electron-builder, NSIS + portable)
+        run: npx electron-builder --win --publish never --config electron-builder.ci.json
+
+      - name: What was built, and is any of it signed
+        run: |
+          Get-ChildItem release -File | Sort-Object Name |
+              Format-Table Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} -AutoSize
+          foreach ($f in @("release\DevDeck-Setup-$((Get-Content package.json -Raw | ConvertFrom-Json).version).exe",
+                           "release\win-unpacked\DevDeck.exe")) {
+              if (Test-Path $f) {
+                  $sig = Get-AuthenticodeSignature $f
+                  Write-Host ("  {0,-34} {1}" -f (Split-Path $f -Leaf), $sig.Status)
+              }
+          }
+
+      # ======================================================================
+      # SIGNPATH - PRESENT, DOCUMENTED, AND INERT.
+      #
+      # NOTHING IN THIS BLOCK HAS EVER RUN. Treat it as a specification that has
+      # been read carefully, not as a tested path. It is skipped whenever the
+      # repository secret SIGNPATH_API_TOKEN is unset, which is today and will
+      # stay today until the certificate is granted.
+      #
+      # WHY IT CANNOT BE WIRED YET: SignPath Foundation's free OSS certificate
+      # requires a PUBLIC repository, and this repository is private. The
+      # application cannot even be filed before ROADMAP step 4 - the delete,
+      # recreate and public flip - which is blocked on the owner's
+      # authorisation. The runbook is docs/release/step-4-public-flip.md.
+      #
+      # THE DAY THE CERTIFICATE IS GRANTED, fill in exactly this much:
+      #
+      #   secret   SIGNPATH_API_TOKEN            SignPath -> your user -> API token
+      #   variable SIGNPATH_ORGANIZATION_ID      SignPath -> organisation id (a GUID)
+      #   variable SIGNPATH_PROJECT_SLUG         e.g. devdeck
+      #   variable SIGNPATH_SIGNING_POLICY_SLUG  e.g. release-signing
+      #   variable SIGNPATH_ARTIFACT_CONFIG_SLUG the artifact configuration slug
+      #   variable SIGNPATH_PUBLISHER_NAME       the granted certificate's exact CN
+      #
+      # and install the SignPath GitHub App on the repository, connecting it as a
+      # trusted build system so it can verify this workflow produced the artifact.
+      #
+      # THREE THINGS THAT WILL BITE WHOEVER TURNS THIS ON:
+      #
+      # 1. The artifact configuration must be an *Electron/nested* one: it has to
+      #    open the NSIS installer, sign DevDeck.exe and the asar-unpacked native
+      #    binaries inside it (including @lydell/node-pty's OpenConsole.exe), and
+      #    re-sign the installer. Signing only the outer installer leaves the app
+      #    a stranger actually runs unsigned, and SmartScreen judges that exe too.
+      #    The upload below sends both the installer and the portable exe in one
+      #    workflow artifact, so the configuration must handle a zip with two
+      #    entries.
+      #
+      # 2. Signing happens AFTER electron-builder wrote latest.yml, so the
+      #    manifest describes the UNSIGNED bytes the moment SignPath hands the
+      #    file back. That is not theoretical - this repo shipped exactly that
+      #    bug once, and it is invisible: the artifacts look perfect and
+      #    electron-updater silently refuses every update. The `--rewrite` step
+      #    below regenerates the blockmap and rewrites the sha512/size, and the
+      #    `--check` after it is the gate. Do not remove either.
+      #
+      # 3. The first signed release will NOT reach anyone already running an
+      #    earlier build. 0.12.0 ships `publisherName: DevDeck Dev` in its
+      #    app-update.yml and refuses an update signed by anyone else, which the
+      #    SignPath certificate will be. That is one manual reinstall, by design;
+      #    it is not a bug to debug on the day.
+      # ======================================================================
+      - name: Collect the artifacts for signing
+        id: unsigned
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installers
+          path: |
+            release/DevDeck-Setup-*.exe
+            release/DevDeck-Portable-*.exe
+            !release/*__uninstaller*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Submit to SignPath and wait for the signed artifacts
+        if: steps.signing.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIG_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Put the signed artifacts back and repair the update manifest
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          Get-ChildItem signed -Recurse -File | ForEach-Object {
+              Write-Host "signed <- $($_.Name)"
+              Copy-Item $_.FullName (Join-Path "release" $_.Name) -Force
+          }
+          # Regenerates the blockmap and rewrites latest.yml's sha512/size against
+          # the bytes SignPath returned. See point 2 above.
+          node scripts/update-manifest.mjs --rewrite
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          foreach ($f in @("release\DevDeck-Setup-$v.exe", "release\DevDeck-Portable-$v.exe")) {
+              $sig = Get-AuthenticodeSignature $f
+              Write-Host ("  {0,-34} {1}" -f (Split-Path $f -Leaf), $sig.Status)
+              if ($sig.Status -ne "Valid") { throw "SignPath returned $f but its signature is $($sig.Status)" }
+          }
+
+      # ======================================================================
+      # The gate. Runs in both paths and must run last: latest.yml is what
+      # electron-updater reads, and a manifest that disagrees with the installer
+      # by one byte breaks auto-update for every existing install, silently.
+      # ======================================================================
+      - name: The update manifest describes the artifacts on disk
+        run: node scripts/update-manifest.mjs --check
+
+      - name: Upload the artifacts to the workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: devdeck-installers-${{ github.run_number }}
+          # All four. latest.yml and the .blockmap are not optional extras:
+          # electron-updater reads the manifest to find the download and the
+          # blockmap to fetch only the changed parts of it. A release without
+          # them breaks updating for everyone already installed.
+          path: |
+            release/DevDeck-Setup-*.exe
+            release/DevDeck-Setup-*.exe.blockmap
+            release/DevDeck-Portable-*.exe
+            release/latest.yml
+            !release/*__uninstaller*
+          if-no-files-found: error
+          retention-days: 14
+
+      # A DRAFT, always. Publishing is a human act with an outward-facing
+      # consequence, and while the artifacts are unsigned it is the wrong act:
+      # a published release is what electron-updater polls, so publishing an
+      # unsigned build offers it to every existing install (which will refuse
+      # it - see point 3 above). The draft carries its own signing status in
+      # its body so nobody has to remember which kind of build this was.
+      - name: Draft the release and attach the four assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNED: ${{ steps.signing.outputs.enabled }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+
+          if ($env:SIGNED -eq "true") {
+              $status = "**Signed** by SignPath. Verify with ``Get-AuthenticodeSignature`` before publishing."
+          } else {
+              $status = @"
+          > **These artifacts are UNSIGNED.** No distribution certificate has been granted yet
+          > (ROADMAP step 4), so this build was packaged with code signing switched off.
+          > SmartScreen will block it, and an existing DevDeck install will refuse it as an
+          > update because it verifies the Authenticode publisher. **Do not publish this draft
+          > as a release** - use it to test the pipeline, or install the portable exe by hand.
+          "@
+          }
+
+          $notes = @"
+          $status
+
+          Built by ``.github/workflows/release.yml`` from ``$($env:GITHUB_SHA)``.
+
+          | Asset | What needs it |
+          |---|---|
+          | ``DevDeck-Setup-$v.exe`` | the installer |
+          | ``DevDeck-Setup-$v.exe.blockmap`` | ``electron-updater``, to download only what changed |
+          | ``DevDeck-Portable-$v.exe`` | running without installing |
+          | ``latest.yml`` | ``electron-updater``, to find the update at all |
+
+          Release notes still have to be written by a human: take them from ``CHANGELOG.md``'s
+          ``$v`` section, and look at ``docs/release/published-release-notes.md`` for the shape
+          the previous fourteen used (install line, SmartScreen warning, what-this-is framing).
+          "@
+          $notes | Out-File release-notes.md -Encoding utf8
+
+          gh release view $tag --json id 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+              Write-Host "release $tag already exists - refreshing its assets"
+          } else {
+              gh release create $tag --draft --title "DevDeck $v" --notes-file release-notes.md
+              if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
+          }
+
+          gh release upload $tag `
+              "release/DevDeck-Setup-$v.exe" `
+              "release/DevDeck-Setup-$v.exe.blockmap" `
+              "release/DevDeck-Portable-$v.exe" `
+              "release/latest.yml" `
+              --clobber
+          if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
+
+          Write-Host "Draft release $tag is ready. A human publishes it."
