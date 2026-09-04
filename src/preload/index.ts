@@ -360,11 +360,17 @@ const api = {
             return () => ipcRenderer.removeListener("pty:data", handler)
         },
         onExit: (
-            cb: (p: { id: string; exitCode: number; stale?: boolean }) => void
+            cb: (p: {
+                id: string
+                exitCode: number
+                stale?: boolean
+                /** False only when no process was ever spawned at this id. */
+                started?: boolean
+            }) => void
         ): (() => void) => {
             const handler = (
                 _e: unknown,
-                p: { id: string; exitCode: number; stale?: boolean }
+                p: { id: string; exitCode: number; stale?: boolean; started?: boolean }
             ): void => cb(p)
             ipcRenderer.on("pty:exit", handler)
             return () => ipcRenderer.removeListener("pty:exit", handler)

@@ -263,6 +263,11 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                     )
                     return
                 }
+                // A real spawn is being attempted for this id, so drop any
+                // never-started mark from a previous failure - otherwise a pane
+                // that failed once would stay unpersistable even after a
+                // successful restart.
+                useStore.getState().noteSpawnAttempt(termId)
                 window.api.pty.create({
                     id: termId,
                     cwd: useStore.getState().termCwd[termId] ?? cwd,

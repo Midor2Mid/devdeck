@@ -12,7 +12,8 @@ import {
     collectLeaves,
     firstLeaf,
     hasLeaf,
-    isLayoutNode
+    isLayoutNode,
+    pruneNeverStarted
 } from "./layout"
 import type { PipelineRun, PipelineStepState } from "./pipeline"
 import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } from "./pipeline"
@@ -388,6 +389,18 @@ interface AppState extends Persisted {
     /** Rename a single session independently of its tab (empty clears the override). */
     renameSession: (termId: string, name: string) => void
     saveWorkspacePreset: (projectId: string) => void
+    /**
+     * Called by TerminalPane immediately before it asks main to spawn `id`.
+     *
+     * Clears any never-started mark, so a pane that failed once and is being
+     * restarted becomes persistable again the moment a real attempt is made.
+     * This cannot key off incoming output: main REPLAYS a dead session's buffer
+     * back over `pty:data` when a pane re-attaches (index.ts:377), so a corpse's
+     * own failure notice arrives as a byte and "any byte means alive" marks a
+     * session that never ran as live. That is not hypothetical - it is why the
+     * first version of this filter did nothing at all.
+     */
+    noteSpawnAttempt: (id: string) => void
     openWorkspacePreset: (presetId: string) => void
     deleteWorkspacePreset: (presetId: string) => void
 
@@ -535,6 +548,17 @@ export const useStore = create<AppState>((set, get) => {
     // during the load round-trip - or after a load that failed - writes the
     // module-load defaults over a real workspace. No click required.
     let loaded = false
+    /**
+     * Sessions main reported as never having had a process (`started: false` on
+     * pty:exit — the cwd/shell guard fires before anything is spawned).
+     *
+     * Module-level rather than store state on purpose: it is persistence
+     * bookkeeping, nothing renders from it, and putting it in the store would
+     * make every failed spawn a re-render for no visible change. Ids leave the
+     * set the moment any byte arrives at that id (see onPtyData), so a restart
+     * that succeeds restores the tab's right to be saved.
+     */
+    const neverStarted = new Set<string>()
     // Debounced disk persistence - coalesces bursts (e.g. composer keystrokes).
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
@@ -546,7 +570,15 @@ export const useStore = create<AppState>((set, get) => {
             termCwd: s.termCwd,
             termNames: s.termNames,
             termShells: s.termShells,
-            tabsByProject: s.tabsByProject,
+            // A tab that never held a process is not saved: restoring it would
+            // retry the same doomed spawn on the next launch. Dead-but-ran tabs
+            // ARE saved - restoring the arrangement is the feature.
+            tabsByProject: Object.fromEntries(
+                Object.entries(s.tabsByProject).map(([pid, tabs]) => [
+                    pid,
+                    pruneNeverStarted(tabs, neverStarted)
+                ])
+            ),
             activeTabByProject: s.activeTabByProject,
             activePaneByProject: s.activePaneByProject,
             composerDrafts: s.composerDrafts,
@@ -827,6 +859,7 @@ export const useStore = create<AppState>((set, get) => {
         // pane would keep a "process exited" bar forever with a live pty behind
         // it, and clicking Restart would spawn nothing.
         if (exitCodeOf(id) !== undefined) clearExit(id)
+
         if (id in get().paneHold) {
             set((s) => {
                 const paneHold = { ...s.paneHold }
@@ -1121,14 +1154,34 @@ export const useStore = create<AppState>((set, get) => {
         dismissNotification: (id) =>
             set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 
+        noteSpawnAttempt: (id) => {
+            neverStarted.delete(id)
+        },
+
         init: async () => {
             if (!dataSubscribed) {
                 window.api.pty.onData(onPtyData)
                 // App-global, not per-pane: TerminalPane's own onExit only fires while a
                 // pane is mounted, and Mission has to know about a process that died in a
                 // tab you were not looking at.
-                window.api.pty.onExit(({ id, exitCode, stale }) => {
+                window.api.pty.onExit(({ id, exitCode, stale, started }) => {
                     recordExit(id, exitCode)
+                    // `started === false` means main never spawned anything at
+                    // this id. Guarded on the explicit false so an older main
+                    // that does not send the field is treated as "it started",
+                    // which is the safe direction: it keeps the tab.
+                    if (started === false) {
+                        neverStarted.add(id)
+                        // writeNow, not the debounced persist: the whole point of
+                        // this branch is a session that failed to start, and the
+                        // failures worth guarding against are the ones where the
+                        // app does not survive to flush a timer. A debounced
+                        // un-persist that loses the race leaves exactly the tab
+                        // this is here to remove. Proven, not assumed - the first
+                        // cut of this used persist() and the tab was still in
+                        // workspace.json when the app was killed seconds later.
+                        writeNow()
+                    }
                     // A stale exit belongs to a process a restart already spawned
                     // over (see pty.ts) - main skipped writing its corpse for the
                     // same reason, and holding this pane would freeze a "process

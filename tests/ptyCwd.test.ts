@@ -69,7 +69,13 @@ describe("createPty with a cwd that is not there", () => {
 
     it("reports through the same corpse surface a real death uses", () => {
         pty.createPty({ id: "cwd-missing", cwd: MISSING, shell })
-        expect(seen.exits).toEqual([{ id: "cwd-missing", exitCode: 1, stale: false }])
+        // started:false is the payload's whole purpose here - a real process that
+        // runs and exits 1 is otherwise indistinguishable from a spawn that never
+        // happened, and the renderer needs the difference to decide whether the
+        // tab is worth restoring next launch.
+        expect(seen.exits).toEqual([
+            { id: "cwd-missing", exitCode: 1, stale: false, started: false }
+        ])
         const notice = seen.data.join("")
         expect(notice).toContain("folder")
         expect(notice).toContain(MISSING)

@@ -95,3 +95,41 @@ export function hasLeaf(node: LayoutNode, termId: string): boolean {
         ? node.termId === termId
         : node.children.some((c) => hasLeaf(c, termId))
 }
+
+/**
+ * Drop panes that never had a process from a project's tabs, for persistence.
+ *
+ * A tab whose spawn failed used to be written to `workspace.json` like any
+ * other, so the next launch restored it and tried the same doomed spawn again.
+ * When that spawn could kill the main process — a missing project folder made
+ * node-pty throw asynchronously, outside every guard — one crash became a
+ * permanent one: the app died before the UI was usable and the only way out was
+ * hand-editing userData. The spawn is guarded now, so this is no longer the
+ * difference between recoverable and not, but persisting a tab that never held
+ * a process is wrong on its own terms and would rebuild the same trap around
+ * the next fatal spawn failure.
+ *
+ * Only *never-started* ids are dropped, never merely dead ones. A shell you ran
+ * and exited must still come back on relaunch — restoring the arrangement is
+ * the feature, and a tab that did its job and closed is not the same thing as
+ * one that never opened.
+ *
+ * Tabs left with no panes are removed entirely; `removeLeaf` already collapses
+ * a split whose child is gone.
+ */
+export function pruneNeverStarted<T extends { id: string; root: LayoutNode }>(
+    tabs: readonly T[],
+    neverStarted: ReadonlySet<string>
+): T[] {
+    if (neverStarted.size === 0) return tabs as T[]
+    const out: T[] = []
+    for (const tab of tabs) {
+        let root: LayoutNode | null = tab.root
+        for (const id of neverStarted) {
+            if (root === null) break
+            root = removeLeaf(root, id)
+        }
+        if (root !== null) out.push(root === tab.root ? tab : { ...tab, root })
+    }
+    return out
+}

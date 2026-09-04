@@ -242,7 +242,12 @@ function reportDead(id: string, notice: string): void {
     tails.set(id, cleanTail("", notice, TAIL_CAP))
     rawCarry.delete(id)
     ptyEvents.emit("data", { id, data: notice })
-    ptyEvents.emit("exit", { id, exitCode: 1, stale: false })
+    // `started: false` is the whole point of this flag: nothing was ever
+    // spawned at this id. A real process that runs and exits 1 is
+    // indistinguishable from this in the renderer otherwise - both arrive as
+    // one data event and one exit - and the renderer needs the difference to
+    // decide whether the tab is worth restoring next launch.
+    ptyEvents.emit("exit", { id, exitCode: 1, stale: false, started: false })
 }
 
 export function createPty(opts: CreateOpts): void {
@@ -373,7 +378,7 @@ export function createPty(opts: CreateOpts): void {
         if (!stale) {
             sessions.set(id, { kind: "dead", buffer: live.buffer, exitCode, diedAt: Date.now() })
         }
-        ptyEvents.emit("exit", { id, exitCode, stale })
+        ptyEvents.emit("exit", { id, exitCode, stale, started: true })
     })
 
 }

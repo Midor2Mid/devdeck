@@ -150,13 +150,13 @@ describe("a late exit for an id that has been re-spawned", () => {
         pty.killPty(ID)
         pty.createPty({ id: ID })
         p1.onExitCb?.({ exitCode: 1 })
-        expect(events).toEqual([{ id: ID, exitCode: 1, stale: true }])
+        expect(events).toEqual([{ id: ID, exitCode: 1, stale: true, started: true }])
     })
 
     it("an ordinary (non-stale) exit is not flagged", () => {
         const events: { id: string; exitCode: number; stale: boolean }[] = []
         pty.ptyEvents.on("exit", (e) => events.push(e))
         runAndDie(1)
-        expect(events).toEqual([{ id: ID, exitCode: 1, stale: false }])
+        expect(events).toEqual([{ id: ID, exitCode: 1, stale: false, started: true }])
     })
 })
