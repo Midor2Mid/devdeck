@@ -6245,14 +6245,11 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .deck-view.group-start:hover {
     border-left-color: var(--border-soft);
 }
-/* Icon-first switcher: only the active view carries its label (state in form).
-   Inactive views are quiet icons with a hover tooltip + Ctrl+N shortcut. */
+/* Every view key carries its label, always. Active-label-only spent the label
+   on the one view whose identity the user already knew and left the other six
+   as unnamed glyphs; the active state is the underline above, on its own. */
 .deck-view-name {
     font-size: 12px;
-    display: none;
-}
-.deck-view.on .deck-view-name {
-    display: inline;
 }
 .deck-tools {
     display: flex;
@@ -6307,13 +6304,36 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .deck-status-spacer {
     flex: 1;
 }
-/* Narrow windows: view keys go icon-only so status/tools keep their room.
-   The buttons keep data-tip/aria-label, so they stay discoverable. */
-@media (max-width: 1180px) {
-    .deck-view-name {
+/* Narrow windows, in the order the deck can afford to lose them: the verify
+   group goes icon-only and the supervision three keep their words, because
+   "is anything waiting on me" is the question the deck exists to answer while
+   API/Database/Browser/Editor are places you go on purpose. A collapsed key
+   keeps its data-tip and its aria-label, so it is still named.
+
+   959px is measured, not guessed, and it is the same number in all six
+   surviving skins - Chromium's UA stylesheet resets `letter-spacing` on
+   `button`, so Modern Pro's tracking never reaches a deck key and the two
+   styles come out identical to the hundredth of a pixel. Fully labelled the
+   key row is 590.45px; the tool cluster is 148px; the bar spends 20px on
+   padding and 24px on its two gaps. That leaves the status region 177.55px at
+   a 960px viewport, against the 139.48px its branch + changes + identity
+   content occupies - and only 117.55px at 900.
+
+   What 900 does to it was looked at, not assumed: `.deck-status` is
+   `justify-content: flex-end`, so the overflow goes off the LEFT edge, where
+   `scrollWidth` cannot see it. Branch `main` rendered as `in`, icon gone, with
+   nothing on screen saying it had been cut. A truncated value that still looks
+   like a value is the defect class this app removes on sight, so the labels
+   yield first and the status keeps its room.
+
+   There is deliberately no second stage dropping the supervision three: the
+   window's own minimum (900) cannot get narrow enough to need one, and a media
+   query that can never fire is a rule nobody can trust. */
+@media (max-width: 959px) {
+    .deck-view.verify .deck-view-name {
         display: none;
     }
-    .deck-view {
+    .deck-view.verify {
         justify-content: center;
     }
 }

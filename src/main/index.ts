@@ -279,6 +279,16 @@ function createWindow(): void {
         height: saved.height ?? 900,
         x: saved.x,
         y: saved.y,
+        // Re-measured against the labelled deck (2026-09-04) rather than raised.
+        // The plan called for 1040 because a fully labelled key row measured
+        // 978px in Bauhaus; Bauhaus and CRT are gone, and across all six
+        // surviving skins the row is 590.45px - identical in every one, since
+        // Chromium's UA stylesheet resets `letter-spacing` on `button` and so
+        // Modern Pro's tracking never reaches a deck key. Row + tool cluster +
+        // bar chrome is 782.45px against the 886px of CSS width a 900px window
+        // actually has here (the frame charges 14px), so nothing overflows and
+        // 900 stands. Below 959 the verify group's labels collapse to keep the
+        // status region's branch readable - see the media query in styles.css.
         minWidth: 900,
         minHeight: 600,
         backgroundColor: "#1b1a18",

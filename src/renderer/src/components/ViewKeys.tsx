@@ -7,12 +7,17 @@ export const DECK_VIEWS: { view: MainView; icon: IconName; name: string; group?:
     { view: "terminal", icon: "terminal", name: "Terminal" },
     // Verification tools: where you check what an agent did. Grouped apart so the
     // deck reads supervision-first, without costing anyone a keystroke — the
-    // order (and so Ctrl+1..7) is unchanged.
+    // order (and so Ctrl+1..7) is unchanged. The group is now marked on all four,
+    // not just the first: it is what the responsive collapse drops labels from,
+    // and the hairline is drawn from "first of the group" instead.
     { view: "api", icon: "send", name: "API", group: "verify" },
-    { view: "database", icon: "database", name: "Database" },
-    { view: "browser", icon: "appWindow", name: "Browser" },
-    { view: "editor", icon: "code", name: "Editor" }
+    { view: "database", icon: "database", name: "Database", group: "verify" },
+    { view: "browser", icon: "appWindow", name: "Browser", group: "verify" },
+    { view: "editor", icon: "code", name: "Editor", group: "verify" }
 ]
+
+/** Index of the first verify key — where the group hairline is drawn. */
+const FIRST_VERIFY = DECK_VIEWS.findIndex((v) => v.group === "verify")
 
 export function ViewKeys(): JSX.Element {
     const view = useStore((s) => s.view)
@@ -43,7 +48,8 @@ export function ViewKeys(): JSX.Element {
                     className={
                         "deck-view" +
                         (!off && view === v.view ? " on" : "") +
-                        (v.group === "verify" ? " group-start" : "")
+                        (v.group === "verify" ? " verify" : "") +
+                        (i === FIRST_VERIFY ? " group-start" : "")
                     }
                     role="tab"
                     disabled={off}

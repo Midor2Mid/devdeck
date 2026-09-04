@@ -15,6 +15,7 @@ export type IconName =
     | "search"
     | "pencil"
     | "play"
+    | "scrollText"
     | "gitBranch"
     | "check"
     | "chevronDown"
@@ -93,6 +94,17 @@ const P: Record<IconName, JSX.Element> = {
     ),
     pencil: <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />,
     play: <polygon points="6 4 19 12 6 20 6 4" />,
+    // "Scripts & saved commands". `play` used to serve here too, while also
+    // meaning "Run project" on the topbar ~250px away - one glyph, two acts.
+    // The triangle stays with running; a script gets a script.
+    scrollText: (
+        <>
+            <path d="M15 12h-5" />
+            <path d="M15 8h-5" />
+            <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+            <path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" />
+        </>
+    ),
     gitBranch: (
         <>
             <line x1="6" y1="3" x2="6" y2="15" />

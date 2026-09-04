@@ -29,14 +29,17 @@ export function ToolCluster(): JSX.Element {
                 {/* "Scripts", not "Tasks": this popover runs package.json scripts
                     and saved shell commands, while the Tasks deck view is the agent
                     task board. They sat on the SAME bar under the same word and the
-                    same `list` icon, ~250px apart, meaning two unrelated things. */}
+                    same `list` icon, ~250px apart, meaning two unrelated things.
+                    The glyph moved off `play` for the same reason: that triangle
+                    is "Run project" on the topbar, and no glyph carries two
+                    meanings. */}
                 <IconButton
                     className="deck-tool"
                     tip="Scripts & saved commands"
                     tipPos="top"
                     onClick={() => setTasksOpen((v) => !v)}
                 >
-                    <Icon name="play" size={16} />
+                    <Icon name="scrollText" size={16} />
                 </IconButton>
                 {tasksOpen && (
                     <>
