@@ -7,6 +7,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron"
 // this boundary, instead of `ipcRenderer.invoke`'s untyped channel quietly
 // letting the two sides drift (the exact gap that hid Task 3's regression).
 import type { BindMode } from "../main/guards"
+import type { FolderState, RelocateResult } from "../main/projects"
 import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
@@ -27,6 +28,11 @@ import type { DecisionSnapshot, DecisionView } from "../shared/decision"
 // `userAgent` - `PublicRemoteDevice` (what every IPC call below actually
 // returns) is the only shape that should exist on this side of the bridge.
 export type { BindMode, PublicRemoteDevice as RemoteDevice }
+// The folder probe's three states, defined once in main. `ok`, `missing` and
+// `unchecked` are three different things and a renderer that treats the last
+// two as one is the defect this type exists to prevent - read the type's own
+// comment in main/projects.ts before rendering any of them.
+export type { FolderState, RelocateResult }
 // `Loaded<T>` crosses the bridge intact: the renderer has to distinguish "no
 // workspace yet" from "there is one and we could not read it" to know whether
 // saving over it is safe. Collapsing the two is what destroyed workspaces.
@@ -425,6 +431,17 @@ const api = {
          * to distinguish "no path" from a path anyway, and an exception here
          * would take the whole drop handler down with it.
          */
+        /**
+         * Every known project's folder state, keyed by project id.
+         *
+         * A project MISSING from the returned map has not been probed, which is
+         * not the same as `ok` - render nothing for it. Takes no argument by
+         * design; main probes its own store.
+         */
+        probe: (): Promise<Record<string, FolderState>> => ipcRenderer.invoke("projects:probe"),
+        /** Re-point a project at a folder the user picks, keeping its id. */
+        relocate: (id: string): Promise<RelocateResult> =>
+            ipcRenderer.invoke("projects:relocate", id),
         pathForFile: (file: File): string => {
             try {
                 return webUtils.getPathForFile(file)

@@ -5,7 +5,9 @@ import { setDecisions } from "./missionTail"
 import { useSettings } from "./settings"
 import { useToasts, toast } from "./toast"
 import { classifyDrop, type DroppedItem } from "./folderDrop"
+import { refreshFolderStates } from "./folderStates"
 import { PersistBlockedBar } from "./components/PersistBlockedBar"
+import { FolderNotice } from "./components/FolderNotice"
 import { RegionBoundary } from "./components/RegionBoundary"
 import { Topbar } from "./components/Topbar"
 import { Deck } from "./components/Deck"
@@ -196,6 +198,31 @@ export function App(): JSX.Element {
     useEffect(() => {
         window.api.mobile.syncSessions(sessions())
     }, [tabsByProject, agentStatus, termAgents, projects, sessions])
+
+    /**
+     * The folder probe: does each project's path still resolve?
+     *
+     * Deliberately NOT gated on `document.hidden`, unlike the git poll. What a
+     * project IS does not depend on whether anyone is looking at it, and a
+     * folder deleted while DevDeck sat in the background must be marked when
+     * you come back, not attributed to whatever you click first. The focus
+     * listener is what makes that immediate.
+     *
+     * Nothing renders until the first report lands - a project with no entry in
+     * the map gets no marker, which is the honest state while a probe is in
+     * flight.
+     */
+    useEffect(() => {
+        if (projects.length === 0) return
+        const tick = (): void => void refreshFolderStates()
+        tick()
+        const iv = setInterval(tick, 15000)
+        window.addEventListener("focus", tick)
+        return () => {
+            clearInterval(iv)
+            window.removeEventListener("focus", tick)
+        }
+    }, [projects])
 
     // Main's classification, straight into missionTail's module cache — no
     // React state on this path: it fires per status flip and the tiles read it
@@ -435,6 +462,10 @@ export function App(): JSX.Element {
                         <Topbar />
                     </RegionBoundary>
                     <PersistBlockedBar />
+                    {/* A marker is not a gate: this bar names the failure and
+                        offers the repair, and everything below it keeps
+                        working. */}
+                    <FolderNotice />
                     <div className="panels">
                         {/* One guard above the whole panel stack: with no project,
                             all eight views resolve to the same panel. Folding

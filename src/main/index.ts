@@ -543,6 +543,12 @@ function registerIpc(): void {
     ipcMain.handle("projects:setGroup", (_e, { id, group }) => projects.setGroup(id, group))
     ipcMain.handle("projects:setMeta", (_e, { id, meta }) => projects.setMeta(id, meta))
     ipcMain.handle("projects:addPath", (_e, path: string) => projects.addProjectByPath(path))
+    // Takes no path from the renderer: it probes the projects already in the
+    // store, so this cannot be asked whether an arbitrary path exists.
+    ipcMain.handle("projects:probe", () => projects.probeProjects())
+    ipcMain.handle("projects:relocate", (_e, id: string) =>
+        projects.relocateProject(id, mainWindow!)
+    )
 
     // --- Workspace (terminal layout persistence) ---
     ipcMain.handle("workspace:load", () => loadWorkspace())

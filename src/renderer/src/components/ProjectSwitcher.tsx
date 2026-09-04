@@ -4,6 +4,7 @@ import { orderByMru, previousProjectId } from "../projectMru"
 import { contextMenu } from "../contextmenu"
 import { projectContextMenu } from "../projectMenu"
 import { ProjectChip } from "./ProjectChip"
+import { folderMarker, useFolderStates } from "../folderStates"
 import { switcherEmpty } from "../probeView"
 
 /**
@@ -21,6 +22,10 @@ export function ProjectSwitcher(): JSX.Element {
     const close = useStore((s) => s.closeSwitcher)
     const sessions = useStore((s) => s.sessions)
     const addProject = useStore((s) => s.addProject)
+    // The whole map, which is a stable reference between reports (see
+    // folderStates.apply) - the per-card marker is derived in the loop below,
+    // never inside a selector.
+    const folderStates = useFolderStates((s) => s.states)
 
     const [q, setQ] = useState("")
     const [sel, setSel] = useState(0)
@@ -160,13 +165,15 @@ export function ProjectSwitcher(): JSX.Element {
                 <div className="switcher-grid" ref={gridRef}>
                     {ordered.map((p, i) => {
                         const c = counts[p.id]
+                        const marker = folderMarker(folderStates[p.id])
                         return (
                             <div
                                 key={p.id}
                                 className={
                                     "switcher-card" +
                                     (i === sel ? " sel" : "") +
-                                    (p.id === activeId ? " active" : "")
+                                    (p.id === activeId ? " active" : "") +
+                                    (marker?.state === "missing" ? " folder-missing" : "")
                                 }
                                 onMouseEnter={() => setSel(i)}
                                 onClick={() => open(p.id)}
@@ -186,6 +193,26 @@ export function ProjectSwitcher(): JSX.Element {
                                 </div>
                                 {p.group && <div className="switcher-card-group">{p.group}</div>}
                                 <div className="switcher-card-path">{p.path}</div>
+                                {/* The third channel of the same grammar the
+                                    launcher's PATH marks use: the chip
+                                    desaturates, the path takes a dashed rule,
+                                    and the pill says the word - because in
+                                    Washi a border is nearly invisible against
+                                    --bg-2, so two channels can both vanish.
+                                    Dashed pill = the reading is qualified
+                                    (missing); solid = we could not read it
+                                    (unchecked). A card that resolved gets
+                                    nothing at all, and so does one nobody has
+                                    probed yet. */}
+                                {marker && (
+                                    <span
+                                        className={
+                                            "probe-tag" + (marker.qualified ? " qualified" : "")
+                                        }
+                                    >
+                                        {marker.pill}
+                                    </span>
+                                )}
                                 <div className="switcher-card-meta">
                                     {c ? (
                                         <>

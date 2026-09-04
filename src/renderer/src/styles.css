@@ -1523,6 +1523,25 @@ button .ic,
     letter-spacing: 0.08em;
     color: var(--faint);
 }
+/* ---------- The same grammar, for a project's folder ---------- */
+/* A folder that does not resolve is the same KIND of fact as a command that is
+   not on the PATH, so it reuses the marks above rather than inventing a second
+   vocabulary: the identity chip desaturates, the path takes the dashed
+   "qualified" rule, and .probe-tag says the word (FOLDER MISSING dashed,
+   UNCHECKED solid). `filter`, not `color`, for the same reason as the launch
+   card's icon - a project chip can be a user-set emoji, which paints its own
+   colours and ignores `color` entirely. A project that resolved gets none of
+   this, and neither does one nobody has probed yet. */
+.project-chip.folder-missing {
+    filter: grayscale(1) opacity(0.6);
+}
+/* The path is already a nowrap/ellipsis block filling the card, so the rule
+   sits under the value and nowhere else - no display change, which would put
+   the pill back on this line. */
+.switcher-card.folder-missing .switcher-card-path {
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 2px;
+}
 /* Geometry copied from .mtile-chip, which stays where it is: those are
    tone-coloured and glyphed at 9px, a different axis on a different surface. */
 .probe-tag {
@@ -2407,6 +2426,24 @@ button .ic,
    changes, after this class has landed. */
 .term-mount.with-dead-bar {
     bottom: var(--dead-bar-h);
+}
+/* A pane that has asked for a process and heard nothing back yet. No scrim and
+   no card: there is nothing underneath to dim and nothing to decide, so it is
+   one line of copy on the pane's own ground. `pointer-events: none` keeps the
+   click that focuses the pane reaching .term-pane behind it, and no z-index is
+   needed - .term-mount sits in the plain auto layer, and this follows it in
+   tree order. Deliberately not a spinner: DESIGN.md's motion rule would need a
+   reduced-motion variant, and a line needs none. */
+.term-starting {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    text-align: center;
+    color: var(--muted);
+    font-size: var(--fs-sm);
+    pointer-events: none;
 }
 /* Overlay shown on a restored agent pane until you pick resume vs. fresh. */
 .resume-overlay {
