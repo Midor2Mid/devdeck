@@ -822,17 +822,36 @@ owner and would have shipped describing deleted features.
 - [ ] **Step 3: `README.md:133`** — `npm test  # 1,530 unit tests`. Already stale
   before this plan (the suite was 1,536), and every Phase 1 deletion moves it.
   Set it to the number `npm test` actually prints at this point
-- [ ] **Step 4: Re-run Task 4's grep, which only comes back clean now**
+- [ ] **Step 4: The skin matrix is claimed in four more places, none of them README**
+
+Task 12's agent flagged two and could not reach the rest. All four now describe a
+matrix the code no longer has:
+
+- `src/renderer/src/tileState.ts:78` — "the tile has to stay legible in all 84 skins"
+- `DESIGN.md:95` — the Styles list still names Modern Minimal, Bauhaus, Flat Vector
+  and the rest; `:186` uses "Bauhaus is 0, Flat Vector is generous" as its worked
+  example of the radius dial, and that example now references two deleted styles
+- `.claude/skills/devdeck-design/SKILL.md:41, :49, :131` — states "**7 themes × 12
+  styles = 84 combinations**" three times. **This is the highest-priority one and
+  it is not documentation:** it is the skill every future design agent loads before
+  touching UI, so leaving it stale makes every later design decision argue against
+  a constraint that no longer exists
+- `CHANGELOG.md` — history, correctly left alone
+
+Rewrite the first three to the real 3 × 2. Keep each one's *rationale* — the reason
+a form marker must survive every skin is unchanged; only the arithmetic moved.
+
+- [ ] **Step 5: Re-run Task 4's grep, which only comes back clean now**
 
 Run: `grep -rn -i "capture proxy|network debugging|network capture" README.md site/index.html PRODUCT.md`
 `PRODUCT.md:3` and `:8` still carry capture-proxy claims — those belong to **Task 24**,
 so hits there are expected until Task 24 runs. Hits in `README.md` or
 `site/index.html` are not.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add README.md
+git add README.md DESIGN.md src/renderer/src/tileState.ts .claude/skills/devdeck-design/SKILL.md
 git commit -m "docs: the README describes what Phase 1 left behind
 
 Canvas, the skin counts and the test count all moved underneath it. The
