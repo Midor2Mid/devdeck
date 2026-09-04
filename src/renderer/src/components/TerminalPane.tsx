@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { SearchAddon } from "@xterm/addon-search"
 import { paneRegistry } from "../paneRegistry"
-import { useSettings } from "../settings"
+import { useSettings, startingLabel } from "../settings"
 import { SHELL, useStore } from "../store"
 import { THEMES } from "../themes"
 import { exitNotice } from "../termExit"
@@ -11,6 +11,23 @@ import { toast } from "../toast"
 import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
 
 const IS_WINDOWS = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
+
+/**
+ * How long a spawning pane says nothing at all.
+ *
+ * A pane that mounts onto a session that is already running asks main to
+ * create it too, and gets the whole kept buffer replayed over `pty:data`
+ * within a few milliseconds. Without this delay every tab and project switch
+ * would flash "Starting PowerShell…" across output that was already there.
+ */
+const START_SETTLE_MS = 250
+/**
+ * When "Starting" becomes "Still starting". Measured silence before the first
+ * byte is ~4s for a shell and ~12s for an agent, so five seconds is past the
+ * normal case for one and mid-way through the other - which is the point: it
+ * distinguishes slow from stuck without claiming to know which.
+ */
+const START_SLOW_MS = 5000
 
 /**
  * The exit notice, ANSI-dimmed the same way on both call sites: the live
@@ -60,6 +77,56 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
     // under a bar that claims the output is above. Captured once, at the
     // value `hold` already has at mount, not re-derived on every render.
     const bornDead = useRef(useStore.getState().paneHold[termId] === "restart")
+
+    // ---- "Starting …" ------------------------------------------------------
+    // Between the click and the first byte this pane was an unlabelled black
+    // rectangle for a measured 4s (shell) / 12s (agent) - indistinguishable
+    // from a spawn that hung. The three states now render differently: nothing
+    // yet (bare pane, under START_SETTLE_MS), starting (this line), and dead
+    // (the exit notice in the buffer, plus .dead-bar).
+    const [startNotice, setStartNotice] = useState<"" | "starting" | "slow">("")
+    const [startName, setStartName] = useState("")
+    const startTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+    // Starts settled: until `spawn` arms it, nothing is waiting to be told
+    // about - which is exactly a pane that mounted onto a dead session and is
+    // about to have a corpse replayed into it.
+    const startSettled = useRef(true)
+    const clearStartTimers = (): void => {
+        for (const t of startTimers.current) clearTimeout(t)
+        startTimers.current = []
+    }
+    /**
+     * Called once a process has actually been requested for this pane - from
+     * inside `spawn`, so a refused spawn (a blank custom-shell path) never
+     * claims to be starting anything.
+     *
+     * Not sticky: a pane whose process died and was restarted from the dead bar
+     * spawns again through the same closure and is entitled to say so, so this
+     * re-arms `startSettled`.
+     */
+    const beginStarting = (name: string): void => {
+        clearStartTimers()
+        startSettled.current = false
+        setStartName(name)
+        setStartNotice("")
+        startTimers.current = [
+            setTimeout(() => setStartNotice("starting"), START_SETTLE_MS),
+            setTimeout(() => setStartNotice("slow"), START_SLOW_MS)
+        ]
+    }
+    /**
+     * The pane has heard from the process - any byte, including the single
+     * notice `pty.ts` writes for a spawn that failed before it started, and
+     * including a dead session's replayed buffer. Guarded by a ref because the
+     * caller is the `pty:data` hot path: a setState per chunk would re-render
+     * React on every line of terminal output.
+     */
+    const settleStarting = (): void => {
+        if (startSettled.current) return
+        startSettled.current = true
+        clearStartTimers()
+        setStartNotice("")
+    }
 
     const resumeAgentId = useStore.getState().agentOf(termId)
     const isAgentPane = resumeAgentId !== SHELL
@@ -216,10 +283,18 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
 
         // Register stream listeners BEFORE attaching so replayed buffer isn't missed.
         const offData = window.api.pty.onData(({ id, data }) => {
-            if (id === termId) term.write(data)
+            if (id !== termId) return
+            // Before the write, so the line is gone in the same frame the first
+            // output lands. `pty.ts` reports a spawn that never started as one
+            // data event carrying a notice followed by an exit, so this clears
+            // on a corpse exactly as it does on a healthy shell's prompt.
+            settleStarting()
+            term.write(data)
         })
         const offExit = window.api.pty.onExit(({ id, exitCode }) => {
-            if (id === termId) writeExitNotice(term, exitCode)
+            if (id !== termId) return
+            settleStarting()
+            writeExitNotice(term, exitCode)
         })
         const inputSub = term.onData((data) => window.api.pty.input(termId, data))
 
@@ -253,9 +328,10 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 // so in the pane. Passing it through would land on pty.ts's
                 // `opts.shell?.file ? … : defaultShell()` and quietly start
                 // PowerShell instead, which is how this went unnoticed.
-                const shell = useSettings.getState().resolveShell(
-                    useStore.getState().termShells[termId]
-                )
+                const shellKind =
+                    useStore.getState().termShells[termId] ??
+                    useSettings.getState().terminal.shell
+                const shell = useSettings.getState().resolveShell(shellKind)
                 if (!shell) {
                     term.write(
                         "\r\nNo shell to start: \"Custom\" is selected in Settings → Terminal " +
@@ -280,6 +356,11 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                     keyEnv: preset?.apiKeyEnv || undefined,
                     projectId: useStore.getState().projectIdOfTerm(termId)
                 })
+                // Only after a process has really been asked for. The closure
+                // captured here is the first render's, which is safe: it
+                // touches setState functions and refs, all stable for the
+                // pane's lifetime.
+                beginStarting(startingLabel(agentId === SHELL ? "" : agentId, preset, shellKind))
             }
             spawnRef.current = spawn
             // A held pane holds for BOTH reasons. Spawning over a corpse is what
@@ -294,6 +375,7 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             offData()
             offExit()
             inputSub.dispose()
+            clearStartTimers()
             ro.disconnect()
             container.removeEventListener("contextmenu", onContextMenu)
             paneRegistry.delete(termId)
@@ -431,6 +513,15 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
                 ref={containerRef}
                 className={"term-mount" + (hold === "restart" ? " with-dead-bar" : "")}
             />
+            {/* No spinner: a static line carries this on its own, reads
+                identically under prefers-reduced-motion, and cannot imply
+                progress nothing here is measuring. `!hold` so a held pane's
+                card or dead bar is never competing with it. */}
+            {!hold && startNotice && (
+                <div className="term-starting" role="status">
+                    {startNotice === "slow" ? "Still starting" : "Starting"} {startName}…
+                </div>
+            )}
             {hold === "resume" && (
                 <div className="resume-overlay">
                     <div className="resume-card">
