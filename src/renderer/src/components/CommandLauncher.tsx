@@ -106,7 +106,9 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
                 </p>
             </div>
             <div className="launcher-actions">
-                <button onClick={() => newTab(SHELL)}>+ New terminal</button>
+                {/* One label for one act: the terminal tab bar's button says
+                    "New terminal" too. */}
+                <button onClick={() => newTab(SHELL)}>New terminal</button>
                 {missing.length > 0 && (
                     <button
                         onClick={() => {
@@ -115,7 +117,7 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
                         }}
                         data-tip="Add the recommended starter commands you don't have yet (Claude, Codex, Gemini, dev server…). Nothing is duplicated or overwritten."
                     >
-                        ↺ Add starter commands ({missing.length})
+                        <Icon name="restart" size={12} /> Add starter commands ({missing.length})
                     </button>
                 )}
                 <button onClick={() => openSettings()}>Settings</button>
@@ -159,6 +161,21 @@ export function CommandLauncher({ projectName }: { projectName: string }): JSX.E
                                         <span className="launch-card-none">no command set</span>
                                     ) : (
                                         <span className="launch-card-cmd">{a.command}</span>
+                                    )}
+                                    {/* The word, next to the stripe that has
+                                        been carrying this alone. A 2px border
+                                        and a hover tooltip is not enough
+                                        marking for the one card that lets an
+                                        agent edit and run anything here without
+                                        asking - and a tooltip does not exist at
+                                        all for someone driving by keyboard.
+                                        Derived from the command, so a preset a
+                                        user rolled themselves (or one still
+                                        carrying its old name from an install
+                                        that predates the rename) is labelled
+                                        too. */}
+                                    {isUnsafeAgent(a.command) && (
+                                        <span className="launch-card-risk">SKIPS PROMPTS</span>
                                     )}
                                     {mark === "unchecked" && <span className="probe-tag">UNCHECKED</span>}
                                     {mark === "not-on-path" && (

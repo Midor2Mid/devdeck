@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore, SHELL } from "../store"
-import { useSettings, sshCommand, isUnsafeAgent, type ShellKind } from "../settings"
+import {
+    useSettings,
+    sshCommand,
+    isUnsafeAgent,
+    primaryAgentPreset,
+    canResumePreset,
+    SHELL_LABELS,
+    type ShellKind
+} from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
 import { sessionIndexOrder, validZoom } from "../paneNav"
 import { isRunnable } from "../pipeline"
@@ -17,13 +25,30 @@ import { Icon } from "./Icon"
 
 // Shell choices offered in the "new terminal" menu (overrides the global default
 // for that one terminal). "custom" is configured in Settings → Terminal.
-const SHELL_OPTIONS: { kind: ShellKind; label: string }[] = [
-    { kind: "powershell", label: "PowerShell" },
-    { kind: "cmd", label: "Command Prompt" },
-    { kind: "gitbash", label: "Git Bash" },
-    { kind: "wsl", label: "WSL" },
-    { kind: "custom", label: "Custom shell" }
-]
+// Order is this menu's own; the names come from SHELL_LABELS so the menu, the
+// Settings dropdown and a pane's "Starting …" line cannot disagree.
+const SHELL_OPTIONS: { kind: ShellKind; label: string }[] = (
+    ["powershell", "cmd", "gitbash", "wsl", "custom"] as const
+).map((kind) => ({ kind, label: SHELL_LABELS[kind] }))
+
+/**
+ * What Ctrl+Shift+Enter starts.
+ *
+ * The same `primaryAgentPreset` the launch button renders from, rather than the
+ * `agents[0]` this chord used to take: those two diverge the moment a
+ * normal-mode command sits first in Settings, and then a button and a keystroke
+ * advertised as the same thing start different processes. Nothing configured =
+ * nothing happens, which is also when the button is not rendered - the old
+ * `?? "claude"` fallback guessed at a command that may not be installed.
+ *
+ * A function rather than a block inside the keymap: the entries there are
+ * single-expression arrows, and `tests/shortcutsWiring.test.ts` scans that
+ * object's source to check every chord is documented.
+ */
+function launchPrimaryAgent(newTab: (agentId: string) => void): void {
+    const primary = primaryAgentPreset(useSettings.getState().agents)
+    if (primary) newTab(primary.id)
+}
 
 export function TerminalView(): JSX.Element {
     const projects = useStore((s) => s.projects)
@@ -32,6 +57,11 @@ export function TerminalView(): JSX.Element {
     const activeTabByProject = useStore((s) => s.activeTabByProject)
     const agentOf = useStore((s) => s.agentOf)
     const agentStatus = useStore((s) => s.agentStatus)
+    // Stable slices, both of them: the Resume gate below derives from these in
+    // the render body. Selecting a filtered/mapped version here would hand
+    // zustand a fresh array every render and spin.
+    const termAgents = useStore((s) => s.termAgents)
+    const closedSessions = useStore((s) => s.closedSessions)
     const newTab = useStore((s) => s.newTab)
     const splitActive = useStore((s) => s.splitActive)
     const closePaneSilent = useStore((s) => s.closePaneSilent)
@@ -92,9 +122,25 @@ export function TerminalView(): JSX.Element {
     const tabs = activeId ? tabsByProject[activeId] ?? [] : []
     const activeTabId = activeId ? activeTabByProject[activeId] : undefined
     const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
-    // The one-click "+" button is the first AI-agent preset; normal-mode startup
-    // commands live in the ▾ menu only.
-    const primaryAgent = agents.find((a) => a.runMode !== "normal") ?? agents[0]
+    // The one-click launch button is the first AI-agent preset; normal-mode
+    // startup commands live in the ▾ menu only. Ctrl+Shift+Enter reads the same
+    // function, so the button and the chord cannot name one thing and start two.
+    const primaryAgent = primaryAgentPreset(agents)
+    // Resume runs the preset's continuation flag, which reattaches to whatever
+    // the CLI last recorded in this directory - so it is only a real control
+    // once a session running that same command has existed here. "Has existed"
+    // is read from the panes this project still holds (dead ones included) plus
+    // the undo ring; both are plain state slices, derived here in the render
+    // body rather than inside a selector.
+    const pastAgentIds = tabs
+        .flatMap((t) => collectLeaves(t.root))
+        .map((id) => termAgents[id] ?? SHELL)
+        .concat(
+            closedSessions
+                .filter((c) => c.isAgent && c.projectId === activeId)
+                .map((c) => c.agentId)
+        )
+    const canResume = canResumePreset(primaryAgent, agents, pastAgentIds)
 
     const runFind = (forward: boolean): void => {
         const s = useStore.getState()
@@ -117,7 +163,7 @@ export function TerminalView(): JSX.Element {
             if (!(e.ctrlKey && e.shiftKey)) return
             const map: Record<string, () => void> = {
                 KeyT: () => s.newTab(SHELL),
-                Enter: () => s.newTab(useSettings.getState().agents[0]?.id ?? "claude"),
+                Enter: () => launchPrimaryAgent(s.newTab),
                 KeyW: () => s.closeActivePane(),
                 Backslash: () => s.splitActive("row", SHELL),
                 Minus: () => s.splitActive("col", SHELL),
@@ -368,8 +414,11 @@ export function TerminalView(): JSX.Element {
                     })}
                 </div>
                 <div className="term-actions">
-                    <button onClick={() => newTab(SHELL)} data-tip="New shell tab (Ctrl+Shift+T)">
-                        + Terminal
+                    {/* One label for one act: the launcher's own button says
+                        "New terminal" too, and the two are visible within a
+                        second of each other. */}
+                    <button onClick={() => newTab(SHELL)} data-tip="New terminal (Ctrl+Shift+T)">
+                        New terminal
                     </button>
                     {primaryAgent && (
                         <span className="term-launch">
@@ -406,9 +455,14 @@ export function TerminalView(): JSX.Element {
                                     onClose={() => setLaunchOptsOpen(false)}
                                 />
                             )}
-                            {primaryAgent.resumeArgs && (
+                            {/* Secondary, and absent until there is something to
+                                resume. It used to be accent-outlined beside the
+                                accent-filled launch button - two accents side by
+                                side, so neither said "act here" - and it was
+                                offered on a project that had never run an agent,
+                                where it could only fail in the CLI's words. */}
+                            {canResume && (
                                 <button
-                                    className="term-launch-resume"
                                     onClick={() =>
                                         newTab(
                                             primaryAgent.id,
@@ -417,7 +471,7 @@ export function TerminalView(): JSX.Element {
                                     }
                                     data-tip={`Resume ${primaryAgent.name} — continues your last session (${primaryAgent.command} ${primaryAgent.resumeArgs})`}
                                 >
-                                    <span className="term-launch-glyph">↻</span> Resume
+                                    <Icon name="restart" size={12} /> Resume
                                 </button>
                             )}
                         </span>

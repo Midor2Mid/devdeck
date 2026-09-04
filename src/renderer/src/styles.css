@@ -1509,6 +1509,20 @@ button .ic,
     font-style: italic;
     color: var(--faint);
 }
+/* "SKIPS PROMPTS" on a card whose command bypasses permission prompts. A bare
+   uppercase micro-label is DESIGN.md's classification tier: --faint,
+   letter-spaced, no border and no fill. Deliberately NOT .probe-tag below -
+   that is an outlined pill on the orthogonal "will this even run" axis and can
+   appear on this same card, so the two must not look alike - and not a filled
+   badge, which is reserved for the one thing to act on. The loudness is the
+   word plus .launch-card-unsafe's danger stripe; the colour here stays quiet so
+   it reads as a classification rather than a fifth thing competing for the eye. */
+.launch-card-risk {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+}
 /* Geometry copied from .mtile-chip, which stays where it is: those are
    tone-coloured and glyphed at 9px, a different axis on a different surface. */
 .probe-tag {
