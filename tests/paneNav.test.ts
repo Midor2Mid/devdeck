@@ -160,7 +160,6 @@ describe("validZoom", () => {
 
     it("drops outside the tabs layout", () => {
         expect(validZoom("A", "grid", ["A"])).toBeUndefined()
-        expect(validZoom("A", "canvas", ["A"])).toBeUndefined()
         expect(validZoom("A", "overview", ["A"])).toBeUndefined()
     })
 

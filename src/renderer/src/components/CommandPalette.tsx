@@ -73,7 +73,7 @@ export function CommandPalette(): JSX.Element {
                 run: () => store.newTab(SHELL, sshCommand(p), p.label)
             })
 
-        const layouts: TermLayout[] = ["tabs", "grid", "canvas"]
+        const layouts: TermLayout[] = ["tabs", "grid"]
         for (const l of layouts)
             cmds.push({
                 id: "layout:" + l,

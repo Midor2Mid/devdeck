@@ -176,8 +176,8 @@ describe("reopenLastClosed", () => {
     })
 })
 
-// Undo used to belong to the VIEW, not to the close: Tabs had it, Overview and
-// Canvas did not - and those two are the cross-project surfaces the product is
+// Undo used to belong to the VIEW, not to the close: Tabs had it, while Overview
+// and the since-deleted Canvas did not - and those are the cross-project surfaces the product is
 // sold on. The safe closer now owns the default name, so a view gets undo by
 // doing nothing special, and losing it takes an explicit `closePaneSilent`.
 describe("undo belongs to the close, not to the view", () => {

@@ -25,7 +25,6 @@ export type IconName =
     | "splitV"
     | "tabs"
     | "grid"
-    | "canvas"
     | "layers"
     | "help"
     | "plus"
@@ -147,7 +146,6 @@ const P: Record<IconName, JSX.Element> = {
             <rect x="14" y="14" width="7" height="7" rx="1" />
         </>
     ),
-    canvas: <path d="M12 3 21 12 12 21 3 12Z" />,
     pause: (
         <>
             <rect x="6" y="4" width="4" height="16" rx="1" />

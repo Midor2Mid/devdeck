@@ -82,11 +82,6 @@ export interface ActivityEvent {
     kind: ActivityKind
 }
 
-export interface CanvasLink {
-    a: string
-    b: string
-}
-
 export interface AnySession {
     termId: string
     projectId: string
@@ -126,16 +121,29 @@ interface Persisted {
      */
     viewByProject: Record<string, MainView>
     termLayout: TermLayout
-    canvasPos: Record<string, CanvasPos>
-    canvasLinks: CanvasLink[]
     boardTasks: BoardTask[]
 }
 
-export type TermLayout = "tabs" | "grid" | "canvas" | "overview"
+export type TermLayout = "tabs" | "grid" | "overview"
 
-export interface CanvasPos {
-    x: number
-    y: number
+/** The layouts a build can restore from disk. `overview` is deliberately absent
+ *  - it is the cross-project board, not a per-project layout to come back to. */
+const TERM_LAYOUTS: readonly TermLayout[] = ["tabs", "grid", "overview"]
+
+/**
+ * Read the persisted terminal layout.
+ *
+ * workspace.json outlives the build that wrote it, and 0.12.0 wrote `canvas` -
+ * a third layout, deleted in this release, that did what Grid does. Reading it
+ * back as-is matched no branch in TerminalView, so the stage rendered nothing.
+ * `canvas` therefore lands on **grid**, the layout that replaced it, and any
+ * other unknown value on the same `tabs` default an absent key gets.
+ */
+const readTermLayout = (raw: unknown): TermLayout => {
+    if (typeof raw !== "string") return "tabs"
+    if ((TERM_LAYOUTS as readonly string[]).includes(raw)) return raw as TermLayout
+    if (raw === "canvas") return "grid"
+    return "tabs"
 }
 
 interface AppState extends Persisted {
@@ -225,10 +233,6 @@ interface AppState extends Persisted {
     flush: () => void
     termLayout: TermLayout
     setTermLayout: (layout: TermLayout) => void
-    canvasPos: Record<string, CanvasPos>
-    setCanvasPos: (termId: string, pos: CanvasPos) => void
-    canvasLinks: CanvasLink[]
-    toggleCanvasLink: (a: string, b: string) => void
 
     // Activity feed
     activity: ActivityEvent[]
@@ -354,7 +358,7 @@ interface AppState extends Persisted {
      * offers it back.
      *
      * This is deliberately the *default* name. The split used to be by view -
-     * Tabs had undo, Overview and Canvas did not - which meant the two
+     * Tabs had undo, Overview and the since-deleted Canvas did not - which meant the two
      * cross-project surfaces silently lost a session on a mis-click. The safe
      * closer now owns the obvious name, and losing the undo takes an explicit
      * call to `closePaneSilent`.
@@ -549,8 +553,6 @@ export const useStore = create<AppState>((set, get) => {
             view: s.view,
             viewByProject: s.viewByProject,
             termLayout: s.termLayout,
-            canvasPos: s.canvasPos,
-            canvasLinks: s.canvasLinks,
             boardTasks: s.boardTasks
         } satisfies Persisted)
     }
@@ -999,8 +1001,6 @@ export const useStore = create<AppState>((set, get) => {
             delete termNames[termId]
             const termShells = { ...s.termShells }
             delete termShells[termId]
-            const canvasPos = { ...s.canvasPos }
-            delete canvasPos[termId]
             const paneHold = { ...s.paneHold }
             delete paneHold[termId]
             return {
@@ -1012,8 +1012,6 @@ export const useStore = create<AppState>((set, get) => {
                 termCwd,
                 termNames,
                 termShells,
-                canvasPos,
-                canvasLinks: s.canvasLinks.filter((l) => l.a !== termId && l.b !== termId),
                 lastAgentTermId: s.lastAgentTermId === termId ? null : s.lastAgentTermId
             }
         })
@@ -1090,8 +1088,6 @@ export const useStore = create<AppState>((set, get) => {
         view: "mission",
         viewByProject: {},
         termLayout: "tabs",
-        canvasPos: {},
-        canvasLinks: [],
         boardTasks: [],
         activity: [],
         activityOpen: false,
@@ -1225,9 +1221,7 @@ export const useStore = create<AppState>((set, get) => {
                 composerDrafts: w.composerDrafts ?? {},
                 view: startView,
                 viewByProject,
-                termLayout: w.termLayout ?? "tabs",
-                canvasPos: w.canvasPos ?? {},
-                canvasLinks: w.canvasLinks ?? [],
+                termLayout: readTermLayout(w.termLayout),
                 boardTasks: w.boardTasks ?? []
             })
             // Only from here on does in-memory state reflect what is on disk, so
@@ -1618,26 +1612,6 @@ export const useStore = create<AppState>((set, get) => {
         },
         setTermLayout: (layout) => {
             set({ termLayout: layout })
-            persist()
-        },
-        setCanvasPos: (termId, pos) => {
-            set((s) => ({ canvasPos: { ...s.canvasPos, [termId]: pos } }))
-            persist()
-        },
-        toggleCanvasLink: (a, b) => {
-            if (a === b) return
-            set((s) => {
-                const exists = s.canvasLinks.some(
-                    (l) => (l.a === a && l.b === b) || (l.a === b && l.b === a)
-                )
-                return {
-                    canvasLinks: exists
-                        ? s.canvasLinks.filter(
-                              (l) => !((l.a === a && l.b === b) || (l.a === b && l.b === a))
-                          )
-                        : [...s.canvasLinks, { a, b }]
-                }
-            })
             persist()
         },
         setActivityOpen: (activityOpen) => set({ activityOpen }),

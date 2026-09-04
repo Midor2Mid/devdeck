@@ -10,7 +10,6 @@ import { paneRegistry } from "../paneRegistry"
 import type { Tab } from "../store"
 import { SplitView } from "./SplitView"
 import { PromptComposer } from "./PromptComposer"
-import { CanvasView } from "./CanvasView"
 import { OverviewView } from "./OverviewView"
 import { CommandLauncher } from "./CommandLauncher"
 import { LaunchOptions } from "./LaunchOptions"
@@ -42,11 +41,10 @@ export function TerminalView(): JSX.Element {
     const termLayout = useStore((s) => s.termLayout)
     const setTermLayout = useStore((s) => s.setTermLayout)
     // Layout modes cycle behind one control instead of separate buttons. The
-    // first three are per-project; Overview is the cross-project board.
+    // first two are per-project; Overview is the cross-project board.
     const LAYOUTS = [
         { id: "tabs", icon: "tabs", label: "Tabs" },
         { id: "grid", icon: "grid", label: "Grid" },
-        { id: "canvas", icon: "canvas", label: "Canvas" },
         { id: "overview", icon: "layers", label: "Overview (all projects)" }
     ] as const
     const layoutIdx = Math.max(
@@ -215,7 +213,7 @@ export function TerminalView(): JSX.Element {
         activeTab ? collectLeaves(activeTab.root) : []
     )
 
-    // All terminals across the project's tabs - used by Grid + Canvas layouts.
+    // All terminals across the project's tabs - used by the Grid layout.
     const allPanes = tabs.flatMap((tab) =>
         collectLeaves(tab.root).map((termId) => ({ termId, tabName: tab.name, tabId: tab.id }))
     )
@@ -709,12 +707,6 @@ export function TerminalView(): JSX.Element {
                                 )
                             })}
                         </div>
-                    ) : termLayout === "canvas" ? (
-                        <CanvasView
-                            panes={allPanes}
-                            projectId={activeProject.id}
-                            cwd={activeProject.path}
-                        />
                     ) : (
                         <SplitView
                             node={activeTab.root}
