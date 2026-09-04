@@ -1,9 +1,10 @@
-import { useEffect } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useStore } from "./store"
 import { nextSession } from "./deck"
 import { setDecisions } from "./missionTail"
 import { useSettings } from "./settings"
 import { useToasts, toast } from "./toast"
+import { classifyDrop, type DroppedItem } from "./folderDrop"
 import { PersistBlockedBar } from "./components/PersistBlockedBar"
 import { RegionBoundary } from "./components/RegionBoundary"
 import { Topbar } from "./components/Topbar"
@@ -102,6 +103,70 @@ export function App(): JSX.Element {
     const projects = useStore((s) => s.projects)
     const sessions = useStore((s) => s.sessions)
     const newTabIn = useStore((s) => s.newTabIn)
+    const addProjectByPath = useStore((s) => s.addProjectByPath)
+
+    /**
+     * Folder drop, at the app root rather than on the switcher.
+     *
+     * It lived on the switcher backdrop, so the only way to drop a folder was
+     * to first open the picker you were trying to avoid - and the read behind
+     * it (`File.path`) had been dead since Electron 32, so it animated and did
+     * nothing either way. Here it works with nothing open, and the switcher
+     * still receives it because the event bubbles to this element.
+     */
+    const [folderOver, setFolderOver] = useState(false)
+    // dragenter/dragleave fire for every element the pointer crosses inside the
+    // window, so a boolean flipped on `dragleave` blinks off over each child.
+    // Depth counting is the standard fix and it is why this is a ref, not state.
+    const dragDepth = useRef(0)
+
+    const onDrop = useCallback(
+        (e: React.DragEvent): void => {
+            dragDepth.current = 0
+            setFolderOver(false)
+            if (!e.dataTransfer.types.includes("Files")) return
+            // A child that already took this drop wins: PromptComposer attaches
+            // a dropped image and calls preventDefault without stopping
+            // propagation, so without this the root would follow a successful
+            // attach with "that's a file, not a folder" - two answers to one
+            // act, and the wrong one last.
+            if (e.defaultPrevented) return
+            e.preventDefault()
+            // Both reads are synchronous on purpose: `items` is neutered the
+            // moment this handler yields, so an `await` before them loses the
+            // drop entirely.
+            const items: DroppedItem[] = Array.from(e.dataTransfer.items).map((it) => {
+                const file = it.getAsFile()
+                const entry = it.webkitGetAsEntry?.() ?? null
+                return {
+                    path: file ? window.api.projects.pathForFile(file) : "",
+                    // `webkitGetAsEntry` is what tells a folder from a file
+                    // before main is involved; the fallback stays `null`
+                    // ("nobody asked"), never `false`.
+                    isDirectory: entry ? entry.isDirectory : null
+                }
+            })
+            const verdict = classifyDrop(items)
+            if (verdict.kind === "nothing") return
+            if (verdict.kind === "file") {
+                toast("That's a file, not a folder. DevDeck opens folders.")
+                return
+            }
+            for (const path of verdict.paths) {
+                void addProjectByPath(path).then(() => {
+                    // Main stats the path and refuses anything that is not a
+                    // directory, so a path that never became a project is the
+                    // one case the renderer could not classify. Say that much
+                    // and no more - the cause is main's to know, and a
+                    // damaged projects.json lands here too.
+                    if (!useStore.getState().projects.some((p) => p.path === path)) {
+                        toast("DevDeck couldn't open that.")
+                    }
+                })
+            }
+        },
+        [addProjectByPath]
+    )
 
     useEffect(() => {
         // Bare `init()` swallowed every rejection: there is no unhandledrejection
@@ -338,7 +403,24 @@ export function App(): JSX.Element {
     }, [openSwitcher, closeSwitcher])
 
     return (
-        <div className="app">
+        <div
+            className={"app" + (folderOver ? " folder-drop" : "")}
+            onDragEnter={(e) => {
+                if (!e.dataTransfer.types.includes("Files")) return
+                dragDepth.current++
+                setFolderOver(true)
+            }}
+            onDragOver={(e) => {
+                // Without preventDefault on dragover the browser refuses the
+                // drop and the cursor stays a "no entry" sign.
+                if (e.dataTransfer.types.includes("Files")) e.preventDefault()
+            }}
+            onDragLeave={() => {
+                dragDepth.current = Math.max(0, dragDepth.current - 1)
+                if (dragDepth.current === 0) setFolderOver(false)
+            }}
+            onDrop={onDrop}
+        >
             <div className="app-body">
                 <div className="main">
                     {/* Deliberately no resetKey: the top bar is not view-scoped.

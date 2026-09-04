@@ -369,6 +369,23 @@ button .ic,
 .sb-item .ic {
     vertical-align: middle;
 }
+/* A folder being dragged over the window. The dashed accent frame is the one
+   moment the accent marks the whole window rather than a control, and it is
+   honest about it: a drop here does something now (it read a property Electron
+   deleted in 32 and silently did nothing). `fixed` on a pseudo-element rather
+   than an outline on .app, because every modal is a positioned child and would
+   paint straight over an outline on the parent; z-index sits above the context
+   menu (81) and below the tooltip layer, which has no business in a drag. */
+.app.folder-drop::after {
+    content: "";
+    position: fixed;
+    inset: 6px;
+    z-index: 90;
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius, 7px);
+    pointer-events: none;
+}
+
 /* ---------- Custom tooltips (data-tip) ---------- */
 .tip {
     position: fixed;
@@ -484,10 +501,6 @@ button .ic,
 .switcher-add:hover {
     color: var(--accent);
     border-color: var(--accent);
-}
-.switcher-backdrop.folder-drop {
-    outline: 2px dashed var(--accent);
-    outline-offset: -8px;
 }
 .switcher-grid {
     display: grid;

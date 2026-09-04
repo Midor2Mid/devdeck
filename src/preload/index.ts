@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 // Type-only imports from main: erased at bundle time (isolatedModules + no
 // runtime value pulled in), so this doesn't drag main's Electron/native-module
 // side effects into the preload bundle. Importing the canonical shapes here -
@@ -407,7 +407,31 @@ const api = {
         setMeta: (id: string, meta: { emoji?: string; color?: string }): Promise<ProjectStore> =>
             ipcRenderer.invoke("projects:setMeta", { id, meta }),
         addPath: (path: string): Promise<ProjectStore> =>
-            ipcRenderer.invoke("projects:addPath", path)
+            ipcRenderer.invoke("projects:addPath", path),
+        /**
+         * The absolute path behind a dropped `File`.
+         *
+         * The drop handler read `File.path` for two years. Electron removed
+         * that property in 32 and this app is on 43, so the read was
+         * `undefined`, the guard below it was always false, and every folder
+         * drop silently did nothing while the dashed outline animated - a
+         * promised feature failing quietly, which is worse than not having one.
+         * `webUtils.getPathForFile` is the documented replacement and is
+         * callable only from the preload, which is why this crosses the bridge
+         * as a function rather than the renderer reading a property.
+         *
+         * Returns "" rather than throwing for anything that is not a real
+         * filesystem File (a Blob-backed one, a synthetic drop): the caller has
+         * to distinguish "no path" from a path anyway, and an exception here
+         * would take the whole drop handler down with it.
+         */
+        pathForFile: (file: File): string => {
+            try {
+                return webUtils.getPathForFile(file)
+            } catch {
+                return ""
+            }
+        }
     },
     workspace: {
         load: (): Promise<Loaded<unknown>> => ipcRenderer.invoke("workspace:load"),

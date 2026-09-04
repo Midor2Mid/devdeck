@@ -8,8 +8,9 @@ import { switcherEmpty } from "../probeView"
 
 /**
  * Full-window launchpad for switching and managing projects: a searchable grid
- * of cards with an `Open folder…` button, per-card context menu, and OS
- * folder-drop to add. Type to filter, arrows to move, Enter to open.
+ * of cards with an `Open folder…` button and a per-card context menu. Type to
+ * filter, arrows to move, Enter to open. Dropping a folder works anywhere in
+ * the window (App.tsx), including with this picker closed.
  * Opened with Ctrl+K.
  */
 export function ProjectSwitcher(): JSX.Element {
@@ -20,11 +21,9 @@ export function ProjectSwitcher(): JSX.Element {
     const close = useStore((s) => s.closeSwitcher)
     const sessions = useStore((s) => s.sessions)
     const addProject = useStore((s) => s.addProject)
-    const addProjectByPath = useStore((s) => s.addProjectByPath)
 
     const [q, setQ] = useState("")
     const [sel, setSel] = useState(0)
-    const [folderOver, setFolderOver] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const gridRef = useRef<HTMLDivElement>(null)
 
@@ -126,28 +125,13 @@ export function ProjectSwitcher(): JSX.Element {
         }
     }
 
+    // Folder drop is handled at the app root now (App.tsx), which is where it
+    // works whether or not this picker is open - and the drop still reaches it
+    // from here, because the event bubbles out of this backdrop. What used to
+    // be here read `File.path`, removed in Electron 32: the dashed outline lit
+    // up and the drop did nothing.
     return (
-        <div
-            className={"switcher-backdrop" + (folderOver ? " folder-drop" : "")}
-            onMouseDown={close}
-            onDragOver={(e) => {
-                if (e.dataTransfer.types.includes("Files")) {
-                    e.preventDefault()
-                    setFolderOver(true)
-                }
-            }}
-            onDragLeave={() => setFolderOver(false)}
-            onDrop={(e) => {
-                if (e.dataTransfer.files.length) {
-                    e.preventDefault()
-                    for (const f of Array.from(e.dataTransfer.files)) {
-                        const path = (f as unknown as { path?: string }).path
-                        if (path) addProjectByPath(path)
-                    }
-                }
-                setFolderOver(false)
-            }}
-        >
+        <div className="switcher-backdrop" onMouseDown={close}>
             <div className="switcher" onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKeyDown}>
                 <div className="switcher-head">
                     <input
