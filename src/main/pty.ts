@@ -250,6 +250,34 @@ function reportDead(id: string, notice: string): void {
     ptyEvents.emit("exit", { id, exitCode: 1, stale: false, started: false })
 }
 
+/**
+ * The corpse notice for a cwd we refused to spawn into, in the two states that
+ * refusal has.
+ *
+ * Exported so the wording can be tested without a filesystem: this text is the
+ * only thing a user sees when a terminal never starts, and the difference
+ * between the two sentences is the difference between a fact about their folder
+ * and a fact about our attempt to read it. Neither mentions the shell, which is
+ * fine in both cases.
+ */
+export function cwdNotice(cwd: string, state: "missing" | "unchecked"): string {
+    return [
+        "",
+        "DevDeck could not start this terminal.",
+        `  folder: ${cwd}`,
+        ...(state === "missing"
+            ? [
+                  "That folder isn't there right now. It may have been moved or renamed,",
+                  "or be on a drive that isn't connected."
+              ]
+            : [
+                  "DevDeck couldn't check that folder, so it won't start a shell there.",
+                  "It may be on a drive that isn't connected, or one this account can't read."
+              ]),
+        ""
+    ].join("\r\n")
+}
+
 export function createPty(opts: CreateOpts): void {
     const { id } = opts
     // Attaching to a RUNNING session is a no-op; spawning over a corpse is a
@@ -269,34 +297,28 @@ export function createPty(opts: CreateOpts): void {
     // `isDirectory()` rather than mere existence: a path that resolves to a FILE
     // makes statSync succeed and node-pty throw the same way.
     const cwd = resolveCwd(opts)
-    let cwdOk = false
+    let cwdState: "ok" | "missing" | "unchecked" = "unchecked"
     try {
-        cwdOk = statSync(cwd).isDirectory()
-    } catch {
+        cwdState = statSync(cwd).isDirectory() ? "ok" : "missing"
+    } catch (e) {
         // A stat that THROWS (permission denied, an unmounted drive, a path
         // longer than the OS accepts) is not proof the folder is gone. It is,
         // however, proof we cannot hand it to node-pty and survive, so it takes
-        // the same refusal - the notice says what we can see, not what we guess.
-        cwdOk = false
+        // the same refusal - but NOT the same sentence. Only the OS answering
+        // "nothing there" earns that one. These are the same three states the
+        // project probe reports (main/projects.ts), so the terminal and the
+        // project chip cannot end up disagreeing about one folder.
+        const code = (e as NodeJS.ErrnoException).code
+        cwdState = code === "ENOENT" || code === "ENOTDIR" ? "missing" : "unchecked"
     }
-    if (!cwdOk) {
+    if (cwdState !== "ok") {
         // Deliberately BEFORE the "spawn" notice below: that event feeds the
         // diagnostics record's "what shell actually launched" half, and nothing
         // launched here. The copy names the folder and says nothing about the
         // shell, which in this case is fine — sending the user to Settings ->
         // Terminal to repair a working shell is a wrong diagnosis, and the
         // missing-shell branch's copy does exactly that.
-        reportDead(
-            id,
-            [
-                "",
-                "DevDeck could not start this terminal.",
-                `  folder: ${cwd}`,
-                "That folder isn't there right now. It may have been moved or renamed,",
-                "or be on a drive that isn't connected.",
-                ""
-            ].join("\r\n")
-        )
+        reportDead(id, cwdNotice(cwd, cwdState))
         return
     }
 

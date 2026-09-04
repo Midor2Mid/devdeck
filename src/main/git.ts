@@ -1,5 +1,6 @@
 import { execFile, spawn } from "child_process"
 import { request as httpsRequest } from "https"
+import { stat } from "fs/promises"
 
 export interface GitStatus {
     isRepo: boolean
@@ -175,12 +176,49 @@ export function parseBranchLine(line: string): { upstream: string; ahead: number
     return { upstream, ahead, behind }
 }
 
+/**
+ * Did this cwd resolve as a directory?
+ *
+ * `false` means we could not confirm that it did - either the OS said nothing
+ * is there, or the stat itself failed. The three-state grammar (ok / missing /
+ * unchecked) lives in `main/projects.ts` and is what the UI renders; here the
+ * two non-ok answers deliberately collapse, because they produce the same fact
+ * about the COUNT: it is unknown either way, and unknown is not zero.
+ *
+ * Async, like the probe and for the same reason: a synchronous stat against a
+ * disconnected share would block main for as long as the OS takes to answer,
+ * and this runs on a 12s poll.
+ */
+async function cwdResolves(cwd: string): Promise<boolean> {
+    try {
+        return (await stat(cwd)).isDirectory()
+    } catch {
+        return false
+    }
+}
+
 /** Branch + uncommitted-change count for a directory (empty if not a git repo). */
 export function gitStatus(cwd: string): Promise<GitStatus> {
     return new Promise((resolve) => {
         execFile("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, ...OPTS }, (err, stdout) => {
             if (err) {
-                resolve({ isRepo: false, branch: "", changes: 0, upstream: "", ahead: 0, behind: 0 })
+                // Two very different failures land here and `execFile` cannot
+                // tell them apart: a folder that simply is not a git repo (the
+                // common case) and a cwd that does not exist at all. This
+                // answered `changes: 0` for both - and zero is a claim about a
+                // working tree, which there is none of when the folder is gone.
+                // The type's own doc comment already insists unknown is not
+                // zero; this was the one path still deciding otherwise.
+                void cwdResolves(cwd).then((ok) =>
+                    resolve({
+                        isRepo: false,
+                        branch: "",
+                        changes: ok ? 0 : null,
+                        upstream: "",
+                        ahead: 0,
+                        behind: 0
+                    })
+                )
                 return
             }
             const branch = stdout.trim()
