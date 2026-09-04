@@ -796,6 +796,45 @@ ROADMAP step 8 claimed this and did not do it. It must not ship a false validati
 
 ---
 
+### Task 25: Reconcile the README with what Phase 1 actually deleted
+
+**Files:** `README.md`
+
+**Interfaces:** Consumes the finished state of Tasks 5, 10 and 12. **Runs last in
+Phase 1**, because two of its numbers are outputs of other tasks.
+
+Found by the Task 4 agent, which correctly refused to fix them as out of scope:
+the plan assigned `README.md` to Task 4 only, so three lines were left with no
+owner and would have shipped describing deleted features.
+
+- [ ] **Step 1: `README.md:157`** — "four ways to arrange sessions… a free-form
+  **Canvas** you pan and position by hand" → three ways, Canvas removed (Task 10)
+- [ ] **Step 2: `README.md:174`** — "7 color themes (Sumi, Washi, Slate, Graphite,
+  Zen, Aurora, Neo) × 12 design styles" → the real surviving counts and names
+  (Task 12). Default stays "Slate + Modern Pro"
+- [ ] **Step 3: `README.md:133`** — `npm test  # 1,530 unit tests`. Already stale
+  before this plan (the suite was 1,536), and every Phase 1 deletion moves it.
+  Set it to the number `npm test` actually prints at this point
+- [ ] **Step 4: Re-run Task 4's grep, which only comes back clean now**
+
+Run: `grep -rn -i "capture proxy|network debugging|network capture" README.md site/index.html PRODUCT.md`
+`PRODUCT.md:3` and `:8` still carry capture-proxy claims — those belong to **Task 24**,
+so hits there are expected until Task 24 runs. Hits in `README.md` or
+`site/index.html` are not.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add README.md
+git commit -m "docs: the README describes what Phase 1 left behind
+
+Canvas, the skin counts and the test count all moved underneath it. The
+plan gave README.md to the docs task only, so these three lines had no
+owner - caught by that task's agent rather than by anything automated."
+```
+
+---
+
 ## Self-review
 
 **Spec coverage:** §2 → Tasks 1–3. §3 → Tasks 4–12 (including the corrected `netproxy`/`browserNet` carve-out in Task 5). §4.1 → 13, 14. §4.2 → 15. §4.3 → 16. §4.4 → 17, 18, 19. §4.5 → 20, 21. §4.6 → 22. §4.7 → 23. §4.8 → 24. §5 fixed points are in Global Constraints. §6 deferrals have no tasks, by design.
