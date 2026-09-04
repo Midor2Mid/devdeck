@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard } from "electron"
+import { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard, Menu } from "electron"
 import { join } from "path"
 import { mkdirSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
@@ -293,7 +293,12 @@ function createWindow(): void {
         minHeight: 600,
         backgroundColor: "#1b1a18",
         title: "DevDeck",
-        autoHideMenuBar: true,
+        // Visible, deliberately. `true` is Electron's comfortable default and
+        // it was hiding the one affordance most Windows users already know how
+        // to look for: a menu bar you can see without first guessing that Alt
+        // does something. ~20px of chrome, decided by the user, in exchange for
+        // Ctrl+O and F1 having somewhere to be discovered.
+        autoHideMenuBar: false,
         webPreferences: {
             preload: join(__dirname, "../preload/index.js"),
             contextIsolation: true,
@@ -341,6 +346,132 @@ function createWindow(): void {
         }
         if (mainWindow) saveWindowState(mainWindow)
     })
+}
+
+/**
+ * Replay one of the renderer's own chords, from the menu.
+ *
+ * The menu lives in this process; every act it offers lives in the other one.
+ * Projects are held in the renderer store, which adopts main's `projects.json`
+ * as the *reply* to an IPC it initiated - so main opening the folder dialog by
+ * itself would write a project the window on screen never hears about, and
+ * `contextBridge` (correctly) exposes no channel for main to push a command
+ * the other way. Until one exists, the honest bridge is the keystroke: the
+ * renderer already owns these chords, `shortcuts.ts` already publishes them,
+ * and this adds no IPC surface at all.
+ *
+ * Every item that uses this therefore carries `registerAccelerator: false` -
+ * the chord belongs to the renderer, and letting Electron register it too
+ * would fire the item AND the renderer's handler, i.e. two folder dialogs.
+ */
+function sendChord(keyCode: string, modifiers: Array<"control" | "shift"> = ["control"]): void {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const wc = mainWindow.webContents
+    wc.sendInputEvent({ type: "keyDown", keyCode, modifiers })
+    wc.sendInputEvent({ type: "keyUp", keyCode, modifiers })
+}
+
+/** Version facts for Help -> About. Nothing here leaves the machine. */
+function aboutDetail(): string {
+    return [
+        `Version ${app.getVersion()}`,
+        `Electron ${process.versions.electron} - Chromium ${process.versions.chrome} - Node ${process.versions.node}`,
+        "",
+        "A terminal-first cockpit for the projects you already have.",
+        "",
+        'For a copy of what this install is doing: Settings -> About -> "Copy diagnostics".',
+        "Nothing is sent anywhere. The clipboard is the only way anything leaves your machine."
+    ].join("\n")
+}
+
+/**
+ * The application menu.
+ *
+ * It exists because `Ctrl+O` - the first thing a Windows user tries - was a
+ * dead end: this file never imported `Menu`, so Electron installed its own
+ * default and the app had no File menu, no Help, and no visible home for any
+ * chord it does support.
+ *
+ * Two things asked for are deliberately NOT here, and both are absences rather
+ * than oversights:
+ *
+ * - **Open Recent.** DevDeck's recent-project order is the renderer's MRU
+ *   (localStorage, `projectMru.ts`), and activating one project by id needs a
+ *   command channel main does not have. A submenu built from `projects.json`
+ *   would be in the wrong order and could only open a picker anyway, so the
+ *   menu points at the picker that IS MRU-ordered - Switch Project (Ctrl+K).
+ * - **Close Project.** There is no such act in the app: `setActive` takes a
+ *   string, the store has no path back to "no active project", and the thing
+ *   that does exist is Remove, which forgets the project entirely. A menu item
+ *   labelled Close that removed a project would be a lying label.
+ *
+ * Replacing Electron's default menu also drops its `Ctrl+Shift+I` DevTools
+ * item - a chord this app binds to the prompt composer, so the two were
+ * sharing it. In dev the toggle comes back on F12, which nothing else uses.
+ */
+function buildAppMenu(): void {
+    const isDev = !!process.env["ELECTRON_RENDERER_URL"]
+    const menu = Menu.buildFromTemplate([
+        {
+            label: "&File",
+            submenu: [
+                {
+                    label: "&Open Folder...",
+                    accelerator: "CmdOrCtrl+O",
+                    registerAccelerator: false,
+                    click: () => sendChord("o")
+                },
+                {
+                    label: "&Switch Project...",
+                    accelerator: "CmdOrCtrl+K",
+                    registerAccelerator: false,
+                    click: () => sendChord("k")
+                },
+                { type: "separator" },
+                { label: "E&xit", role: "quit" }
+            ]
+        },
+        {
+            label: "&Help",
+            submenu: [
+                {
+                    label: "&Keyboard Shortcuts",
+                    accelerator: "F1",
+                    registerAccelerator: false,
+                    click: () => sendChord("F1", [])
+                },
+                ...(isDev
+                    ? ([
+                          {
+                              label: "Toggle &Developer Tools",
+                              accelerator: "F12",
+                              click: () => mainWindow?.webContents.toggleDevTools()
+                          },
+                          { type: "separator" }
+                      ] as Electron.MenuItemConstructorOptions[])
+                    : []),
+                {
+                    label: "&About DevDeck",
+                    click: () => {
+                        const opts: Electron.MessageBoxOptions = {
+                            type: "info",
+                            title: "About DevDeck",
+                            message: "DevDeck",
+                            detail: aboutDetail(),
+                            buttons: ["Close"],
+                            noLink: true
+                        }
+                        if (mainWindow && !mainWindow.isDestroyed()) {
+                            void dialog.showMessageBox(mainWindow, opts)
+                        } else {
+                            void dialog.showMessageBox(opts)
+                        }
+                    }
+                }
+            ]
+        }
+    ])
+    Menu.setApplicationMenu(menu)
 }
 
 function registerIpc(): void {
@@ -1134,6 +1265,9 @@ app.whenReady().then(() => {
     registerIpc()
     applyNavigationGuards()
     applySecurity()
+    // Before the window, so the bar is in the first painted frame rather than
+    // appearing under the user a moment later and shifting the layout.
+    buildAppMenu()
     createWindow()
     // Fire-and-forget, before the renderer has finished booting: the one login
     // shell this process ever spawns for its PATH takes ~150-600ms, and starting

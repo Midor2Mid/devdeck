@@ -162,12 +162,16 @@ export function App(): JSX.Element {
         })
     }, [])
 
-    // Global shortcuts: Ctrl+K project switcher, Ctrl+Shift+K previous project,
-    // Ctrl+Shift+P command palette, Ctrl+1..6 view switch, Ctrl+Tab session cycle.
+    // Global shortcuts: Ctrl+O open folder, Ctrl+K project switcher,
+    // Ctrl+Shift+K previous project, Ctrl+Shift+P command palette, Ctrl+1..N
+    // view switch, Ctrl+Tab session cycle. Every one of them is published in
+    // shortcuts.ts, which is what the F1 overlay and Settings read.
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
             const mod = e.ctrlKey || e.metaKey
-            if (e.code === "F1") {
+            // `e.key` as well as `e.code`: the Help menu replays this chord
+            // through `sendInputEvent`, which is reliable about `key`.
+            if (e.code === "F1" || e.key === "F1") {
                 e.preventDefault()
                 const s = useStore.getState()
                 s.setShortcutsOpen(!s.shortcutsOpen)
@@ -238,8 +242,9 @@ export function App(): JSX.Element {
                 return
             }
             // Alt+1..9 — jump straight to a session in this project, counted the
-            // way the tab bar reads. Alt is otherwise unbound here, and the
-            // window has no menu whose mnemonics could collide with digits.
+            // way the tab bar reads. Alt is otherwise unbound here; the window
+            // now has a menu bar, but its mnemonics are F and H, so no digit
+            // collides with one.
             if (e.altKey && !mod && /^Digit[1-9]$/.test(e.code)) {
                 const s = useStore.getState()
                 if (!s.activeId) return
@@ -270,6 +275,17 @@ export function App(): JSX.Element {
                 e.preventDefault()
                 if (useStore.getState().switcherOpen) closeSwitcher()
                 else openSwitcher()
+                return
+            }
+            // Ctrl+O — the folder dialog, in one keystroke. It is the first
+            // thing a Windows user tries and until now it did nothing at all.
+            // It goes straight to `addProject()` rather than to the switcher:
+            // `addProject` already adopts main's activeId, so opening a folder
+            // always activates it, and routing through the picker would put the
+            // dialog three hops from the chord that names it.
+            if (mod && !e.shiftKey && e.key.toLowerCase() === "o") {
+                e.preventDefault()
+                void useStore.getState().addProject()
                 return
             }
             // Ctrl+1..N — switch main view (indexed into the deck view order).

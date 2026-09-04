@@ -115,6 +115,10 @@ function specialWiring(keys: string): { file: string; needle: string } | undefin
     switch (keys) {
         case "Ctrl + K":
             return { file: APP, needle: `!e.shiftKey && e.key.toLowerCase() === "k"` }
+        // Matched on `e.key`, not `e.code`, because the File menu replays this
+        // chord through `sendInputEvent` - which is reliable about `key`.
+        case "Ctrl + O":
+            return { file: APP, needle: `!e.shiftKey && e.key.toLowerCase() === "o"` }
         case "Ctrl + Tab":
         case "Ctrl + Shift + Tab":
             return { file: APP, needle: `mod && e.code === "Tab"` }
