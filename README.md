@@ -52,8 +52,10 @@ it found: see "The first five minutes" below.
 3. You're seeing that prompt because the installer is signed with a
    self-signed certificate, trusted today only on the developer's own machine
    — a real Authenticode signature, but not one Windows trusts out of the box.
-   A certificate that would clear SmartScreen for everyone has been applied
-   for with the SignPath Foundation and not yet granted. See the
+   A free certificate for open-source projects, from the SignPath Foundation,
+   is the plan for clearing SmartScreen for everyone — but it has **not** been
+   applied for yet, and cannot be: the Foundation requires a public repository
+   and this one is still private. See the
    [DevDeck homepage](site/index.html) for the full code-signing policy.
 4. Launch DevDeck from the Start menu (installed) or by running the portable
    `.exe` directly.
@@ -75,7 +77,8 @@ never guesses.
 2. Switch to **Terminal** — the third view key in the deck along the bottom
    of the window, or `Ctrl+3`. With
    no terminals yet it shows **+ New terminal**, plus one card per configured
-   agent (**Claude**, **Claude Opus**, **Claude YOLO**, **Codex**, **Gemini**
+   agent (**Claude**, **Claude Opus**, **Claude (no permission prompts)**,
+   **Codex**, **Gemini**
    by default) and, if the folder has a `package.json`, one card per script in
    it.
 3. Click **+ New terminal** (or press `Ctrl+Shift+T`) for a plain shell, or
@@ -151,7 +154,7 @@ its own, so nothing else catches a type error.
 - **Projects in the deck** — add a folder as a project; the deck along the bottom of the window carries one strip per project with its live sessions, and `Ctrl+K` switches between them. Persisted across restarts.
 - **Multi-terminal** — real shells via xterm.js + pty, tabbed, each spawned in the active project's directory.
 - **Split panes** — split any terminal right (⇆) or down (⇅) to see multiple terminals at once; close panes and the layout collapses cleanly.
-- **Multi-agent sessions** — configurable agent presets (Claude, Claude Opus, Claude YOLO, Codex, Gemini, or a custom command) launched per project, each with a type badge; `+` for the primary agent, `▾` menu for the rest (with resume). DevDeck checks each command against your shell's PATH and says so on the card, rather than launching into a pane that silently fails. Configure in Settings → Agents.
+- **Multi-agent sessions** — configurable agent presets (Claude, Claude Opus, Claude (no permission prompts), Codex, Gemini, or a custom command) launched per project, each with a type badge; `+` for the primary agent, `▾` menu for the rest (with resume). DevDeck checks each command against your shell's PATH and says so on the card, rather than launching into a pane that silently fails. Configure in Settings → Agents.
 - **Task board + dispatch rules** — cards move through doing/review/done on real evidence (a snapshot of the project's git state, not just a quiet terminal); a Dispatch button routes a card to an agent by rule (title match, glob, or project) instead of always picking the first preset.
 - **Prompt composer** — `Ctrl+Shift+I` opens a rich prompt box with `@file` and `/snippet` autocomplete (snippets defined in Settings) to compose and send to the focused agent session.
 - **Terminal layouts** — three ways to arrange sessions: **Tabs**, a **Dashboard grid** of every terminal in the project, and an **Overview** across every project at once.
