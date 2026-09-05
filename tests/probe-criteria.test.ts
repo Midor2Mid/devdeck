@@ -12,6 +12,19 @@ import {
 } from "../src/main/shellPath"
 import type { ProbeRequest } from "../src/shared/probe"
 
+// These specs create real temp directories and walk a real PATH with real
+// `fs.stat` calls, which is the point — the hydration is stubbed but the
+// resolution is not. Under a full 133-file run vitest schedules many files at
+// once, and that filesystem work has repeatedly overrun the 5s default: the
+// suite went red three separate times today on "finds a binary that exists only
+// on the hydrated PATH", which passed alone every time.
+//
+// A flaky test in a release gate is worse than no test, because it teaches
+// whoever sees it to re-run and stop reading. The budget is what was wrong, not
+// the assertions, so the budget is what changes. Kept file-scoped rather than
+// raised globally: a genuinely hung test elsewhere should still fail fast.
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
+
 /**
  * The two acceptance criteria the suite proves only indirectly, written as the
  * criteria state them (po, 2026-09-03, criteria 1 and 5).
