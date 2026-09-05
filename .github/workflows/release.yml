@@ -58,6 +58,14 @@ jobs:
       contents: write # gh release create / upload
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow clone. tests/gitIdentity.test.ts
+          # walks every commit to prove no unintended author or committer address
+          # is about to be published, and against a depth-1 checkout it would have
+          # one commit to look at - it fails loudly rather than passing vacuously,
+          # but only because it asserts the history is there. This is what makes
+          # the guard mean something on a runner.
+          fetch-depth: 0
 
       # Pinned to the patch, not `22`, because this is the build that ships.
       # The repo's dependency floor is `^20.19 || >=22.12` (vite 7 / electron 43);
