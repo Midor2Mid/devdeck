@@ -1,5 +1,359 @@
 # Changelog
 
+## 0.13.0 - 2026-09-05
+
+The release that removes things. Six surfaces, 78 of the 84 skins, and one crash
+that made the app unopenable. There is no new panel here; the largest single
+change is a subtraction, and each section says what the thing cost to keep.
+
+It is also the first build since **0.10.0** that anything outside this machine
+could install. `0.11.0`, `0.11.1` and `0.12.0` were tagged and never published, so
+one installer carries four versions — their entries are directly below this one
+and are not repeated here.
+
+### A project whose folder had moved took the app down, and kept it down
+
+The worst defect this codebase has shipped. Opening a terminal in a project whose
+folder had been moved, renamed or unmounted killed the main process — and the tab
+that did it was persisted, so every later launch died before the UI loaded. The
+only way back was to hand-edit files under `userData`. Three faults, fixed at
+three levels.
+
+- **The throw.** node-pty's Windows agent raises error 267 for a bad `cwd` from
+  inside `_completePtyConnection`, and it does it *asynchronously* — so `pty.ts`'s
+  try/catch, which exists for the synchronous missing-shell throw, never saw it and
+  the throw reached Electron's fatal main-process dialog. The directory is checked
+  before anything is spawned, and the failure is reported through the same corpse
+  notice and exit event a real process death uses, naming the folder rather than
+  sending you to fix a shell that is fine.
+- **The trap.** A tab that never started was written to `workspace.json` like any
+  other tab, so the next launch restored it and retried the same doomed spawn. That
+  is what turned one crash into a permanent one. `pty:exit` now carries whether
+  anything was actually started, and **only never-started panes are dropped** — a
+  shell you ran and exited still comes back, because restoring the arrangement is
+  the feature and a tab that did its job is not one that never opened. The
+  un-persist writes immediately instead of through the usual debounce, since the
+  failure it guards against is exactly the one where the app does not survive to
+  flush a timer.
+- **The backstop.** An uncaught throw anywhere in main used to produce Electron's
+  "A JavaScript error occurred in the main process" — a sentence that names no
+  cause, offers no action, and leaves nothing on disk. It is now written into the
+  diagnostics record 0.12.0 added, and the app quits *through* the same teardown a
+  normal quit runs, so pty trees, sqlite handles and the WS server are closed. It
+  quits rather than continuing on purpose: nearly every store in main is
+  load-mutate-save, and a throw between the mutate and the save followed by a later
+  successful save writes a half-mutated object over a good file — the
+  workspace-destroying failure this codebase already survived once. An unhandled
+  promise rejection is recorded and is **not** fatal; registering that listener does
+  suppress Node's default of re-raising it as an uncaught exception, which is a real
+  behaviour change and is only defensible because the record makes the failure
+  visible instead of silent. The dialog path itself is not proven — forcing a real
+  main-process throw was not done.
+
+### Six surfaces and 78 skins are gone, and that is the feature
+
+Every UI change had to be verified against the skin matrix, and **84 combinations
+is what made each one expensive**: a label change in this same round overflowed the
+app's own minimum window in one style, and nothing short of measuring all twelve
+would have found it. That cost was paid on every change, forever, for combinations
+nobody has ever selected. The same argument, in a different currency, applies to
+each deleted surface: it is code that has to keep working, in a file somebody has
+to read, for a job something else already does.
+
+- **84 skins → 6.** Slate (default), Washi (light) and Sumi — the stated wabi-sabi
+  north star — across Modern Pro and Wabi-sabi. Ten styles and four themes deleted,
+  Aurora Glass, Neo Holographic and Kinetic Minimal among them; a recorded
+  product-identity candidate named those three, the conflict was put on the table
+  first, and the cut was made anyway. It is reversible — the CSS is in git. A
+  `settings.json` naming a deleted skin falls back to the default instead of
+  rendering an unstyled window, and it falls back in the **loaded state**, not only
+  at apply time: resolving at apply alone was tried and was not enough, because the
+  store kept the dead id, so the window painted as Slate while the Appearance picker
+  showed nothing selected and every other reader — the Monaco theme, the xterm
+  palette, the accent Reset button — indexed `undefined`. Your accent survives the
+  migration; it is a choice that outlives the theme it was defaulted from.
+  `styles.css` went 8,716 → 7,081 lines.
+- **The Network view and the local capture proxy.** A general-purpose forward proxy
+  for arbitrary client traffic, with no agent edge — Fiddler, mitmproxy and browser
+  devtools own that job. An earlier audit had already ruled it a failure of the
+  product's own test and it shipped anyway. Deck view keys: **eight → seven**.
+- **`Settings → Corporate proxy` was not removed and is not affected.** Three
+  modules in this repo have "proxy" in the name, and an earlier kill list treated
+  two of them as one feature. What survives, unchanged: the upstream corporate proxy
+  applied to every child DevDeck spawns so `npm`, `git` and `dotnet` work behind a
+  firewall (plus `NODE_EXTRA_CA_CERTS`), and the browser's own request capture, which
+  feeds the → Agent payload and the MCP tools. Both were verified still answering in
+  the built app after the deletion.
+- **ReleaseBoard.** A deployment tracker, and a team artifact, in a single-developer
+  cockpit; GitHub Environments and the CI system own it. It also held a permanent
+  seat in the deck's status region, which is the scarcest chrome in the app. Its five
+  `release:*` IPC handlers went with it, because a live channel no code can reach is
+  worse than the component was.
+- **StandupModal.** It generates a standup. A single developer does not have one, and
+  a team's standup is not a product feature. The git-log-scraping worklog stack behind
+  it was deleted too, since the modal was its only consumer.
+- **DotnetPanel**, and `Ctrl+Shift+B` with it — including the palette entry and the
+  terminal's own key-swallow list, which would otherwise have eaten the chord and done
+  nothing. It jumps to file:line, i.e. it helps you author, which is Visual Studio's
+  job, and it was stack-specific in a stack-agnostic product. The .NET review lens and
+  `dotnet` project detection are unrelated and stay.
+- **Terminal recording** and its modal. Buried under an overflow menu, never promoted,
+  no agent edge; asciinema owns this. The run **ledger** also "records" and is
+  untouched — it prices real tokens from agent transcripts and is load-bearing.
+- **The Canvas terminal layout.** A third layout doing what Grid does, carrying drag
+  positions, zoom and SVG connectors. Two layouts is a choice; three is a hobby. A
+  `workspace.json` naming `canvas` now opens on Grid, through a real migration
+  function rather than a `??` default — the old code read the key back with no
+  validation at all, so a saved `canvas` matched no branch in the view and the stage
+  rendered nothing.
+
+### The path a stranger walks now has labels on it
+
+- **All seven deck keys carry their name.** Only the active view's key had a label,
+  which spent the label on the one view whose identity you already knew. Four
+  independent audits arrived here by four routes; one of them counted that **14 of
+  22 first-run instructions existed only to name an unlabelled control**. The
+  minimum window size did not have to move: measured in the running app across all
+  six surviving skins, the labelled key row is 590.45px — the same number in every
+  one — and row plus tools plus bar chrome is 782.45px against the ~886px of CSS
+  width a 900px window actually gives the page. What 900px does cost is the status
+  region, so one measured collapse at 959px drops the verify group's labels and
+  keeps the supervision three.
+- **A view key that is off can now say so.** On first run all seven were `disabled`,
+  and Chromium dispatches no mouse *or* focus events from a disabled button — so
+  those seven glyphs could not be named by hovering, by Tab, or by a screen reader,
+  at the first moment of the product, on the one screen where nothing else had taught
+  you what they were. They take `aria-disabled` instead: focusable, hoverable, still
+  announced as unavailable, with a permanent label and a per-key tip in both states
+  ("API — open a project to use the views"). The hover brightening is withdrawn,
+  because a control that lights up under the cursor is claiming it will do something.
+  `Ctrl+1..N` used to bypass the disabled state entirely, moving the breadcrumb to a
+  view the app was not showing; the keys and the chord now read one predicate.
+- **An application menu, with `Ctrl+O`, and a menu bar you can see.** `src/main`
+  never imported `Menu`, so Electron installed its own default and `Ctrl+O` — the
+  first thing a Windows user tries — was a dead end. File → Open folder… /
+  Switch Project… / Open Recent / Exit; Help → Keyboard Shortcuts / About DevDeck.
+  The bar is **not** hidden until Alt: ~20px of chrome for an affordance every
+  Windows user already knows, and a menu you have to know about defeats the point of
+  adding one. Open Recent needed a command channel from main to the renderer that did
+  not exist — the recency order lives in the renderer, while `projects.json` knows
+  only when a project was *added*, so a submenu built in main would have been in the
+  wrong order while calling itself Recent.
+- **One verb for one act: `Open folder…`** Five labels shipped for the same thing —
+  "Open a project folder", "+ Add folder", "Add project…", "Add or open a project"
+  and the OS dialog's own title — and the deck's did neither, opening the switcher
+  and putting the folder dialog three hops from the control that named it. Adding a
+  project always activated it; only the interface pretended there was a distinction.
+- **The folder drop that had animated for two major Electron versions now works.**
+  The switcher read `File.path` on drop. Electron removed that property in 32 and
+  this app is on 43, so the read was `undefined`, the guard under it was always
+  false, and `webUtils` was absent from the preload entirely. The dashed accent
+  outline lit up on drag and the drop did nothing — a promised feature failing
+  quietly, which is worse than not having one. The target also moved to the app root
+  so it works with the picker closed, which was the point: the old target was the
+  switcher backdrop, so dropping a folder meant first opening the picker you were
+  trying to avoid. Three outcomes, not two — a folder; a definite file ("That's a
+  file, not a folder. DevDeck opens folders."); and anything else ("DevDeck couldn't
+  open that.", which claims no cause). The classifier has 8 unit tests. **The drop
+  gesture itself cannot be simulated by this project's harness**, so the wiring is
+  tested and the gesture is not.
+- **A folder that is not there is attributed to the folder.** No path validation
+  existed anywhere, so a project whose folder had moved, been renamed or been
+  unmounted rendered as perfectly healthy — and three separate features then blamed
+  whatever you clicked next. A probe answers in three states, reusing the
+  command-presence grammar 0.12.0 introduced rather than inventing a second
+  vocabulary for the same idea: **ok** (nothing on screen — a healthy project does
+  not grow by a pixel), **missing** (the OS answered and said not-there: the chip
+  desaturates, the path takes the dashed qualified rule, and a `FOLDER MISSING` tag
+  appears), and **unchecked** (the stat failed or timed out: full colour, solid pill
+  — nothing about the project is qualified, only our knowledge of it). The active
+  project also gets a notice bar naming the folder, with `Locate…` on the accent and
+  `Remove from DevDeck` secondary — never "deleted", which DevDeck cannot know.
+  Locate re-points the project keeping its id, so its tabs, remembered view and saved
+  layouts survive. **A marker is not a gate:** a missing project still activates and
+  still opens a terminal, because a path can come back. The poll is deliberately not
+  gated on whether the window is visible — what a project *is* cannot depend on
+  whether anyone was looking.
+- **A pane says which process it is waiting for.** Between the click and the first
+  byte a pane was an unlabelled black rectangle for a measured 4s (shell) and 12s
+  (agent) — identical to a spawn that had hung. It now renders one muted line,
+  "Starting Claude…", becoming "Still starting Claude…" after 5s. No spinner, so it
+  reads the same under `prefers-reduced-motion` and never implies progress nothing is
+  measuring. It is armed *after* the spawn is accepted, so a refused spawn never
+  claims to be starting anything, and it is never armed for a pane that mounted onto
+  an already-dead session.
+- **A new project opens on Terminal, not Mission.** The launcher is the only screen
+  that answers all three of a stranger's questions — what is this for, what do I
+  press, what could go wrong — and it was three steps and a guess away. A returning
+  project keeps its remembered view; this changes first contact only.
+- **Mission's empty AGENTS section gets a control, not a signpost.** It was muted
+  prose pointing at an icon-only plus on the deck and at "the command palette",
+  neither of which a stranger can name. Three states, because there are three: a
+  project with an agent command gets the act; a project with none gets the place to
+  configure one, because DevDeck runs CLIs you install and "start an agent" would be
+  a button that cannot keep its word; with no active project there is no directory to
+  spawn into, so nothing is offered rather than a control that no-ops.
+- **The ports wall a stranger landed on is collapsed.** Eighteen port pills belonging
+  to Steam and SQL Server were the loudest object on the first project screen, under
+  a heading that read `SYSTEM` — a name for an internal concept rather than for what
+  the list is.
+- **Ten modals are behind their own error boundaries.** Worktrees, Changes, Commands,
+  ExtendAgent, Import, Pr, ProjectEnv, ProjectIdentity, Search and Shortcuts had
+  none, so a throw in any of them blanked the whole renderer — which leaves ptys
+  running in main with nothing able to see or answer them. Each card gets overlay
+  placement and its own Close control, because a crashed modal takes its own Escape
+  handler and close button down with it.
+- **One keyboard reference instead of two that disagreed.** Settings → Shortcuts and
+  the F1 overlay each kept a hand-written list. Settings had 10 of 27 bindings and
+  still called `Ctrl+Shift+Enter` a "New Claude session" when the chord starts a
+  preset that may be Codex or Gemini; the overlay labelled `Ctrl+Shift+J` "Agents
+  inbox", a drawer deleted two releases ago. Both now read one module, and a test
+  pins each documented chord to the guard that makes it real **in both directions** —
+  forward catches a reference promising a keystroke that does nothing, reverse
+  catches the app growing a keystroke the reference never learned about.
+
+### Controls that did something riskier than their words admitted
+
+- **`Claude YOLO` is now `Claude (no permission prompts)`.** It runs
+  `claude --dangerously-skip-permissions` — the agent edits and runs anything in the
+  project without asking — and the only marking was a 2px stripe and a hover tooltip.
+  The rename reaches fresh installs and "Add recommended" only, because presets are
+  persisted and overwriting a name you may have chosen would be worse. The durable
+  marking is derived from the **command** at render time, so a hand-rolled preset —
+  or a saved one still carrying the old name — is marked too: a `SKIPS PROMPTS` label
+  on the launcher card, and a `BYPASS` badge.
+- **Dispatching a task no longer creates a git worktree by default.** The checkbox
+  said "worktree", lowercase and unexplained, and was checked, so every dispatch
+  silently made a worktree in a sibling folder. It now reads "Give the agent its own
+  worktree" and starts off.
+- **A double-click no longer starts two paid agent sessions.** The launch card and
+  the tab bar's `+ <agent>` are single-click controls and Windows delivers a
+  double-click as two clicks, so two sessions started — for an agent that is two paid
+  CLI processes, which is what makes it money rather than cosmetic. A guard at the
+  click sites, keyed on the OS double-click threshold rather than a rate limit, so a
+  second session a moment later is a real intent and still works. It is deliberately
+  **not** in `newTab`: that seam looks tidier and is wrong, because restoring a saved
+  layout creates several shells in a burst all carrying the same id, and a guard
+  there would silently drop every one after the first.
+- **Deny meant something different on a phone than at a desk.** At 46 terminal
+  columns — about what the phone client's own fit resizes the host pty to on a 390px
+  screen — Deny silently stopped sending Esc and started sending the digit of the
+  "No" option. Esc rejects and returns; that digit is *"No, and tell Claude what to
+  do differently"*, a different thing to do to a live agent, under the same button,
+  with nothing on screen saying it had changed. The cause was not the resize: a
+  terminal hard-wraps a long option, the `(esc)` marker lands on a continuation line
+  matching no option, and the option reads as truncated. Each option is now re-joined
+  with the lines it wrapped onto before the marker is looked for. The new test asserts
+  the property that was violated — Deny resolves to the same keystroke at all eight
+  tested widths, because whatever Deny means it must not depend on how wide the
+  terminal happens to be.
+
+### Fixed
+
+- **An unreadable `projects.json` no longer looks like a fresh install.** Main
+  latches `unreadable` when the file exists but cannot be read, and then refuses to
+  save over a store it could not read — so every project action was a silent no-op
+  for the session and the list came back empty. That rendered as *"you have no
+  projects"*, with no recovery and no explanation, in the first five minutes. The
+  reason no renderer code read the flag is that the preload's type never declared it:
+  the value crossed the bridge and the type said it did not exist, so there was
+  nothing to notice. It is declared now, a notice bar names the file, and the copy
+  says the projects are not lost — because they are not; DevDeck just cannot see them.
+- **Mission and the review queue stop reporting a clean tree for a folder that is
+  gone.** `gitStatus` already answered honestly in all four cases — a count, `0` for
+  a folder that resolves but is not a repo, and `null` when the count is unknown —
+  but both consumers wrote `isRepo ? changes : 0`, and a missing folder is *also*
+  `isRepo: false`, so the ternary threw the `null` away. Deeper down, the git probe
+  itself resolved `changes: 0` for a directory that does not exist: zero is a claim
+  about a working tree, and there was no working tree to make it about.
+- **The Run button stops naming a cause nobody could read.** For a folder that is
+  gone it said "No runnable project type detected" — a claim about contents nobody
+  could read — and because Chromium dispatches nothing from a `disabled` button, the
+  sentence explaining why Run was off could not be reached by hover, Tab or a screen
+  reader. It now says "This project's folder isn't there right now.", for `missing`
+  only, on an `aria-disabled` control.
+- **A failed spawn's notice was printed twice.** The notice is written during create
+  and emitted live to every window and remote client; the create handler then replayed
+  the session buffer unconditionally, so the pane showed the same two lines twice. The
+  replay is now gated on a session that existed before the call.
+- **Five defects on the phone approve/deny card**, found by driving the real client in
+  Chrome device emulation at five phone viewports. The one that matters: in landscape
+  the terminal canvas painted 114px of output over the card's question and raw excerpt
+  while Approve and Deny stayed tappable — you could answer a prompt you could not
+  read. Then: a tap the server never answered left both buttons disabled forever with
+  nothing said, and a socket that dropped mid-tap left the reconnected card
+  unanswerable; there is now a sticky "Sending" note, a 10s release reading "Response
+  unconfirmed", a release on close, and a refusal rather than a dead card when the
+  socket is shut. Re-enabling is safe because main's once-only rule means a second tap
+  on the same decision can never reach the agent. The header's content was a fixed
+  431px against a 320–390px viewport, so every portrait phone scrolled sideways and
+  "disconnected — retrying" sat off the right edge — the one thing that explains a tap
+  that did nothing. And the raw excerpt opened at its *oldest* line, hiding the
+  `(esc)` option Deny actually sends. A new test compiles the client's HTML under
+  `node:vm`: it is a template literal, so `tsc` does not parse it, the build does not
+  parse it, and nothing loaded it — a syntax error in the phone client would ship
+  green and surface only on a phone.
+- **Resume is no longer offered where it cannot work.** It is hidden until a session
+  running that same command has existed in this project, because `--continue`
+  reattaches to what the CLI recorded in the directory — on a fresh project it was a
+  control for a thing that does not exist, and it could only fail in the agent's own
+  words. It also drops from accent-outline to plain secondary, so the launcher has one
+  accent instead of two side by side, neither of which said "act here".
+- **`+ Terminal` and `+ New terminal` were the same action under two labels**, visible
+  within a second of each other. Both say "New terminal".
+- **`Ctrl+Shift+Enter` and the button beside it start the same agent.** The chord took
+  the first preset in Settings while the button took the first AI-mode preset; they
+  diverged the moment a normal-mode command sat first. With nothing configured the
+  chord now does nothing, matching a button that is not rendered — the old fallback
+  guessed at a command that may not be installed.
+- **The "not on PATH" copy names the PATH it read.** 0.12.0's mitigating sentence said
+  a shell alias or function still works, but a Git Bash or WSL user's `claude` is a
+  real binary on a PATH that PowerShell never sees — and PowerShell's is the one this
+  app hydrates. Both surfaces now say which PATH was read and name the shells it does
+  not cover.
+- Nine dead CSS classes, three unused icons and a stale comment claiming to feed a
+  panel deleted the same morning.
+
+### Build, tests and the state of the signature
+
+- **A release can be built somewhere other than one laptop.** A GitHub Actions
+  workflow on a `vX.Y.Z` tag checks the tag against `package.json`, gates on typecheck
+  and the suite, packages NSIS and portable on `windows-latest`, verifies `latest.yml`
+  against the artifacts it just built, and attaches the installer, blockmap, portable
+  exe and manifest to a **draft** release. The manifest and blockmap are not optional:
+  `electron-updater` reads the manifest to find the download and the blockmap to fetch
+  only what changed. This already ends the dependency on one machine's antivirus
+  configuration, because CI signs nothing and therefore looks up no certificate. The
+  draft's own body says the artifacts are unsigned and must not be published, and the
+  CI packaging config drops the publisher name, because an unsigned build making a
+  publisher claim is exactly what `electron-updater` refuses an update over.
+- **The installers are still signed with a self-signed certificate**, made on the
+  machine that builds them. It is trusted by no other Windows install, so
+  **SmartScreen will warn on first run**. A free certificate for open-source projects
+  is the plan, and the workflow carries an inert, never-executed block waiting for one
+  — but the application cannot be filed yet, because the granting foundation requires
+  a public repository and this one is private. Nothing about the signature changes in
+  this release.
+- **1,536 → 1,657 tests, 133 files. Typecheck at zero.** The count is not only
+  growth: seven suites were deleted with the features they tested, and every deletion
+  was verified by grep rather than by the suite, because the tests' hand-written
+  `window.api` stubs are cast through `unknown` — a dangling IPC channel leaves every
+  spec green. That gap is the same one 0.10.0's notes named, and it is still open.
+
+### What this release still does not do
+
+- **The phone approve/deny card has never rendered on real hardware.** Every fix
+  above was found and checked under Chrome's device emulation, against a decision
+  minted by the real app from a real pty, over loopback. Emulation is not a phone,
+  and the distinction is load-bearing: three findings behind the Deny fix are
+  explicitly *not* settled by it — the phone still resizes the host pty, a redraw can
+  still re-mint the decision under a new id, and the desktop pane is left narrow.
+  Those need a physical device.
+- **No external user has ever run this app.** No install off this machine, no
+  recorded first session, no sentence from anybody who is not its author.
+  `PRODUCT.md` now says so in those words, and the validation claims that were
+  previously ticked have been corrected to what the evidence supports.
+
 ## 0.12.0 - 2026-09-03
 
 The release that stops the app claiming things it does not know, and starts
