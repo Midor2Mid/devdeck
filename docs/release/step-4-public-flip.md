@@ -18,6 +18,26 @@ loops do not.
 
 ---
 
+
+> ## This file is itself in scope for the scrub
+>
+> **Added 2026-09-05.** This runbook names `<employer-domain>`, `<Client-A>`,
+> `<Client-B>`, `<Client-C>` and `[CLIENT]` in its grep patterns and its findings — because
+> it has to, to be runnable. That means **the flip would publish, in this file,
+> exactly the identifiers the flip exists to remove**, and deleting the file
+> afterwards does not help: the commit that added it is in the history the flip
+> publishes.
+>
+> So Phase 2's `filter-repo` replacement pass must cover **this file's contents
+> too**, not only the identity fields. Verify with the Phase 6 grep *after* the
+> rewrite, not before — if it still returns hits inside `docs/release/`, the
+> rewrite did not include them and the flip is not safe.
+>
+> The alternative, if the literals are wanted verbatim for the run: keep this
+> file out of the repo entirely (run it from a copy outside the working tree)
+> and commit only a version with the identifiers replaced by placeholders. Do
+> not resolve this by "remembering to delete it later".
+
 ## 0. Preflight — four things that are not true yet
 
 Step 4 is currently blocked on all four. None of them is hard; all of them are
