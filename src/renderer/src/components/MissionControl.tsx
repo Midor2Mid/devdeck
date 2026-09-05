@@ -292,7 +292,7 @@ export function MissionControl(): JSX.Element {
      * `primaryAgent` comes from `primaryAgentPreset`, the one definition the
      * terminal tab bar's `+ <agent>` button and `Ctrl+Shift+Enter` also use, so
      * all three controls that claim to start "the" agent start the same one.
-     * Until eccbd0f the chord resolved `agents[0]` instead, and this comment
+     * Until 29b257d the chord resolved `agents[0]` instead, and this comment
      * recorded that the chord was deliberately not cited because the
      * equivalence did not hold. It holds now; the history is kept because the
      * omission it explains would otherwise look like an oversight.
