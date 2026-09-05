@@ -1,6 +1,6 @@
 # The phone approve/deny card — audit, and the ten minutes that settle it
 
-**ROADMAP step 7.** Owner `qa`. Written 2026-09-04 against `0aecdc4`.
+**ROADMAP step 7.** Owner `qa`. Written 2026-09-04 against `55dd578`.
 
 The card has still never rendered on a physical phone, and nothing in this
 document changes that. What it does is spend everything findable *without* one, so

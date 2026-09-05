@@ -811,7 +811,7 @@ That is the one failure this build existed to prevent, and it does not happen.
   own §4.4 table, and the word is a real channel, but a reader should know the
   Settings surface leans on it harder than the launcher does.
 
-## Security findings, fixed in `49c9f33` and `b5b7f54`
+## Security findings, fixed in `9d67ef4` and `b6c596b`
 
 The probe reached the network and froze the main process. A UNC token in a
 preset command (`\\host\share\claude.exe`) made `statSync` open an outbound SMB
@@ -900,8 +900,8 @@ whitelist in main — never by spawning a renderer-supplied executable.
 
 ### Condition 3 — no code changes required before shipping
 
-`po` found the three post-review fixes (`4339994`) and the two security fixes
-(`49c9f33`, `b5b7f54`) real, measured and regression-tested.
+`po` found the three post-review fixes (`d2d35fc`) and the two security fixes
+(`9d67ef4`, `b6c596b`) real, measured and regression-tested.
 
 ---
 
@@ -981,7 +981,7 @@ the bridge to return `Promise<boolean>`.
 ## Ruling — `po`, 2026-09-03: **met, with conditions** (diagnostics record)
 
 Criteria 38–62 are met. `po` verified against the code rather than the report —
-ran the suite, ran the typecheck, and read the diffs in `a5d1fb9` and `451a44c`
+ran the suite, ran the typecheck, and read the diffs in `2af5fa3` and `303732d`
 instead of trusting the commit messages describing them.
 
 Its standard for the gaps below, which is the one this project should keep:

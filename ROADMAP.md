@@ -39,7 +39,7 @@ more is a way of not asking for the authorisation.
 | 5 | A one-page homepage: SignPath attribution, the code-signing policy, **Windows-only**, **single maintainer, PRs by invitation** | `marketing` / `docs-writer` | Step 4 — the application requires the attribution line and a published policy | **drafted and content-complete** 2026-09-03 — `site/index.html`, self-contained, no build step, carries a real `run-app` screenshot rather than a mockup. The SignPath attribution line is **not asserted** (the certificate isn't granted); `#code-signing` holds a marked, empty slot for it plus the team-roles and privacy statements SignPath's terms require now. **Undeployed:** Pages needs the public flip, i.e. **step 4** — *not* step 6, as this row wrongly said until 2026-09-04. Deploying it is the first thing that happens after 4 |
 | 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run without meeting SmartScreen; ends the Avast dependency in the release path | **blocked on 4** |
 | 7 | Verify the approve/deny card on a **physical phone** — and in the same sitting the four things CDP cannot observe (the native folder dialog, and `addProjectByPath` failing silently on a bad path; `F1`/`Ctrl+K` via real keys; the "none found on your PATH" state; the crash card), plus a look at the phone client's own palette | `qa` (a human at the keyboard) | Step 9's first impression. The most distinctive thing in the product has **never rendered on real hardware**, and 0.11.0/0.11.1 exist as tags precisely because it was never published | **not started — needs a human, and blocked on nothing else.** Moved ahead of 4 in wall-clock order 2026-09-04: it is the only remaining step needing neither the remote nor an authorisation, and it can start today against the signed build already in `release/` |
-| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9 | **done** — both halves ruled *met, with conditions* 2026-09-03, shipped in 0.12.0. Its outstanding condition, `PRODUCT.md`'s validation rewrite, was closed by row **I** on 2026-09-04 (`aa50500`) |
+| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9 | **done** — both halves ruled *met, with conditions* 2026-09-03, shipped in 0.12.0. Its outstanding condition, `PRODUCT.md`'s validation rewrite, was closed by row **I** on 2026-09-04 (`5d71cbc`) |
 | 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | **not started — needs a human. Nobody has been contacted.** Materials drafted 2026-09-04: `docs/beta/` (archetypes, recruiting message, install-watch protocol, session template, criteria, shell-mismatch watch); destination `NOTES.md` → "Beta — external users (step 9)", deliberately empty. Three blockers, none of them code: **a build from current `main`** (`release/` holds 0.12.0, which predates every fix in row I including the freeze), **a delivery path** (repo private, newest published release `v0.10.0`, so README's "download from Releases" is a dead end for an outsider), and **one reply address** (no issues on a private repo; diagnostics is clipboard-only by design, so a stranger's failure reaches the author only if they are asked to paste it). `field` dissents on the dependency: hand-delivering a verified build with SHA-256s to 5–10 *named* people needs neither 4 nor 6, and whether SmartScreen actually stops them is a pre-registered prediction (kill criterion K4) — i.e. the way to find out if the certificate is urgent instead of assuming it. 7 still gates the phone card being demoed at all. |
 
 ### The order, in wall-clock terms
@@ -194,7 +194,7 @@ step 9. Three things did change:
   **CLOSED, and it was already done** — corrected 2026-09-04 after this row was
   written. The spec ordered `minWidth: 900 → 1040` justified on Bauhaus 978px,
   CRT 916px and Flat 935px; Phase 1 deleted all three, so the change correctly
-  did not ship. But the six survivors were **not** left unmeasured: `d82d9cc`
+  did not ship. But the six survivors were **not** left unmeasured: `47bf515`
   re-measured them in the running app and records the numbers in its own commit
   message — the labelled key row is **590.45px, identical in all six skins**
   (Chromium's UA stylesheet resets `letter-spacing` on `button`, so Modern Pro's
@@ -270,9 +270,9 @@ because "we can afford it now" is spending the only thing the cut bought.
 
 - **The 17 unguarded overlays** — closed. Four were deleted outright
   (`DotnetPanel`, `RecordingsModal`, `ReleaseBoard`, `StandupModal`) and the
-  remainder sit behind their own boundary (`8b89409`). `WorktreesModal`, the one
+  remainder sit behind their own boundary (`1cccbe1`). `WorktreesModal`, the one
   confirmed to blank the window, is among them.
-- **`PRODUCT.md`'s false validation claim** — closed (`aa50500`). It now says, in
+- **`PRODUCT.md`'s false validation claim** — closed (`5d71cbc`). It now says, in
   its own words, that no external user has ever run this app.
 - **The `Ctrl+O` menu-bar question**, which the spec insisted be decided
   explicitly rather than by default — decided: `autoHideMenuBar: false`
@@ -390,7 +390,7 @@ in this section.
 ## Milestone 4 — Network debugging ✅ (2026-06-28) — **DELETED 2026-09-04**
 
 > **This milestone no longer exists in the product.** `NetworkPanel.tsx` and
-> `main/proxy.ts` were deleted after 0.12.0 (`4a5c936`): a general-purpose forward
+> `main/proxy.ts` were deleted after 0.12.0 (`ad5ff4b`): a general-purpose forward
 > proxy for arbitrary client traffic, with no agent edge, costing more to carry
 > than it returned. Two things that share the word survive and are unrelated:
 > `main/browserNet.ts` (CDP capture on the embedded webview, feeds the `→ Agent`
@@ -455,7 +455,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 
 ## Milestone 10 — themes, polish & perf ✅ (2026-06-27)
 
-- [x] **Theme system** (Zen deleted 2026-09-04; the surviving set is Sumi/Washi/Slate × Wabi-sabi/Modern Pro — **6 skins, down from 84**, `148154b`) — Sumi (dark), Washi (light), Zen (airy dark); picker in Settings → Appearance; applied across UI (CSS vars), terminal (xterm) and editor (Monaco). User chose mockups from generated PNGs first.
+- [x] **Theme system** (Zen deleted 2026-09-04; the surviving set is Sumi/Washi/Slate × Wabi-sabi/Modern Pro — **6 skins, down from 84**, `f9af11c`) — Sumi (dark), Washi (light), Zen (airy dark); picker in Settings → Appearance; applied across UI (CSS vars), terminal (xterm) and editor (Monaco). User chose mockups from generated PNGs first.
 - [x] Accent customization derives `--accent-soft` as a proper tint (lighter on dark, darker on light)
 - [x] **Perf:** debounced disk persistence (was writing on every composer keystroke / accent drag)
 - [x] Theme-aware scrollbars
@@ -475,7 +475,7 @@ From studying the 1DevTool reference (video + 1devtool.com):
 
 ## Milestone 13 — Canvas layout ✅ (2026-06-27) — **DELETED 2026-09-04**
 
-> Deleted (`9eac56a`), with its connectors and persisted positions: a third
+> Deleted (`5635aa7`), with its connectors and persisted positions: a third
 > terminal layout doing what Grid does. Two layouts is a choice; three is a hobby.
 
 - [x] **Canvas** terminal layout — free-form board: drag terminal cards anywhere, pan the surface; positions persisted. Third layout alongside Tabs + Grid.
@@ -524,7 +524,7 @@ The reference feature set is fully covered. Remaining ideas are open-ended (term
 From a live-app design review against the wabi-sabi north star:
 - [x] **Ensō brand mark** — a real single-stroke ensō (`Enso.tsx`) for the rail logo + sidebar wordmark, replacing the placeholder "D" and the spinner-like ring
 - [x] **Empty-state ensō watermark** — a faint accent ensō behind empty panels so they read as intentional space; muted/faint text contrast lifted to WCAG AA across themes; Settings modal backdrop now dims + blurs
-- [x] **Terminal toolbar declutter** — grouped into create / layout / pane clusters; secondary tools (record, recordings — both deleted 2026-09-04, `51383af` — worktrees, review changes) moved into a `⋯` overflow; 13 → 10 controls
+- [x] **Terminal toolbar declutter** — grouped into create / layout / pane clusters; secondary tools (record, recordings — both deleted 2026-09-04, `b8204e9` — worktrees, review changes) moved into a `⋯` overflow; 13 → 10 controls
 - [x] **Lacquer style** — **deleted 2026-09-04** in the 84 → 6 skin cut — a new opt-in design style (Settings → Appearance → Style): frosted-glass surfaces, gilded gradient accent buttons, soft accent glow on active tabs / rail / ensō, deep layered shadows, plus an animated sheen sweep + breathing ensō glow (honors `prefers-reduced-motion`). Additive — existing styles and the default are unchanged.
 - [x] **Local signed builds** — `npm run cert:make` + `npm run package:signed` produce a self-signed Authenticode build (personal-use) to avoid unsigned-binary AV false positives; shipped as the signed **v0.4.2** release.
 

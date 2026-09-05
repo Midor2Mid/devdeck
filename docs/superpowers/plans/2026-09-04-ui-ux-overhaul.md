@@ -15,7 +15,7 @@
 - **`npm run typecheck` must stay at zero errors.** The build does not typecheck. Run it before every commit.
 - **`npm test` must stay green.** It is 1,536 specs. Phase 1 deletes code that some specs cover — deleting those specs *with* their code is correct; silently letting the count drop without saying so is not. Every deletion task states its expected test-count delta.
 - **A test-count delta is only meaningful on a tree no other agent is touching.**
-  Measured on `main` at 6792b81: **1,536 passed, 1 skipped**. During wave 1 the
+  Measured on `main` at 448b0bd: **1,536 passed, 1 skipped**. During wave 1 the
   Task 1 agent measured 1,548 and concluded the baseline was stale — it was not.
   A concurrently-running agent had an untracked `tests/themeFallback.test.ts` on
   disk, and vitest runs every test file it finds, committed or not. Before quoting
@@ -408,7 +408,7 @@ the team's standup is not a product feature."
 
 **Interfaces:** Produces a `shortcuts.ts` with the `Ctrl + Shift + B` row removed. `tests/shortcuts.test.ts` asserts no duplicate chords and every chord has a description — both still hold.
 
-**This is the one deletion with a keyboard consequence.** `Ctrl+Shift+B` is bound in `App.tsx` and advertised in `shortcuts.ts`, which is rendered by both the F1 overlay and Settings → Shortcuts. Removing the panel without removing the row leaves the reference lying — the exact defect fixed in `c16c47d`.
+**This is the one deletion with a keyboard consequence.** `Ctrl+Shift+B` is bound in `App.tsx` and advertised in `shortcuts.ts`, which is rendered by both the F1 overlay and Settings → Shortcuts. Removing the panel without removing the row leaves the reference lying — the exact defect fixed in `c160c9c`.
 
 - [ ] **Step 1: Delete the component, its route, and its `Ctrl+Shift+B` handler**
 - [ ] **Step 2: Remove the `["Ctrl + Shift + B", "Build / test (.NET)"]` row from `shortcuts.ts`**
@@ -423,7 +423,7 @@ git commit -m "refactor: delete DotnetPanel, and the Ctrl+Shift+B row with it
 It jumps to file:line - i.e. it helps you author, which is Visual Studio's
 job - and it is stack-specific in a stack-agnostic product. The shortcut
 row goes in the same commit: a reference that outlives its feature is the
-defect c16c47d just finished fixing."
+defect c160c9c just finished fixing."
 ```
 
 ### Task 9: Delete RecordingsModal and terminal record/replay

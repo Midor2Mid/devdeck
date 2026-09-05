@@ -4,7 +4,7 @@ import { webContents } from "electron"
 // Chrome DevTools Protocol (attached in the main process to the webview's
 // webContents). Both buffers feed the Browser panel's `-> Agent` payload and
 // the MCP tools that let an agent read what the page actually did. (They fed the
-// Network view too, until 4a5c936 deleted it - this module is not that proxy.)
+// Network view too, until ad5ff4b deleted it - this module is not that proxy.)
 export interface NetEntry {
     method: string
     url: string
