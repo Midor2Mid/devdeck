@@ -170,7 +170,7 @@ Fixed with `pinTail()` (`src/main/server.ts:1147`), called on render and again o
 in portrait, `179/178` after rotating to landscape, and the `(esc)` line is inside
 the visible band.
 
-### D6 — Opening a session on the phone resizes the host pty *(NOT fixed — judgement call)*
+### D6 — Opening a session on the phone resizes the host pty *(D3 half FIXED 2026-09-05; the rest stands)*
 
 **Confirmed by code, consequences only observable on a phone.**
 `fit()` sends `{t:"resize", cols, rows}` unconditionally 60ms after attach, and on
@@ -202,11 +202,29 @@ applies to the phone, at a quarter of the width, and nobody connected the two.
 | Resize only when no decision is pending | does not help — the resize is what destroys the decision |
 | Resize, then re-mint, then re-render | correct, and the largest change: the card has to survive its own id changing |
 
-**Recommendation:** treat this as the next piece of work on the feature, owned by
-`backend-dev` + `product-director`, and decide it against protocol step 6 below —
-because whether it matters depends on something only a phone can show: whether
-Claude Code's card still classifies after a real reflow to 46 columns. A naive
-hard-wrap still classifies (D3's table), but a real TUI redraw is not a hard wrap.
+**Ruled 2026-09-05, and none of the four options above was taken.** All four
+treat the *resize* as the defect. It is not: the resize is legitimate, and the
+defect was that `escMarker` going false silently changed what Deny **does** —
+the same button, two different acts, no signal.
+
+The fix is in the classifier (`src/shared/approval.ts`): an option is not one
+line, so each option is now re-joined with the lines it wrapped onto before the
+`(esc)` marker is looked for. Deny sends Esc at 46, 40 and 34 columns, and a new
+invariant test asserts the property that was actually violated — **Deny means the
+same thing at all eight tested widths**, because whatever Deny means it must not
+depend on how wide the terminal happens to be. The join is conservative: a
+continuation is only a line between two options that matches no option itself and
+is not a question, and every existing gate (`live`, YES/NO, question-or-marker)
+still has to pass.
+
+**What this does NOT fix, and what protocol step P4 is still for:** points 1, 2
+and 4 of D6 stand — the phone still resizes the host pty, a redraw can still
+re-mint the decision under a new id, and the desktop pane is still left at ~46
+columns. And the open question is unchanged, because only a phone can answer it:
+a naive hard-wrap now classifies correctly, but **a real TUI redraw is not a hard
+wrap**. If Claude Code reflows into a shape this classifier does not match at all,
+the card will not appear — which is a visibly absent card, not a wrong keystroke,
+and that is the better failure of the two.
 
 ### D7 — `dvh` with no `vh` fallback, two rules under the comment explaining why *(FIXED)*
 

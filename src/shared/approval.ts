@@ -52,6 +52,33 @@ export function detectApproval(tail: string): ApprovalPrompt | null {
         const m = l.match(OPTION)
         if (m) opts.push({ num: Number(m[1]), text: m[2].trim(), line: i })
     })
+    // Re-join each option with the lines it wrapped onto.
+    //
+    // An option is not one line: a terminal hard-wraps it at `cols`, and the
+    // phone's own `fit()` resizes the host pty to roughly 46 columns on a 390px
+    // screen. At that width "3. No, and tell Claude what to do differently
+    // (esc)" wraps, the `(esc)` lands on a continuation line that matches no
+    // OPTION, and this function used to read the option as truncated - so
+    // `escMarker` went false and Deny silently stopped sending Esc and started
+    // sending the digit of the No option. Esc rejects and returns; that digit is
+    // "No, and tell Claude what to do differently", which is a different thing
+    // to do to a live agent, under the same button.
+    //
+    // Conservative, per this module's contract: a continuation is only a line
+    // that sits BETWEEN two options (or after the last one), matches no OPTION
+    // itself, and is not a question. Nothing here loosens a gate - the joined
+    // text still has to satisfy YES/NO, `live` and the question/marker rule.
+    for (let k = 0; k < opts.length; k++) {
+        const from = opts[k].line + 1
+        const to = k + 1 < opts.length ? opts[k + 1].line : lines.length
+        const parts: string[] = []
+        for (let i = from; i < to; i++) {
+            const l = lines[i]
+            if (OPTION.test(l) || l.endsWith("?")) break
+            parts.push(l)
+        }
+        if (parts.length > 0) opts[k].text = `${opts[k].text} ${parts.join(" ")}`.trim()
+    }
     if (opts.length >= 2) {
         const lastOpt = opts[opts.length - 1]
         // The options must sit at the tail — if real output followed them, the

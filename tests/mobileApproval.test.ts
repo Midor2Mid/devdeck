@@ -58,25 +58,34 @@ describe("detectApproval at a phone's terminal width", () => {
         }
     })
 
-    // This is the one that matters, and it is a real change of behaviour rather
-    // than a degradation of one: at 46 columns the trailing "(esc)" wraps off the
-    // end of its option line, `escMarker` goes false, and `detectApproval` falls
-    // back to the numbered No option - so Deny stops sending Esc and starts
-    // sending the digit "3". Esc rejects and returns; "3" selects "No, and tell
-    // Claude what to do differently", which is a different thing to do to a live
-    // agent. 46 columns is not hypothetical: it is about what the phone client's
-    // own `fit()` resizes the host pty to on a 390px-wide phone.
+    // This is the one that mattered, and it is FIXED (2026-09-05).
     //
-    // The fallback itself is deliberate and separately tested
-    // (tests/approval.test.ts, "classifies a menu without an (esc) marker").
-    // What was never written down is that a terminal width can trigger it.
-    it("silently swaps Deny from Esc to a digit at 46 columns and below", () => {
+    // At 46 columns the trailing "(esc)" wraps off the end of its option line.
+    // detectApproval used to read the option as truncated, so `escMarker` went
+    // false and it fell back to the numbered No option - Deny stopped sending
+    // Esc and started sending a digit. Esc rejects and returns; that digit is
+    // "No, and tell Claude what to do differently", a different thing to do to
+    // a live agent, under the same button and with no signal that it changed.
+    //
+    // 46 columns is not hypothetical: it is about what the phone client's own
+    // `fit()` resizes the host pty to on a 390px-wide phone. The fix is in the
+    // classifier rather than in the resize, because the resize is legitimate -
+    // an option is simply not one line, and re-joining an option with the lines
+    // it wrapped onto makes the marker visible again at any width.
+    it("sends Esc for Deny at a phone's width, not a digit", () => {
         for (const cols of [46, 40, 34]) {
             const r = at(cols)
             expect(r, `${cols} cols`).not.toBeNull()
             expect(r?.approve, `${cols} cols`).toBe("1")
-            expect(r?.deny, `${cols} cols`).toBe("3")
+            expect(r?.deny, `${cols} cols`).toBe("")
         }
+    })
+
+    it("agrees with the desktop widths it used to disagree with", () => {
+        // The defect was a DISAGREEMENT between widths for one prompt. Whatever
+        // Deny means, it must not depend on how wide the terminal happens to be.
+        const denies = [156, 120, 100, 80, 60, 46, 40, 34].map((c) => at(c)?.deny)
+        expect(new Set(denies).size, JSON.stringify(denies)).toBe(1)
     })
 
     it("still finds the question, so the card does appear at phone width", () => {
