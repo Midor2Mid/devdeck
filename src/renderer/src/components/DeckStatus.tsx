@@ -4,7 +4,7 @@ import { useSettings } from "../settings"
 import { toast } from "../toast"
 import type { GitStatus, GitIdentity, PullResult } from "../../../preload/index"
 import { Icon } from "./Icon"
-import { awaitedTermIds, getLastAt } from "../missionTail"
+import { awaitedTermIds, getLastAt, promptFor } from "../missionTail"
 import { exitCodeOf } from "../termExit"
 import { wantsYou } from "../tileState"
 
@@ -111,6 +111,9 @@ export function DeckStatus(): JSX.Element {
         wantsYou(
             {
                 status: s.status,
+                // Without this the flag cannot see a session blocked on a
+                // permission prompt that was acknowledged as a quiet hand-back.
+                prompt: promptFor(s),
                 exitCode: exitCodeOf(s.termId),
                 lastAt: getLastAt(s.termId),
                 awaited: awaited.has(s.termId),

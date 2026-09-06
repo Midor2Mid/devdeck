@@ -236,18 +236,61 @@ describe("wantsYou", () => {
     // deck bar's flag and Mission's header both read this, so they cannot
     // disagree on who wants the user's attention.
 
+    it("counts a session blocked on a permission prompt it has already been seen at", () => {
+        // The defect this pins. `seen` is granted when a session goes `waiting`
+        // in front of you (store.ts:674) - a legitimate rule, because watching
+        // an agent hand back IS knowing about it. But the prompt detector can
+        // then find a QUESTION in that same silence. The tile promotes and
+        // renders live Approve/Deny; wantsYou could not see the prompt at all,
+        // because it was not in its input, so the deck flag and Mission's header
+        // both read zero while two tiles asked to be answered.
+        //
+        // The rule wantsYou already states for `attention` is the right one and
+        // simply was not applied here: looking at a question does not answer it.
+        const blocked = {
+            status: "waiting" as const,
+            prompt: {
+                kind: "menu",
+                question: "Do you want to proceed?",
+                approve: "1",
+                deny: ""
+            } satisfies ApprovalPrompt,
+            exitCode: undefined,
+            lastAt: NOW,
+            awaited: false,
+            alive: true
+        }
+        expect(wantsYou(blocked, NOW, true)).toBe(true)
+        expect(wantsYou(blocked, NOW, false)).toBe(true)
+    })
+
+    it("still lets a plain finished turn be acknowledged", () => {
+        // The counterpart: no prompt means `seen` keeps its meaning, or the
+        // acknowledgement axis would be dead and the count would only grow.
+        const done = {
+            status: "waiting" as const,
+            prompt: null,
+            exitCode: undefined,
+            lastAt: NOW,
+            awaited: false,
+            alive: true
+        }
+        expect(wantsYou(done, NOW, true)).toBe(false)
+        expect(wantsYou(done, NOW, false)).toBe(true)
+    })
+
     it("is false for an exited session, even when status still reads attention", () => {
         // A dead process wants nothing: nothing is listening for a reply.
         expect(
-            wantsYou({ status: "attention", exitCode: 0, lastAt: NOW, awaited: true, alive: false }, NOW)
+            wantsYou({ status: "attention", prompt: null, exitCode: 0, lastAt: NOW, awaited: true, alive: false }, NOW)
         ).toBe(false)
         expect(
-            wantsYou({ status: "attention", exitCode: 1, lastAt: NOW, awaited: true, alive: true }, NOW)
+            wantsYou({ status: "attention", prompt: null, exitCode: 1, lastAt: NOW, awaited: true, alive: true }, NOW)
         ).toBe(false)
     })
 
     it("stops counting a `waiting` session you have already seen", () => {
-        const live = { status: "waiting" as const, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
+        const live = { status: "waiting" as const, prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
         expect(wantsYou(live, NOW)).toBe(true)
         expect(wantsYou(live, NOW, true)).toBe(false)
     })
@@ -255,14 +298,14 @@ describe("wantsYou", () => {
     it("keeps counting `attention` however hard you look at it", () => {
         // Looking at a permission prompt does not answer it. Only the states you
         // can genuinely leave alone are acknowledgeable.
-        const asking = { status: "attention" as const, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
+        const asking = { status: "attention" as const, prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
         expect(wantsYou(asking, NOW, true)).toBe(true)
     })
 
     it("keeps counting a stall you have seen, because a stall is not a handover", () => {
         // `seen` modifies the finished-a-turn state, not "this has been quiet for
         // too long" - which is still true, and still worth a look, after you look.
-        const stalled = { status: "working" as const, exitCode: undefined, lastAt: NOW - 60 * 60 * 1000, awaited: true, alive: true }
+        const stalled = { status: "working" as const, prompt: null, exitCode: undefined, lastAt: NOW - 60 * 60 * 1000, awaited: true, alive: true }
         expect(wantsYou(stalled, NOW)).toBe(true)
         expect(wantsYou(stalled, NOW, true)).toBe(true)
     })
@@ -270,7 +313,7 @@ describe("wantsYou", () => {
     it("is true for attention", () => {
         expect(
             wantsYou(
-                { status: "attention", exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
+                { status: "attention", prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
                 NOW
             )
         ).toBe(true)
@@ -279,7 +322,7 @@ describe("wantsYou", () => {
     it("is true for waiting", () => {
         expect(
             wantsYou(
-                { status: "waiting", exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
+                { status: "waiting", prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
                 NOW
             )
         ).toBe(true)
@@ -289,7 +332,7 @@ describe("wantsYou", () => {
         expect(
             wantsYou(
                 {
-                    status: "idle",
+                    status: "idle", prompt: null,
                     exitCode: undefined,
                     lastAt: NOW - STALL_MS - 1,
                     awaited: true,
@@ -304,7 +347,7 @@ describe("wantsYou", () => {
         expect(
             wantsYou(
                 {
-                    status: "idle",
+                    status: "idle", prompt: null,
                     exitCode: undefined,
                     lastAt: NOW - STALL_MS - 1,
                     awaited: false,
@@ -318,7 +361,7 @@ describe("wantsYou", () => {
     it("is false for working", () => {
         expect(
             wantsYou(
-                { status: "working", exitCode: undefined, lastAt: NOW, awaited: true, alive: true },
+                { status: "working", prompt: null, exitCode: undefined, lastAt: NOW, awaited: true, alive: true },
                 NOW
             )
         ).toBe(false)
@@ -330,7 +373,7 @@ describe("wantsYou", () => {
 // turns 0 into a claim about the working tree.
 describe("a changed count that could not be established", () => {
     it("does not claim CHANGED", () => {
-        expect(resolveTileState(input({ status: "idle", changedCount: null }), NOW).kind).not.toBe(
+        expect(resolveTileState(input({ status: "idle", prompt: null, changedCount: null }), NOW).kind).not.toBe(
             "changed"
         )
     })
@@ -338,7 +381,7 @@ describe("a changed count that could not be established", () => {
     it("keeps the more useful headline but says the file check failed", () => {
         // WAITING is the better thing to put on the chip; the unknown rides in
         // the detail, and Review is added so the state is actually actionable.
-        const s = resolveTileState(input({ status: "waiting", changedCount: null }), NOW)
+        const s = resolveTileState(input({ status: "waiting", prompt: null, changedCount: null }), NOW)
         expect(s.kind).toBe("waiting")
         expect(s.chip).toMatch(/WAITING/)
         expect(s.detail).toContain("Couldn't check for file changes")
@@ -347,7 +390,7 @@ describe("a changed count that could not be established", () => {
 
     it("replaces QUIET outright, because QUIET reads as nothing happened here", () => {
         const s = resolveTileState(
-            input({ status: "idle", awaited: false, changedCount: null }),
+            input({ status: "idle", prompt: null, awaited: false, changedCount: null }),
             NOW
         )
         expect(s.kind).toBe("unchecked")
@@ -357,7 +400,7 @@ describe("a changed count that could not be established", () => {
 
     it("leaves a session that is asking you something alone", () => {
         // The tile is relaying a question; files are not what is being asked.
-        const s = resolveTileState(input({ status: "attention", changedCount: null }), NOW)
+        const s = resolveTileState(input({ status: "attention", prompt: null, changedCount: null }), NOW)
         expect(s.kind).toBe("asking")
         expect(s.detail).not.toContain("Couldn't check")
         expect(s.actions).toEqual(["reply"])
@@ -366,7 +409,7 @@ describe("a changed count that could not be established", () => {
     it("stays completely quiet for a session nobody has polled yet", () => {
         // `undefined` is the gap of one poll interval after mount - not a
         // failure, and it must not be dressed as one.
-        const s = resolveTileState(input({ status: "idle", awaited: false, changedCount: undefined }), NOW)
+        const s = resolveTileState(input({ status: "idle", prompt: null, awaited: false, changedCount: undefined }), NOW)
         expect(s.kind).toBe("quiet")
         expect(s.detail ?? "").not.toContain("Couldn't check")
     })
@@ -394,7 +437,7 @@ describe("a changed count that could not be established", () => {
     })
 
     it("leaves a real count saying exactly what it said before", () => {
-        const s = resolveTileState(input({ status: "idle", changedCount: 4 }), NOW)
+        const s = resolveTileState(input({ status: "idle", prompt: null, changedCount: 4 }), NOW)
         expect(s.kind).toBe("changed")
         expect(s.chip).toContain("4 files")
     })

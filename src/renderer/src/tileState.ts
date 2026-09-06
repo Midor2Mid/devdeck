@@ -273,7 +273,7 @@ function baseTileState(i: TileStateInput, now: number): TileState {
  * never match; counting off the facts can.
  */
 export function wantsYou(
-    i: Pick<TileStateInput, "status" | "exitCode" | "lastAt" | "awaited" | "alive">,
+    i: Pick<TileStateInput, "status" | "prompt" | "exitCode" | "lastAt" | "awaited" | "alive">,
     now: number,
     seen = false
 ): boolean {
@@ -283,6 +283,17 @@ export function wantsYou(
     // nothing here - only the two states you can genuinely leave alone are
     // acknowledgeable.
     if (i.status === "attention") return true
+    // An unanswered permission prompt, by the SAME rule - and `prompt` was not
+    // in this input at all until 2026-09-07, which is how the two disagreed.
+    //
+    // `seen` is granted when a session goes `waiting` while you are looking at
+    // it (store.ts:674), and that rule is right: watching an agent hand back is
+    // knowing about it. But the detector can then find a QUESTION in that same
+    // silence. The tile promoted and drew live Approve/Deny; this predicate
+    // could not see the prompt, so the deck flag and Mission's header both read
+    // zero while a tile on screen asked to be answered. One count per question
+    // means this one, and it was answering a different question from the tile.
+    if (i.prompt) return true
     // Finished its turn and handed back. Once you have looked at it (or acted on
     // it) it is a thing you know about and deliberately left, so it stops
     // counting. It is still `waiting` - this changes the COUNT, never the state.
