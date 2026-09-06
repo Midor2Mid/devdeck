@@ -241,7 +241,33 @@ git log HEAD --format='%ae%n%ce' | sort -u
     # 14520777@gm.uit.edu.vn - fails this gate.
 ```
 
-### Phase 2 — rewrite the commit identities (optional in mechanism, required in intent)
+### Phase 2 — rewrite the commit identities — **ALREADY DONE, 2026-09-05/06. DO NOT RE-RUN.**
+
+> Executed and verified. Skip to Phase 3. Re-running would rewrite an already
+> clean history for no gain and invalidate every SHA citation again.
+>
+> - **Identities:** 654 commits carried the employer address on author *and*
+>   committer. `filter-branch --env-filter` over `-- --all` mapped them to
+>   `Midor2Mid@users.noreply.github.com`.
+> - **Contents:** two further `--index-filter` passes — one scoped to the 10
+>   commits carrying this runbook, one to the 3 files that ever carried the
+>   client tag — replaced every literal with placeholders.
+> - **A stale ref that nearly survived it:** `refs/remotes/origin/main` still
+>   pointed at pre-scrub objects, because the identity pass ran over `--all` but
+>   the content passes were range-scoped to `main`, and a range rewrite never
+>   touches remote-tracking refs. Deleted, then `gc --prune=now`.
+> - **Verified twice, with stderr visible:** `git log --all -S<literal>` returns
+>   0 commits for each literal, and `xargs -n 150 git grep` over all 745
+>   revisions returns nothing. **Do not verify with
+>   `git grep ... $(git rev-list --all)`** — on this history that exceeds the
+>   Windows argument limit, and with `2>/dev/null` the failure reads as a pass.
+>   That false negative was reported as proof once already.
+> - `tests/gitIdentity.test.ts` now fails the build if an unintended identity
+>   ever reappears, and it is cloned, which `.git/config` is not.
+>
+> The original instructions are kept below for the record.
+
+#### (historical) rewrite the commit identities
 
 Skip only if the owner decides publishing `@<employer-domain>` on 654 commits is
 acceptable. **Rewrites every commit SHA in the repository**, which is reversible
