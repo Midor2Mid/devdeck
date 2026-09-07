@@ -442,3 +442,81 @@ describe("a changed count that could not be established", () => {
         expect(s.chip).toContain("4 files")
     })
 })
+
+describe("the attention contract", () => {
+    /**
+     * The standing invariant `product-director` ordered after `6caf63f`.
+     *
+     * That bug was not a missed branch — it was a tile and a counter answering
+     * different questions, because `wantsYou`'s input could not express the most
+     * blocking state in the product. The fix closed the instance. This closes
+     * the class: **a tile that asks to be answered must be counted by the
+     * predicate both counters read.** Anything else puts a live Approve/Deny on
+     * screen while the deck flag and Mission's header say nobody needs you.
+     *
+     * The converse is deliberately NOT asserted. `wantsYou` may legitimately
+     * count a session whose tile reads something else — a stalled one, or an
+     * unacknowledged hand-back — because those want you without asking a
+     * question. One direction is the contract; both would be a coincidence.
+     */
+    const STATUSES = ["idle", "working", "waiting", "attention"] as const
+    const PROMPT: ApprovalPrompt = {
+        kind: "menu",
+        question: "Do you want to proceed?",
+        approve: "1",
+        deny: "\x1b"
+    }
+
+    it("counts every tile that asks to be answered, under every combination", () => {
+        const offenders: string[] = []
+        for (const status of STATUSES) {
+            for (const prompt of [null, PROMPT]) {
+                for (const changedCount of [undefined, null, 0, 3]) {
+                    for (const alive of [true, false]) {
+                        for (const awaited of [true, false]) {
+                            for (const seen of [true, false]) {
+                                for (const lastAt of [NOW, NOW - STALL_MS - 1]) {
+                                    const i: TileStateInput = {
+                                        status,
+                                        prompt,
+                                        exitCode: undefined,
+                                        lastAt,
+                                        changedCount,
+                                        awaited,
+                                        alive
+                                    }
+                                    const kind = resolveTileState(i, NOW).kind
+                                    if (kind !== "needs-you" && kind !== "asking") continue
+                                    if (!wantsYou(i, NOW, seen)) {
+                                        offenders.push(
+                                            `${kind} tile uncounted: status=${status} ` +
+                                                `prompt=${prompt ? "yes" : "no"} seen=${seen} ` +
+                                                `alive=${alive} awaited=${awaited}`
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        expect(offenders, offenders.slice(0, 5).join("\n")).toEqual([])
+    })
+
+    it("still lets a dead session ask nothing, whatever its tile once said", () => {
+        // The one exemption, and it is in wantsYou's first line: nothing is
+        // listening for a reply, so an exited session is never counted even
+        // while its tile still carries the words it died with.
+        const dead: TileStateInput = {
+            status: "attention",
+            prompt: PROMPT,
+            exitCode: 1,
+            lastAt: NOW,
+            changedCount: 0,
+            awaited: false,
+            alive: false
+        }
+        expect(wantsYou(dead, NOW, false)).toBe(false)
+    })
+})
