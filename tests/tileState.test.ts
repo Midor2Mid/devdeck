@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveTileState, wantsYou, type TileStateInput } from "../src/renderer/src/tileState"
+import { resolveTileState, wantsYou, hasProcess, type TileStateInput } from "../src/renderer/src/tileState"
 import { STALL_MS } from "../src/renderer/src/missionTail"
 import { FASTFAIL } from "../src/renderer/src/termExit"
 import type { ApprovalPrompt } from "../src/renderer/src/approval"
@@ -518,5 +518,43 @@ describe("the attention contract", () => {
             alive: false
         }
         expect(wantsYou(dead, NOW, false)).toBe(false)
+    })
+})
+
+describe("hasProcess — what 'running' counts", () => {
+    /**
+     * The header said `sessions.length` and therefore counted TABS. Restoring a
+     * workspace stamps paneHold = "resume" on every agent pane and starts
+     * nothing, so a relaunch with five restored sessions read "5 running" while
+     * every one of those panes said "Restored from your last run." The header
+     * was the only thing on screen claiming they were alive.
+     */
+    const live = { exitCode: undefined }
+
+    it("counts a session that has not exited and is not held", () => {
+        expect(hasProcess(live, undefined)).toBe(true)
+    })
+
+    it("does not count a restored pane, which has started nothing", () => {
+        // The reported defect, exactly: this is every agent pane after a
+        // workspace restore.
+        expect(hasProcess(live, "resume")).toBe(false)
+    })
+
+    it("does not count a pane held for restart after its process died", () => {
+        expect(hasProcess(live, "restart")).toBe(false)
+    })
+
+    it("does not count an exited session, held or not", () => {
+        for (const held of [undefined, "resume", "restart"] as const) {
+            expect(hasProcess({ exitCode: 0 }, held)).toBe(false)
+            expect(hasProcess({ exitCode: 1 }, held)).toBe(false)
+        }
+    })
+
+    it("never counts more sessions than exist, and never a negative", () => {
+        // A whole restored workspace: the count must be 0, not 5.
+        const restored = [1, 2, 3, 4, 5].map(() => hasProcess(live, "resume"))
+        expect(restored.filter(Boolean)).toHaveLength(0)
     })
 })

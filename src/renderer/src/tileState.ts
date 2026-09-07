@@ -272,6 +272,31 @@ function baseTileState(i: TileStateInput, now: number): TileState {
  * no changed count with which to agree. Counting off the kind could therefore
  * never match; counting off the facts can.
  */
+/**
+ * Does this session have a process behind it?
+ *
+ * The header used to answer this with `sessions.length`, which counts TABS.
+ * Restoring a workspace stamps `paneHold = "resume"` on every agent pane and
+ * starts nothing, so five restored sessions read "5 running" while each pane
+ * said, honestly, "Restored from your last run."
+ *
+ * `alive` is deliberately not the input: it is true for "a pane whose process
+ * died but whose tab is still open" (see the note in `baseTileState`), so it
+ * means "this tab is an agent", not "this agent is running". Two facts do
+ * establish a process — it has not exited, and it is not being held for a
+ * resume or a restart — and those are what this reads.
+ *
+ * `held` is the pane's `paneHold` entry: "resume" after a workspace restore,
+ * "restart" after an exit, `undefined` when neither.
+ */
+export function hasProcess(
+    i: Pick<TileStateInput, "exitCode">,
+    held: "resume" | "restart" | undefined
+): boolean {
+    if (i.exitCode !== undefined) return false
+    return held === undefined
+}
+
 export function wantsYou(
     i: Pick<TileStateInput, "status" | "prompt" | "exitCode" | "lastAt" | "awaited" | "alive">,
     now: number,

@@ -13,7 +13,7 @@ import {
 import { buildOwnership, type OwnershipMap } from "../ownership"
 import { nextChangedCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
-import { resolveTileState, wantsYou } from "../tileState"
+import { resolveTileState, wantsYou, hasProcess } from "../tileState"
 import { Icon } from "./Icon"
 import type { SystemInfo } from "../../../preload/index"
 
@@ -89,6 +89,10 @@ export function MissionControl(): JSX.Element {
     // A quiet agent is only stalled if something is actually waiting on it.
     const awaited = awaitedTermIds(boardTasks, pipelineRun)
     const totalAgents = sessions.length
+    // Held panes: "resume" is stamped on every agent pane at restore (store.ts,
+    // the workspace load) and "restart" when a process exits. Either way there
+    // is no process behind the tab.
+    const paneHold = useStore((st) => st.paneHold)
 
     // Tiles the user has expanded to see fuller recent output inline.
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -276,6 +280,10 @@ export function MissionControl(): JSX.Element {
     // its doc comment for why this app cannot afford two counts for one
     // question again.
     const attention = resolved.filter((r) => wantsYou(r.input, now, !!seen[r.s.termId])).length
+    // Sessions with a process behind them — NOT `sessions.length`, which counts
+    // tabs and read "5 running" for five restored panes that had started
+    // nothing. See hasProcess in tileState.
+    const running = resolved.filter((r) => hasProcess(r.input, paneHold[r.s.termId])).length
 
     /**
      * The AGENTS empty state's one control — the only accent on this screen.
@@ -327,7 +335,7 @@ export function MissionControl(): JSX.Element {
                 <div className="mission-head">
                     <span className="section-label">AGENTS</span>
                     <span className="muted small">
-                        {totalAgents} running{attention ? ` · ${attention} need attention` : ""}
+                        {running} running{attention ? ` · ${attention} need attention` : ""}
                     </span>
                 </div>
                 {totalAgents === 0 ? (
