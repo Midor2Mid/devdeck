@@ -6,73 +6,6 @@
 
 import { cleanTail, lastLines, peekLine, CARRY_MAX, OSC, CSI, OTHER, CTRL } from "../../shared/tail"
 export { cleanTail, lastLines, peekLine, CARRY_MAX }
-
-/** printableDelta's state, threaded by the caller between chunks of one stream. */
-export interface DeltaState {
-    /** Unfinished segment from the last chunk — a line routinely spans many chunks. */
-    carry: string
-}
-
-const EMPTY_STATE: DeltaState = { carry: "" }
-
-/**
- * Printable characters committed in a raw pty chunk — the trace's unit of
- * activity. Every completed line counts at its non-whitespace length, full
- * stop: this is a measure of output volume, not of whether the line is new.
- * A TUI that repaints a spinner or a ticking counter with `\r\n`-terminated
- * frames scores the same as one writing genuinely new lines (a bare-`\r`
- * repaint is the one case this module can tell apart — see below) —
- * distinguishing the general case needs the rendered terminal buffer, not the
- * pty byte stream (three attempts at deriving it from the stream all failed
- * review; see NOTES.md).
- *
- * Deliberately NOT cleanTail: that rewrites \r to \n, which is right for a
- * readable peek and wrong here, because it would make a bare-\r overwrite look
- * like a completed line. A bare \r overwrites the pending segment in place, the
- * way a terminal cursor return does, so the overwritten text does not survive
- * on screen — not counting it is correct terminal semantics, not a claim about
- * spinners. \r\n and \n commit the pending segment as a line.
- *
- * `state` is the caller's carry from the previous call and comes back out on
- * every call: agents stream token by token, so a line routinely spans many
- * chunks and a stateless count would drop nearly all of it.
- */
-export function printableDelta(
-    chunk: string,
-    state: DeltaState = EMPTY_STATE
-): { chars: number; state: DeltaState } {
-    const s = state.carry + chunk.replace(OSC, "").replace(CSI, "").replace(OTHER, "").replace(CTRL, "")
-    // A chunk may end mid-CRLF; hold the \r back so the next chunk can complete it.
-    const heldCr = s.endsWith("\r")
-    const body = heldCr ? s.slice(0, -1) : s
-    let chars = 0
-    let pending = ""
-    const commit = (line: string): void => {
-        chars += line.replace(/\s/g, "").length
-    }
-    for (let i = 0; i < body.length; i++) {
-        const ch = body[i]
-        if (ch === "\n") {
-            commit(pending)
-            pending = ""
-        } else if (ch === "\r") {
-            if (body[i + 1] === "\n") {
-                commit(pending)
-                pending = ""
-                i++
-            } else {
-                // A bare \r overwrites the pending segment in place — it does
-                // not survive on screen, so it is discarded here too.
-                pending = ""
-            }
-        } else {
-            pending += ch
-        }
-    }
-    if (pending.length > CARRY_MAX) pending = pending.slice(-CARRY_MAX)
-    return { chars, state: { carry: pending + (heldCr ? "\r" : "") } }
-}
-
 import type { AgentStatus, AnySession } from "./store"
 import type { ApprovalPrompt } from "./approval"
 import type { DecisionSnapshot, DecisionView } from "../../shared/decision"
@@ -200,100 +133,19 @@ export function hasBell(id: string, chunk: string): boolean {
     return bell
 }
 
-const BUCKET_MS = 2000
-const BUCKETS = 60
 /**
- * The trace window's width in ms, and isStalled's default silence threshold —
- * historically the same number, but the two no longer read each other:
- * isStalled looks at wall-clock silence on a session something is waiting on,
- * the trace only at recent output volume.
+ * How long a session something is waiting on may be silent before it reads as
+ * stalled.
+ *
+ * Two minutes, and it used to be written as BUCKET_MS * BUCKETS because the
+ * output-rate trace shared the window. The trace was deleted on 2026-09-07 -
+ * it measured output VOLUME and DESIGN.md had to carry five sentences of legend
+ * explaining that an agent repainting in place with a bare CR reads as silent,
+ * which is a channel that can state something untrue to a stranger in their
+ * first five minutes. isStalled never read the ring; it reads wall-clock
+ * silence. The number is unchanged.
  */
-export const STALL_MS = BUCKET_MS * BUCKETS
-/** Characters in one bucket that count as a full-height bar. */
-const CEILING = 4096
-
-interface Ring {
-    /** Oldest first, newest last; always BUCKETS long. */
-    buckets: number[]
-    /** Start time of the newest bucket. */
-    at: number
-    /** printableDelta's carry, threaded between chunks of this session. */
-    state: DeltaState
-}
-const rings = new Map<string, Ring>()
-
-/** Advance a ring to `now`, zero-filling the buckets that elapsed. */
-function roll(r: Ring, now: number): void {
-    const steps = Math.floor((now - r.at) / BUCKET_MS)
-    if (steps <= 0) return
-    r.at += steps * BUCKET_MS
-    if (steps >= BUCKETS) {
-        r.buckets.fill(0)
-        return
-    }
-    for (let i = 0; i < steps; i++) {
-        r.buckets.shift()
-        r.buckets.push(0)
-    }
-}
-
-/** Log scale against a fixed ceiling, so quiet and loud agents both stay legible. */
-function scale(chars: number): number {
-    if (chars <= 0) return 0
-    return Math.min(1, Math.log(1 + chars) / Math.log(1 + CEILING))
-}
-
-/**
- * Add a pty chunk's output volume to a session's current bucket. Called from
- * the same place as recordTail, on every pty data event — a chunk that scores
- * zero still keeps the ring current, so the trace reflects recent silence
- * accurately rather than going stale. Never throws: this runs in the hot path
- * of every agent's raw output, so a bad chunk must not take the pty listener
- * down with it.
- */
-export function recordRate(id: string, chunk: string, now = Date.now()): void {
-    try {
-        let r = rings.get(id)
-        if (!r) {
-            r = { buckets: new Array<number>(BUCKETS).fill(0), at: now, state: EMPTY_STATE }
-            rings.set(id, r)
-        }
-        roll(r, now)
-        // The state is per session: a line split across chunks is counted once,
-        // when it completes.
-        const out = printableDelta(chunk, r.state)
-        r.state = out.state
-        r.buckets[BUCKETS - 1] += out.chars
-    } catch {
-        // Losing one chunk's contribution to the trace is harmless; losing the
-        // pty listener is not.
-    }
-}
-
-/** A session's trace, oldest first, each sample 0..1. Always BUCKETS long. */
-export function getTrace(id: string, now = Date.now()): number[] {
-    const r = rings.get(id)
-    if (!r) return new Array<number>(BUCKETS).fill(0)
-    roll(r, now)
-    return r.buckets.map(scale)
-}
-
-/**
- * An SVG path of one bar per sample, for a `0 0 <len> <height>` viewBox drawn
- * with preserveAspectRatio="none". Bars are 0.7 units wide on a 1-unit pitch, so
- * the gap is part of the path rather than a separate element. Empty samples get a
- * 1-unit stub, which is the baseline that makes silence read as a flat line.
- */
-export function barsPath(trace: number[], height = 12): string {
-    return trace
-        .map((v, i) => {
-            const h = Math.max(1, v * height)
-            const top = height - h
-            return `M${i} ${height} L${i} ${top} L${i + 0.7} ${top} L${i + 0.7} ${height} Z`
-        })
-        .join(" ")
-}
-
+export const STALL_MS = 120_000
 /** Record a raw pty chunk for a terminal (cheap; no React state). */
 export function recordTail(id: string, chunk: string): void {
     // Keep a larger window than the one-line peek so tiles can expand to context.
@@ -316,11 +168,10 @@ export function getLastAt(id: string): number | undefined {
     return lastAt.get(id)
 }
 
-/** Drop a terminal's tail and trace when its session closes. */
+/** Drop a terminal's tail when its session closes. */
 export function forgetTail(id: string): void {
     tails.delete(id)
     lastAt.delete(id)
-    rings.delete(id)
     oscState.delete(id)
     decisions.delete(id)
 }

@@ -660,20 +660,6 @@ button .ic,
     word-break: break-word;
 }
 
-/* Output-rate trace. Quiet by default and never accent-coloured: it is a reading,
-   not something to act on, and the tile's status classes already carry emphasis.
-   currentColor means it re-themes with everything else and needs no [data-style]
-   override. */
-.mission-trace {
-    display: block;
-    width: 100%;
-    height: 12px;
-    margin-top: 2px;
-    color: var(--muted);
-}
-.mission-trace path {
-    fill: currentColor;
-}
 /* DASHED, where attention is solid: the two were both 2px left rules separated
    only by hue (--clay vs --danger), which in Sumi and Washi are a shade apart
    and indistinguishable at 2px. A broken rule reads as "interrupted" and is

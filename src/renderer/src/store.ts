@@ -31,7 +31,6 @@ import { LENSES, reviewPrompt, type Lens } from "./reviewLenses"
 import {
     recordTail,
     forgetTail,
-    recordRate,
     hasBell,
     markLaunched,
     getFullTail
@@ -907,8 +906,6 @@ export const useStore = create<AppState>((set, get) => {
         if (!isAgentId(get().agentOf(id))) return
         // Keep a cleaned tail of this agent's output for the Mission Control peek.
         recordTail(id, data)
-        // …and its committed-output rate, for the tile's trace.
-        recordRate(id, data)
         const visible = isVisible(id)
         // M4: visibility gates the NOTIFICATION, never the classification. The
         // bell is a fact about the agent, and letting `!visible` decide whether

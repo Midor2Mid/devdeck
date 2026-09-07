@@ -7,8 +7,6 @@ import {
     getLastAt,
     relTime,
     sortForFollow,
-    getTrace,
-    barsPath,
     awaitedTermIds,
     promptFor
 } from "../missionTail"
@@ -356,7 +354,6 @@ export function MissionControl(): JSX.Element {
                         {resolved.map(({ s, prompt, st }) => {
                             const ago = relTime(now, getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
-                            const trace = getTrace(s.termId)
                             const stalled = st.kind === "stalled"
                             // changedBySession starts {} on mount (and briefly holds a
                             // stale count after a session's own reply while the next
@@ -488,15 +485,6 @@ export function MissionControl(): JSX.Element {
                                             )}
                                         </div>
                                     )}
-                                    <svg
-                                        className="mission-trace"
-                                        viewBox={`0 0 ${trace.length} 12`}
-                                        preserveAspectRatio="none"
-                                        aria-hidden="true"
-                                        focusable="false"
-                                    >
-                                        <path d={barsPath(trace)} />
-                                    </svg>
                                 </div>
                             )
                         })}

@@ -1,7 +1,24 @@
 # Mission trace — output-rate traces on the agent tiles
 
-**Status:** approved design, not yet implemented
+**Status:** SHIPPED 2026-08, **DELETED 2026-09-07**. Historical.
 **Date:** 2026-08-11
+
+> The status line above read "not yet implemented" until 2026-09-07. It was
+> stale — this shipped, and the trace rendered on every agent tile.
+>
+> **Why it was deleted.** The premise in the next paragraph is that "for a
+> working session, a fully flat trace **is** stalled". That is false for a real
+> agent. The trace measures committed output *volume*, so a CLI that repaints
+> its spinner in place with a bare `` produces a flat trace while working
+> perfectly — the exact false negative this design was written to avoid, shipped
+> and then documented as a caveat in DESIGN.md rather than fixed. A stranger
+> meets it in the first five minutes and it can state something untrue about
+> whether their agent is doing anything.
+>
+> A channel that needs five sentences of legend to stop it lying fails the
+> rubric it was designed under. `STALL_MS` keeps its value (120s) and
+> `isStalled` is unaffected — it reads wall-clock silence, and never read the
+> ring this spec describes.
 
 ## The idea
 
