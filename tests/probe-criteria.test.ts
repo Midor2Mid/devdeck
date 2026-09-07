@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { mkdtempSync, writeFileSync } from "fs"
+import { mkdtempSync, writeFileSync, realpathSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
 
@@ -35,6 +35,19 @@ vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 })
  * accident of what happens to be installed.
  */
 
+/**
+ * A temp directory, canonicalised.
+ *
+ * `mkdtempSync` under `tmpdir()` returns the 8.3 SHORT form on a Windows CI
+ * runner - `C:\Users\RUNNER~1\...` - while the PATH walk resolves the long
+ * one, `C:\Users\runneradmin\...`. Comparing the two fails on the runner and
+ * passes on any machine whose user name is short enough to have no 8.3 alias,
+ * which is why this only ever broke in CI.
+ */
+function tempDir(prefix: string): string {
+    return realpathSync.native(mkdtempSync(join(tmpdir(), prefix)))
+}
+
 /** A hydration stub that answers with exactly `path`, parsing the real markers. */
 function shellWith(path: string): RunShell {
     return async (cmd: HydrationCommand) => {
@@ -56,7 +69,7 @@ describe("criterion 1 - the answer comes from the shell's PATH, not main's", () 
     beforeEach(() => invalidateShellEnv())
 
     it("finds a binary that exists only on the hydrated PATH", async () => {
-        const dir = mkdtempSync(join(tmpdir(), "qa-shellpath-"))
+        const dir = tempDir("qa-shellpath-")
         writeFileSync(join(dir, SHELL_ONLY + (WIN ? ".cmd" : "")), "shim")
         if (!WIN) require("fs").chmodSync(join(dir, SHELL_ONLY), 0o755)
 
@@ -144,7 +157,7 @@ describe("criterion 5 - hydration spawns once, never once per preset", () => {
 
 describe("criterion 6 - only a found result carries a path", () => {
     it("attaches an absolute path to found and nothing to missing or unknown", async () => {
-        const dir = mkdtempSync(join(tmpdir(), "qa-resolved-"))
+        const dir = tempDir("qa-resolved-")
         writeFileSync(join(dir, "claude" + (WIN ? ".cmd" : "")), "shim")
         if (!WIN) require("fs").chmodSync(join(dir, "claude"), 0o755)
 

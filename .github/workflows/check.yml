@@ -17,6 +17,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # tests/gitIdentity.test.ts walks every commit to prove no unintended
+          # author or committer address is published. Against the default
+          # depth-1 clone it sees one commit and fails - which is the guard
+          # refusing to pass vacuously, but it needs the history to do its job.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
