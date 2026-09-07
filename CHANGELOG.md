@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.13.0 - 2026-09-05
+## 0.13.0 - 2026-09-07
 
 The release that removes things. Six surfaces, 78 of the 84 skins, and one crash
 that made the app unopenable. There is no new panel here; the largest single
@@ -249,6 +249,37 @@ to read, for a job something else already does.
   terminal happens to be.
 
 ### Fixed
+
+- **The count that decides who needs you could not see a session blocked on a
+  question.** `wantsYou` is the single predicate behind the deck's attention flag
+  and Mission's header, so the two cannot disagree. Its input type omitted
+  `prompt` — so it was structurally blind to the most blocking state in the app.
+  Watch a session go quiet, and it is acknowledged as a hand-back, correctly;
+  when the detector then finds a *question* in that same silence, the tile
+  promoted and drew live Approve/Deny while both counters read zero. Two tiles
+  asking to be answered while the app said nobody needed you. The predicate's own
+  doc comment already stated the right rule for the neighbouring case — *looking
+  at it does not answer it* — and a pending prompt is that same rule; it had
+  simply never been applied, because the input could not express it. A standing
+  invariant now sweeps 256 combinations to assert every tile that asks to be
+  answered is counted, so this closes the class rather than the instance.
+
+- **"N running" counted tabs, not processes.** Restoring a workspace marks every
+  agent pane for resume and starts nothing, so a relaunch with five restored
+  sessions said *"5 running"* while each of those panes said, honestly,
+  *"Restored from your last run."* The header was the only thing on screen
+  claiming they were alive. The obvious fix was the wrong one: `alive` is true
+  for a pane whose process died but whose tab is still open — it means "this tab
+  is an agent", not "this agent is running".
+
+- **The activity sparkline could show a working agent as silent, and has been
+  removed.** It measured committed output *volume*, so a CLI repainting its
+  spinner in place with a bare carriage return produced a flat trace while
+  working perfectly. The design notes carried five sentences explaining that —
+  *read it for pace, not for progress* — which is a channel documenting its own
+  lie rather than fixing it, and a stranger meets it in the first five minutes.
+  Deleted with the machinery that fed it; stall detection is unaffected, because
+  it reads wall-clock silence and never read that ring.
 
 - **An unreadable `projects.json` no longer looks like a fresh install.** Main
   latches `unreadable` when the file exists but cannot be read, and then refuses to
