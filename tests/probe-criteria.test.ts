@@ -61,8 +61,23 @@ describe("criterion 1 - the answer comes from the shell's PATH, not main's", () 
         if (!WIN) require("fs").chmodSync(join(dir, SHELL_ONLY), 0o755)
 
         // Precondition: main's own environment cannot see it.
-        const offMain = await probeCommand(SHELL_ONLY, { path: process.env.PATH ?? null })
-        expect(offMain.state).toBe("missing")
+        //
+        // Retried, and NOT relaxed to "anything but found". `unknown` is a
+        // legitimate answer - the probe asked and could not find out - and under
+        // a full 134-file parallel run the PATH walk does occasionally answer it
+        // (observed: 8.1s, then `unknown`, while the same spec takes 290ms alone).
+        // But `unknown` does not establish this precondition: if we did not
+        // manage to look at main's PATH, finding the shim via the hydrated PATH
+        // proves nothing about WHICH path answered, which is the whole of
+        // criterion 1. So the honest move is to ask again rather than to accept
+        // a weaker answer and keep the assertion looking green.
+        let offMain = await probeCommand(SHELL_ONLY, { path: process.env.PATH ?? null })
+        for (let i = 0; i < 3 && offMain.state === "unknown"; i++) {
+            offMain = await probeCommand(SHELL_ONLY, { path: process.env.PATH ?? null })
+        }
+        expect(offMain.state, "precondition: main's PATH must resolve this as absent").toBe(
+            "missing"
+        )
 
         const rep = await probe(
             [{ id: "t", command: SHELL_ONLY, runMode: "agent" }] as ProbeRequest[],
