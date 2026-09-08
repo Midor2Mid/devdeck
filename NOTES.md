@@ -920,6 +920,61 @@ silent — no card advances and nothing in the UI says a check failed.
 
 ## Decisions
 
+**2026-09-08 - D1 is authorised outright: the Database, API and Work panels go, and Tasks leaves the deck.**
+
+The owner authorised the deletion in full: `DbPanel`, `ApiPanel` and `WorkPanel`
+with their IPC handlers, preload channels and stores; `pg`, `mysql2`, `mssql` and
+`node-sqlite3-wasm` — 4 of the 9 remaining production dependencies; every test
+covering those surfaces; and **Tasks demoted out of the deck**, which takes it
+from seven keys to **four** (Mission · Terminal · Browser · Editor) and collapses
+`Ctrl+1..7` to `1..4`. Roughly 2,200 lines.
+
+**What it rests on, and what it does not.** The evidence is the empty-table test
+in `docs/superpowers/brainstorm/2026-09-08-product-direction.md`, run against the
+only machine that has ever run DevDeck: no `connections.json` has ever existed,
+`collections` is `[]`, and `gitAccounts`, `sshProfiles`, `routingRules` and
+`triggers` are all empty. Half the deck's justification is refuted by its own
+author's usage.
+
+It does **not** rest on users, and this is the sentence that matters. D1 was
+pre-registered as a *conditional* kill — it was to fire only if, across five
+recorded beta sessions, (a) no user opened the Database or API view unprompted,
+(b) none named either as a reason to keep the app, and (c) none asked about
+either at day 7. The owner chose to authorise it now instead, on the author's own
+usage. **Those three conditions are therefore moot, and this deletion must never
+be written up as though users decided it.** Section 6's "what would prove me
+wrong" clause for D1 no longer has a test attached to it.
+
+**Second ruling, same sitting: orphan the keys, do not prune user data.** No
+migration, no cleanup pass, no tidy-on-first-launch. A user who upgrades and then
+downgrades gets their data back — that is the whole reason for preferring orphan
+over prune. This is currently **impossible to honour**: `settings.ts:713`
+destructures a 24-key whitelist and `:721` saves exactly that, so deleting the
+panels' keys drops the orphaned data on the next save — pruning by omission,
+invisible to the typecheck and to all 1,645 specs. That must be fixed by a
+failing test *before* any store is deleted.
+
+**Two scope corrections found after the authorisation.** The deck goes 7 → 4, not
+7 → 6 as first relayed. And the authorisation was silent on five MCP tools and
+the remote server (`mcptools.ts:35`, `server.ts:10-11`): `devdeck_db_query`
+actually *passes* the agent-edge test, so whether it survives is a
+`technical-director` decision and not a follow-on delete.
+
+**Not executed yet, and the timing is unresolved.** `pm` ruled it should run
+*after* the fifth recorded session
+(`docs/superpowers/plans/2026-09-08-beta-execution.md`), because changing three of
+seven deck keys and the build's hashes mid-measurement makes the milestone's
+criteria a sum over two different products, and because it is 2–3 days plus four
+review checkpoints inside the fortnight in which K6 fires. The document half —
+repointing the published claim from "all-in-one" to the cockpit — merges into the
+day-one docs pass regardless. The branch `d1-delete-verify-panels` exists and is
+currently just a clean base.
+
+Recorded because it was not: `po` audited the roadmap on 2026-09-08 and refused
+to treat the authorisation as fact, correctly, since no file carried it. An
+authorisation that lives only in a chat transcript is not a decision anyone can
+later check.
+
 **2026-08-25 - the agent bake-off is removed; the inbox is NOT.**
 
 The race feature is gone: about 2,100 lines, the full reasoning in `CHANGELOG.md`.
