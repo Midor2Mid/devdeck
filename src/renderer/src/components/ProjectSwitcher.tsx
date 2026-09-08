@@ -3,6 +3,8 @@ import { useStore } from "../store"
 import { orderByMru, previousProjectId } from "../projectMru"
 import { contextMenu } from "../contextmenu"
 import { projectContextMenu } from "../projectMenu"
+import { projectSessionCounts } from "../deck"
+import { useKeyStatus } from "../keyStatus"
 import { ProjectChip } from "./ProjectChip"
 import { folderMarker, useFolderStates } from "../folderStates"
 import { switcherEmpty } from "../probeView"
@@ -22,6 +24,12 @@ export function ProjectSwitcher(): JSX.Element {
     const close = useStore((s) => s.closeSwitcher)
     const sessions = useStore((s) => s.sessions)
     const addProject = useStore((s) => s.addProject)
+    // The acknowledgement axis, a stable slice. Read for the attention count
+    // and for nothing else here - it may not reach the dot.
+    const seen = useStore((s) => s.seen)
+    // Carries the `paneHold` subscription, and is stable while that slice is,
+    // so it can sit in the memo's dependency list below.
+    const keyStatusOf = useKeyStatus()
     // The whole map, which is a stable reference between reports (see
     // folderStates.apply) - the per-card marker is derived in the loop below,
     // never inside a selector.
@@ -36,17 +44,15 @@ export function ProjectSwitcher(): JSX.Element {
         inputRef.current?.focus()
     }, [])
 
-    // Per-project session counts for the card metadata.
-    const counts = useMemo(() => {
-        const map: Record<string, { terms: number; agents: number; attention: number }> = {}
-        for (const s of sessions()) {
-            const c = (map[s.projectId] = map[s.projectId] ?? { terms: 0, agents: 0, attention: 0 })
-            c.terms++
-            if (s.isAgent) c.agents++
-            if (s.status === "attention") c.attention++
-        }
-        return map
-    }, [sessions])
+    // Per-project session counts for the card metadata. Derived in deck.ts: the
+    // attention count is a NAG, so it excludes a session with no process behind
+    // it (`s.status` outlives the process, and this card was the last surface
+    // still marking a project whose agents had all exited) and one you have
+    // already looked at - without either of those touching what the session IS.
+    const counts = useMemo(
+        () => projectSessionCounts(sessions(), keyStatusOf, seen),
+        [sessions, keyStatusOf, seen]
+    )
 
     const filtered = useMemo(() => {
         const needle = q.toLowerCase()

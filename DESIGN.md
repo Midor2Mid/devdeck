@@ -1,6 +1,6 @@
 ---
 name: DevDeck
-version: 0.9.1
+version: 0.9.2
 description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
@@ -240,6 +240,17 @@ What that means in practice:
   the two cannot drift. `Ctrl+1..N` bypassed the deck's disabled state and moved
   the topbar to "Terminal" while the first-run panel stayed up — the app naming a
   view it was not showing.
+- **Gating a chord is half the job: it must also answer.** Once gated, `Ctrl+1..N`
+  returned in silence, which made a chord the app refuses indistinguishable from a
+  chord that does not exist. A refused gesture owes the same answer as the refused
+  click, or a stranger presses it twice and concludes the app is broken when it is
+  only empty.
+- **An inert control's explanation may not be withdrawn by the gesture that
+  reveals it is inert.** A tooltip hidden on `mousedown` takes the reason away at
+  the exact moment the click proves one is needed — and a stranger clicks before
+  they hover long enough to have read it. **The click answers for itself:** offer
+  the fix, not a second copy of the reason. Seven view keys that answered a click
+  with nothing at all were the product's first ten seconds.
 - An `aria-label` must be **permanent**, not conditional on being enabled, and it
   must survive a visible label collapsing at narrow widths: `display: none` takes
   the text out of the accessibility tree with it.
@@ -304,7 +315,7 @@ which:
 | `attention` | the accent | `NEEDS YOU` · `●`, `ASKING` · `◆` |
 | `warn` | `--clay`, dashed border | `STALLED` · `⋯`, `EXITED n` · `□` |
 | `neutral` | `--text`, no color spend | `CHANGED` · `▤`, `WAITING` · `◇`, `WORKING` · `▶` |
-| `quiet` | `--faint` | `QUIET` · `–`, a clean `EXITED` · `□` |
+| `quiet` | `--faint` | `QUIET` · `–`, `NOT RUNNING` · `○`, a clean `EXITED` · `□`, `COULDN'T CHECK` · `?` |
 
 `--clay` and `--accent` sit within a hair of each other in both Sumi and
 Washi — the same collision `.mission-tile.stalled`'s dashed-vs-solid rule
@@ -313,6 +324,21 @@ above already exists to route around — so `warn` never leans on hue to clear
 `□` (`EXITED`) is the only glyph that spans two tones, because the
 process-exited fact is the same at any code and only the tone says whether it
 mattered.
+
+`WAITING` keeps `neutral` — no color spend — and the deck key status dot
+section below now agrees with it: that state's dot is a `--text` hollow
+**diamond**, not an accent ring. The two used to contradict each other inside a
+single tile, which rendered the chip and the dot 20px apart. **One rule, stated
+once: only `attention` spends the accent on a session's status.**
+
+For `WAITING` the agreement is now on **shape** as well as on token: this table
+fixes `◇` as its glyph while the dot 20px away was a circle, so the tile said
+one state twice in two shapes. It says one shape twice now. That is not a rule
+about the whole vocabulary and must not be read as one — `▶` (`WORKING`) and
+`□` (`EXITED`) still name their states with a shape the dot does not use, and
+they should: a chip has room to be specific about which of several exits or
+which kind of work this is, and the dot has 6px and five forms. Where a chip
+glyph and a dot form *can* be the same shape for the same state, they are.
 
 `attention`'s own two states share a tone, so `NEEDS YOU` and `ASKING` separate
 by the chip's *words*, not by `●` vs `◆` — at the chip's actual size (9px) a
@@ -327,6 +353,215 @@ the 4.5:1 text floor. Consistent with why actives are told not to lean on
 tint alone in Washi — the chip is small set text, so it carries more of that
 shortfall than a fill would, and does so by word and by the warn tone's dash
 rather than by clearing the ratio.
+
+### Deck key status dot
+
+The deck is the surface that is always on screen and Mission is not, so the 6px
+dot on a `.deck-key` carries the same question the tile answers in words. Four
+forms for four live states, plus one for no process at all — and the forms do the
+work, because `--clay` and `--accent` sit within a hair of each other in Sumi and
+Washi and the accent is a user choice that can be set to either:
+
+| Dot | Means | Form |
+| --- | --- | --- |
+| `status-idle` | resting | filled `--clay`, faint |
+| `status-working` | mid-turn | filled `--clay`, full (+ opacity pulse) |
+| `status-waiting` | finished a turn, your move | **hollow** `--text` **diamond**, static |
+| `status-attention` | asking | filled `--accent` + a static 3px halo, plus the `!` glyph |
+| `status-not-running` | nothing is running behind this tab | a flat `--muted` **bar** |
+
+**Only `attention` spends the accent, and that is the whole accent rule for
+status.** `waiting` was speced as a hollow `--accent` ring, which put two
+statements about one state on one Mission tile: the chip tier above gives
+`WAITING` the `neutral` tone — "`--text`, no color spend", because *a live
+question is what the accent is saved for* — and `MissionControl.tsx` renders
+that chip and this dot 20px apart. They now read the **same token**. The tile
+makes one statement, and the accent still points at the one session that cannot
+continue without an answer rather than at every session that has stopped.
+
+Two other things fall out of that, and both were defects:
+
+- **Contrast.** The accent ring measured **2.92:1** on Washi's `--bg-2` — below
+  the 3:1 floor for a non-text mark, and the weakest mark in the app at 1×. No
+  per-theme accent value could have fixed it, because **the accent is a user
+  choice**; whatever ships, someone can pick a cream. `--text` is by definition
+  the ink a theme paints its ground *against*, so the ring clears the floor in
+  every theme for every accent: **15.0:1 Slate · 12.2:1 Sumi · 9.8:1 Washi**.
+  A badly-chosen accent can now cost you the *nag* (the deck key's breathing
+  edge), never the classification.
+- **Motion.** The mark is **static**; the halo went with the breathing. So
+  `attention` is the only dot with a halo and `working` the only dot that moves,
+  each form is unique on both axes, and `waiting` reads identically in a still
+  frame and in motion. The accent still marks a waiting session on the deck, but
+  only on the **nag** channel — `.deck-key.key-waiting`'s breathing edge, which
+  `key-seen` takes away — never on the mark that says what the session *is*.
+
+The pair this most had to survive — `waiting` against `working` — comes out
+*better* separated by ink, not worse. `--accent` vs `--clay` measured 1.32:1
+(Slate), 1.01:1 (Sumi), 1.15:1 (Washi): hue was contributing nothing, and
+hollow-vs-filled was already doing the entire job. `--text` vs `--clay` is
+**2.27:1 · 2.27:1 · 2.93:1**. The form still carries the distinction and is
+still what the grammar rests on; the ink no longer has to pretend it is helping.
+
+The one pair that stays ink-identical is a **seen** `waiting` mark (`--muted`)
+against a `working` disc (`--clay`) — 1.05:1, 1.02:1, 1.33:1 — and it is told
+apart the way this whole table is told apart, by form: a hollow diamond against
+a filled circle.
+
+**Why a diamond and not a ring.** `--text` fixed the contrast and created one
+smaller problem. A hollow **circle** of text ink, 4px left of a `--text`/600
+session name on the same baseline, *is* a typographic bullet — `◦` is a bullet
+character — and it was read as a leading bullet before the title rather than as
+a status, on Mission's tiles, on the active deck key and on Overview's focus
+header. A status mark that reads as decoration has stopped being a status mark.
+Ink cannot fix it: `--text` is the most contrast a theme has, and the accent is
+exactly what was taken away for measuring 2.92:1. So the fix is **form** — no
+bullet glyph is a diamond. The 6×6 box and the 1.5px ring do not change (the
+hole is the same 3×3); only the corner radius (1px, as on the `not-running`
+bar) and a static `rotate(45deg)` do. That costs no token and nothing under
+`prefers-reduced-motion`, because a transform is not motion. The rotation grows
+the mark's painted extent to 8.49px inside a 6px slot, which is deliberate and
+precedented on this same element: `attention`'s 3px halo has always painted
+12px of extent in the same containers, the tightest of which is the deck key's
+6px gap. Contrast is unchanged by rotation — still **15.03:1 Slate · 12.17:1
+Sumi · 9.82:1 Washi** on `--bg-2`.
+
+`not-running` is **derived, never stored**: `deckKeyStatus` (`deck.ts`) reads
+`hasProcess` — the same predicate behind Mission's "N running" count and its
+`NOT RUNNING` chip — so the deck cannot describe a session differently from the
+tile. It is a *bar* rather than a dot because every other form already means
+alive (a filled circle = running, a hollow diamond = your move), and a restored
+session used to
+paint `status-idle`, the resting form of a live agent, on the one surface you
+never look away from. It never spends the accent: the act it needs lives in the
+pane's own Start gate.
+
+**Every surface that says something about a session reads the derived status**,
+through one resolver (`useKeyStatus`, whose only job is to carry the `paneHold`
+subscription into `deckKeyStatus`). That is eleven surfaces, not one dot: deck
+key, terminal tab strip and grid card, Mission tile (dot *and* left border),
+Overview card / rail row / collapsed mini-strip, the usage panel's `Running now`
+rows, board cards, the composer's target list, the command palette's session
+rows, and the switcher card's attention marker. A raw `status` in any of them is
+a claim about a live agent — `status` is what the agent last *did*, and it
+outlives the process that did it.
+
+**And every one of them now shows all five forms.** The terminal tab strip used
+to read the derived status and then discard one of its values: `tabDotStatus`
+(`deck.ts`) reduces a tab's several panes to one dot, and `waiting` fell through
+to `idle` — the resting form of a live agent, painted on a session blocked on
+your answer, on the surface you use to move between panes. It was left as a
+known gap for a designer to rule on, on the grounds that granting the mark would
+put a *breathing* dot on the tab of every session that finished a turn. That
+reason expired when the dot went static: a hollow diamond carries **less** ink
+than the filled disc the tab was painting instead, so granting it makes the
+strip quieter, not busier. There is no three-form tab strip. A vocabulary that
+drops exactly one of its five values on exactly one surface is not a smaller
+vocabulary, it is an exception nobody can predict.
+
+`tabDotStatus`'s ladder is `missionTail`'s `RANK` order — attention, waiting,
+working, idle, then nothing-running — and a test asserts it stays that order. A
+tab dot that ranked its panes differently from the order Mission and Overview
+*sort* by would be the same surface-disagreement defect the derived status
+exists to prevent.
+
+Two consequences beyond colour, because a dead session must also stop being
+*actionable*:
+
+- **A prompt is only relayed by a live session.** `promptFor` takes the derived
+  status, so Approve / Deny cannot appear under a question nothing is listening
+  for. Overview offered both buttons on a `not-running` row.
+- **A dead session is not a send target.** The composer lists it (it is real, and
+  hiding it moves the confusion) with the flat `--muted` bar, a disabled
+  checkbox, the words `not running`, and no hover fill — three forms, because one
+  of them is 6px. Its quick-select presets skip it too; `Idle` used to select
+  exactly the dead ones.
+
+**The acknowledgement axis is separate from all of this, and lives on the KEY.**
+`seen` (`store.ts`) records that you have looked at or answered a session; it is
+read by the wants-you count and by two CSS rules, and by nothing that decides
+what a session IS. Both rules dim the *nag* and leave the *state* at full
+strength:
+
+- `.deck-key.key-waiting.key-seen` — the breathing edge stops and goes, and the
+  dot's ring drops from `--text` to `--muted` **keeping its hollow form**, so it
+  still says `waiting`.
+- `.deck-key.key-attn.key-seen .claude-attn` — the `!` drops to `--muted` and
+  from 700 to 500 weight; the filled accent dot and its halo still say `asking`.
+
+**The line a `seen` rule may not cross is the dot's FORM, not its ink.** Form is
+what classifies — filled = alive, hollow = your move, bar = nothing running — and
+a `seen` rule that changed it would put a visibility-derived fact back into what
+a session *is*. Ink is loudness, and dimming it is what the `!` rule above has
+always done.
+
+Ink alone has to carry it for `waiting`, because it is all there is: that state
+has one mark and no second glyph to thin. It carries by a wide margin —
+`--text` vs `--muted` is **2.15:1** (Slate), **2.22:1** (Sumi), **2.20:1**
+(Washi), against **1.25:1** for the shipped `!` precedent's `--accent` →
+`--muted` in Slate, which is why that one also changes weight. The seen mark
+shares its ink with the `not-running` bar and is told apart by form, the same way
+every other pair on this table is: a 6px hollow diamond against a 6×2px flat
+bar — a wider separation than the circle it replaced.
+
+This is a *correction*, not the original design. Acknowledgement on a waiting dot
+used to be `animation: none` and nothing else, so at the breathing keyframe's
+rest point a seen and an unseen waiting dot were **pixel-identical** — the axis
+existed only while you watched it move. It was statically distinguishable under
+`prefers-reduced-motion` and not under normal motion, i.e. the guarantee
+backwards, and it gave up the "must survive a still frame" bar that the hollow
+ring was promoted out from behind `prefers-reduced-motion` to meet.
+
+A fresh bell re-raises the loud form by itself, because `setStatus` clears `seen`
+on a new attention transition.
+
+The same axis governs **counts**, and a count now excludes two different things
+for two different reasons: a session with no process (nothing is there) and a
+session you have already looked at (acknowledged, still unanswered). Only the
+first changes the dot. The switcher card's per-project attention marker
+(`projectSessionCounts`, `deck.ts`) applies both; its `terms` / `agents` numbers
+apply neither, because those count what *exists* and claim nothing about it.
+
+### The blocked-on-you word
+
+**A 6px mark is enough only where a nag channel already exists.** The deck has
+one — `.deck-key.key-waiting`'s breathing accent edge, and the `⚑ N` count in
+the status region — so the deck key can carry `waiting` on the dot alone.
+Mission has one too: the tile prints the state in words, `WAITING 13s`, 20px
+under its dot. **Overview has neither**, and its session heads set the name in
+`--text`/600, which is where the mark also read most like a bullet. When the
+waiting dot stopped breathing, a waiting session on Overview's focus header and
+on a grid card was one static 6px mark and nothing else — no word, no chip, no
+motion — on a surface a user may well be looking at when an agent starts
+waiting on them. That is the product's core promise going unserved on the screen
+built to watch several agents at once.
+
+The fix is a **word**, not a fourth marker. DESIGN.md prefers a word to an
+encoding, these heads have room for one, and Overview's rail row had already
+shipped both words since it was written — so the two heads that were silent say
+the same thing in the same words rather than inventing something new:
+
+| Derived status | Word |
+| --- | --- |
+| `attention` | `needs you` |
+| `waiting` | `waiting for you` |
+| anything else | nothing at all — the marker only ever *adds* |
+
+`.ov-flag`, one component (`StatusFlag`) on all three heads, so they cannot come
+to describe one state differently. `--text` at weight 600 for **both** states,
+and **the accent is not spent on this line at all**: the accent's marker on an
+attention head is the `!` glyph immediately to its left, and colouring the word
+as well was the same spend twice. It was also the last `2.92:1` mark of that
+family — `--accent` on `--bg-2` in Washi, at 9.5px, i.e. a word too faint to
+read set in the one colour that exists to be noticed. As `--text` it measures
+**15.03 / 12.17 / 9.82** on `--bg-2` and **16.03 / 12.87 / 10.73** on `--bg`
+(Slate / Sumi / Washi), and `waiting`'s own former `--accent-soft`
+(10.03 / 6.69 / **4.11**) goes with it — which is what finally makes the head
+agree with the dot: one token for one state. `attention` still outranks
+`waiting` on this line, by the `!` beside it and by the words themselves.
+
+`not-running` deliberately has no word here. Nothing in there is listening, and
+the flat bar plus the pane's own Start gate is the whole of that story.
 
 ### Badge tiers
 

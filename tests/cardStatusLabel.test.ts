@@ -55,4 +55,19 @@ describe("cardStatusLabel", () => {
     it("falls back to the raw status rather than dropping an unknown one", () => {
         expect(cardStatusLabel("quiet", "review", "", false)).toBe("quiet")
     })
+
+    // The card's dot reads the DERIVED status now (deckKeyStatus), and every
+    // word above describes a RUNNING agent: a card whose session had exited or
+    // been restored was labelled "Agent session is idle", the resting state of
+    // one that is alive. Without the entry it would also have fallen through
+    // the case above and read the raw token "not-running" at the user.
+    it("names a session with no process, instead of describing a live one", () => {
+        expect(cardStatusLabel("not-running", "review", "", false)).toBe(
+            "Agent is not running - open the session to start it again"
+        )
+        expect(cardStatusLabel("not-running", "doing", "4m", false)).toBe(
+            "Agent is not running - open the session to start it again · quiet 4m" +
+                " · no file changes yet, so it stays in Doing"
+        )
+    })
 })

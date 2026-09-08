@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
+import { pendingAnswer, sentLabel, sentTip } from "../answered"
 import type { AnySession } from "../store"
 import { SplitView } from "./SplitView"
 import { Icon } from "./Icon"
 import { getTail, peekLine, sortForFollow, followRank, promptFor } from "../missionTail"
+import { type DeckKeyStatus } from "../deck"
+import { useKeyStatus } from "../keyStatus"
 import { type ApprovalPrompt } from "../approval"
 
 /**
@@ -17,8 +20,61 @@ import { type ApprovalPrompt } from "../approval"
  * exactly once — a separate always-mounted view would double-attach every pty.
  */
 
-function dotClass(s: AnySession): string {
-    return s.isAgent ? "tab-dot claude status-" + s.status : "tab-dot shell"
+/**
+ * The dot on a card, a rail row or a collapsed group's mini-strip.
+ *
+ * Takes the status rather than reading `s.status`, because `s.status` is what
+ * the agent last DID and it survives the process that did it: every dot on this
+ * surface painted `status-idle` - the resting form of a live agent - for a
+ * session restored from the last run. The caller derives it once through
+ * `deckKeyStatus` (see `statusOf` below), which is the same predicate behind
+ * Mission's "N running" count, its NOT RUNNING chip and the deck key's dot.
+ *
+ * A shell keeps its own single form: it is not an agent, so none of the five
+ * agent forms apply to it.
+ */
+function dotClass(s: AnySession, status: DeckKeyStatus): string {
+    return s.isAgent ? "tab-dot claude status-" + status : "tab-dot shell"
+}
+
+/**
+ * The WORD for a session that is blocked on you — on every session head this
+ * view has, not just the rail row.
+ *
+ * The rail row has said "needs you" / "waiting for you" since it was written;
+ * the focus header and the grid card head said nothing, and carried the state
+ * on the 6px dot alone. That was survivable only while the waiting dot
+ * breathed. It is static now (deliberately: motion was the only thing telling
+ * waiting from working in a still frame, which is the defect that got fixed),
+ * and Overview has no nag channel of its own — no breathing key, no wants-you
+ * flag — so on these two heads `waiting` had no legible marker left at all.
+ * DESIGN.md's rule for that situation is to prefer a word, and these heads have
+ * room for one.
+ *
+ * One component rather than three copies, and the same two words the rail
+ * already shipped, so the three heads cannot come to describe one state
+ * differently — the failure this whole surface has been corrected for twice.
+ *
+ * `null` for every other status: the marker only ever ADDS, and a session that
+ * is working or resting or dead is not blocked on you. `not-running` in
+ * particular must not appear here — it says nothing is listening.
+ *
+ * Takes the DERIVED status (`useKeyStatus`), because "blocked on you" is a
+ * claim about a live process and `s.status` outlives the one that made it.
+ */
+function StatusFlag({
+    status,
+    block
+}: {
+    status: DeckKeyStatus
+    block?: boolean
+}): JSX.Element | null {
+    if (status !== "attention" && status !== "waiting") return null
+    return (
+        <span className={"ov-flag " + status + (block ? " ov-ri-flag" : "")}>
+            {status === "attention" ? "needs you" : "waiting for you"}
+        </span>
+    )
 }
 
 /** A session name that becomes an inline editor on double-click (reuses the
@@ -71,30 +127,71 @@ function EditableName({
 }
 
 /** One-click Approve / Deny for a detected prompt — answers the agent without
- *  opening its terminal. stopPropagation so it doesn't also trigger the row. */
-function ApprovalActions({ termId, prompt }: { termId: string; prompt: ApprovalPrompt }): JSX.Element {
+ *  opening its terminal. stopPropagation so it doesn't also trigger the row.
+ *
+ *  Used by both Overview modes (the Focus rail and the Grid cards), so the
+ *  confirmation below lands on every place this surface offers the buttons.
+ *
+ *  `prompt` is optional and the mount decision lives HERE rather than at the
+ *  two call sites, because with `{approval && …}` around it the two surfaces
+ *  disagreed about the same state. A Grid card embeds a live terminal, so
+ *  answering it produces a byte, the byte reclassifies the session to
+ *  `working`, `promptFor` stops returning a prompt — and the whole block
+ *  unmounted, taking the confirmation with it. The Focus rail showed the sent
+ *  row correctly only because a rail session's pane is not rendered, so no byte
+ *  arrived. Same state, same 6s constant, one place to decide. */
+function ApprovalActions({ termId, prompt }: { termId: string; prompt?: ApprovalPrompt | null }): JSX.Element | null {
     const respond = useStore((s) => s.respondApproval)
+    // A stable slice, like `seen` — the store's runtime record of what WE sent.
+    const answered = useStore((s) => s.answered)
+    // The same record and the same window Mission's tile reads (answered.ts).
+    // This surface raised the toast and then kept two live buttons under the
+    // question, so one click read as confirmed on Mission and unconfirmed here
+    // — and the honest next move for a stranger was to press it again, into a
+    // live agent. `Date.now()` at render rather than a timer of our own: this
+    // view already repaints every 1500ms for the rail peeks, so the row clears
+    // within one tick of the window closing.
+    const sent = pendingAnswer(answered[termId], Date.now())
+    // Nothing to say: no live prompt, and no answer inside its window. The one
+    // case that used to unmount the confirmation is the other one — the prompt
+    // has gone but the answer is still inside its 6s window — and there the
+    // sent row stands on its own. The question is not invented back: a Grid
+    // card has the agent's own terminal directly below this, which is where the
+    // question still is.
+    if (!prompt && !sent) return null
     return (
         <div className="ov-approve" onClick={(e) => e.stopPropagation()}>
-            <div className="ov-approve-q" data-tip={prompt.question}>
-                {prompt.question}
-            </div>
-            <div className="ov-approve-row">
-                <button
-                    className="ov-approve-yes"
-                    onClick={() => respond(termId, prompt.approve)}
-                    data-tip="Send Yes to the agent"
-                >
-                    ✓ Approve
-                </button>
-                <button
-                    className="ov-approve-no"
-                    onClick={() => respond(termId, prompt.deny)}
-                    data-tip="Reject this action"
-                >
-                    ✕ Deny
-                </button>
-            </div>
+            {prompt && (
+                <div className="ov-approve-q" data-tip={prompt.question}>
+                    {prompt.question}
+                </div>
+            )}
+            {sent ? (
+                /* The question stays — nobody knows yet whether the answer was
+                   taken — but the two live buttons are replaced by what was
+                   sent, so the natural second press has nothing to hit. It says
+                   "sent", never "approved". */
+                <div className="ov-approve-sent muted small" data-tip={sentTip(sent.keys)}>
+                    {sentLabel(sent.keys)}
+                </div>
+            ) : prompt ? (
+                <div className="ov-approve-row">
+                    <button
+                        className="ov-approve-yes"
+                        onClick={() => respond(termId, prompt.approve)}
+                        data-tip="Send Yes to the agent"
+                    >
+                        ✓ Approve
+                    </button>
+                    <button
+                        className="ov-approve-no"
+                        onClick={() => respond(termId, prompt.deny)}
+                        data-tip="Reject this action"
+                    >
+                        ✕ Deny
+                    </button>
+                </div>
+            ) : null}
         </div>
     )
 }
@@ -125,6 +222,9 @@ export function OverviewView(): JSX.Element {
     const agentStatus = useStore((s) => s.agentStatus)
     const termAgents = useStore((s) => s.termAgents)
     const termNames = useStore((s) => s.termNames)
+    // Carries the `paneHold` subscription that repaints a card whose process
+    // went away - see useKeyStatus.
+    const keyStatusOf = useKeyStatus()
     void tabsByProject
     void termAgents
     void termNames
@@ -143,7 +243,14 @@ export function OverviewView(): JSX.Element {
 
     const sessions = sessionsFn()
     void agentStatus // status changes re-render via this subscription
-    const ordered = useMemo(() => sortForFollow(sessions), [sessions])
+
+    // What one session on this surface may claim. Every claim below reads the
+    // shared resolver and not `s.status`: the dot, the `!` glyph, the "needs
+    // you" flag and - since it is what the two Approve / Deny buttons hang off
+    // - the permission prompt itself are all statements about a RUNNING agent,
+    // and a restored or exited session kept making them here after Mission and
+    // the deck had both stopped.
+    const ordered = useMemo(() => sortForFollow(sessions, keyStatusOf), [sessions, keyStatusOf])
 
     // Groups for the Grid mode: named project-group, else the project on its own.
     const groups = useMemo(() => {
@@ -163,14 +270,15 @@ export function OverviewView(): JSX.Element {
         // `status` with a private function, so the two lists could disagree about
         // which session came first — the defect `wantsYou`'s comment describes.
         const arr = [...byKey.values()]
-        arr.forEach((gr) => (gr.sessions = sortForFollow(gr.sessions)))
-        arr.sort(
-            (a, b) =>
-                Math.min(...a.sessions.map(followRank)) -
-                    Math.min(...b.sessions.map(followRank)) || a.label.localeCompare(b.label)
-        )
+        arr.forEach((gr) => (gr.sessions = sortForFollow(gr.sessions, keyStatusOf)))
+        // Ranked on the derived status too, or a group whose agents have all
+        // exited would sort above one still working on the `attention` the
+        // last of them died wearing.
+        const best = (gr: { sessions: AnySession[] }): number =>
+            Math.min(...gr.sessions.map((s) => followRank(keyStatusOf(s))))
+        arr.sort((a, b) => best(a) - best(b) || a.label.localeCompare(b.label))
         return arr
-    }, [sessions, projects])
+    }, [sessions, projects, keyStatusOf])
 
     const toggleFold = (key: string): void =>
         setCollapsed((prev) => {
@@ -251,10 +359,11 @@ export function OverviewView(): JSX.Element {
                 <div className="ov-focus">
                     <div className="ov-main">
                         <div className="ov-main-head">
-                            <span className={dotClass(focused)} />
+                            <span className={dotClass(focused, keyStatusOf(focused))} />
                             <EditableName termId={focused.termId} name={focused.sessionName} className="ov-main-name" />
                             {focused.isAgent && <span className="agent-badge sm">{focused.badge}</span>}
-                            {focused.status === "attention" && <span className="claude-attn">!</span>}
+                            {keyStatusOf(focused) === "attention" && <span className="claude-attn">!</span>}
+                            <StatusFlag status={keyStatusOf(focused)} />
                             <span className="ov-main-proj">{focused.projectName}</span>
                             <span className="ov-main-actions">
                                 <button
@@ -278,7 +387,11 @@ export function OverviewView(): JSX.Element {
                         <div className="ov-rail-title">Other sessions · {rest.length}</div>
                         {rest.map((s) => {
                             const peek = peekLine(getTail(s.termId))
-                            const approval = promptFor(s)
+                            const status = keyStatusOf(s)
+                            // Gated on the DERIVED status: a `not-running` row
+                            // was still offering live Approve / Deny under a
+                            // question nothing was listening for.
+                            const approval = promptFor(s, status)
                             return (
                                 <div
                                     key={s.termId}
@@ -314,10 +427,10 @@ export function OverviewView(): JSX.Element {
                                     data-tip="Bring into focus · middle-click or Del to close"
                                 >
                                     <div className="ov-ri-head">
-                                        <span className={dotClass(s)} />
+                                        <span className={dotClass(s, status)} />
                                         <span className="ov-ri-name">{s.sessionName}</span>
                                         {s.isAgent && <span className="agent-badge sm">{s.badge}</span>}
-                                        {s.status === "attention" && <span className="claude-attn">!</span>}
+                                        {status === "attention" && <span className="claude-attn">!</span>}
                                         <span className="ov-ri-proj">{s.projectName}</span>
                                         <button
                                             type="button"
@@ -334,15 +447,17 @@ export function OverviewView(): JSX.Element {
                                             ×
                                         </button>
                                     </div>
-                                    {(s.status === "attention" || s.status === "waiting") && (
-                                        <div className={"ov-ri-flag " + s.status}>
-                                            {s.status === "attention" ? "needs you" : "waiting for you"}
-                                        </div>
-                                    )}
+                                    {/* The flag is the same lie in WORDS: a dead
+                                        session whose last status was `attention`
+                                        read "needs you", and nothing in there
+                                        needs anything. Derived, so the row's dot
+                                        and its sentence cannot disagree either.
+                                        `block` keeps this on its own line, above
+                                        the peek — the two heads share the words
+                                        but put them inline. */}
+                                    <StatusFlag status={status} block />
                                     {peek && <div className="ov-ri-peek">{peek}</div>}
-                                    {approval && (
-                                        <ApprovalActions termId={s.termId} prompt={approval} />
-                                    )}
+                                    <ApprovalActions termId={s.termId} prompt={approval} />
                                 </div>
                             )
                         })}
@@ -373,7 +488,7 @@ export function OverviewView(): JSX.Element {
                                 {collapsed.has(g.key) && (
                                     <span className="ov-grp-mini" aria-hidden="true">
                                         {g.sessions.map((s) => (
-                                            <span key={s.termId} className={dotClass(s)} />
+                                            <span key={s.termId} className={dotClass(s, keyStatusOf(s))} />
                                         ))}
                                     </span>
                                 )}
@@ -383,18 +498,20 @@ export function OverviewView(): JSX.Element {
                             </div>
                             <div className="ov-grid">
                                 {g.sessions.map((s) => {
-                                    const approval = promptFor(s)
+                                    const status = keyStatusOf(s)
+                                    const approval = promptFor(s, status)
                                     return (
                                     <div key={s.termId} className="ov-card">
                                         <div className="ov-card-head">
-                                            <span className={dotClass(s)} />
+                                            <span className={dotClass(s, status)} />
                                             <EditableName termId={s.termId} name={s.sessionName} className="ov-card-name" />
                                             {s.isAgent && (
                                                 <span className="agent-badge sm">{s.badge}</span>
                                             )}
-                                            {s.status === "attention" && (
+                                            {status === "attention" && (
                                                 <span className="claude-attn">!</span>
                                             )}
+                                            <StatusFlag status={status} />
                                             {g.isGroup && (
                                                 <span className="ov-card-proj">{s.projectName}</span>
                                             )}
@@ -418,9 +535,7 @@ export function OverviewView(): JSX.Element {
                                                 </button>
                                             </span>
                                         </div>
-                                        {approval && (
-                                            <ApprovalActions termId={s.termId} prompt={approval} />
-                                        )}
+                                        <ApprovalActions termId={s.termId} prompt={approval} />
                                         <div className="ov-card-body">
                                             <SplitView
                                                 node={{ kind: "leaf", termId: s.termId }}

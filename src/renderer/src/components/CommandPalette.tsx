@@ -3,6 +3,8 @@ import { useStore, SHELL, type TermLayout, type AnySession } from "../store"
 import { useSettings, sshCommand } from "../settings"
 import { THEMES, STYLES } from "../themes"
 import { DECK_VIEWS } from "./ViewKeys"
+import { useKeyStatus } from "../keyStatus"
+import { followRank } from "../missionTail"
 
 interface Command {
     id: string
@@ -33,6 +35,8 @@ export function CommandPalette(): JSX.Element {
     const pipelines = useSettings((s) => s.pipelines)
     const setAppearance = useSettings((s) => s.setAppearance)
     const openSettings = useSettings((s) => s.openSettings)
+    // The session rows below rank and flag on this, not on `s.status`.
+    const keyStatusOf = useKeyStatus()
     const close = (): void => store.setPaletteOpen(false)
 
     const [q, setQ] = useState("")
@@ -122,18 +126,32 @@ export function CommandPalette(): JSX.Element {
         // is not the project root - because a list of eight "claude" rows is not
         // a way to find anything. All three are searchable, so typing a branch
         // name reaches its session.
-        const rankSession = (x: AnySession): number =>
-            x.status === "attention" ? 0 : x.status === "waiting" ? 1 : x.status === "working" ? 2 : 3
+        // Ranked and flagged on the DERIVED status. `s.status` is what the
+        // agent last did and outlives the process, so the palette floated dead
+        // sessions to the top of the list and appended "needs you" to them -
+        // the one claim this product cannot get wrong, in the one surface that
+        // is a keyboard away from anywhere. A session with no process sorts
+        // LAST but is still listed: jumping to it is how you start it again.
+        //
+        // The order itself is `followRank` (missionTail), not a copy of it.
+        // This ladder was written out here and happened to agree with the one
+        // Mission and Overview sort by - which is how two surfaces come to show
+        // the same sessions in different orders the moment one of them is
+        // edited. `not-running` sorting last is now that shared rank's own rule.
+        const rankSession = (x: AnySession): number => followRank(keyStatusOf(x))
         const leaf = (path: string): string => path.split(/[\/]/).filter(Boolean).pop() ?? path
         for (const s of [...store.sessions()].sort((a, b) => rankSession(a) - rankSession(b))) {
             const cwd = store.termCwd[s.termId]
             const where = cwd && cwd !== s.projectPath ? ` · ${leaf(cwd)}` : ""
+            const st = keyStatusOf(s)
             const flag =
-                s.status === "attention"
+                st === "attention"
                     ? " - needs you"
-                    : s.status === "waiting"
+                    : st === "waiting"
                       ? " - waiting"
-                      : ""
+                      : st === "not-running"
+                        ? " - not running"
+                        : ""
             cmds.push({
                 id: "go:" + s.termId,
                 section: "Sessions",
@@ -182,7 +200,7 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:activity", section: "Actions", title: "Open activity feed", run: () => store.setActivityOpen(true) })
         cmds.push({ id: "act:shortcuts", section: "Help", title: "Keyboard shortcuts (F1)", run: () => store.setShortcutsOpen(true) })
         return cmds
-    }, [agents, sshProfiles, pipelines, store, setAppearance, openSettings])
+    }, [agents, sshProfiles, pipelines, store, setAppearance, openSettings, keyStatusOf])
 
     const filtered = useMemo(() => commands.filter((c) => matches(c.title, q)).slice(0, 100), [commands, q])
 

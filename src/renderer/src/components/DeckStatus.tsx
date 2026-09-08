@@ -6,6 +6,7 @@ import type { GitStatus, GitIdentity, PullResult } from "../../../preload/index"
 import { Icon } from "./Icon"
 import { awaitedTermIds, getLastAt, promptFor } from "../missionTail"
 import { exitCodeOf } from "../termExit"
+import { useKeyStatus } from "../keyStatus"
 import { wantsYou } from "../tileState"
 
 export function DeckStatus(): JSX.Element {
@@ -21,6 +22,12 @@ export function DeckStatus(): JSX.Element {
     const boardTasks = useStore((s) => s.boardTasks)
     const pipelineRun = useStore((s) => s.pipelineRun)
     const termAgents = useStore((s) => s.termAgents)
+    // Read for `wantsYou`'s `held`, and a stable slice - the same one
+    // useKeyStatus subscribes to, so the flag repaints when a process goes away.
+    const paneHold = useStore((s) => s.paneHold)
+    // `promptFor` is gated on the DERIVED status, so the flag cannot count a
+    // question relayed by a tab with nothing behind it.
+    const keyStatusOf = useKeyStatus()
     const [git, setGit] = useState<GitStatus | null>(null)
     const [identity, setIdentity] = useState<GitIdentity | null>(null)
     const [pickerOpen, setPickerOpen] = useState(false)
@@ -113,11 +120,16 @@ export function DeckStatus(): JSX.Element {
                 status: s.status,
                 // Without this the flag cannot see a session blocked on a
                 // permission prompt that was acknowledged as a quiet hand-back.
-                prompt: promptFor(s),
+                prompt: promptFor(s, keyStatusOf(s)),
                 exitCode: exitCodeOf(s.termId),
                 lastAt: getLastAt(s.termId),
                 awaited: awaited.has(s.termId),
-                alive: !!termAgents[s.termId]
+                alive: !!termAgents[s.termId],
+                // `alive` is "this tab is an agent", not "this agent is
+                // running" - a pane whose process died keeps it. `held` is the
+                // other half of `hasProcess`, and without it the flag counted a
+                // restored pane.
+                held: paneHold[s.termId]
             },
             now,
             !!seen[s.termId]

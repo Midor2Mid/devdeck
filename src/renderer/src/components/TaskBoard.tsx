@@ -14,6 +14,7 @@ import { routeAgent, type RoutingRule } from "../routing"
 import { Icon } from "./Icon"
 import { getLastAt, relTime } from "../missionTail"
 import { checkFailedFor } from "../agentSignals"
+import { useKeyStatus } from "../keyStatus"
 
 const COL_LABEL: Record<BoardColumn, string> = {
     todo: "Todo",
@@ -190,6 +191,11 @@ export function TaskBoard(): JSX.Element {
     const activeProject = useStore((s) => s.projects.find((p) => p.id === s.activeId))
     const boardTasks = useStore((s) => s.boardTasks)
     const agentStatus = useStore((s) => s.agentStatus)
+    // A card's dot and its label describe the agent working the card, so they
+    // read the derived status: `agentStatus` is what that agent last DID and it
+    // outlives the process, so a card whose session had exited still carried
+    // "Agent session is idle" and the resting form of a live one.
+    const keyStatusOf = useKeyStatus()
     const boardView = useStore((s) => s.view)
     // getLastAt and checkFailedFor read module Maps that the pty path mutates
     // WITHOUT a set(), so nothing here would re-render when they change: the
@@ -327,7 +333,11 @@ export function TaskBoard(): JSX.Element {
 
                         <div className="board-cards">
                             {grouped[col].map((t) => {
-                                const status = t.termId ? agentStatus[t.termId] : undefined
+                                const raw = t.termId ? agentStatus[t.termId] : undefined
+                                const status =
+                                    t.termId && raw
+                                        ? keyStatusOf({ termId: t.termId, status: raw })
+                                        : undefined
                                 // Module-map reads, not store state: these change on
                                 // the pty stream and must not churn React. The board
                                 // already re-renders on its own cost tick, which is

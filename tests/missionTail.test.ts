@@ -4,6 +4,7 @@ import {
     peekLine,
     relTime,
     sortForFollow,
+    followRank,
     lastLines,
     isStalled,
     awaitedTermIds,
@@ -18,6 +19,7 @@ import {
     setDecisions
 } from "../src/renderer/src/missionTail"
 import type { AnySession } from "../src/renderer/src/store"
+import { deckKeyStatus, type DeckKeyStatus } from "../src/renderer/src/deck"
 
 function sess(over: Partial<AnySession>): AnySession {
     return {
@@ -64,14 +66,68 @@ describe("relTime", () => {
 })
 
 describe("sortForFollow", () => {
+    /** Every session live: the raw status IS the derived one. */
+    const live = (s: AnySession): DeckKeyStatus => deckKeyStatus(s.status, undefined, undefined)
+
     it("orders attention → working → idle, stable within a status", () => {
-        const out = sortForFollow([
-            sess({ termId: "i", status: "idle" }),
-            sess({ termId: "a", status: "attention" }),
-            sess({ termId: "w1", status: "working" }),
-            sess({ termId: "w2", status: "working" })
-        ])
+        const out = sortForFollow(
+            [
+                sess({ termId: "i", status: "idle" }),
+                sess({ termId: "a", status: "attention" }),
+                sess({ termId: "w1", status: "working" }),
+                sess({ termId: "w2", status: "working" })
+            ],
+            live
+        )
         expect(out.map((s) => s.termId)).toEqual(["a", "w1", "w2", "i"])
+    })
+
+    it("sorts a dead session last, whatever it last said", () => {
+        // The defect: the rank read `s.status`, which is what the agent last
+        // DID and outlives the process that did it - so an exited or restored
+        // session kept the `attention` it died wearing and took the FIRST slot
+        // in Mission and in Overview, above every agent still running.
+        //
+        // Ranking on the derived status is the fix, and it is the same
+        // derivation the dot, the chip and every count read.
+        const dead = (s: AnySession): DeckKeyStatus =>
+            s.termId === "corpse"
+                ? deckKeyStatus(s.status, 1, "restart")
+                : deckKeyStatus(s.status, undefined, undefined)
+        const out = sortForFollow(
+            [
+                sess({ termId: "corpse", status: "attention" }),
+                sess({ termId: "i", status: "idle" }),
+                sess({ termId: "a", status: "attention" })
+            ],
+            dead
+        )
+        expect(out.map((s) => s.termId)).toEqual(["a", "i", "corpse"])
+    })
+
+    it("ranks a restored pane last too, not on the status it was restored with", () => {
+        // `paneHold = "resume"` with no exit code: the other half of
+        // `hasProcess`, and the half a future restore-the-statuses change
+        // would make visible.
+        const held = (s: AnySession): DeckKeyStatus =>
+            deckKeyStatus(s.status, undefined, s.termId === "restored" ? "resume" : undefined)
+        const out = sortForFollow(
+            [sess({ termId: "restored", status: "waiting" }), sess({ termId: "w", status: "working" })],
+            held
+        )
+        expect(out.map((s) => s.termId)).toEqual(["w", "restored"])
+    })
+})
+
+describe("followRank", () => {
+    // Exported for Overview's grid, which ranks a GROUP rather than sorting a
+    // list. Same order, so the two surfaces cannot disagree about which
+    // session - or which project group - comes first.
+    it("puts a session with no process behind the four live statuses", () => {
+        expect(followRank("not-running")).toBeGreaterThan(followRank("idle"))
+        expect(followRank("attention")).toBeLessThan(followRank("waiting"))
+        expect(followRank("waiting")).toBeLessThan(followRank("working"))
+        expect(followRank("working")).toBeLessThan(followRank("idle"))
     })
 })
 
@@ -302,27 +358,27 @@ describe("promptFor", () => {
 
     it("returns main's prompt for an agent flagged attention", () => {
         setDecisions({ "p-1": MENU })
-        const p = promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))
+        const p = promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }), "attention")
         expect(p?.kind).toBe("menu")
         expect(p?.approve).toBe("1")
     })
 
     it("returns main's prompt for an agent flagged waiting", () => {
         setDecisions({ "p-1": MENU })
-        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "waiting" }))).not.toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "waiting" }), "waiting")).not.toBeNull()
     })
 
     // The gate, not the detector: the same prompt on a working or idle session
     // is mid-stream output, and answering it sends a keystroke nobody asked for.
     it("returns null for a session that is not flagged attention or waiting", () => {
         setDecisions({ "p-1": MENU })
-        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "working" }))).toBeNull()
-        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "idle" }))).toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "working" }), "working")).toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "idle" }), "idle")).toBeNull()
     })
 
     it("returns null for a plain shell", () => {
         setDecisions({ "p-1": MENU })
-        expect(promptFor(sess({ termId: "p-1", isAgent: false, status: "attention" }))).toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: false, status: "attention" }), "attention")).toBeNull()
     })
 
     // The tail is no longer this function's input: a session with a textbook
@@ -332,7 +388,7 @@ describe("promptFor", () => {
     it("returns null when main minted no decision, whatever the tail says", () => {
         recordTail("p-1", "Do you want to proceed?\n\u276f 1. Yes\n  2. No (esc)\n")
         setDecisions({})
-        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))).toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }), "attention")).toBeNull()
     })
 
     // A snapshot is main's COMPLETE answer, so a prompt going away is expressed
@@ -341,13 +397,42 @@ describe("promptFor", () => {
     it("drops a decision the next snapshot no longer carries", () => {
         setDecisions({ "p-1": MENU })
         setDecisions({})
-        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))).toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }), "attention")).toBeNull()
     })
 
     it("forgetTail drops the session's decision with its tail", () => {
         setDecisions({ "p-1": MENU })
         forgetTail("p-1")
-        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }))).toBeNull()
+        expect(promptFor(sess({ termId: "p-1", isAgent: true, status: "attention" }), "attention")).toBeNull()
+    })
+
+    /**
+     * The gate is on the DERIVED status, and that is why the status is a
+     * required argument rather than read off the session.
+     *
+     * A session keeps the status it died with, so this same decision hung two
+     * live Approve / Deny buttons on a `not-running` row in Overview - and it
+     * would have read NEEDS YOU on a Mission tile too, because `prompt`
+     * outranks the NOT-RUNNING rule inside resolveTileState. Composed through
+     * `deckKeyStatus` rather than passing the literal, so this fails if either
+     * half drifts.
+     */
+    it("returns null for a session with nothing behind it, whatever it died saying", () => {
+        setDecisions({ "p-1": MENU })
+        const dead: [number | undefined, "resume" | "restart" | undefined][] = [
+            [undefined, "resume"],
+            [undefined, "restart"],
+            [0, undefined],
+            [1, "restart"]
+        ]
+        for (const status of ["attention", "waiting"] as const) {
+            const s = sess({ termId: "p-1", isAgent: true, status })
+            for (const [exitCode, held] of dead) {
+                expect(promptFor(s, deckKeyStatus(status, exitCode, held))).toBeNull()
+            }
+            // Not vacuous: the same session with a process still gets the prompt.
+            expect(promptFor(s, deckKeyStatus(status, undefined, undefined))).not.toBeNull()
+        }
     })
 })
 
@@ -356,7 +441,7 @@ describe("promptFor consumes main's decision", () => {
 
     it("returns null for a session main minted no decision for", () => {
         setDecisions({})
-        expect(promptFor({ termId: "t1", isAgent: true, status: "waiting" } as AnySession)).toBeNull()
+        expect(promptFor({ termId: "t1", isAgent: true, status: "waiting" } as AnySession, "waiting")).toBeNull()
     })
 
     it("returns main's prompt verbatim \u2014 it does not re-classify", () => {
@@ -372,7 +457,7 @@ describe("promptFor consumes main's decision", () => {
                 ]
             }
         })
-        expect(promptFor({ termId: "t1", isAgent: true, status: "waiting" } as AnySession)).toEqual({
+        expect(promptFor({ termId: "t1", isAgent: true, status: "waiting" } as AnySession, "waiting")).toEqual({
             kind: "menu",
             question: "Do you want to proceed?",
             approve: "1",
@@ -393,6 +478,6 @@ describe("promptFor consumes main's decision", () => {
                 ]
             }
         })
-        expect(promptFor({ termId: "t1", isAgent: true, status: "idle" } as AnySession)).toBeNull()
+        expect(promptFor({ termId: "t1", isAgent: true, status: "idle" } as AnySession, "idle")).toBeNull()
     })
 })

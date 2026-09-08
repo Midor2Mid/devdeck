@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "../store"
 import { useSettings } from "../settings"
 import { groupTargets, presetSelection, type Preset } from "../broadcast"
+import { keyIsRunning } from "../deck"
+import { useKeyStatus } from "../keyStatus"
 import { confirm } from "../confirm"
 
 interface Props {
@@ -28,6 +30,9 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
     const draft = useStore((s) => (s.activeId ? s.composerDrafts[s.activeId] ?? "" : ""))
     const setComposerDraft = useStore((s) => s.setComposerDraft)
     const snippets = useSettings((s) => s.snippets)
+    // What each target IS. A send is a keystroke into a pty, so this decides
+    // both the dot and whether the row can be picked at all.
+    const keyStatusOf = useKeyStatus()
 
     const [files, setFiles] = useState<string[]>([])
     const [token, setToken] = useState<{ start: number; query: string; trigger: "@" | "/" } | null>(
@@ -49,9 +54,23 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
 
     const sessions = agentSessions()
     const groups = groupTargets(sessions)
-    const selectedCount = selected.size
+    // The sessions a keystroke can actually reach. Dead sessions stay in the
+    // list - the composer is also how you SEE what you have, and hiding one
+    // would just move the confusion - but they cannot be targets: nothing is
+    // listening behind them, so `broadcast` would write into a closed pty and
+    // report nothing, while the header counted the send as going somewhere.
+    const reachable = new Set(
+        sessions.filter((s) => keyIsRunning(keyStatusOf(s))).map((s) => s.termId)
+    )
+    // The selection, intersected with what is reachable NOW. The seed is the
+    // last focused agent and the presets are resolved when clicked, so either
+    // could hold a session whose process has since gone: this is what keeps the
+    // count, the single-target line and `send` from disagreeing with the
+    // checkboxes on screen.
+    const targets = [...selected].filter((id) => reachable.has(id))
+    const selectedCount = targets.length
     const singleTarget =
-        selectedCount === 1 ? sessions.find((s) => selected.has(s.termId)) : undefined
+        selectedCount === 1 ? sessions.find((s) => s.termId === targets[0]) : undefined
 
     useEffect(() => {
         if (activeProject) {
@@ -168,11 +187,14 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
 
     // Presets read a fresh session list so idle/all reflect the current moment.
     const applyPreset = (preset: Preset): void =>
-        setSelected(presetSelection(agentSessions(), preset, activeProject?.id ?? null))
+        setSelected(
+            presetSelection(agentSessions(), preset, activeProject?.id ?? null, keyStatusOf)
+        )
 
     const send = async (): Promise<void> => {
         const body = text.trim()
-        const ids = [...selected]
+        // `targets`, not `selected`: see its note above.
+        const ids = targets
         if (!body || ids.length === 0) return
         if (ids.length >= 3) {
             const ok = await confirm({
@@ -223,6 +245,11 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
                 <span className="muted small">
                     {sessions.length === 0 ? (
                         "No agent session - start one to send a prompt"
+                    ) : reachable.size === 0 ? (
+                        // Sessions exist, and none of them has a process. "Select
+                        // at least one agent" was the message here, which asks for
+                        // something the list cannot give.
+                        "No agent session is running - open one to start it again"
                     ) : selectedCount === 0 ? (
                         "Select at least one agent"
                     ) : singleTarget ? (
@@ -261,18 +288,50 @@ export function PromptComposer({ onClose }: Props): JSX.Element {
                     {groups.map((g) => (
                         <div key={g.projectId} className="composer-target-group">
                             <div className="composer-target-group-title">{g.projectName}</div>
-                            {g.sessions.map((s) => (
-                                <label key={s.termId} className="composer-target">
-                                    <input
-                                        type="checkbox"
-                                        checked={selected.has(s.termId)}
-                                        onChange={() => toggle(s.termId)}
-                                    />
-                                    <span className={"tab-dot claude status-" + s.status} />
-                                    <span className="composer-target-name">{s.sessionName}</span>
-                                    <span className="agent-badge sm">{s.badge}</span>
-                                </label>
-                            ))}
+                            {g.sessions.map((s) => {
+                                const status = keyStatusOf(s)
+                                const canSend = keyIsRunning(status)
+                                // `disabled` on the input makes the row genuinely
+                                // inert; `aria-disabled` on the label is what keeps
+                                // its REASON on screen through the press that
+                                // discovers it - the tooltip layer withdraws a tip
+                                // on mousedown for everything else (Tooltip.tsx),
+                                // and this row's tip carries the fix.
+                                return (
+                                    <label
+                                        key={s.termId}
+                                        className={
+                                            "composer-target" + (canSend ? "" : " not-running")
+                                        }
+                                        data-tip={
+                                            canSend
+                                                ? undefined
+                                                : "No process behind this session - open it to start it again"
+                                        }
+                                        aria-disabled={canSend ? undefined : true}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={canSend && selected.has(s.termId)}
+                                            disabled={!canSend}
+                                            onChange={() => toggle(s.termId)}
+                                        />
+                                        <span className={"tab-dot claude status-" + status} />
+                                        <span className="composer-target-name">
+                                            {s.sessionName}
+                                        </span>
+                                        <span className="agent-badge sm">{s.badge}</span>
+                                        {/* The word as well as the form: a
+                                            disabled checkbox says you cannot,
+                                            not why, and the bar dot is 6px. */}
+                                        {!canSend && (
+                                            <span className="composer-target-dead">
+                                                not running
+                                            </span>
+                                        )}
+                                    </label>
+                                )
+                            })}
                         </div>
                     ))}
                 </div>

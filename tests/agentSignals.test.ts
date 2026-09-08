@@ -5,6 +5,7 @@ import {
     adoptBaseline,
     baselineOf,
     forgetSignals,
+    ensureBaseline,
     newCounts,
     nextChangedCounts
 } from "../src/renderer/src/agentSignals"
@@ -190,6 +191,75 @@ describe("a capture that resolves too late", () => {
         await new Promise((r) => setTimeout(r, 0))
         expect(baselineOf("s-race")).toEqual(new Set(["new.ts"]))
         forgetSignals("s-race")
+    })
+})
+
+/**
+ * The launch paths' capture, and the one thing it must not do.
+ *
+ * `captureBaseline` OVERWRITES on purpose - a dispatch, or a card dragged back
+ * into `doing`, is a deliberate statement that what came before stops counting.
+ * A launch is not that statement: resume and restart reuse the same termId, so a
+ * launch that overwrote would re-inherit the files the session itself created
+ * and turn a real conflict silent. Filling a gap and rebasing are different acts
+ * and this is the first of the two.
+ */
+describe("ensureBaseline", () => {
+    afterEach(() => {
+        delete (globalThis as unknown as { window?: unknown }).window
+    })
+
+    it("captures for a session that has no baseline", async () => {
+        stubGitChanges(async () => [{ path: "a.ts" }])
+        ensureBaseline("s-ens", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-ens")).toEqual(new Set(["a.ts"]))
+        forgetSignals("s-ens")
+    })
+
+    it("leaves an existing baseline exactly as it was", async () => {
+        stubGitChanges(async () => [{ path: "a.ts" }])
+        captureBaseline("s-ens2", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        const first = baselineOf("s-ens2")
+
+        // The tree is dirtier now - because this session made it so.
+        stubGitChanges(async () => [{ path: "a.ts" }, { path: "written-by-me.ts" }])
+        ensureBaseline("s-ens2", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+
+        expect(baselineOf("s-ens2")).toBe(first)
+        forgetSignals("s-ens2")
+    })
+
+    it("stands down while a capture is still in flight", async () => {
+        // Presence of a ticket answers "has one", the same way adoptBaseline
+        // reads it: a second read issued here would race the first for no gain.
+        let release: (files: { path: string }[]) => void = () => undefined
+        stubGitChanges(
+            () =>
+                new Promise<{ path: string }[]>((r) => {
+                    release = r
+                })
+        )
+        captureBaseline("s-ens3", "/repo")
+        ensureBaseline("s-ens3", "/repo")
+        release([{ path: "first.ts" }])
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-ens3")).toEqual(new Set(["first.ts"]))
+        forgetSignals("s-ens3")
+    })
+
+    it("still leaves the baseline unknown when the read fails", async () => {
+        // Fail-closed is the contract tests/changes.test.ts pins on purpose:
+        // unknown means "no evidence", never "nothing changed".
+        stubGitChanges(async () => {
+            throw new Error("index.lock")
+        })
+        ensureBaseline("s-ens4", "/repo")
+        await new Promise((r) => setTimeout(r, 0))
+        expect(baselineOf("s-ens4")).toBeUndefined()
+        forgetSignals("s-ens4")
     })
 })
 

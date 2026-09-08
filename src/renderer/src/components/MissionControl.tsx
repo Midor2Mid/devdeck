@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useStore } from "../store"
+import { pendingAnswer, sentLabel, sentTip } from "../answered"
 import { useSettings, isUnsafeAgent, primaryAgentPreset } from "../settings"
 import {
     getTail,
@@ -11,11 +12,13 @@ import {
     promptFor
 } from "../missionTail"
 import { buildOwnership, type OwnershipMap } from "../ownership"
-import { nextChangedCounts } from "../agentSignals"
+import { baselineOf, nextChangedCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
 import { resolveTileState, wantsYou, hasProcess } from "../tileState"
+import { useKeyStatus } from "../keyStatus"
 import { Icon } from "./Icon"
 import type { SystemInfo } from "../../../preload/index"
+
 
 // Whether the ports wall is open, persisted across view switches + restarts
 // (localStorage, the same lightweight store OverviewView's group folding and the
@@ -64,6 +67,9 @@ export function MissionControl(): JSX.Element {
     const agentStatus = useStore((s) => s.agentStatus)
     const termAgents = useStore((s) => s.termAgents)
     const seen = useStore((s) => s.seen)
+    // Keystroke answers already sent, so a tile can say so instead of offering
+    // the same button again. A stable slice, like `seen`.
+    const answered = useStore((s) => s.answered)
     const termNames = useStore((s) => s.termNames)
     // The two places an outstanding expectation on a session is recorded. Both
     // are stable slices, so subscribing to them is safe; the Set is derived in
@@ -84,15 +90,21 @@ export function MissionControl(): JSX.Element {
     void termAgents
     void termNames
 
-    // Attention-first: the agent that needs you floats to the top.
-    const sessions = sortForFollow(agentSessions())
-    // A quiet agent is only stalled if something is actually waiting on it.
-    const awaited = awaitedTermIds(boardTasks, pipelineRun)
-    const totalAgents = sessions.length
     // Held panes: "resume" is stamped on every agent pane at restore (store.ts,
     // the workspace load) and "restart" when a process exits. Either way there
     // is no process behind the tab.
     const paneHold = useStore((st) => st.paneHold)
+    // The same two facts, through the resolver every other surface reads, so
+    // the tile's own dot cannot describe this session differently from its chip.
+    // Declared ahead of the sort because the sort reads it too.
+    const keyStatusOf = useKeyStatus()
+    // Attention-first: the agent that needs you floats to the top - ranked on
+    // the DERIVED status, so a dead session cannot hold the first slot with the
+    // `attention` it died wearing.
+    const sessions = sortForFollow(agentSessions(), keyStatusOf)
+    // A quiet agent is only stalled if something is actually waiting on it.
+    const awaited = awaitedTermIds(boardTasks, pipelineRun)
+    const totalAgents = sessions.length
 
     // Tiles the user has expanded to see fuller recent output inline.
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -202,6 +214,10 @@ export function MissionControl(): JSX.Element {
                     termId: s.termId,
                     sessionName: s.sessionName,
                     projectName: s.projectName,
+                    // Carried, not re-derived: the ownership map keys sessions by
+                    // TREE (two worktrees of one project cannot collide), and it
+                    // has to be the same directory the read below used.
+                    cwd: st.sessionCwd(s.termId),
                     // null, not [] - a failed read is UNKNOWN, not "nothing changed".
                     // git.changes rejects on purpose (a transient failure: a repo
                     // mid-rebase, an index.lock another agent holds, the timeout) so
@@ -228,10 +244,21 @@ export function MissionControl(): JSX.Element {
             // for that session, so the tile declines to make a file claim rather
             // than reading 0 or a count that was true eight seconds ago.
             const ok = entries.filter(
-                (e): e is { termId: string; sessionName: string; projectName: string; files: string[] } =>
-                    e.files !== null
+                (e): e is {
+                    termId: string
+                    sessionName: string
+                    projectName: string
+                    cwd: string
+                    files: string[]
+                } => e.files !== null
             )
-            setOwnership(buildOwnership(ok))
+            // The baseline goes in with the dirty list, so the map attributes to
+            // a session only what appeared AFTER it started. Without it, every
+            // session in a shared tree owned every dirty file in that tree and
+            // the header claimed a red conflict per file - for two sessions that
+            // had written nothing. Same evidence the tiles' CHANGED count uses,
+            // so the two halves of this view can no longer disagree.
+            setOwnership(buildOwnership(ok.map((e) => ({ ...e, baseline: baselineOf(e.termId) }))))
             setChangedBySession((prev) => nextChangedCounts(prev, entries))
         }
         void fetchOwn()
@@ -261,7 +288,14 @@ export function MissionControl(): JSX.Element {
     // already does once a second for no reason.
     const now = Date.now()
     const resolved = sessions.map((s) => {
-        const prompt = promptFor(s)
+        // What this session IS, before the tile claims anything about it. The
+        // chip had the rule and the tile's own dot and left border did not, so
+        // one tile said NOT RUNNING in words while wearing the resting form of
+        // a live agent 20px away - and `promptFor` was status-blind, which is
+        // how a dead session could still have relayed a question (`prompt`
+        // outranks the NOT-RUNNING rule inside resolveTileState).
+        const keyStatus = keyStatusOf(s)
+        const prompt = promptFor(s, keyStatus)
         const input = {
             status: s.status,
             prompt,
@@ -272,9 +306,14 @@ export function MissionControl(): JSX.Element {
             // is a quieter fact than `null`, which means a poll ran and failed.
             changedCount: changedBySession[s.termId],
             awaited: awaited.has(s.termId),
-            alive: !!termAgents[s.termId]
+            alive: !!termAgents[s.termId],
+            // The tile is now asked the same question the header's "N running"
+            // already asked: is there a process behind this tab? A restored
+            // pane's pty died with the previous app process, and every status
+            // below "held" describes a running agent.
+            held: paneHold[s.termId]
         }
-        return { s, prompt, input, st: resolveTileState(input, now) }
+        return { s, prompt, keyStatus, input, st: resolveTileState(input, now) }
     })
     // The same predicate the deck bar's flag reads (tileState's wantsYou) — see
     // its doc comment for why this app cannot afford two counts for one
@@ -283,7 +322,7 @@ export function MissionControl(): JSX.Element {
     // Sessions with a process behind them — NOT `sessions.length`, which counts
     // tabs and read "5 running" for five restored panes that had started
     // nothing. See hasProcess in tileState.
-    const running = resolved.filter((r) => hasProcess(r.input, paneHold[r.s.termId])).length
+    const running = resolved.filter((r) => hasProcess(r.input, r.input.held)).length
 
     /**
      * The AGENTS empty state's one control — the only accent on this screen.
@@ -359,10 +398,16 @@ export function MissionControl(): JSX.Element {
                     </>
                 ) : (
                     <div className="mission-grid">
-                        {resolved.map(({ s, prompt, st }) => {
+                        {resolved.map(({ s, prompt, keyStatus, st }) => {
                             const ago = relTime(now, getLastAt(s.termId))
                             const isExpanded = expanded.has(s.termId)
                             const stalled = st.kind === "stalled"
+                            // An answer we sent moments ago and have heard nothing
+                            // back about yet. Time-boxed rather than cleared on the
+                            // agent's next byte - see ANSWERED_MS in answered.ts,
+                            // which Overview's cards read too so one click cannot
+                            // read as confirmed here and unconfirmed there.
+                            const sent = pendingAnswer(answered[s.termId], now)
                             // changedBySession starts {} on mount (and briefly holds a
                             // stale count after a session's own reply while the next
                             // poll is in flight), so a session that is really CHANGED
@@ -386,12 +431,12 @@ export function MissionControl(): JSX.Element {
                             return (
                                 <div
                                     key={s.termId}
-                                    className={"mission-tile status-" + s.status + (stalled ? " stalled" : "")}
+                                    className={"mission-tile status-" + keyStatus + (stalled ? " stalled" : "")}
                                     data-tip={st.detail ?? (ago ? `Last output ${ago} ago` : undefined)}
                                     onClick={() => jumpToTerm(s.termId)}
                                 >
                                     <div className="mission-tile-head">
-                                        <span className={"tab-dot claude status-" + s.status} />
+                                        <span className={"tab-dot claude status-" + keyStatus} />
                                         {/* I3: the wrapper is no longer role="button", so this is the
                                             one focusable, announced control for "jump to this session" -
                                             without it, a screen-reader user would have no way to reach
@@ -448,24 +493,43 @@ export function MissionControl(): JSX.Element {
                                     )}
                                     {(st.actions.length > 0 || canReply) && (
                                         <div className="mtile-actions" onClick={(e) => e.stopPropagation()}>
-                                            {st.actions.includes("approve") && prompt && (
-                                                <>
-                                                    <button
-                                                        className="ov-approve-yes"
-                                                        data-tip="Send Yes to the agent"
-                                                        onClick={() => respondApproval(s.termId, prompt.approve)}
+                                            {st.actions.includes("approve") &&
+                                                prompt &&
+                                                (sent ? (
+                                                    /* The confirmation that did not exist: the
+                                                       question stays visible (nobody knows yet
+                                                       whether the answer was taken), but the two
+                                                       live buttons are replaced by what was sent,
+                                                       so the natural second press has nothing to
+                                                       hit. It says "sent", never "approved". */
+                                                    <span
+                                                        className="muted small"
+                                                        data-tip={sentTip(sent.keys)}
                                                     >
-                                                        ✓ Approve
-                                                    </button>
-                                                    <button
-                                                        className="ov-approve-no"
-                                                        data-tip="Reject this action"
-                                                        onClick={() => respondApproval(s.termId, prompt.deny)}
-                                                    >
-                                                        ✕ Deny
-                                                    </button>
-                                                </>
-                                            )}
+                                                        {sentLabel(sent.keys)}
+                                                    </span>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            className="ov-approve-yes"
+                                                            data-tip="Send Yes to the agent"
+                                                            onClick={() =>
+                                                                respondApproval(s.termId, prompt.approve)
+                                                            }
+                                                        >
+                                                            ✓ Approve
+                                                        </button>
+                                                        <button
+                                                            className="ov-approve-no"
+                                                            data-tip="Reject this action"
+                                                            onClick={() =>
+                                                                respondApproval(s.termId, prompt.deny)
+                                                            }
+                                                        >
+                                                            ✕ Deny
+                                                        </button>
+                                                    </>
+                                                ))}
                                             {st.actions.includes("review") && (
                                                 <button
                                                     className="mtile-act"
@@ -534,10 +598,23 @@ export function MissionControl(): JSX.Element {
                 <div className="mission-section">
                     <div className="mission-head">
                         <span className="section-label">IN-FLIGHT CHANGES</span>
-                        <span className={"muted small" + (ownership.conflicts > 0 ? " mission-own-warn" : "")}>
+                        {/* The claim and the fact behind it, in the same place. The
+                            count used to be the whole dirty tree seen twice, so it
+                            went red on any dirty repo with two sessions; it now
+                            counts only files that were not there when the sessions
+                            started, and the tip says what that does and does not
+                            prove. See buildOwnership. */}
+                        <span
+                            className={"muted small" + (ownership.conflicts > 0 ? " mission-own-warn" : "")}
+                            data-tip={
+                                ownership.conflicts > 0
+                                    ? `${ownership.conflicts} file${ownership.conflicts === 1 ? "" : "s"} here appeared after two or more sessions in the same working tree had already started. DevDeck can't tell which session wrote them - only that nobody inherited them. Two agents in one working tree overwrite each other.`
+                                    : "Files that appeared after a session started, in that session's working tree. A change that was already there when it launched belongs to the tree, not to the agent."
+                            }
+                        >
                             {ownership.conflicts > 0
                                 ? `${ownership.conflicts} conflict${ownership.conflicts === 1 ? "" : "s"}`
-                                : "who's touching what"}
+                                : "changed since these sessions started"}
                         </span>
                     </div>
                     <div className="mission-own">

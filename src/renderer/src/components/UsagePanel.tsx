@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useStore } from "../store"
+import { keyIsRunning } from "../deck"
+import { useKeyStatus } from "../keyStatus"
 import { Modal } from "./Modal"
 import { useSettings, type UsageEvent } from "../settings"
 import {
@@ -152,6 +154,9 @@ export function UsagePanel(): JSX.Element {
     const termAgents = useStore((s) => s.termAgents)
     const agentStatus = useStore((s) => s.agentStatus)
     const jumpToTerm = useStore((s) => s.jumpToTerm)
+    // Every claim about a session on this panel reads this, not `s.status` -
+    // see the `running` count below.
+    const keyStatusOf = useKeyStatus()
 
     // The run ledger: finished runs only, newest first, read once when the panel
     // opens. `runs` is the stable array everything below derives from - the
@@ -189,6 +194,20 @@ export function UsagePanel(): JSX.Element {
         () => agentSessions(),
         [agentSessions, tabsByProject, termAgents, agentStatus]
     )
+    // Sessions with a process behind them. `live` is agent TABS: a restored or
+    // exited session is still one, so the card read "3 running now" for three
+    // panes that had started nothing - the same lie Mission's header already
+    // stopped telling, told by a panel about MONEY. Not memoized on purpose:
+    // it is a loop over a handful of sessions, and the derivation reads a module
+    // Map (termExit) that a memo could serve a stale answer for.
+    //
+    // The list below is filtered too, not just the count. "Running now" is a
+    // claim made by the heading, and a session with no process is not spending
+    // anything - it has no open usage event either, so it rendered as a row
+    // with a blank duration under a title that said it was running. The deck,
+    // Mission and Overview are where a dead session is meant to be seen, and
+    // all three now say so in form.
+    const running = live.filter((s) => keyIsRunning(keyStatusOf(s)))
     // Map a running session to its open log event (to read its start time).
     const openByTerm = useMemo(() => {
         const m: Record<string, UsageEvent> = {}
@@ -359,7 +378,7 @@ export function UsagePanel(): JSX.Element {
                         <div className="usage-card-label">agent time</div>
                     </div>
                     <div className="usage-card">
-                        <div className="usage-card-num">{live.length}</div>
+                        <div className="usage-card-num">{running.length}</div>
                         <div className="usage-card-label">running now</div>
                     </div>
                 </div>
@@ -478,22 +497,23 @@ export function UsagePanel(): JSX.Element {
                     </div>
                 )}
 
-                {live.length > 0 && (
+                {running.length > 0 && (
                     <div className="usage-section">
                         <div className="usage-section-title">Running now</div>
                         <div className="usage-live">
-                            {live.map((s) => {
+                            {running.map((s) => {
                                 const ev = openByTerm[s.termId]
+                                const status = keyStatusOf(s)
                                 return (
                                     <div
                                         key={s.termId}
-                                        className={"usage-live-row status-" + s.status}
+                                        className={"usage-live-row status-" + status}
                                         onClick={() => {
                                             jumpToTerm(s.termId)
                                             close(false)
                                         }}
                                     >
-                                        <span className={"tab-dot claude status-" + s.status} />
+                                        <span className={"tab-dot claude status-" + status} />
                                         <span className="usage-live-agent">{s.badge}</span>
                                         <span className="usage-live-tab">{s.sessionName}</span>
                                         <span className="usage-live-proj muted small">

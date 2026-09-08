@@ -105,12 +105,33 @@ export function TooltipLayer(): JSX.Element | null {
             elRef.current = null
             hideTip()
         }
+        // Pressing an INERT control is the one press that must not dismiss its
+        // tip. `aria-disabled` (not `disabled`) keeps such a control hoverable
+        // precisely so its reason can be read - and this handler used to hide
+        // that reason on mousedown, in capture, before the guarded click even
+        // ran. So a stranger who hovered a dead view key, waited out the 420ms,
+        // read "Terminal - open a project to use the views" and then did the
+        // natural next thing had the explanation withdrawn by the same gesture
+        // that produced the silent no-op. Nothing will change on screen from
+        // this press, so nothing about the frame should change: the tip stays,
+        // and if the press came before the hover delay elapsed it is shown now,
+        // which is the only moment it is certainly wanted.
+        const onMouseDown = (e: MouseEvent): void => {
+            const el = (e.target as Element)?.closest?.('[data-tip][aria-disabled="true"]')
+            if (!el) {
+                hide()
+                return
+            }
+            clearTimeout(timer.current)
+            elRef.current = el
+            show(el, true)
+        }
         document.addEventListener("mouseover", onOver)
         document.addEventListener("mouseout", onOut)
         window.addEventListener("focusin", onFocusIn)
         window.addEventListener("focusout", onFocusOut)
         window.addEventListener("scroll", hide, true)
-        window.addEventListener("mousedown", hide, true)
+        window.addEventListener("mousedown", onMouseDown, true)
         window.addEventListener("keydown", hide, true)
         return () => {
             document.removeEventListener("mouseover", onOver)
@@ -118,7 +139,7 @@ export function TooltipLayer(): JSX.Element | null {
             window.removeEventListener("focusin", onFocusIn)
             window.removeEventListener("focusout", onFocusOut)
             window.removeEventListener("scroll", hide, true)
-            window.removeEventListener("mousedown", hide, true)
+            window.removeEventListener("mousedown", onMouseDown, true)
             window.removeEventListener("keydown", hide, true)
             clearTimeout(timer.current)
         }

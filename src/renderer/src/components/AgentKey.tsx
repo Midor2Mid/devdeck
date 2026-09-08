@@ -2,6 +2,8 @@ import { useState } from "react"
 import type { DragEvent } from "react"
 import { useStore } from "../store"
 import type { AnySession } from "../store"
+import { deckKeyStatusLabel, shortSessionLabel } from "../deck"
+import { useKeyStatus } from "../keyStatus"
 import { getTail } from "../missionTail"
 
 export function AgentKey({
@@ -18,6 +20,9 @@ export function AgentKey({
     const seen = useStore((s) => s.seen)
     const dragPayload = useStore((s) => s.dragPayload)
     const setDragPayload = useStore((s) => s.setDragPayload)
+    // Carries the `paneHold` subscription that repaints this key when its
+    // process goes away - see useKeyStatus.
+    const keyStatusOf = useKeyStatus()
     const [renaming, setRenaming] = useState(false)
     const [text, setText] = useState("")
     const [over, setOver] = useState(false)
@@ -30,15 +35,23 @@ export function AgentKey({
         setRenaming(false)
     }
 
+    // What this key may claim. `session.status` is what the agent last DID; it
+    // survives the process that did it, so a restored or exited session came
+    // back as `idle` - the resting form of a live agent - on the one surface
+    // that is always on screen. Derived through `hasProcess`, the same
+    // predicate behind Mission's "N running" and its NOT RUNNING chip, so the
+    // deck cannot disagree with the tile about the same session again.
+    const keyStatus = keyStatusOf(session)
+
     const keyClass =
         "deck-key" +
         (active ? " active" : "") +
         (compressed ? " compressed" : "") +
-        (session.status === "waiting" ? " key-waiting" : "") +
+        (keyStatus === "waiting" ? " key-waiting" : "") +
         // Acknowledged, not resolved: the status is untouched, so the key keeps
         // saying `waiting` and only its FORM changes.
         (seen[session.termId] ? " key-seen" : "") +
-        (session.status === "attention" ? " key-attn" : "") +
+        (keyStatus === "attention" ? " key-attn" : "") +
         (dragPayload ? " drop-active" : "") +
         (over ? " drag-over" : "")
 
@@ -63,12 +76,24 @@ export function AgentKey({
     }
     const tip = dragPayload
         ? "Drop to insert into this session"
-        : `${session.sessionName} · ${session.projectName} - ${session.status}` +
+        : `${session.sessionName} · ${session.projectName} - ${deckKeyStatusLabel(keyStatus)}` +
           (peek ? `\n${peek}` : "")
 
-    const dot = <span className={"tab-dot claude status-" + session.status} />
-    const badge = <span className="agent-badge sm">{session.badge}</span>
-    const attention = session.status === "attention" && <span className="claude-attn">!</span>
+    const dot = <span className={"tab-dot claude status-" + keyStatus} />
+    // Compression takes the name away, and the badge names the agent, not the
+    // session — so a compressed key carries the name's distinguishing tail
+    // inside the same pill. Only when compressed: the expanded key already
+    // shows the whole name, and repeating its tail beside it says nothing.
+    const ord = compressed ? shortSessionLabel(session.sessionName, session.badge) : ""
+    const badge = (
+        <span className="agent-badge sm">
+            {session.badge}
+            {ord && <span className="deck-key-ord">{ord}</span>}
+        </span>
+    )
+    // Rendered outside the `!compressed` guard below, deliberately: attention is
+    // the one thing a key must still be able to say when it has lost its name.
+    const attention = keyStatus === "attention" && <span className="claude-attn">!</span>
 
     // While renaming, the key holds an <input>, which must not be nested
     // inside a <button> — render the container as a plain <div> for that

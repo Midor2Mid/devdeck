@@ -31,6 +31,8 @@ export type TileTone = "attention" | "warn" | "neutral" | "quiet"
 export type TileStateKind =
     | "needs-you"
     | "exited"
+    /** A tab with no process behind it: restored, or waiting to be restarted. */
+    | "not-running"
     | "asking"
     | "stalled"
     | "changed"
@@ -66,6 +68,15 @@ export interface TileStateInput {
     awaited: boolean
     /** Is the session still on the grid (`!!termAgents[id]`)? */
     alive: boolean
+    /**
+     * The pane's `paneHold` entry: "resume" after a workspace restore,
+     * "restart" after an exit, `undefined` when neither.
+     *
+     * The same fact `hasProcess` reads, and now the classifier's too. It was an
+     * argument to that predicate alone, so the header could say "0 running"
+     * while every tile under it still described a live agent.
+     */
+    held: "resume" | "restart" | undefined
 }
 
 export interface TileState {
@@ -179,7 +190,33 @@ function baseTileState(i: TileStateInput, now: number): TileState {
     //    died but whose tab is still open, so without this every corpse would
     //    also read as stalled.
     if (i.exitCode !== undefined) return exited(i.exitCode, i.changedCount)
-    // 3. It wants something, but nothing in the tail parses as a prompt we can
+    // 3. Nothing is running behind this tab, and there is no exit code to
+    //    describe why: a pane restored from the last run, whose pty died with
+    //    the previous process. Every state below is a claim about a RUNNING
+    //    agent, and QUIET most of all - its own note says it "reads as nothing
+    //    happened here", which is how a restart left three dead sessions
+    //    looking idle while the panes behind them said "Restored from your last
+    //    run." `hasProcess` could already answer this for the header's count;
+    //    the classifier was simply never asked.
+    if (i.held !== undefined) {
+        return {
+            kind: "not-running",
+            chip: "NOT RUNNING",
+            // Hollow, against exited's filled square: nothing is in there. The
+            // chip has to read in FORM as well as tone across all six skins,
+            // and "quiet" is the correct tone - a relaunch is not a failure.
+            mark: "○",
+            tone: "quiet",
+            detail:
+                i.held === "resume"
+                    ? "Restored from your last run - it has no process yet. Open the session to start it."
+                    : "Its process is gone. Open the session to start it again.",
+            // No action here can be honest: nothing is listening, and a
+            // restored session has no baseline, so it has no changes to review.
+            actions: []
+        }
+    }
+    // 4. It wants something, but nothing in the tail parses as a prompt we can
     //    answer with a keystroke. A sentence can still answer it.
     if (i.status === "attention") {
         return {
@@ -191,7 +228,7 @@ function baseTileState(i: TileStateInput, now: number): TileState {
             actions: ["reply"]
         }
     }
-    // 4. Silent, alive, and something is actually waiting on it.
+    // 5. Silent, alive, and something is actually waiting on it.
     if (isStalled(i.lastAt, i.alive, i.awaited, now)) {
         const ago = relTime(now, i.lastAt)
         return {
@@ -203,7 +240,7 @@ function baseTileState(i: TileStateInput, now: number): TileState {
             actions: ["reply"]
         }
     }
-    // 5. It produced something you have not looked at. Above WORKING on
+    // 6. It produced something you have not looked at. Above WORKING on
     //    purpose: work that exists is reviewable whether or not it is finished.
     //    A null count skips this rule rather than being read as 0: the tile
     //    makes no file claim at all when the read failed, instead of quietly
@@ -218,7 +255,7 @@ function baseTileState(i: TileStateInput, now: number): TileState {
             actions: ["review"]
         }
     }
-    // 6. Finished a turn while you were looking elsewhere. Not a question and
+    // 7. Finished a turn while you were looking elsewhere. Not a question and
     //    not a stall — the app's own soft signal that it is your move. Below
     //    CHANGED because reviewable work is the more useful thing to say, and
     //    NOT accent-toned: a live question is what the accent is saved for, and
@@ -238,11 +275,11 @@ function baseTileState(i: TileStateInput, now: number): TileState {
             actions: ["reply"]
         }
     }
-    // 7. Mid-turn. Nothing to decide.
+    // 8. Mid-turn. Nothing to decide.
     if (i.status === "working") {
         return { kind: "working", chip: "WORKING", mark: "▶", tone: "neutral", actions: [] }
     }
-    // 8. The resting state of an agent that finished and handed back to you.
+    // 9. The resting state of an agent that finished and handed back to you.
     const ago = relTime(now, i.lastAt)
     return {
         kind: "quiet",
@@ -253,25 +290,6 @@ function baseTileState(i: TileStateInput, now: number): TileState {
     }
 }
 
-/**
- * Does this session want something from you?
- *
- * The ONE predicate behind every "who wants you" count in the frame — the deck
- * bar's flag and Mission's header both read it, because two numbers for one
- * question, 200px apart, disagreeing by construction is a defect this app has
- * already fixed once.
- *
- * `seen` is a third ARGUMENT rather than a field on the input, and that is the
- * point: `resolveTileState` takes the input, so a field there could be read by
- * the classifier and would put a visibility-derived fact back into what a
- * session IS. As an argument to this predicate alone, it structurally cannot.
- *
- * Deliberately over the raw facts rather than the resolved chip kind. A
- * `waiting` session that has also changed files resolves to CHANGED — the more
- * useful single label for a tile — but it still wants you, and the deck bar has
- * no changed count with which to agree. Counting off the kind could therefore
- * never match; counting off the facts can.
- */
 /**
  * Does this session have a process behind it?
  *
@@ -297,31 +315,72 @@ export function hasProcess(
     return held === undefined
 }
 
+/**
+ * Does this session want something from you?
+ *
+ * The ONE predicate behind every "who wants you" count in the frame — the deck
+ * bar's flag and Mission's header both read it, because two numbers for one
+ * question, 200px apart, disagreeing by construction is a defect this app has
+ * already fixed once.
+ *
+ * `seen` is a third ARGUMENT rather than a field on the input, and that is the
+ * point: `resolveTileState` takes the input, so a field there could be read by
+ * the classifier and would put a visibility-derived fact back into what a
+ * session IS. As an argument to this predicate alone, it structurally cannot.
+ *
+ * Deliberately over the raw facts rather than the resolved chip kind. A
+ * `waiting` session that has also changed files resolves to CHANGED — the more
+ * useful single label for a tile — but it still wants you, and the deck bar has
+ * no changed count with which to agree. Counting off the kind could therefore
+ * never match; counting off the facts can.
+ *
+ * ACKNOWLEDGEMENT DIMS THE NAG, NOT THE STATE (the owner's ruling). A session
+ * you have looked at and deliberately left drops out of this count while its
+ * dot goes on reporting `waiting` / `attention` — `seen` is read here and by
+ * one CSS class, and nothing anywhere rewrites the status. Both halves are
+ * required: rewriting the state was the original bug (a glance erased the `!`
+ * forever), and counting a session you have already acknowledged is the nag
+ * that made the deck's flag worth ignoring.
+ *
+ * Until 2026-09-08 this predicate exempted `attention` and `prompt` from
+ * `seen` on the argument that looking at a question does not answer it. True,
+ * and beside the point: nothing here claims it was answered. The cost was that
+ * `projectSessionCounts` (deck.ts) already honoured the ruling, so the switcher
+ * card and the deck flag disagreed about the same word — which is the defect
+ * this predicate exists to make impossible.
+ */
 export function wantsYou(
-    i: Pick<TileStateInput, "status" | "prompt" | "exitCode" | "lastAt" | "awaited" | "alive">,
+    i: Pick<
+        TileStateInput,
+        "status" | "prompt" | "exitCode" | "lastAt" | "awaited" | "alive" | "held"
+    >,
     now: number,
     seen = false
 ): boolean {
-    // A dead process wants nothing.
-    if (i.exitCode !== undefined) return false
-    // Blocked on a question. Looking at it does not answer it, so `seen` buys
-    // nothing here - only the two states you can genuinely leave alone are
-    // acknowledgeable.
-    if (i.status === "attention") return true
-    // An unanswered permission prompt, by the SAME rule - and `prompt` was not
-    // in this input at all until 2026-09-07, which is how the two disagreed.
+    // Nothing behind the tab wants anything - through `hasProcess`, the single
+    // derivation the dot and the header's "N running" also read, so the flag
+    // cannot nag about a session the deck is already drawing as not-running.
+    // `exitCode` alone was the old test, and it missed `held`: a restored or
+    // exit-held pane has no pty either. That was harmless only because a
+    // restore does not bring statuses back with it - a latent bug resting on an
+    // accident somewhere else, which is not a guarantee.
+    if (!hasProcess(i, i.held)) return false
+    // A stall is the ONE thing `seen` may not dim, and not because it is
+    // louder. `seen` is event-scoped for the two hand-over states: it is
+    // granted against a transition and `setStatus` clears it on the next one,
+    // so acknowledging `waiting` acknowledges THAT hand-back and no future one.
+    // A stall arrives with no transition at all - that is what a stall IS - so
+    // nothing would ever clear the acknowledgement, and dimming it would be the
+    // opposite failure: forgetting a stuck agent silently, for as long as it
+    // stays stuck.
+    if (isStalled(i.lastAt, i.alive, i.awaited, now)) return true
+    if (seen) return false
+    // Blocked on a bell, blocked on an unanswered permission prompt, or
+    // finished its turn and handed back. Three ways to want you and one count.
     //
-    // `seen` is granted when a session goes `waiting` while you are looking at
-    // it (store.ts:674), and that rule is right: watching an agent hand back is
-    // knowing about it. But the detector can then find a QUESTION in that same
-    // silence. The tile promoted and drew live Approve/Deny; this predicate
-    // could not see the prompt, so the deck flag and Mission's header both read
-    // zero while a tile on screen asked to be answered. One count per question
-    // means this one, and it was answering a different question from the tile.
-    if (i.prompt) return true
-    // Finished its turn and handed back. Once you have looked at it (or acted on
-    // it) it is a thing you know about and deliberately left, so it stops
-    // counting. It is still `waiting` - this changes the COUNT, never the state.
-    if (i.status === "waiting") return !seen
-    return isStalled(i.lastAt, i.alive, i.awaited, now)
+    // `prompt` was not in this input at all until 2026-09-07, which is how the
+    // tile and the counters came to answer different questions: the tile
+    // promoted to NEEDS YOU and drew live Approve/Deny while the deck flag and
+    // Mission's header both read zero.
+    return i.status === "attention" || !!i.prompt || i.status === "waiting"
 }

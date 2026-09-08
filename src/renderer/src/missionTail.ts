@@ -6,9 +6,10 @@
 
 import { cleanTail, lastLines, peekLine, CARRY_MAX, OSC, CSI, OTHER, CTRL } from "../../shared/tail"
 export { cleanTail, lastLines, peekLine, CARRY_MAX }
-import type { AgentStatus, AnySession } from "./store"
+import type { AnySession } from "./store"
 import type { ApprovalPrompt } from "./approval"
 import type { DecisionSnapshot, DecisionView } from "../../shared/decision"
+import type { DeckKeyStatus } from "./deck"
 
 const tails = new Map<string, string>()
 const lastAt = new Map<string, number>()
@@ -265,23 +266,50 @@ export function markLaunched(id: string, now = Date.now()): void {
     if (!lastAt.has(id)) lastAt.set(id, now)
 }
 
-const RANK: Record<AgentStatus, number> = { attention: 0, waiting: 1, working: 2, idle: 3 }
+const RANK: Record<DeckKeyStatus, number> = {
+    attention: 0,
+    waiting: 1,
+    working: 2,
+    idle: 3,
+    // Last, and it is the reason this is keyed on the DERIVED status. A session
+    // whose process is gone kept its last status - `attention` outlives the
+    // agent that raised it - so a corpse took the first slot in Mission and in
+    // Overview, above every agent still running. Attention-first is the right
+    // order; the thing it sorted was the wrong fact.
+    "not-running": 4
+}
 
 /**
  * Where a session sits in the follow order, as a number.
  *
- * Exported for the one caller that has to rank a *group* of sessions rather than
- * sort a list of them (Overview's grid). It exists so that caller can read this
- * order instead of writing its own: a private rank in one surface is how two
- * surfaces come to show the same sessions in different orders.
+ * Takes the DERIVED status (`useKeyStatus` / `deckKeyStatus`) as an argument
+ * rather than reading `s.status`, for the reason spelled out in `promptFor`
+ * below: `s.status` is what the agent last DID and it outlives the process
+ * that did it. A caller therefore has to derive a status before it can rank
+ * anything, and `hasProcess` stays derived in exactly one place.
+ *
+ * Exported for the one caller that has to rank a *group* of sessions rather
+ * than sort a list of them (Overview's grid). It exists so that caller can read
+ * this order instead of writing its own: a private rank in one surface is how
+ * two surfaces come to show the same sessions in different orders.
  */
-export const followRank = (s: AnySession): number => RANK[s.status]
+export const followRank = (status: DeckKeyStatus): number => RANK[status]
 
-/** Order sessions attention-first, then waiting-on-you, then working, then idle. */
-export function sortForFollow(sessions: AnySession[]): AnySession[] {
+/**
+ * Order sessions attention-first, then waiting-on-you, then working, then idle,
+ * then the ones with nothing behind them. Stable within a rank.
+ *
+ * `keyStatus` is the shared resolver, passed in the same shape
+ * `projectSessionCounts` (deck.ts) takes it - this module is pure and store-
+ * free, and the derivation needs a `paneHold` subscription only a component has.
+ */
+export function sortForFollow(
+    sessions: AnySession[],
+    keyStatus: (s: AnySession) => DeckKeyStatus
+): AnySession[] {
     return sessions
         .map((s, i) => [s, i] as const)
-        .sort((a, b) => followRank(a[0]) - followRank(b[0]) || a[1] - b[1])
+        .sort((a, b) => followRank(keyStatus(a[0])) - followRank(keyStatus(b[0])) || a[1] - b[1])
         .map(([s]) => s)
 }
 
@@ -298,10 +326,19 @@ export function sortForFollow(sessions: AnySession[]): AnySession[] {
  * (`refreshDecision`); keeping it here too is deliberate belt-and-braces, and
  * it is what makes this function safe no matter how the cache was filled.
  *
+ * `status` is the DERIVED status (`useKeyStatus` / `deckKeyStatus`), and it is a
+ * required argument rather than `s.status` read from the session, because the
+ * sentence above is the whole point: answering sends a keystroke to a LIVE
+ * agent. `s.status` outlives the process, so Overview offered live Approve /
+ * Deny buttons on a `not-running` session, and the tile's own precedence puts
+ * `prompt` above its NOT-RUNNING rule - so a corpse holding a decision would
+ * have read NEEDS YOU there too. Gating here fixes every consumer at once, and
+ * a caller now has to derive a status before it can even ask the question.
+ *
  * Reads the module cache, never IPC: callers run it once per tile per render.
  */
-export function promptFor(s: AnySession): ApprovalPrompt | null {
-    if (!s.isAgent || (s.status !== "attention" && s.status !== "waiting")) return null
+export function promptFor(s: AnySession, status: DeckKeyStatus): ApprovalPrompt | null {
+    if (!s.isAgent || (status !== "attention" && status !== "waiting")) return null
     const d = decisions.get(s.termId)
     if (!d) return null
     // Main always mints exactly two options, Approve then Deny (refreshDecision).

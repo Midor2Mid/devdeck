@@ -128,6 +128,26 @@ export function captureBaseline(id: string, cwd: string): void {
 }
 
 /**
+ * Capture a baseline for a session that has none — the LAUNCH path's capture.
+ *
+ * `captureBaseline` overwrites on purpose: a dispatch, or a card dragged back
+ * into `doing`, is a deliberate statement that the work that came before stops
+ * counting. A launch is not that statement. Resume and restart reuse the same
+ * termId, so a launch that overwrote would re-inherit the files this very
+ * session created and turn a real conflict silent — the false-negative
+ * direction, on a path that only runs after a crash.
+ *
+ * An outstanding capture counts as "has one": it was issued for this session
+ * and is about to arrive, so a second read would only race it. Failure is still
+ * failure — an unknown baseline stays unknown, which every reader takes as "no
+ * evidence" rather than "nothing changed".
+ */
+export function ensureBaseline(id: string, cwd: string): void {
+    if (baselines.has(id) || captures.has(id)) return
+    captureBaseline(id, cwd)
+}
+
+/**
  * Adopt a dirty set the caller already has as this session's baseline.
  *
  * The self-heal for an unknown baseline: rather than leaving a card stranded in

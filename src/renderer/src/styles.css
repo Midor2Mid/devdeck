@@ -1105,11 +1105,51 @@ button .ic,
 .claude-attn {
     color: var(--accent);
     font-weight: 700;
+    /* The attention glyph must never be the thing that gets squeezed: flex
+       items shrink by default, and on a COMPRESSED key this glyph is the only
+       mark separating "needs you" from "waiting". */
+    flex: none;
 }
 
-/* Claude status dots (shared by deck keys + terminal tabs) */
+/* Claude status dots (shared by deck keys + terminal tabs).
+   Three live states, three FORMS, because hue cannot carry them here: --clay
+   and --accent sit within a hair of each other in both Sumi and Washi
+   (DESIGN.md, Colors), and the accent is a user choice that can be set to
+   either. So:
+     idle        filled --clay CIRCLE, faint
+     working     filled --clay CIRCLE, full  (+ opacity pulse)
+     waiting     HOLLOW --text DIAMOND, static
+     attention   filled --accent CIRCLE + a static 3px halo, plus the `!` glyph
+     not-running a flat --muted BAR - derived, not a status: no process is
+                 behind the tab at all (see deckKeyStatus), and every form
+                 above is a claim about a live one
+   The hollow ring existed but lived behind `prefers-reduced-motion`, so in a
+   still frame - a screenshot, a glance, an animation between its extremes -
+   waiting and working were the same filled dot of the same colour. It is
+   unconditional and static now, and `prefers-reduced-motion` no longer decides
+   anything about it: nothing here has to be seen moving to be read. */
 .tab-dot.status-idle {
     opacity: 0.35;
+}
+/* No process behind this key: restored from the last run, or exited. The SAME
+   fact `hasProcess` answers for Mission's "N running" and its NOT RUNNING chip
+   (deckKeyStatus in deck.ts), so the two surfaces cannot describe one session
+   differently again - the deck used to paint this `status-idle`, the resting
+   form of a LIVE agent, while the pane behind it said "Restored from your last
+   run."
+   A flat BAR rather than a dot, because every other form is taken and every
+   other form means alive: a filled circle = running, a hollow diamond = waiting
+   on you. A dead session must read as neither in a still frame, and a flatline
+   is the one shape that cannot be mistaken for either at 6px in any of the six
+   skins. --muted, never the accent: the accent marks something you can act on,
+   and the act here lives in the pane's own Start gate.
+   The bar and a SEEN waiting mark share this ink (--muted), so form is the only
+   thing separating them - and since waiting turned angular that separation went
+   from circle-vs-bar to diamond-vs-bar, which is the wider of the two. */
+.tab-dot.status-not-running {
+    background: var(--muted);
+    height: 2px;
+    border-radius: 1px;
 }
 .tab-dot.status-working {
     animation: dot-pulse 1.2s ease-in-out infinite;
@@ -1119,24 +1159,66 @@ button .ic,
     opacity: 1;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
-/* waiting: finished a turn, your move — a calmer breathing ring than attention. */
+/* waiting: finished a turn, your move. A HOLLOW mark is a different shape from
+   attention's filled dot + halo, not a dimmer one. The dot is 6px, so the ring
+   is 1.5px: at 2px anti-aliasing fills the ~2px hole and it reads as a filled
+   dot again.
+   --text, NOT the accent, for two reasons that arrived together.
+   (1) CONTRAST. The accent ring measured 2.92:1 on Washi's --bg-2 - under the
+   3:1 floor for a non-text mark, and the weakest mark in the app at 1x on the
+   one light theme. No per-theme accent value fixes that, because the accent is
+   a user choice: whatever we shipped, someone can pick a cream. --text is by
+   definition the ink a theme paints its ground AGAINST, so it clears the floor
+   in every theme for every accent - 15.0:1 Slate, 12.2:1 Sumi, 9.8:1 Washi.
+   (2) THE ACCENT BUDGET. Mission's chip tier gives WAITING the `neutral` tone
+   ("--text, no colour spend") because a live question is what the accent is
+   saved for - and one Mission tile renders that chip and this dot 20px apart.
+   They now read the SAME token, so the tile makes one statement instead of two.
+   The accent still marks a waiting session on the deck, but only on the NAG
+   channel (`.deck-key.key-waiting`'s breathing edge, which `key-seen` takes
+   away) - never on the mark that says what the session IS.
+   Static, and the halo went with the animation: `attention` is now the only dot
+   with a halo and `working` the only dot that moves, so each form is unique on
+   both axes - and this state reads identically in a still frame and in motion,
+   which is the bar this file set for itself one paragraph up.
+   A DIAMOND rather than a circle, which is the fix for the one thing --text got
+   wrong. A hollow CIRCLE of text ink, 4px left of a --text/600 session name on
+   the same baseline, IS a typographic bullet - `◦` is a bullet character - and
+   it was read as a leading bullet before the title rather than as a status, on
+   Mission's tiles, on the active deck key and on Overview's focus header. A
+   status mark that reads as decoration has stopped being a status mark. Ink
+   cannot fix that: --text is the most contrast a theme has, and the accent is
+   exactly what was taken away above for measuring 2.92:1. So the fix is FORM -
+   no bullet glyph is a diamond, so a 45deg square ring cannot be taken for one
+   at any size. It also finishes reconciling the tile with itself: Mission's
+   chip vocabulary already fixes `◇` as the glyph for WAITING (DESIGN.md,
+   Mission tile state chip) while the dot 20px away was a circle, so the tile
+   said one state twice in two shapes. Chip and dot now agree on shape as well
+   as on token.
+   Geometry: the 6x6 box and the 1.5px ring do not change, so the hole is the
+   same 3x3 it always was - only the corner radius and the rotation move, and
+   contrast is untouched (still 15.03 / 12.17 / 9.82). The rotation grows the
+   painted extent to 8.49px inside a 6px flex slot; that is deliberate and
+   precedented on this very element, since `.status-attention`'s 3px halo has
+   always painted 12px of extent in the same containers - the tightest gap it
+   lives in is the deck key's 6px. A transform is not motion: nothing here
+   animates, and `prefers-reduced-motion` still decides nothing about it. */
 .tab-dot.status-waiting {
-    background: var(--accent);
+    background: transparent;
     opacity: 1;
-    animation: dot-breathe 2s ease-in-out infinite;
+    box-shadow: inset 0 0 0 1.5px var(--text);
+    /* Overrides `.tab-dot`'s 50% at (0,2,0) vs (0,1,0), so source order decides
+       nothing. 1px, matching the `not-running` bar: it takes the spikiness off
+       the four points without rounding the mark back toward a circle. */
+    border-radius: 1px;
+    transform: rotate(45deg);
 }
-@keyframes dot-breathe {
-    0%,
-    100% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 28%, transparent);
-    }
-    50% {
-        box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 6%, transparent);
-    }
-}
-/* The key of a session waiting on you gets a soft breathing accent edge. */
+/* The key of a session waiting on you gets a soft breathing accent edge.
+   Deliberately not a border: `button.deck-key` at the end of this file resets
+   `border` to none, so a `border-color` set here computes against a 0-width
+   border and paints nothing. One used to be set here and was pure decoration in
+   the source - the inset box-shadow is the entire marker. */
 .deck-key.key-waiting {
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--border, transparent));
     animation: key-breathe 2s ease-in-out infinite;
 }
 @keyframes key-breathe {
@@ -1149,44 +1231,63 @@ button .ic,
     }
 }
 /* Acknowledged: you have looked at this one, or answered it, since it last
-   changed. The state is UNCHANGED — it is still `waiting` — so the hue is
-   unchanged too and the difference is carried in form, exactly as the
-   reduced-motion rules below do it: the breathe stops and the dot becomes a
-   hollow ring rather than a filled one. Nothing else in the app reads `seen`
-   except the wants-you count; if a second rule appears here that changes what a
-   session IS, the acknowledgement axis has become a state and the design is
-   broken. */
+   changed. The state is UNCHANGED - it is still `waiting`, and the ring still
+   says so - so the acknowledgement dims the nag and never the fact: the key's
+   edge stops breathing and goes, and the dot's ring drops from --text to
+   --muted while keeping its hollow FORM.
+   The line a `seen` rule may not cross is the dot's FORM, not its ink. Form is
+   what classifies - a filled circle = alive, a hollow diamond = your move, a
+   flat bar = nothing running - and a `seen` rule that changed it would put a
+   visibility-derived fact back into what a session IS. Ink is loudness, and dimming it is the same move
+   `.key-attn.key-seen .claude-attn` below already makes on the `!`.
+   Ink alone has to be enough here, because it is all there is: the dot carries
+   `waiting` with one mark and there is no second glyph to thin. It is enough by
+   a wide margin - --text vs --muted is 2.15:1 (Slate), 2.22:1 (Sumi), 2.20:1
+   (Washi), where the shipped `!` precedent's accent -> --muted is 1.25:1 in
+   Slate and needed the weight change to carry.
+   This replaces `animation: none`, which was the whole of the acknowledgement
+   on this dot and was therefore invisible in a still frame: at the breathing
+   keyframe's rest point a seen and an unseen waiting dot were pixel-identical,
+   so the axis existed only while you watched it move. Under
+   `prefers-reduced-motion` it WAS distinguishable and under normal motion it
+   was not - the guarantee backwards. */
 .deck-key.key-waiting.key-seen {
     animation: none;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+    box-shadow: none;
 }
 .deck-key.key-seen .tab-dot.status-waiting {
-    animation: none;
-    background: transparent;
-    box-shadow: inset 0 0 0 1.5px var(--accent);
+    box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+/* The same axis for the OTHER state you can acknowledge, and the same division
+   of labour: the acknowledgement dims the NAG, never the state. `.key-attn` had
+   no rule at all, so answering a prompt or walking to the pane changed nothing
+   on the key - the double-press this app is organised against.
+   The state here is the DOT (filled accent + halo) and it is untouched at full
+   strength, so the key still truthfully says this session is asking. What goes
+   quiet is the `!` - the redundant shout on top of a dot that already carries
+   the fact, and the loudest thing on the key. Hue AND weight, because hue alone
+   survives neither the six skins nor a colour-vision difference: at 12px a `!`
+   is a vertical stroke, and 700 -> 500 visibly thins it.
+   A new bell re-raises this by itself: `setStatus` clears `seen` on a fresh
+   attention transition, so this can only ever be quiet about a bell you have
+   already dealt with. The dot here needs no dimming at all, because the `!` is
+   the second mark `waiting` does not have - and the same line applies either
+   way: a `seen` rule may dim ink, never change a dot's FORM. */
+.deck-key.key-attn.key-seen .claude-attn {
+    color: var(--muted);
+    font-weight: 500;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .tab-dot.status-waiting,
+    /* Only the motion is withdrawn, never a distinction. The waiting DOT is
+       static either way now, so there is nothing to restore on it; the waiting
+       KEY keeps an edge, frozen at the breathe's strong end, so the nag still
+       reads with no animation running at all.
+       `.deck-key.key-waiting.key-seen`'s `box-shadow: none` is (0,3,0) and
+       still wins over the (0,2,0) rule here. */
     .deck-key.key-waiting {
         animation: none;
-    }
-    .deck-key.key-waiting {
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
-    }
-    /* Without the breathe there is no form left here at all: measured, `waiting`
-       and `working` then differ by a 0.15 OPACITY step (1 vs 0.85) on the same
-       fill — worse than a hue difference, because there is nothing to name. Note
-       the `background: var(--accent)` on .status-attention/.status-waiting never
-       applies on these dots: `.tab-dot.claude` below sets --clay at equal
-       specificity and later in the file, so every state renders the same colour
-       and form is doing ALL the work.
-       A HOLLOW ring is a different shape from attention's filled dot + 3px halo,
-       not merely a smaller one. The dot is 6px, so the ring is 1.5px: 2px leaves
-       a ~2px hole that anti-aliasing fills in, reading as a dimmer filled dot. */
-    .tab-dot.status-waiting {
-        background: transparent;
-        box-shadow: inset 0 0 0 1.5px var(--accent);
     }
 }
 @keyframes dot-pulse {
@@ -1613,11 +1714,22 @@ button .ic,
     height: 6px;
     border-radius: 50%;
     opacity: 0.85;
+    /* A 6px flex item still shrinks. Inside a .deck-key at its 180px cap a long
+       session name could squeeze the dot toward nothing, erasing the one signal
+       the deck exists to carry. */
+    flex: none;
 }
 .tab-dot.shell {
     background: var(--moss);
 }
-.tab-dot.claude {
+/* Agent identity colour - and only where the STATUS has not claimed the dot.
+   Unscoped, this rule sat ~500 lines below `.tab-dot.status-waiting` and
+   `.tab-dot.status-attention` at equal specificity (0,2,0) and won the tie on
+   source order, so every agent dot painted --clay in every state and the colour
+   axis designed up there never rendered at all - working, waiting and attention
+   measured the same rgb() in every skin. Scoped rather than reordered on
+   purpose: a reorder wins only until the next rule is appended to the file. */
+.tab-dot.claude:not(.status-waiting):not(.status-attention):not(.status-not-running) {
     background: var(--clay);
 }
 .tab-title {
@@ -2233,8 +2345,14 @@ button .ic,
 .ov-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-3);
     border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border)); border-radius: var(--radius-lg, 12px); overflow: hidden; }
 .ov-main-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg); border-bottom: 1px solid var(--border-soft); }
-.ov-main-name { font-weight: 600; font-size: 13px; }
-.ov-main-proj { font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
+/* Same order of giving way as the rail row below: the session name is what you
+   scan for and never wraps, the mono project path is what shrinks. This head is
+   the narrow case on this surface - at a 700px window `.ov-main` is ~390px wide
+   and now also carries the blocked-on-you word - so it needed the rule the rail
+   already had. */
+.ov-main-name { font-weight: 600; font-size: 13px; white-space: nowrap; }
+.ov-main-proj { font-family: var(--font-mono); font-size: 11px; color: var(--faint);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-main-actions { margin-left: auto; }
 .ov-main-body { position: relative; flex: 1; min-height: 0; }
 .ov-rail { width: 280px; flex: none; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
@@ -2261,9 +2379,45 @@ button .ic,
 @media (prefers-reduced-motion: reduce) {
     .ov-ri-close { transition: none; }
 }
-.ov-ri-flag { font-size: 9.5px; margin-top: 5px; letter-spacing: 0.3px; }
-.ov-ri-flag.attention { color: var(--accent); }
-.ov-ri-flag.waiting { color: var(--accent-soft); }
+/* The WORD for a session that is blocked on you, on every Overview session head
+   - the focus header, a grid card's head and a rail row.
+   It used to exist on the rail row only, and that was the hole the waiting dot
+   fell through when its breathing was removed: on the focus header and on a
+   grid card, `waiting` became a static 6px mark beside a --text/600 name with
+   no word, no chip and no motion, on a surface that has no nag channel of its
+   own and so depended on the deck to raise the state at all. DESIGN.md prefers
+   a word to an encoding, these heads have room for one, and the rail had
+   already written both words - so the fix is to say the same thing in the same
+   words on all three rather than invent a fourth marker.
+   --text, weight 600, for BOTH states, and the accent is not spent here at all:
+   the accent's marker on an attention head is the `!` glyph immediately to the
+   left of this word (`.claude-attn`), and colouring the word too was the same
+   spend twice. It was also the last 2.92:1 mark of that family - `--accent` on
+   --bg-2 in Washi, at 9.5px, i.e. a word too faint to read set in the colour
+   that exists to be noticed. As --text it measures 15.03 / 12.17 / 9.82 on
+   --bg-2 and 16.03 / 12.87 / 10.73 on --bg (Slate / Sumi / Washi), and
+   `waiting`'s own former --accent-soft (10.03 / 6.69 / 4.11) goes with it,
+   which is what makes the head agree with the dot: one token for one state.
+   attention still outranks waiting on this line by the `!` beside it and by the
+   words themselves. */
+.ov-flag {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: var(--text);
+    /* Same reason `.claude-attn` is `flex: none`: on a narrow focus header this
+       is the only thing saying the session is blocked on you, so it must not be
+       the item that gets squeezed. */
+    flex: none;
+}
+/* The rail row is not a flex container, so its flag keeps its own line under
+   the head - where the peek line and the Approve block already are. */
+.ov-ri-flag { display: block; margin-top: 5px; }
+/* The status stays on the element as `.attention` / `.waiting` and carries no
+   declarations on purpose: the two WORDS are the difference, and a rule that
+   re-tinted one of them is how the accent came to be spent twice on this line
+   in the first place. It stays in the DOM because it is the hook a style layer
+   would need, and the one a driven check can read back. */
 .ov-ri-peek { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); margin-top: 5px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -2302,6 +2456,16 @@ button .ic,
 .ov-approve-no:hover {
     background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
+/* Replaces `.ov-approve-row` for ANSWERED_MS after a click (answered.ts), so
+   the same click cannot read as confirmed on Mission and unconfirmed here.
+   Padded to roughly the height the two buttons it stands in for occupy: a grid
+   card holds a LIVE terminal, and a row that collapsed for six seconds and grew
+   back would move the thing you are reading. No accent and no border - the
+   accent marks something you can press, and there is nothing here to press. */
+.ov-approve-sent {
+    padding: 5px 0;
+    line-height: 1.3;
+}
 
 /* grid (grouped by project-group, foldable) */
 .ov-grid-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
@@ -2319,6 +2483,12 @@ button .ic,
 .ov-group.collapsed .ov-chev { transform: rotate(-90deg); }
 .ov-grp-mini { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; }
 .ov-grp-mini .tab-dot { width: 7px; height: 7px; }
+/* The mini strip sizes the dot, which would take `status-not-running`'s FORM
+   away with it: a 7px square is not a flatline, and this row is the only place
+   a folded group still reports its sessions. Kept adjacent and at (0,3,0)
+   rather than reordering the canonical rule - the same reason
+   `.tab-dot.claude:not(...)` up at line ~1687 is scoped instead of moved. */
+.ov-grp-mini .tab-dot.status-not-running { height: 2px; }
 .ov-grp-expand { margin-left: auto; font-size: 9px; letter-spacing: 0.4px; text-transform: none; color: var(--faint); opacity: 0; transition: opacity var(--dur-fast, 0.12s) var(--ease, ease); }
 .ov-group-head:hover .ov-grp-expand { opacity: 1; }
 .ov-group.collapsed .ov-grp-expand { opacity: 0.7; }
@@ -2329,8 +2499,9 @@ button .ic,
 .ov-card { display: flex; flex-direction: column; height: 280px; background: var(--bg-3);
     border: 1px solid var(--border-soft); border-radius: var(--radius-lg, 12px); overflow: hidden; }
 .ov-card-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg); border-bottom: 1px solid var(--border-soft); }
-.ov-card-name { font-size: 12px; font-weight: 600; }
-.ov-card-proj { font-family: var(--font-mono); font-size: 10px; color: var(--faint); }
+.ov-card-name { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.ov-card-proj { font-family: var(--font-mono); font-size: 10px; color: var(--faint);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-card-actions { margin-left: auto; display: flex; gap: 2px; }
 .ov-card-body { position: relative; flex: 1; min-height: 0; }
 
@@ -2637,6 +2808,27 @@ button .ic,
 }
 .composer-target input {
     accent-color: var(--accent);
+}
+/* A target with no process behind it. Listed, never selectable - a send is a
+   keystroke into a pty, and there is nothing there to receive it.
+   Tokens only, and no new colour: the row drops to --muted, the hover fill is
+   withdrawn (a row that lights up under the pointer reads as pickable), and
+   the disabled checkbox plus the dot's own flat --muted BAR carry the state in
+   FORM, which is what has to survive all 84 skins. The word beside it does the
+   rest, because a 6px bar and a greyed box say "you cannot", not "why". */
+.composer-target.not-running {
+    color: var(--muted);
+    cursor: default;
+}
+.composer-target.not-running:hover {
+    background: transparent;
+}
+.composer-target-dead {
+    font-size: var(--fs-label);
+    text-transform: uppercase;
+    letter-spacing: var(--ls-label);
+    color: var(--faint);
+    white-space: nowrap;
 }
 .composer-launcher {
     display: flex;
@@ -6061,7 +6253,27 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     padding: 4px 10px;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
+}
+/* The key row scrolls, and past three projects it has to: measured 1154px of
+   content in a 1000px window, with the third project's keys cut mid-word and
+   nothing on screen saying there was more. `scrollbar-width: thin` used to be
+   set here, which makes Chromium ignore the `::-webkit-scrollbar` rules further
+   down this file and draw its own - and what it drew was not visible on the
+   deck at any theme.
+   A scrollbar is the honest affordance for this: it exists exactly when there
+   is more to see, its thumb length says how much, and it costs the row its 8px
+   only while overflowing. Drawn explicitly, with a --border-strong thumb (>=3:1
+   on every theme's ground) rather than the global rule's --border, which is
+   ~1.3:1 against --bg in Slate. */
+.deck-strips::-webkit-scrollbar {
+    height: 8px;
+}
+.deck-strips::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 4px;
+}
+.deck-strips::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
 }
 .deck-strip {
     display: flex;
@@ -6139,6 +6351,25 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 12px;
+}
+/* The name is the part that ellipsizes; neither the badge nor the status dot
+   nor the `!` may shrink to make room for it. */
+.deck-key .agent-badge {
+    flex: none;
+}
+/* Which SESSION, inside the pill that says which AGENT. Compression hides the
+   name, and the badge is per-preset - so five sessions launched from the Claude
+   preset compressed to five identical CLAUDE pills, and the deck could say how
+   many needed you but not which. This is the distinguishing tail of the
+   session's own name (`shortSessionLabel`), so it is always a truncation of
+   what the expanded key shows, never a number invented for the compressed
+   state. --text against the pill's --clay, plus 600 weight: the half that
+   answers "which" is the brighter and heavier one, and the weight is the part
+   that carries it if a theme ever pulls --clay toward --text. */
+.deck-key-ord {
+    margin-left: 3px;
+    color: var(--text);
+    font-weight: 600;
 }
 .deck-add {
     display: grid;

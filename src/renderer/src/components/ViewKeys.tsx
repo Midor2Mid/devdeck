@@ -1,4 +1,6 @@
+import { useRef } from "react"
 import { useStore, type MainView } from "../store"
+import { useToasts } from "../toast"
 import { Icon, type IconName } from "./Icon"
 
 export const DECK_VIEWS: { view: MainView; icon: IconName; name: string; group?: "verify" }[] = [
@@ -41,6 +43,12 @@ export function ViewKeys(): JSX.Element {
     // in a selector is fine, but returning a derived array or object from one
     // spins forever, so the whole file keeps to slices as a habit.
     const projects = useStore((s) => s.projects)
+    const addProject = useStore((s) => s.addProject)
+    const pushToast = useToasts((s) => s.push)
+    const dismissToast = useToasts((s) => s.dismiss)
+    // At most one "nothing happened" toast on screen: seven inert keys must not
+    // be able to stack seven copies of the same sentence.
+    const lastToast = useRef<string | null>(null)
     // With no project every view resolves to the same panel, so a live key
     // would be a control that visibly does nothing. NO key takes the accent
     // underline while off - nothing on screen may claim to be active.
@@ -79,7 +87,26 @@ export function ViewKeys(): JSX.Element {
                     data-tip={off ? `${v.name} - ${OFF_REASON}` : `${v.name} (Ctrl+${i + 1})`}
                     data-tip-pos="top"
                     onClick={() => {
-                        if (off) return
+                        if (off) {
+                            // The reason is on the key, but only in a tooltip
+                            // that wants a 420ms hover - and a stranger clicks
+                            // first. Seven keys that answer a click with
+                            // nothing at all was the product's first ten
+                            // seconds, so the click answers for itself, and the
+                            // answer worth giving is the fix rather than a
+                            // second copy of the reason. `off` is
+                            // `projects.length === 0`, which is exactly the
+                            // condition under which the deck's own empty
+                            // control offers the folder dialog, so this offers
+                            // the same act.
+                            if (lastToast.current) dismissToast(lastToast.current)
+                            lastToast.current = pushToast({
+                                text: `No project is open, so ${v.name} has nothing to show yet.`,
+                                actionLabel: "Open folder…",
+                                onAction: () => void addProject()
+                            })
+                            return
+                        }
                         setView(v.view)
                     }}
                 >

@@ -296,7 +296,14 @@ export function TerminalPane({ termId, initialCommand, cwd, focused, onFocus }: 
             settleStarting()
             writeExitNotice(term, exitCode)
         })
-        const inputSub = term.onData((data) => window.api.pty.input(termId, data))
+        const inputSub = term.onData((data) => {
+            // Answering a question by typing the answer is answering it, and
+            // this is the only path a keystroke takes to a pty - so it is the
+            // only place the store can learn about the commonest act there is.
+            // A Set write, no render: see `actedOn` in store.ts.
+            useStore.getState().notePaneInput(termId)
+            window.api.pty.input(termId, data)
+        })
 
         requestAnimationFrame(() => {
             if (container.clientWidth && container.clientHeight) {

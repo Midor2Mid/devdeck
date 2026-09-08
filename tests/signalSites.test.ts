@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 // The wiring, pinned in source. The whole-branch reviewer commented out ALL
@@ -9,14 +9,22 @@ import { fileURLToPath } from "node:url"
 // thing standing between the shipped behaviour and Task 3's original
 // newTab-only bug was a JSDoc sentence.
 //
-// Two invariants, two shapes. `markLaunched` genuinely belongs on every launch
-// path - stall applies to every session - so it is pinned here, structurally,
-// against the one marker every launch path already has. `captureBaseline` is
-// NOT a launch concern: the baseline is a property of the CARD, and only
-// dispatchBoardTask ever writes task.termId, so it has exactly two card-
-// lifecycle sites and a new launch path needs no change at all. That count is
-// what this file pins; tests/cardReview.test.ts and tests/dispatchBoardTask.ts
-// pin the behaviour of each site.
+// Two invariants, two shapes. Both belong on every launch path now, and they
+// arrive together as `beginAgentSession`, which is pinned here structurally
+// against the one marker every launch path already has.
+//
+// The baseline used to be argued NOT to be a launch concern - "a property of
+// the CARD", with two card-lifecycle sites and nothing needed from a new launch
+// path. `buildOwnership` consults every agent session's baseline now, so the
+// consequence of that narrowing was that a session started any other way had no
+// baseline, `newPathsSince` honestly reported no evidence, and the whole
+// in-flight-changes map went dark on the launch path everyone uses: qa watched
+// six deck-launched agents create a file in one working tree and Mission report
+// nothing through three polls over 40 seconds. What survives of the old
+// argument is the SHAPE of each capture: a dispatch overwrites (it is a
+// statement about what stops counting), a launch only fills a gap. That is two
+// functions, and this file pins both counts; tests/launchBaseline.test.ts,
+// tests/cardReview.test.ts and tests/dispatchBoardTask.ts pin the behaviour.
 
 const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
 const STORE = src("../src/renderer/src/store.ts")
@@ -92,22 +100,44 @@ describe("every agent-launch path stamps a launch instant", () => {
         expect(launchSites.length).toBeGreaterThanOrEqual(4)
     })
 
-    it.each(launchSites)("markLaunched precedes the logUsageStart at line %i", (line) => {
+    it.each(launchSites)("beginAgentSession precedes the logUsageStart at line %i", (line) => {
         // A few lines of slack: the two calls sit together, but the usage call
         // is a multi-line `useSettings.getState().logUsageStart(` on most paths.
         const window = lines.slice(Math.max(0, line - 9), line).join("\n")
-        expect(window).toContain("markLaunched(")
+        expect(window).toContain("beginAgentSession(")
+    })
+
+    it("stamps the launch instant AND the inherited dirty set in that one call", () => {
+        // The whole point of routing five sites through one helper: dropping
+        // either line here silently undoes one of the two fixes on all five
+        // paths at once, and no unit test would notice - they seed their own
+        // signals by calling markLaunched and ensureBaseline directly.
+        const at = linesWith("const beginAgentSession = ")
+        expect(at, "expected one beginAgentSession definition").toHaveLength(1)
+        const body = lines.slice(at[0] - 1, at[0] + 3).join("\n")
+        expect(body).toContain("markLaunched(")
+        expect(body).toContain("ensureBaseline(")
+        // A launch must not be the OVERWRITING capture: resume and restart
+        // reuse the termId, and overwriting there re-inherits the files the
+        // session itself created, which makes a real conflict silent.
+        expect(body).not.toContain("captureBaseline(")
     })
 })
 
-describe("the baseline is captured on the card's lifecycle, not the pane's", () => {
-    it("has exactly two capture sites", () => {
+describe("the two capture shapes stay apart", () => {
+    it("keeps the OVERWRITING capture to the card's two lifecycle sites", () => {
         // Dispatch (the only writer of task.termId) and entering `doing` (the
-        // rebase). Adding a third means the baseline has drifted back into
-        // being a property of the session - which is what left splitActive and
-        // openWorkspacePreset firing `git status` for baselines no reader could
-        // ever consult.
+        // rebase). Those two are deliberate statements that earlier work stops
+        // counting, so they replace the baseline. A third one here means a
+        // launch has started overwriting again, which is how a session that
+        // crashed and restarted re-inherits the files it created itself.
         expect(linesWith("captureBaseline(")).toHaveLength(2)
+    })
+
+    it("captures a baseline on every launch path too, via the fill-a-gap one", () => {
+        // Not vacuous and not a duplicate of the pin above: this is the half
+        // that was missing entirely. One site, inside beginAgentSession.
+        expect(linesWith("ensureBaseline(")).toHaveLength(1)
     })
 })
 
@@ -392,5 +422,154 @@ describe("main is the only classifier, and it is actually fed (task 4)", () => {
         // A fallback `detectApproval` here would restore the two-answers defect
         // while every promptFor test kept passing.
         expect(linesWith("detectApproval", tail)).toHaveLength(0)
+    })
+})
+
+// --- One derivation, and nobody painting around it ------------------------
+//
+// "A dead session reads as alive" was fixed eleven times over, and the reason
+// it took eleven is that the fix is invisible to every other kind of test: a
+// component that concatenates `s.status` into a class name type-checks, builds,
+// and passes every unit test in this repo, because the wrong answer is a valid
+// AgentStatus. The dot is just wrong on screen.
+//
+// So the two invariants that keep it fixed are structural, and they live here
+// with the rest of the wiring pins.
+//
+//   1. No surface paints a RAW status. `s.status` / `agentStatus[id]` is what
+//      the agent last DID and it outlives the process that did it, so a class
+//      built from one describes a live agent whatever is actually behind the
+//      tab.
+//   2. `deckKeyStatus` has exactly one caller, and it is the shared hook. Five
+//      surfaces each wrote the three-fact call themselves; a sixth copy is how
+//      "is there a process behind this tab" gets two answers again.
+const RENDERER = fileURLToPath(new URL("../src/renderer/src/", import.meta.url))
+
+/** A file's name, on either platform's separator. */
+function base(path: string): string {
+    return path.split(/[\\/]/).filter(Boolean).pop() ?? path
+}
+
+/** Every .ts/.tsx file under the renderer, as paths. */
+function rendererFiles(): string[] {
+    return readdirSync(RENDERER, { recursive: true, encoding: "utf8" })
+        .filter((f) => /\.tsx?$/.test(f))
+        .map((f) => RENDERER + f)
+}
+
+describe("no renderer surface paints a raw agent status", () => {
+    const files = rendererFiles()
+
+    it("finds the renderer files at all", () => {
+        // Guards the scan itself: a moved directory would otherwise leave every
+        // assertion below passing over an empty list.
+        expect(files.length).toBeGreaterThan(30)
+    })
+
+    it("builds every status- class from a derived value", () => {
+        // Raw lines, not codeLines: the evidence IS a quoted literal, and
+        // blanking it would erase the thing under test. A comment spelling the
+        // pattern would be a false FAILURE, which is the safe direction for a
+        // scan to be wrong in.
+        const offenders: string[] = []
+        for (const path of files) {
+            rawLines(path).forEach((line, i) => {
+                // The class concatenation, and whatever it is fed.
+                const m = /status-"\s*\+\s*([A-Za-z_$][\w$.[\]]*)/.exec(line)
+                if (!m) return
+                const expr = m[1]
+                if (/\.status$/.test(expr) || /^agentStatus\[/.test(expr)) {
+                    offenders.push(`${base(path)}:${i + 1} paints ${expr}`)
+                }
+            })
+        }
+        expect(offenders, offenders.join("\n")).toEqual([])
+    })
+
+    it("ranks the follow order on a derived status, never a raw one", () => {
+        // TypeScript CANNOT catch this one, and that is why it is here:
+        // `DeckKeyStatus` is `AgentStatus | "not-running"`, so `s.status` is
+        // assignable to it and `followRank(s.status)` compiles, builds and
+        // passes every unit test while sorting a corpse's last words to the
+        // top of Mission and Overview - the exact defect this pass fixed.
+        const offenders: string[] = []
+        for (const path of files) {
+            rawLines(path).forEach((line, i) => {
+                const m = /(?:followRank|sortForFollow)\([^)]*?(\w+\.status|agentStatus\[)/.exec(
+                    line
+                )
+                if (m) offenders.push(`${base(path)}:${i + 1} ranks ${m[1]}`)
+            })
+        }
+        expect(offenders, offenders.join("\n")).toEqual([])
+    })
+
+    it("gives the deck flag's wants-you input both halves of hasProcess", () => {
+        // The deck's flag is the most visible count in the product, and it is
+        // assembled by hand in a component - so `held: undefined` here
+        // type-checks and puts the flag back to counting restored panes, with
+        // the whole suite green. `alive` is NOT the same fact: it means "this
+        // tab is an agent", and a pane whose process died keeps it.
+        const deck = codeLines(src("../src/renderer/src/components/DeckStatus.tsx"))
+        const call = callSite("wantsYou(", deck, 22)
+        expect(call).toContain("exitCode: exitCodeOf(s.termId)")
+        expect(call).toContain("held: paneHold[s.termId]")
+        expect(call).not.toContain("held: undefined")
+        // And `seen` is what dims the nag - a literal `false` here is the nag
+        // that never stops, which is the half of the ruling this pass applied.
+        expect(call).toContain("!!seen[s.termId]")
+    })
+
+    it("keeps deckKeyStatus to one caller - the shared hook", () => {
+        const callers = files.filter(
+            (path) =>
+                linesWith("deckKeyStatus(", codeLines(path)).length > 0 &&
+                !path.endsWith("deck.ts")
+        )
+        expect(callers.map(base)).toEqual(["keyStatus.ts"])
+        // Not vacuous: the hook really does call it, and deck.ts really does
+        // define it. A rename that made the needle match nothing would
+        // otherwise pass the assertion above forever.
+        expect(linesWith("deckKeyStatus(", codeLines(RENDERER + "keyStatus.ts"))).toHaveLength(1)
+        expect(
+            linesWith("export function deckKeyStatus(", codeLines(RENDERER + "deck.ts"))
+        ).toHaveLength(1)
+    })
+})
+
+// --- One answer, and two surfaces that must not disagree about it ---------
+//
+// Finding 2 of the 2026-09-09 verification: Overview's GRID card unmounted the
+// whole approval block after a click, so the surface the user actually pressed
+// said nothing, while Mission and Overview's own Focus rail both showed
+// `Sent "y" - waiting for its next output`. The cause was the mount decision
+// living at the two call sites as `{approval && …}`: a Grid card embeds a live
+// terminal, the answer produces a byte, the byte reclassifies the session, and
+// `promptFor` stops returning a prompt - while the rail's pane is not rendered,
+// so no byte arrives and its block survives. Identical code, opposite result,
+// decided by whether the pane happened to be on screen.
+//
+// The decision lives inside the component now, and this repo has no component
+// tests: re-adding either guard restores the defect with the whole suite green.
+const OVERVIEW = src("../src/renderer/src/components/OverviewView.tsx")
+
+describe("both Overview surfaces mount the approval block on the same terms", () => {
+    const overview = codeLines(OVERVIEW)
+
+    it("renders ApprovalActions at both call sites, neither of them guarded", () => {
+        const sites = linesWith("<ApprovalActions", overview)
+        // The rail row and the grid card. A third surface offering these
+        // buttons would need the same treatment, so the count is pinned too.
+        expect(sites).toHaveLength(2)
+        for (const line of sites) {
+            const window = overview.slice(Math.max(0, line - 3), line).join("\n")
+            expect(window, "guarded call site at line " + line).not.toContain("approval &&")
+        }
+    })
+
+    it("decides inside the component, on the prompt AND the answer record", () => {
+        // Both halves: `!prompt` alone renders an empty box for every session,
+        // and `!sent` alone is the unmount that lost the confirmation.
+        expect(linesWith("if (!prompt && !sent) return null", overview)).toHaveLength(1)
     })
 })

@@ -124,6 +124,9 @@ export function App(): JSX.Element {
     // window, so a boolean flipped on `dragleave` blinks off over each child.
     // Depth counting is the standard fix and it is why this is a ref, not state.
     const dragDepth = useRef(0)
+    // Holds the toast raised when a Ctrl+N chord is refused, so holding the
+    // chord down does not stack one toast per repeat.
+    const gateToast = useRef<string | null>(null)
 
     const onDrop = useCallback(
         (e: React.DragEvent): void => {
@@ -424,11 +427,28 @@ export function App(): JSX.Element {
             // cannot.
             if (mod && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
                 const idx = Number(e.code.slice(5)) - 1
-                const v = DECK_VIEWS[idx]?.view
-                if (v) {
+                const dv = DECK_VIEWS[idx]
+                if (dv) {
                     e.preventDefault()
-                    if (!viewKeysLive(useStore.getState().projects)) return
-                    useStore.getState().setView(v)
+                    if (!viewKeysLive(useStore.getState().projects)) {
+                        // Gating it stopped the app naming a view it was not
+                        // showing, but it left the chord answering with nothing
+                        // at all - so a refused chord and a chord that does not
+                        // exist were indistinguishable. The key answers a click
+                        // with the fix rather than the reason; the chord now
+                        // gives the same answer, because otherwise a stranger
+                        // presses Ctrl+2 twice and concludes the app is broken
+                        // when it is only empty.
+                        const t = useToasts.getState()
+                        if (gateToast.current) t.dismiss(gateToast.current)
+                        gateToast.current = t.push({
+                            text: `No project is open, so ${dv.name} has nothing to show yet.`,
+                            actionLabel: "Open folder…",
+                            onAction: () => void useStore.getState().addProject()
+                        })
+                        return
+                    }
+                    useStore.getState().setView(dv.view)
                     return
                 }
             }

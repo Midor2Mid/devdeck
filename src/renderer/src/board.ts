@@ -132,7 +132,12 @@ const STATUS_WORDS: Record<string, string> = {
     working: "Agent is producing output",
     waiting: "Agent went quiet - your move",
     attention: "Agent is asking for you",
-    idle: "Agent session is idle"
+    idle: "Agent session is idle",
+    // The derived status the card's dot now paints (deckKeyStatus). Every line
+    // above describes a RUNNING agent, and the card was labelling a restored or
+    // exited session with one of them - "Agent session is idle" for a session
+    // with no process at all.
+    "not-running": "Agent is not running - open the session to start it again"
 }
 
 /**

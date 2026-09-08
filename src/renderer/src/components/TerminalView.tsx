@@ -11,6 +11,8 @@ import {
     type ShellKind
 } from "../settings"
 import { firstLeaf, collectLeaves } from "../layout"
+import { tabDotStatus } from "../deck"
+import { useKeyStatus } from "../keyStatus"
 import { sessionIndexOrder, validZoom } from "../paneNav"
 import { isRunnable } from "../pipeline"
 import { confirm } from "../confirm"
@@ -63,6 +65,10 @@ export function TerminalView(): JSX.Element {
     // zustand a fresh array every render and spin.
     const termAgents = useStore((s) => s.termAgents)
     const closedSessions = useStore((s) => s.closedSessions)
+    // Every dot on this screen - tab strip and grid card - reads this one
+    // resolver, which carries the `paneHold` subscription that repaints a tab
+    // whose process went away (see useKeyStatus).
+    const keyStatusOf = useKeyStatus()
     const newTab = useStore((s) => s.newTab)
     const splitActive = useStore((s) => s.splitActive)
     const closePaneSilent = useStore((s) => s.closePaneSilent)
@@ -278,13 +284,17 @@ export function TerminalView(): JSX.Element {
                         const agentLeaves = collectLeaves(tab.root).filter(
                             (id) => agentOf(id) !== SHELL
                         )
-                        const statuses = agentLeaves.map((id) => agentStatus[id] ?? "idle")
-                        const anyAgent = agentLeaves.length > 0
-                        const tabStatus = statuses.includes("attention")
-                            ? "attention"
-                            : statuses.includes("working")
-                              ? "working"
-                              : "idle"
+                        // Each pane through `deckKeyStatus` before the tab
+                        // reduces them: `agentStatus` is what the agent last
+                        // DID and survives the process that did it, so a tab
+                        // full of restored panes used to wear `status-idle` -
+                        // the resting form of a live agent - beside a deck key
+                        // that had already learned to say otherwise.
+                        const paneStatuses = agentLeaves.map((id) =>
+                            keyStatusOf({ termId: id, status: agentStatus[id] ?? "idle" })
+                        )
+                        // null = no agent panes in this tab, i.e. a shell tab.
+                        const tabStatus = tabDotStatus(paneStatuses)
                         return (
                             <div
                                 key={tab.id}
@@ -370,7 +380,7 @@ export function TerminalView(): JSX.Element {
                                 <span
                                     className={
                                         "tab-dot " +
-                                        (anyAgent ? "claude status-" + tabStatus : "shell")
+                                        (tabStatus ? "claude status-" + tabStatus : "shell")
                                     }
                                 />
                                 {editingId === tab.id ? (
@@ -735,6 +745,13 @@ export function TerminalView(): JSX.Element {
                         <div className="term-grid">
                             {allPanes.map(({ termId, tabName, tabId }) => {
                                 const isAgent = agentOf(termId) !== SHELL
+                                // One pane per card here, so no reduction: the
+                                // same derivation the tab strip above and the
+                                // deck key do, for the same reason.
+                                const paneStatus = keyStatusOf({
+                                    termId,
+                                    status: agentStatus[termId] ?? "idle"
+                                })
                                 return (
                                     <div key={termId} className="grid-card">
                                         <div className="grid-card-head">
@@ -742,8 +759,7 @@ export function TerminalView(): JSX.Element {
                                                 className={
                                                     "tab-dot " +
                                                     (isAgent
-                                                        ? "claude status-" +
-                                                          (agentStatus[termId] ?? "idle")
+                                                        ? "claude status-" + paneStatus
                                                         : "shell")
                                                 }
                                             />

@@ -1,11 +1,19 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest"
-import { useStore } from "../src/renderer/src/store"
+// `clearActed`: the act axis is a module Set inside the store, reset per
+// session the same way the tail is - a case that leaked it into the next one
+// would pass for the wrong reason.
+import { useStore, clearActed } from "../src/renderer/src/store"
 import { useSettings } from "../src/renderer/src/settings"
 import { leaf } from "../src/renderer/src/layout"
 import { forgetTail } from "../src/renderer/src/missionTail"
 
 const TERM = "t-vis"
 const BEL = "\x07"
+/** What a shell emits when its pty is resized: erase the line, repaint it. */
+const REDRAW = "\x1b[2K\r"
+/** A CRLF pair and a bare CR, so a chunk can carry a real line ending. */
+const CR = "\r"
+const CRLF = "\r\n"
 
 let ptyData: (e: { id: string; data: string }) => void = () => undefined
 let beeps = 0
@@ -54,7 +62,9 @@ function stubApi(): void {
                 list: async (): Promise<{ projects: unknown[]; activeId: string | null }> => ({
                     projects: [],
                     activeId: null
-                })
+                }),
+                // jumpToTerm - the glance - switches the active project too.
+                setActive: async (): Promise<void> => undefined
             },
             workspace: {
                 load: async () => ({ ok: false as const, reason: "missing" as const }),
@@ -83,8 +93,11 @@ function seed(watching: boolean): void {
         activePaneByProject: watching ? { p1: TERM } : {},
         notifications: [],
         activity: [],
-        boardTasks: []
+        boardTasks: [],
+        seen: {},
+        answered: {}
     })
+    clearActed(TERM)
     beeps = 0
 }
 
@@ -155,6 +168,126 @@ describe("visibility gates the notification, not the classification", () => {
         vi.useRealTimers()
     })
 
+    /**
+     * The walkthrough's finding 4, at the byte level.
+     *
+     * `if (status !== "attention" || visible) setStatus(id, "working")` let the
+     * pane you were LOOKING at decide the classification: a bell rang, the agent
+     * printed one more line - which most of them do straight away - and the `!`
+     * was gone for good, because nothing re-raises a bell that already fired.
+     * Off the pane, the identical bytes kept the flag.
+     */
+    it("keeps an unanswered bell through the agent's own next line, while you watch", () => {
+        seed(true)
+        ptyData({ id: TERM, data: "may I edit store.ts?" + BEL })
+        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+
+        ptyData({ id: TERM, data: "(waiting for your answer)" })
+
+        // Was "working": one line of the agent's own output erased the flag.
+        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+        vi.useRealTimers()
+    })
+
+    it("keeps it through the next line for a pane you are not watching too", () => {
+        seed(false)
+        ptyData({ id: TERM, data: "may I edit store.ts?" + BEL })
+        ptyData({ id: TERM, data: "(waiting for your answer)" })
+        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+        vi.useRealTimers()
+    })
+
+    /**
+     * What DOES end an attention event: an act, plus evidence the agent moved
+     * on. `respondApproval` acknowledges the session, and the next output is
+     * then a real reason to call it working again - so the flag is not
+     * unclearable, it just cannot be cleared by having been looked at.
+     */
+    it("lets output clear a bell the user has already answered", () => {
+        seed(true)
+        ptyData({ id: TERM, data: "may I edit store.ts?" + BEL })
+        useStore.getState().respondApproval(TERM, "y\r")
+
+        ptyData({ id: TERM, data: "ok, editing store.ts" })
+
+        expect(useStore.getState().agentStatus[TERM]).toBe("working")
+        // A fresh state is news again: the acknowledgement does not carry over.
+        expect(useStore.getState().seen[TERM]).toBeUndefined()
+        vi.useRealTimers()
+    })
+
+    /**
+     * Finding 4 of the 2026-09-09 verification, and the route by which the
+     * original defect survived its own fix.
+     *
+     * `ack` had stopped rewriting the status and output had stopped clearing an
+     * unseen bell - but the gate deciding whether output MAY clear one read
+     * `seen`, and a GLANCE sets `seen`. So clicking the key acknowledged the
+     * session, the pane became visible, xterm refitted, the pty resized, the
+     * shell repainted - and that byte, which the user caused nothing of, was
+     * read as the agent moving on. `setStatus` then dropped `seen` too, which
+     * is why qa saw a key wearing neither the `!` nor the dimmed form the fix
+     * had added: `status-working`, no glyph, and Mission reading WORKING over a
+     * question the agent was plainly still blocked on.
+     */
+    it("keeps the question when you only GLANCE at the pane, redraw byte and all", () => {
+        seed(false)
+        ptyData({ id: TERM, data: "Do you want to proceed? [y/n]" + BEL })
+        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+
+        // The ordinary "let me look at that one" gesture: a deck key click.
+        useStore.getState().jumpToTerm(TERM)
+        // Becoming visible refits xterm, which resizes the pty, which makes the
+        // shell repaint its prompt. Nobody answered anything.
+        // ESC[2K + CR: erase the line and repaint it, which is what a shell
+        // does when its pty is resized.
+        ptyData({ id: TERM, data: REDRAW + "Do you want to proceed? [y/n]" })
+
+        // The pair the ruling asks for: acknowledged, and still asking.
+        expect(useStore.getState().seen[TERM]).toBe(true)
+        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+        vi.useRealTimers()
+    })
+
+    /**
+     * The act DevDeck cannot see from the store, and the reason the gate needs
+     * its own axis rather than `answered`: most people answer a prompt by
+     * typing into the terminal. Without this the session would sit on
+     * `attention` until it rang again - a nag over an agent that has moved on,
+     * which is the same lie pointing the other way.
+     */
+    it("lets output clear a question you typed the answer to yourself", () => {
+        seed(true)
+        ptyData({ id: TERM, data: "may I edit store.ts?" + BEL })
+        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+
+        useStore.getState().notePaneInput(TERM)
+        ptyData({ id: TERM, data: "ok, editing store.ts" })
+
+        expect(useStore.getState().agentStatus[TERM]).toBe("working")
+        vi.useRealTimers()
+    })
+
+    /**
+     * The asymmetry that keeps the act axis out of the visibility trap: an
+     * answer authorises output to end the question it answered, and nothing
+     * later. The bell itself resets it - not the status transition, because a
+     * second bell on an already-`attention` session takes no transition at all.
+     */
+    it("does not let an answered question authorise erasing the next one", () => {
+        seed(false)
+        ptyData({ id: TERM, data: "first question?" + BEL })
+        useStore.getState().respondApproval(TERM, "y\r")
+        ptyData({ id: TERM, data: "ok" })
+        expect(useStore.getState().agentStatus[TERM]).toBe("working")
+
+        ptyData({ id: TERM, data: "second question?" + BEL })
+        ptyData({ id: TERM, data: "(waiting for your answer)" })
+
+        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+        vi.useRealTimers()
+    })
+
     it("produces the same classification from the same bytes either way", () => {
         // The whole point, stated once: watched and unwatched must agree about
         // what the agent did, and differ only about whether you are told.
@@ -164,6 +297,100 @@ describe("visibility gates the notification, not the classification", () => {
         seed(false)
         ptyData({ id: TERM, data: "question?" + BEL })
         expect(useStore.getState().agentStatus[TERM]).toBe(watched)
+        vi.useRealTimers()
+    })
+
+    /**
+     * The residual half of finding 4, S1 of the 2026-09-09 spot-check.
+     *
+     * The gate the attention fix installed named ONE state, so a `waiting`
+     * session - the other hand-over, the one the tile writes "Ready for review"
+     * under - was still reclassified by its own repaint byte: `WORKING` with a
+     * pulsing dot on the key and on the tile for the two to four seconds until
+     * the idle timer put it back. It self-healed, which made it a smaller lie
+     * than the attention case and the same lie: the word WORKING printed over a
+     * finished turn, and `setStatus` dropping `seen` on the way through, so the
+     * acknowledgement the glance had just earned was spent as well.
+     */
+    it("keeps WAITING when you only GLANCE at a session that handed back", async () => {
+        seed(false)
+        ptyData({ id: TERM, data: "Refactored 4 files. Ready for review." })
+        await vi.advanceTimersByTimeAsync(200)
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+
+        // The ordinary "let me look at that one" gesture, then the byte it
+        // causes: becoming visible refits xterm, which resizes the pty, which
+        // makes the far end repaint. Nobody asked for any work.
+        useStore.getState().jumpToTerm(TERM)
+        ptyData({ id: TERM, data: REDRAW + "Refactored 4 files. Ready for review." })
+
+        // Was "working" at the first 150ms sample, over the agent's own
+        // "Ready for review".
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+        // And the pair the ruling asks for: acknowledged, and still handed back.
+        expect(useStore.getState().seen[TERM]).toBe(true)
+        vi.useRealTimers()
+    })
+
+    /**
+     * The other half of the same rule, and the reason the gate cannot simply
+     * copy attention's: `waiting` is PROVISIONAL. It is a 6s silence threshold,
+     * and an agent that pauses that long mid-turn - waiting on an API, running
+     * a test suite - is normal. Its own continued output is what refutes the
+     * threshold, so blocking that would trade a 2-4s false WORKING for a false
+     * "your move" that lasts as long as the turn does and never self-heals.
+     */
+    it("lets the agent's own continued output end a hand-back", async () => {
+        seed(false)
+        ptyData({ id: TERM, data: "thinking..." })
+        await vi.advanceTimersByTimeAsync(200)
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+
+        // Two chunks, because one is what a repaint is. An agent that has
+        // actually resumed keeps talking, and the second chunk lands in the
+        // same burst as the first.
+        ptyData({ id: TERM, data: "reading store.ts" + CRLF })
+        ptyData({ id: TERM, data: "editing store.ts" + CRLF })
+
+        expect(useStore.getState().agentStatus[TERM]).toBe("working")
+        vi.useRealTimers()
+    })
+
+    it("gives every fresh silence its own grace, so a second glance is safe too", async () => {
+        seed(false)
+        ptyData({ id: TERM, data: "Ready for review." })
+        await vi.advanceTimersByTimeAsync(200)
+
+        useStore.getState().jumpToTerm(TERM)
+        ptyData({ id: TERM, data: REDRAW + "Ready for review." })
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+
+        // Look away, look back. The idle timer that fires in between confirms
+        // the session is still quiet, which is what re-arms the grace - without
+        // that, the second glance walks through and blips exactly as before.
+        await vi.advanceTimersByTimeAsync(200)
+        useStore.getState().jumpToTerm(TERM)
+        ptyData({ id: TERM, data: REDRAW + "Ready for review." })
+
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+        vi.useRealTimers()
+    })
+
+    /**
+     * An act still authorises output to reclassify at once. Sending a session
+     * something is a statement that you expect it to work, so the first byte
+     * back is evidence and needs no second one.
+     */
+    it("reclassifies a hand-back you answered on the first byte", async () => {
+        seed(false)
+        ptyData({ id: TERM, data: "Ready for review." })
+        await vi.advanceTimersByTimeAsync(200)
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+
+        useStore.getState().respondApproval(TERM, "y" + CR)
+        ptyData({ id: TERM, data: "ok, continuing" })
+
+        expect(useStore.getState().agentStatus[TERM]).toBe("working")
         vi.useRealTimers()
     })
 })

@@ -3,6 +3,14 @@ import { resolveTileState, wantsYou, hasProcess, type TileStateInput } from "../
 import { STALL_MS } from "../src/renderer/src/missionTail"
 import { FASTFAIL } from "../src/renderer/src/termExit"
 import type { ApprovalPrompt } from "../src/renderer/src/approval"
+// The cross-module pair below needs the OTHER attention count and the shared
+// status derivation - the disagreement it pins lived between the two modules.
+import {
+    deckKeyStatus,
+    projectSessionCounts,
+    type DeckKeyStatus
+} from "../src/renderer/src/deck"
+import type { AgentStatus, AnySession } from "../src/renderer/src/store"
 
 const NOW = 1_700_000_000_000
 
@@ -23,6 +31,7 @@ function input(over: Partial<TileStateInput> = {}): TileStateInput {
         changedCount: 0,
         awaited: true,
         alive: true,
+        held: undefined,
         ...over
     }
 }
@@ -60,6 +69,56 @@ describe("resolveTileState precedence", () => {
     it("an exit outranks attention that carries no parsable prompt", () => {
         const s = resolveTileState(input({ status: "attention", exitCode: 2 }), NOW)
         expect(s.kind).toBe("exited")
+    })
+
+    /**
+     * The 2026-09-08 walkthrough's finding 8. Restart DevDeck with four agent
+     * sessions open: the tabs and the deck keys come back, the ptys do not, and
+     * every tile read "QUIET" - the chip whose own note says it "reads as
+     * nothing happened here". A stranger reopens DevDeck and reasonably
+     * believes their agents are still there. The header already said "0
+     * running" from the very same fact.
+     */
+    it("a restored pane with no process does not read QUIET", () => {
+        const s = resolveTileState(input({ status: "idle", held: "resume" }), NOW)
+        expect(s.kind).toBe("not-running")
+        expect(s.chip).toBe("NOT RUNNING")
+        expect(s.detail).toContain("Restored from your last run")
+        // Nothing is listening, so nothing may be offered.
+        expect(s.actions).toEqual([])
+    })
+
+    it("says nothing about a duration for a session with no process", () => {
+        // QUIET carries "8m", which reads as an idle LIVE agent. How long ago a
+        // previous run of the app last printed is not a fact about now.
+        const s = resolveTileState(
+            input({ status: "idle", held: "resume", lastAt: NOW - 8 * 60_000 }),
+            NOW
+        )
+        expect(s.chip).toBe("NOT RUNNING")
+    })
+
+    // A recorded exit code is the more specific answer and keeps its chip,
+    // KILLED included - "NOT RUNNING" would throw away the reason.
+    it("an exit code outranks the hold that follows it", () => {
+        const s = resolveTileState(input({ status: "idle", exitCode: 1, held: "restart" }), NOW)
+        expect(s.chip).toBe("EXITED 1")
+    })
+
+    it("reads a pane held for restart with no code as NOT RUNNING", () => {
+        expect(resolveTileState(input({ status: "idle", held: "restart" }), NOW).kind).toBe(
+            "not-running"
+        )
+    })
+
+    // Whatever the status map still holds from the process that died with the
+    // last run, it cannot make a dead pane claim to be alive.
+    it("does not let a stale status make a held pane look alive", () => {
+        for (const status of ["working", "waiting", "attention", "idle"] as const) {
+            expect(resolveTileState(input({ status, held: "resume" }), NOW).kind).toBe(
+                "not-running"
+            )
+        }
     })
 
     it("attention with no parsable prompt reads ASKING and offers a reply", () => {
@@ -235,46 +294,50 @@ describe("wantsYou", () => {
     // The ONE predicate behind every "who wants you" count in the frame — the
     // deck bar's flag and Mission's header both read this, so they cannot
     // disagree on who wants the user's attention.
+    //
+    // Every case below goes through `input()`, the same helper resolveTileState
+    // is tested with, so `held` is supplied here too. It is a REQUIRED field
+    // rather than an optional one on purpose: DeckStatus built this object by
+    // hand and omitted it, which is exactly how the flag came to count a
+    // restored pane.
 
-    it("counts a session blocked on a permission prompt it has already been seen at", () => {
-        // The defect this pins. `seen` is granted when a session goes `waiting`
-        // in front of you (store.ts:674) - a legitimate rule, because watching
-        // an agent hand back IS knowing about it. But the prompt detector can
-        // then find a QUESTION in that same silence. The tile promotes and
-        // renders live Approve/Deny; wantsYou could not see the prompt at all,
-        // because it was not in its input, so the deck flag and Mission's header
-        // both read zero while two tiles asked to be answered.
+    it("does not count a session blocked on a prompt it has already been seen at", () => {
+        // CONTRACT REVERSED, 2026-09-08. This test previously asserted `true`
+        // for both values of `seen`, on the reasoning that looking at a
+        // question does not answer it. The owner's ruling is narrower and
+        // wins: ACKNOWLEDGEMENT DIMS THE NAG, NOT THE STATE. Nothing here
+        // claims the prompt was answered - the tile still reads NEEDS YOU and
+        // still draws live Approve/Deny, and the dot still reports the real
+        // status. Only the count steps back, because you have already been
+        // told and chose to leave it.
         //
-        // The rule wantsYou already states for `attention` is the right one and
-        // simply was not applied here: looking at a question does not answer it.
-        const blocked = {
-            status: "waiting" as const,
+        // What forced the reversal was not taste. `projectSessionCounts`
+        // (deck.ts) already honoured the ruling, so the switcher card said 0
+        // while the deck's flag said 1 for the same session and the same word.
+        // Two counts disagreeing by construction is the defect this predicate
+        // was extracted to make impossible.
+        const blocked = input({
+            status: "waiting",
             prompt: {
                 kind: "menu",
                 question: "Do you want to proceed?",
                 approve: "1",
-                deny: ""
+                deny: ""
             } satisfies ApprovalPrompt,
-            exitCode: undefined,
             lastAt: NOW,
-            awaited: false,
-            alive: true
-        }
-        expect(wantsYou(blocked, NOW, true)).toBe(true)
+            awaited: false
+        })
+        expect(wantsYou(blocked, NOW, true)).toBe(false)
+        // Unseen, it is still the most blocking thing in the product. `prompt`
+        // was not in this input at all until 2026-09-07, which is how the tile
+        // and the counters came to answer different questions.
         expect(wantsYou(blocked, NOW, false)).toBe(true)
     })
 
     it("still lets a plain finished turn be acknowledged", () => {
         // The counterpart: no prompt means `seen` keeps its meaning, or the
         // acknowledgement axis would be dead and the count would only grow.
-        const done = {
-            status: "waiting" as const,
-            prompt: null,
-            exitCode: undefined,
-            lastAt: NOW,
-            awaited: false,
-            alive: true
-        }
+        const done = input({ status: "waiting", lastAt: NOW, awaited: false })
         expect(wantsYou(done, NOW, true)).toBe(false)
         expect(wantsYou(done, NOW, false)).toBe(true)
     })
@@ -282,91 +345,178 @@ describe("wantsYou", () => {
     it("is false for an exited session, even when status still reads attention", () => {
         // A dead process wants nothing: nothing is listening for a reply.
         expect(
-            wantsYou({ status: "attention", prompt: null, exitCode: 0, lastAt: NOW, awaited: true, alive: false }, NOW)
+            wantsYou(input({ status: "attention", exitCode: 0, lastAt: NOW, alive: false }), NOW)
         ).toBe(false)
-        expect(
-            wantsYou({ status: "attention", prompt: null, exitCode: 1, lastAt: NOW, awaited: true, alive: true }, NOW)
-        ).toBe(false)
+        expect(wantsYou(input({ status: "attention", exitCode: 1, lastAt: NOW }), NOW)).toBe(false)
+    })
+
+    it("is false for a session held for resume or restart, whatever it last said", () => {
+        // The `held` half of `hasProcess`, which this predicate did not read
+        // until now. A restore stamps `paneHold = "resume"` on every agent pane
+        // and starts nothing; an exit stamps "restart". Either way there is no
+        // pty to answer, and the deck already draws such a key as not-running -
+        // so the flag counting it was the same lie in a second place.
+        //
+        // The previous note called this "harmless only because statuses aren't
+        // restored". That is an accident in another module, not a guarantee:
+        // the first change that brings statuses back through a restore turns it
+        // into a wrong number with no test failing.
+        for (const held of ["resume", "restart"] as const) {
+            expect(wantsYou(input({ status: "attention", lastAt: NOW, held }), NOW)).toBe(false)
+            expect(wantsYou(input({ status: "waiting", lastAt: NOW, held }), NOW)).toBe(false)
+            // Including a stall, which is otherwise unacknowledgeable: a pane
+            // with nothing behind it is not stuck, it is finished.
+            expect(
+                wantsYou(input({ status: "working", lastAt: NOW - STALL_MS - 1, held }), NOW)
+            ).toBe(false)
+        }
     })
 
     it("stops counting a `waiting` session you have already seen", () => {
-        const live = { status: "waiting" as const, prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
+        const live = input({ status: "waiting", lastAt: NOW, awaited: false })
         expect(wantsYou(live, NOW)).toBe(true)
         expect(wantsYou(live, NOW, true)).toBe(false)
     })
 
-    it("keeps counting `attention` however hard you look at it", () => {
-        // Looking at a permission prompt does not answer it. Only the states you
-        // can genuinely leave alone are acknowledgeable.
-        const asking = { status: "attention" as const, prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true }
-        expect(wantsYou(asking, NOW, true)).toBe(true)
+    it("stops counting `attention` once you have looked at it", () => {
+        // CONTRACT REVERSED, 2026-09-08 - this asserted `true`, under the title
+        // "keeps counting `attention` however hard you look at it". Same
+        // ruling, and this is the case it was actually about: `attention` is
+        // the word `projectSessionCounts` counts, so this branch was the one
+        // producing two different numbers for one word 200px apart.
+        const asking = input({ status: "attention", lastAt: NOW, awaited: false })
+        expect(wantsYou(asking, NOW, true)).toBe(false)
+        expect(wantsYou(asking, NOW, false)).toBe(true)
     })
 
     it("keeps counting a stall you have seen, because a stall is not a handover", () => {
-        // `seen` modifies the finished-a-turn state, not "this has been quiet for
-        // too long" - which is still true, and still worth a look, after you look.
-        const stalled = { status: "working" as const, prompt: null, exitCode: undefined, lastAt: NOW - 60 * 60 * 1000, awaited: true, alive: true }
+        // The ONE exemption from the ruling, and it survives it for a reason
+        // the ruling itself implies: acknowledgement has to be able to expire.
+        //
+        // `seen` is event-scoped for `waiting` and `attention` - it is granted
+        // against a transition and `setStatus` clears it on the next one, so
+        // acknowledging a hand-back acknowledges THAT hand-back. A stall
+        // arrives with no transition at all (that is what a stall IS), so
+        // nothing would ever clear the acknowledgement: dimming it would mean
+        // one glance silences a stuck agent for as long as it stays stuck.
+        // That is the other failure mode - forgetting silently - not the nag.
+        const stalled = input({ status: "working", lastAt: NOW - 60 * 60 * 1000 })
         expect(wantsYou(stalled, NOW)).toBe(true)
         expect(wantsYou(stalled, NOW, true)).toBe(true)
     })
 
     it("is true for attention", () => {
-        expect(
-            wantsYou(
-                { status: "attention", prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
-                NOW
-            )
-        ).toBe(true)
+        expect(wantsYou(input({ status: "attention", lastAt: NOW, awaited: false }), NOW)).toBe(
+            true
+        )
     })
 
     it("is true for waiting", () => {
-        expect(
-            wantsYou(
-                { status: "waiting", prompt: null, exitCode: undefined, lastAt: NOW, awaited: false, alive: true },
-                NOW
-            )
-        ).toBe(true)
+        expect(wantsYou(input({ status: "waiting", lastAt: NOW, awaited: false }), NOW)).toBe(true)
     })
 
     it("is true for a stalled session", () => {
         expect(
-            wantsYou(
-                {
-                    status: "idle", prompt: null,
-                    exitCode: undefined,
-                    lastAt: NOW - STALL_MS - 1,
-                    awaited: true,
-                    alive: true
-                },
-                NOW
-            )
+            wantsYou(input({ status: "idle", lastAt: NOW - STALL_MS - 1, awaited: true }), NOW)
         ).toBe(true)
     })
 
     it("is false for a quiet, unawaited, idle session", () => {
         expect(
-            wantsYou(
-                {
-                    status: "idle", prompt: null,
-                    exitCode: undefined,
-                    lastAt: NOW - STALL_MS - 1,
-                    awaited: false,
-                    alive: true
-                },
-                NOW
-            )
+            wantsYou(input({ status: "idle", lastAt: NOW - STALL_MS - 1, awaited: false }), NOW)
         ).toBe(false)
     })
 
     it("is false for working", () => {
-        expect(
-            wantsYou(
-                { status: "working", prompt: null, exitCode: undefined, lastAt: NOW, awaited: true, alive: true },
-                NOW
-            )
-        ).toBe(false)
+        expect(wantsYou(input({ status: "working", lastAt: NOW }), NOW)).toBe(false)
     })
 })
+
+/**
+ * The acknowledgement ruling, across every count that says the word.
+ *
+ * The pair, asserted together because the two failure modes are opposites and
+ * fixing one is how you ship the other:
+ *
+ *   - **Absent from every attention count.** Three surfaces say a number: the
+ *     deck's flag and Mission's header (both `wantsYou`) and the switcher card
+ *     (`projectSessionCounts`). Only the card honoured `seen`, so a session you
+ *     had acknowledged read 0 there and 1 on the deck.
+ *   - **Still reporting its real status.** `deckKeyStatus` must go on saying
+ *     `attention`. A glance that rewrote the state to `idle` was the ORIGINAL
+ *     bug - it erased the `!` forever - and it is why `ack` no longer touches
+ *     status. Visibility may change a count. It may never change a
+ *     classification.
+ *
+ * Cross-module on purpose: the disagreement lived in the gap between the two
+ * modules, so a test inside either one could not have seen it.
+ */
+describe("acknowledgement dims the nag, not the state", () => {
+    const live = (s: AnySession): DeckKeyStatus => deckKeyStatus(s.status, undefined, undefined)
+
+    function session(status: AgentStatus): AnySession {
+        return {
+            termId: "a",
+            projectId: "p1",
+            projectName: "P",
+            projectPath: "",
+            tabName: "tab",
+            sessionName: "s",
+            agentId: "claude",
+            badge: "CL",
+            isAgent: true,
+            status
+        }
+    }
+
+    for (const status of ["attention", "waiting"] as const) {
+        it("drops a seen " + status + " session from every count, and from none of its state", () => {
+            const s = session(status)
+            const facts = input({ status, lastAt: NOW, awaited: false })
+
+            // Unseen: the predicate counts it. Not vacuous - without this the
+            // assertions below would pass on a predicate that never counts.
+            expect(wantsYou(facts, NOW, false)).toBe(true)
+            expect(projectSessionCounts([s], live, {}).p1.attention).toBe(
+                // The card counts the WORD `attention` and nothing else, which
+                // is a narrower question than "wants you" and deliberately so.
+                status === "attention" ? 1 : 0
+            )
+
+            // Seen: absent from both predicates, and so from the card too.
+            expect(wantsYou(facts, NOW, true)).toBe(false)
+            expect(projectSessionCounts([s], live, { a: true }).p1.attention).toBe(0)
+
+            // And the state is untouched - what the dot, the tile chip and the
+            // tooltip all read still says exactly what the agent did.
+            expect(live(s)).toBe(status)
+            expect(s.status).toBe(status)
+            // A bell with no detected prompt is ASKING; a hand-back is
+            // WAITING. Either way the chip still says what the agent did.
+            expect(resolveTileState(facts, NOW).kind).toBe(
+                status === "attention" ? "asking" : "waiting"
+            )
+            // Still a real, reachable session on the card too.
+            expect(projectSessionCounts([s], live, { a: true }).p1).toMatchObject({
+                terms: 1,
+                agents: 1
+            })
+        })
+    }
+
+    it("keeps an acknowledged prompt answerable while it stops nagging", () => {
+        // The sharpest case: `seen` withdraws the count, and the tile must
+        // still be the thing you can answer. If acknowledgement reached the
+        // classification here, the Approve/Deny buttons would go with it.
+        const facts = input({ status: "waiting", prompt: PROMPT, lastAt: NOW, awaited: false })
+        expect(wantsYou(facts, NOW, true)).toBe(false)
+        const st = resolveTileState(facts, NOW)
+        expect(st.kind).toBe("needs-you")
+        expect(st.actions).toContain("approve")
+        expect(st.actions).toContain("deny")
+    })
+})
+
 
 // Remedy item 9: `changedCount` can be null - the read failed, or has not
 // happened yet. `0` used to absorb both, and a tile is one of the surfaces that
@@ -458,6 +608,16 @@ describe("the attention contract", () => {
      * count a session whose tile reads something else — a stalled one, or an
      * unacknowledged hand-back — because those want you without asking a
      * question. One direction is the contract; both would be a coincidence.
+     *
+     * SCOPE NARROWED, 2026-09-08. The invariant now runs over UNACKNOWLEDGED
+     * sessions only, because the owner ruled that acknowledgement dims the nag:
+     * a tile you have looked at and left goes on asking to be answered — that
+     * is its state, and nothing here touches it — while dropping out of the
+     * count, which is the whole point of the axis. Asserting the old, wider
+     * form would now require `wantsYou` to ignore `seen`, which is exactly the
+     * disagreement with `projectSessionCounts` (deck.ts) this wave closed. The
+     * contract that survives is the one that caught the original defect: a
+     * tile asking to be answered that NOBODY HAS SEEN must be counted.
      */
     const STATUSES = ["idle", "working", "waiting", "attention"] as const
     const PROMPT: ApprovalPrompt = {
@@ -483,10 +643,19 @@ describe("the attention contract", () => {
                                         lastAt,
                                         changedCount,
                                         awaited,
-                                        alive
+                                        alive,
+                                        // A tab with no process still relays a
+                                        // prompt sitting in its tail, and such a
+                                        // tile has to stay counted.
+                                        held: undefined
                                     }
                                     const kind = resolveTileState(i, NOW).kind
                                     if (kind !== "needs-you" && kind !== "asking") continue
+                                    // An acknowledged session is allowed to be
+                                    // uncounted - see the scope note above. It
+                                    // is still walked, so the combination is
+                                    // exercised and a crash here would surface.
+                                    if (seen) continue
                                     if (!wantsYou(i, NOW, seen)) {
                                         offenders.push(
                                             `${kind} tile uncounted: status=${status} ` +
@@ -508,16 +677,27 @@ describe("the attention contract", () => {
         // The one exemption, and it is in wantsYou's first line: nothing is
         // listening for a reply, so an exited session is never counted even
         // while its tile still carries the words it died with.
-        const dead: TileStateInput = {
+        //
+        // That line now reads `hasProcess`, so BOTH ways of having no process
+        // count as dead here - an exit code, and a pane held for resume or
+        // restart. `held` was outside this predicate's input entirely, which
+        // made the second one invisible to it.
+        const dead = (over: Partial<TileStateInput>): TileStateInput => ({
             status: "attention",
             prompt: PROMPT,
-            exitCode: 1,
+            held: undefined,
+            exitCode: undefined,
             lastAt: NOW,
             changedCount: 0,
             awaited: false,
-            alive: false
-        }
-        expect(wantsYou(dead, NOW, false)).toBe(false)
+            alive: false,
+            ...over
+        })
+        expect(wantsYou(dead({ exitCode: 1 }), NOW, false)).toBe(false)
+        expect(wantsYou(dead({ held: "resume" }), NOW, false)).toBe(false)
+        expect(wantsYou(dead({ held: "restart" }), NOW, false)).toBe(false)
+        // Not vacuous: with a process behind it, the same facts are counted.
+        expect(wantsYou(dead({}), NOW, false)).toBe(true)
     })
 })
 

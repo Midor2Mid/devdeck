@@ -18,7 +18,7 @@ import {
 import type { PipelineRun, PipelineStepState } from "./pipeline"
 import { runnableSteps, sessionPlan, resolveTarget, failTarget, RUN_STEP_CAP } from "./pipeline"
 import { gateActive, evaluateGate, maxAttempts, isCommandGate, commandGatePasses } from "./gate"
-import { undoToast } from "./toast"
+import { toast, undoToast } from "./toast"
 import { toggleZoom } from "./paneNav"
 import {
     pushClosed,
@@ -36,8 +36,10 @@ import {
     getFullTail
 } from "./missionTail"
 import { detectApproval } from "./approval"
+import { describeKeys } from "./answered"
 import {
     captureBaseline,
+    ensureBaseline,
     adoptBaseline,
     forgetSignals,
     newPathsSince,
@@ -47,6 +49,7 @@ import {
 } from "./agentSignals"
 import { holdersOf, holdersSummary, sameDir, type CwdHolder } from "./ownership"
 import { recordExit, exitCodeOf, clearExit } from "./termExit"
+import { hasProcess } from "./tileState"
 import { agentInitCommand } from "./launchCommand"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -60,6 +63,39 @@ export type MainView = "mission" | "tasks" | "terminal" | "editor" | "api" | "da
 // working = producing output; waiting = finished a turn, your move (soft);
 // attention = rang the bell / blocked on input, needs you now (loud); idle = quiet.
 export type AgentStatus = "working" | "idle" | "attention" | "waiting"
+
+/**
+ * What a session IS between the moment its pty is asked for and its first byte.
+ *
+ * Every launch path used to write `"working"` here, and that is a CLAIM: the
+ * tile's own word for it is "mid-turn". At launch DevDeck holds one fact - a
+ * process was requested - and no evidence at all about what it is doing. qa hit
+ * the consequence by accident on a machine where a pty produced nothing: the
+ * key pulsed clay and the tile read WORKING indefinitely, and unlike the glance
+ * blip nothing healed it, because the reclassification to `waiting` is armed by
+ * output and there was none. An honest signal cannot be worse than useless when
+ * the fact behind it is missing, and this one was: it claimed activity that had
+ * never existed, for as long as the tab stayed open.
+ *
+ * `idle` is the only status in the set that claims nothing. `wantsYou` is false
+ * for it, so it never nags; it spends no accent; and its tile reads
+ * `QUIET <ago>` off the launch instant `markLaunched` already stamps, which is
+ * the one true sentence available - this session has been silent that long. The
+ * first byte still makes it `working`, so nothing about a healthy launch
+ * changes beyond a second or two of a quiet dot instead of a pulsing one, and
+ * the pane itself carries the words ("Starting…" / "Still starting", the
+ * product's existing spawning affordance, on the one surface with room for a
+ * sentence).
+ *
+ * It is not the IDEAL answer, and the ideal one is not available from here: a
+ * launched-but-silent session deserves its own form - a distinct dot and a
+ * STARTING chip - and a fifth `AgentStatus` would paint `.status-starting`,
+ * which no stylesheet defines. That is a designer's call and a CSS change, so
+ * this picks the honest existing state and names the gap rather than inventing
+ * a form nobody can see. One constant, so the three launch sites cannot drift
+ * and a later STARTING state is one edit.
+ */
+const LAUNCH_STATUS: AgentStatus = "idle"
 
 export interface Tab {
     id: string
@@ -324,6 +360,22 @@ interface AppState extends Persisted {
      * honest reset.
      */
     seen: Record<string, true>
+    /**
+     * Keystroke answers we have sent and not yet seen an outcome for.
+     *
+     * A record of what WE did, on the same axis as `seen` and under the same
+     * rule: no classifier reads it, because "I pressed Approve" is not a fact
+     * about the agent. Pressing Approve used to change nothing visible
+     * anywhere - `pushActivity` writes to a feed reachable only from the
+     * palette, and `markSeen` is deliberately excluded from the tile
+     * classifier - so the honest next move was to press it again, into a live
+     * agent. This is what the surfaces read to say "sent", and it stops short
+     * of saying "accepted", which nobody knows until the agent's next byte.
+     *
+     * Runtime-only, like `seen`: a send that outlives the app has no outcome
+     * left to report.
+     */
+    answered: Record<string, { at: number; keys: string }>
     lastAgentTermId: string | null
     notifications: AppNotification[]
     dismissNotification: (id: string) => void
@@ -336,6 +388,16 @@ interface AppState extends Persisted {
     respondApproval: (termId: string, keys: string) => void
     /** Send a line of text to a session, as if typed into its terminal. */
     replySession: (termId: string, text: string) => void
+    /**
+     * The user typed straight into this session's terminal.
+     *
+     * The one act DevDeck cannot see from the store, and the commonest way a
+     * question actually gets answered - TerminalPane's `onData` is the only
+     * path a keystroke takes to a pty. Without it the act axis would miss the
+     * answer and the session would keep saying `attention` over an agent that
+     * has moved on.
+     */
+    notePaneInput: (termId: string) => void
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
     /** Jump to the oldest agent session that wants you (waiting or attention). */
@@ -435,6 +497,95 @@ const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
 // When each agent entered a wants-you state (waiting/attention), for "jump to
 // the oldest one that wants you".
 const pendingSince = new Map<string, number>()
+/**
+ * Sessions the user has SENT something to since they last asked for input.
+ *
+ * The third state on the acknowledgement axis, and the one whose absence let
+ * the glance defect survive its own fix. `seen` says you LOOKED at a session;
+ * this says you ANSWERED it, and only the second is a reason to let the agent's
+ * next byte call an attention event over.
+ *
+ * The route the bug took: a glance sets `seen`, the pane becomes visible, xterm
+ * refits, the pty resizes, the shell repaints - and that byte, which the user
+ * caused nothing of, satisfied a gate that read `seen`. So `attention` was
+ * rewritten to `working` above a question still on screen, and `setStatus` then
+ * dropped `seen` as well, which is why the key ended up wearing neither the `!`
+ * nor the dimmed form: the acknowledgement that was supposed to dim the nag had
+ * been consumed to destroy the state instead.
+ *
+ * A module Set rather than store state, for the reason `pendingSince` is one:
+ * it is written from every keystroke, and no component reads it - what
+ * components read is the classification it feeds. It is not `answered` either,
+ * which is a record of what DEVDECK sent and is shown to the user as such;
+ * typing "y" into the pane yourself is the same act and must not print a
+ * `Sent "y"` row nobody caused.
+ *
+ * Cleared by a fresh bell (a new question is unanswered whatever the last one
+ * was), by a fresh hand-back, and when the session goes away.
+ */
+const actedOn = new Set<string>()
+
+/**
+ * Sessions that have produced output since they handed back — one chunk of it.
+ *
+ * The evidence bar for the `waiting` half of the output gate, and it exists
+ * because the two hand-over states differ IN KIND rather than in loudness:
+ *
+ *   - `attention` is TERMINAL. The agent rang once and nothing re-rings it, so
+ *     only an act of the user's can authorise output to end it. That is
+ *     `actedOn`, and it may hold for as long as the question is unanswered.
+ *   - `waiting` is PROVISIONAL. It is the app's own inference from `agentIdleMs`
+ *     of silence, and an agent that pauses that long mid-turn — waiting on an
+ *     API, running a test suite — is ordinary. Its own continued output is
+ *     exactly what refutes the inference, so `actedOn` cannot be the bar here:
+ *     gating `waiting` on an act alone would trade a 2-4s false WORKING for a
+ *     false "your move" lasting as long as the turn does, with nothing to
+ *     self-heal it. That is the same lie, permanent, on the louder state.
+ *
+ * So the bar for a hand-back is that the output CONTINUE. One chunk is what a
+ * repaint is — the pane becomes visible, xterm refits, the pty resizes and the
+ * far end redraws in a single burst — and one chunk is therefore not a resumed
+ * turn. A second chunk is, and a genuinely resumed agent sends it in the same
+ * burst, so the wrong word lasts microseconds instead of seconds.
+ *
+ * Re-armed by every fresh silence, not just the first: the idle timer clears
+ * this when it confirms a session is still quiet. Without that, one glance
+ * would spend the grace and the SECOND glance at the same session would blip
+ * exactly as before.
+ */
+const spokeSinceHandback = new Set<string>()
+
+/**
+ * Forget that a session was answered, and that it has spoken since handing
+ * back.
+ *
+ * Called on close, and by tests that drive the pty handler directly - the Sets
+ * outlive a `useStore.setState`, so a case that left an entry behind would
+ * make the next one pass for the wrong reason.
+ */
+export function clearActed(termId: string): void {
+    actedOn.delete(termId)
+    spokeSinceHandback.delete(termId)
+}
+
+/**
+ * Every write to a pty the renderer makes on the user's behalf.
+ *
+ * One function because "the user has answered this session" was being decided
+ * in one place and acted on in another: the approval buttons recorded it, the
+ * reply box, the composer's prompt, the broadcast and the pipeline did not, and
+ * a session answered by any of those would have gone on saying `attention`
+ * until it rang again - a nag over an agent that has plainly moved on, which is
+ * the same lie pointing the other way.
+ */
+function writePty(termId: string, data: string): void {
+    // The send stays first and stays unconditional: qa verified the keystroke
+    // reaches the pty, and no bookkeeping here may become what decides whether
+    // it goes.
+    window.api.pty.input(termId, data)
+    actedOn.add(termId)
+}
+
 let dataSubscribed = false
 // Bumped on stop / new run; the async runner aborts when its token goes stale.
 let pipelineToken = 0
@@ -656,6 +807,33 @@ export const useStore = create<AppState>((set, get) => {
             ?.path ||
         ""
 
+    /**
+     * One agent session has just started running.
+     *
+     * Both facts every launch path needs, in one call, because the second one
+     * was missing from four of the five.
+     *
+     * `markLaunched` measures silence. `ensureBaseline` records the dirty set
+     * this session INHERITED, and without it `newPathsSince` has no baseline to
+     * compare against — which it honestly reports as no evidence, so
+     * `buildOwnership` yields no files and Mission's IN-FLIGHT CHANGES section
+     * hides itself entirely. The capture used to live only on the two
+     * card-lifecycle sites, justified by a baseline "nothing could ever
+     * consult"; `buildOwnership` consults every agent session's baseline now,
+     * so what that narrowing actually bought was silence on the launch path
+     * everyone uses. qa watched six deck-launched agents in one working tree,
+     * two of which created a file after all six had started, and Mission
+     * reported nothing through three polls over 40 seconds.
+     *
+     * `captureBaseline` stays where it was, on the dispatch and the drag back
+     * into `doing`: those OVERWRITE, because they are a statement about what
+     * should stop counting. A launch only ever fills a gap — see ensureBaseline.
+     */
+    const beginAgentSession = (termId: string): void => {
+        markLaunched(termId)
+        ensureBaseline(termId, sessionCwd(termId))
+    }
+
     const setStatus = (termId: string, status: AgentStatus): void => {
         if (get().agentStatus[termId] === status) return
         // Stamp / clear when a session enters or leaves a wants-you state.
@@ -663,6 +841,15 @@ export const useStore = create<AppState>((set, get) => {
             if (!pendingSince.has(termId)) pendingSince.set(termId, Date.now())
         } else {
             pendingSince.delete(termId)
+        }
+        // A hand-back is a fresh, un-acted event, exactly as a fresh bell is
+        // (the bell branch in the pty handler clears the same Set for the same
+        // reason). Without this the gate below would be open on every session
+        // the user has ever typed into or sent a prompt to - which is most of
+        // them - and the glance blip would survive on the common path.
+        if (status === "waiting") {
+            actedOn.delete(termId)
+            spokeSinceHandback.delete(termId)
         }
         // A transition is news, so it is unseen - except when it happened in
         // front of you. `ack` only runs when you NAVIGATE to a pane, so without
@@ -683,16 +870,31 @@ export const useStore = create<AppState>((set, get) => {
         set((s) => (s.seen[termId] ? s : { seen: { ...s.seen, [termId]: true as const } }))
     }
 
+    /**
+     * You have arrived at this pane: acknowledge it, and change nothing about
+     * what it is.
+     *
+     * The status rewrite this used to do (`attention`/`waiting` -> `idle`) was
+     * the acknowledgement axis' own job done twice, destructively. `seen`
+     * already stops a finished turn counting, and it is read by the count and
+     * by one CSS class - so the rewrite bought nothing and cost the state:
+     * switching to the Terminal view acks whatever pane happens to be active
+     * there, which turned a genuinely waiting agent into an idle one, dropped
+     * the wants-you count from 2 to 1, and left a tile reading QUIET (or, after
+     * the pane's first redraw byte, WORKING) directly above the agent's own
+     * "Ready for review". qa saw the same thing after Ctrl+Shift+J: the key it
+     * jumped to read `status-idle` rather than waiting-and-seen.
+     *
+     * `pendingSince` is still dropped - that map only orders "jump to the agent
+     * waiting longest", and `jumpToPending` skips acknowledged sessions now, so
+     * the chord still advances instead of returning to the pane you just left.
+     */
     const ack = (termId?: string): void => {
         if (!termId || !isAgentId(get().agentOf(termId))) return
         pendingSince.delete(termId)
         set((s) => ({
             lastAgentTermId: termId,
             seen: { ...s.seen, [termId]: true as const },
-            agentStatus:
-                s.agentStatus[termId] === "attention" || s.agentStatus[termId] === "waiting"
-                    ? { ...s.agentStatus, [termId]: "idle" }
-                    : s.agentStatus,
             // Acknowledging a session clears its pending notification.
             notifications: s.notifications.filter((n) => n.termId !== termId)
         }))
@@ -879,7 +1081,7 @@ export const useStore = create<AppState>((set, get) => {
                 "printed nothing before the prompt was sent — it may not have been received"
             )
         }
-        window.api.pty.input(termId, text + "\r")
+        writePty(termId, text + "\r")
         return ready
     }
 
@@ -916,6 +1118,11 @@ export const useStore = create<AppState>((set, get) => {
         // never fix that; only moving the check could.
         if (hasBell(id, data)) {
             const was = get().agentStatus[id]
+            // A new question, whatever we sent the last one. Tied to the bell
+            // rather than to the status transition on purpose: a second bell on
+            // an already-`attention` session is a new question too, and
+            // `setStatus` takes no transition for it to hang off.
+            actedOn.delete(id)
             setStatus(id, "attention")
             if (was !== "attention" && !visible) {
                 pushNotification(id)
@@ -924,14 +1131,75 @@ export const useStore = create<AppState>((set, get) => {
             }
             return
         }
-        if (get().agentStatus[id] !== "attention" || visible) setStatus(id, "working")
+        // An attention flag survives the agent's own follow-up output, and the
+        // decision no longer reads `visible`.
+        //
+        // `|| visible` here was the last place where WHERE YOU WERE LOOKING
+        // decided a classification. A bell rang, the agent printed one more line
+        // - which most of them do immediately - and if you happened to be on
+        // that pane the `!` was gone for good: nothing re-raises it, because the
+        // bell already fired. Off the pane, the identical bytes kept the flag.
+        // Same agent, same output, two different states, and the honest one was
+        // the one you were not watching.
+        //
+        // What ends an attention event instead is an ACT: answering the prompt
+        // (a button, the reply box) or typing into the pane yourself. Once the
+        // user has sent the session something, the agent speaking again is real
+        // evidence it has moved on, so output may then classify it as working.
+        //
+        // This gate used to read `seen`, which made ARRIVING at the pane the
+        // act - and arriving is a glance, not an answer. That is how the
+        // original defect survived the fix aimed at it: `ack` no longer rewrote
+        // the status, but it still opened this gate, and the pane's own
+        // resize-repaint byte walked straight through. qa saw it twice, at a
+        // 150ms sample: `status-working`, no `!`, and Mission reading WORKING
+        // over a live question. The whole ruling is that acknowledgement dims
+        // the nag and never touches the state, so the state's own gate cannot
+        // be the thing acknowledgement opens.
+        //
+        // The asymmetry that keeps `actedOn` out of the visibility trap: a bell
+        // clears it (see the branch above), so an unanswered question can never
+        // be cleared by output alone, however long you look at it.
+        //
+        // ONE gate, both hand-over states, one decision, one site - because the
+        // reason this defect survived its first fix is that the fix named a
+        // single state and left the other one reachable by the same byte. qa
+        // watched a `waiting` session read WORKING with a pulsing dot for two to
+        // four seconds over the agent's own "Ready for review", and `setStatus`
+        // spent the `seen` the glance had just earned on the way through.
+        //
+        // The evidence bar differs per state and that is deliberate, not a
+        // second guard: see `spokeSinceHandback` for why an act is the bar for a
+        // question and continued output is the bar for a hand-back. `stalled` is
+        // NOT here on purpose - it is not an AgentStatus at all but a derived
+        // reading of wall-clock silence (missionTail's isStalled), so a byte
+        // legitimately refutes it, and the status underneath a stalled session
+        // is `waiting`, which this now covers.
+        const st = get().agentStatus[id]
+        const unactedHandover =
+            (st === "attention" && !actedOn.has(id)) ||
+            (st === "waiting" && !actedOn.has(id) && !spokeSinceHandback.has(id))
+        if (!unactedHandover) setStatus(id, "working")
+        // The hand-back keeps its state and banks the chunk: the NEXT one is
+        // evidence the turn resumed. Only for `waiting` - letting an unanswered
+        // question bank its own follow-up line would put the attention defect
+        // straight back, which tests/visibilityGate.test.ts pins.
+        else if (st === "waiting") spokeSinceHandback.add(id)
         const existing = idleTimers.get(id)
         if (existing) clearTimeout(existing)
         idleTimers.set(
             id,
             setTimeout(
                 () => {
-                    if (get().agentStatus[id] === "working") {
+                    // Every fresh silence gets its own grace, and `delete`
+                    // reports whether there was one to spend. This timer is the
+                    // app's own confirmation that the session is quiet, whatever
+                    // it is currently classified as, so it is where a banked
+                    // chunk expires - otherwise the first glance would spend the
+                    // grace and every glance after it would blip.
+                    const spoke = spokeSinceHandback.delete(id)
+                    const wasWorking = get().agentStatus[id] === "working"
+                    if (wasWorking) {
                         // It has gone quiet. That is true whether or not anyone is
                         // looking, so it is recorded either way - the ternary here
                         // destroyed the state by observing it. Only the soft signal
@@ -939,105 +1207,107 @@ export const useStore = create<AppState>((set, get) => {
                         const away = !isVisible(id)
                         setStatus(id, "waiting")
                         if (away) notifyWaiting()
-                        // A dispatched card moves to review only on EVIDENCE the
-                        // agent produced something — not because it went quiet for
-                        // a second. Unawaited so the timer stays synchronous, and
-                        // fully caught: failing to move a card must never break a
-                        // pty handler.
-                        void (async () => {
-                            try {
-                                // `find`, not the blanket `map` this replaced: a
-                                // termId belongs to exactly one dispatched card
-                                // (dispatchBoardTask stamps it on one), and the
-                                // re-check below has to name the card it re-checked
-                                // to mean anything.
-                                const task = get().boardTasks.find(
-                                    (t) => t.termId === id && t.column === "doing"
-                                )
-                                if (!task) return
-                                // "Quiet with evidence" is also true of "blocked
-                                // mid-task": an agent that writes three files and
-                                // then asks `Do you want to proceed? 1. Yes 2. No`
-                                // is quiet, has real evidence, and is waiting on a
-                                // keystroke. Filing that as ready for review hands
-                                // you a half-applied change. detectApproval is the
-                                // same classifier the Overview's one-click approve
-                                // uses - pure, renderer-side, and cheaper than the
-                                // git read it skips, so it goes before the spawn.
-                                if (detectApproval(getFullTail(id, 16))) return
-                                // sessionCwd, not termCwd directly: a dispatch with
-                                // the worktree box off records no termCwd entry at
-                                // all, and reading termCwd alone stranded every
-                                // non-isolated card in doing forever.
-                                const cwd = sessionCwd(id)
-                                if (!cwd) return
-                                // One read per session at a time. The spawn is per
-                                // PAUSE, not per turn - a turn with ten thinking
-                                // pauses is ten `git status` spawns - and without
-                                // this a read that outlives the next pause overlaps
-                                // itself, up to the 8s execFile timeout each.
-                                // Skipping is free: the next pause reads again.
-                                if (evidenceInFlight.has(id)) return
-                                evidenceInFlight.add(id)
-                                // A finally BLOCK, not a `.finally()` chained onto
-                                // the call: if `changes` throws SYNCHRONOUSLY (a
-                                // torn-down preload bridge) there is no promise to
-                                // chain onto, the add has already happened, and
-                                // nothing would ever release it - the outer catch
-                                // swallows the throw and that session is deaf for
-                                // the rest of its life.
-                                let files: ChangeFile[]
-                                try {
-                                    files = await window.api.git.changes(cwd)
-                                } catch (e) {
-                                    // Remember the failure so the board can say
-                                    // "couldn't check" rather than leaving a card
-                                    // in Doing looking indistinguishable from an
-                                    // agent that simply produced nothing.
-                                    markCheckFailed(id)
-                                    throw e
-                                } finally {
-                                    evidenceInFlight.delete(id)
-                                }
-                                clearCheckFailed(id)
-                                const paths = files.map((f) => f.path)
-                                // An UNKNOWN baseline used to be permanent: this
-                                // read is armed only by onPtyData and runs once per
-                                // idle expiry, and an agent that has finished emits
-                                // nothing more - so one transient `git status`
-                                // failure at the one moment it mattered stranded
-                                // that card in doing for the rest of the session,
-                                // silently. Adopt what is dirty NOW as the baseline
-                                // and let the next pause judge against it: unknown
-                                // self-heals instead of being terminal. Nothing
-                                // moves on this pass - these paths are a starting
-                                // point, not evidence.
-                                if (!baselineOf(id)) {
-                                    // Only for a session still live: this writes
-                                    // into a module Map that forget() has already
-                                    // cleared if the pane closed while we awaited.
-                                    if (get().termAgents[id]) adoptBaseline(id, paths)
-                                    return
-                                }
-                                const fresh = newPathsSince(baselineOf(id), paths)
-                                if (fresh.length === 0) return
-                                set((s) => ({
-                                    boardTasks: s.boardTasks.map((t) =>
-                                        t.id === task.id && t.column === "doing"
-                                            ? { ...t, column: "review" }
-                                            : t
-                                    )
-                                }))
-                            } catch {
-                                // Leave the card in doing. "Still working" is the
-                                // honest reading when we cannot tell.
-                            }
-                        })()
                     }
+                    // A dispatched card moves to review only on EVIDENCE the
+                    // agent produced something - not because it went quiet for a
+                    // second. `spoke` is that same evidence for a session that
+                    // had ALREADY handed back: it produced a chunk the gate above
+                    // deliberately did not reclassify, and has now gone quiet
+                    // again. The card rule is "output, then silence", which is
+                    // what this timer measures - not the status label - so it
+                    // must not be reachable only through the working->waiting
+                    // transition. Without this branch, sending a card back to
+                    // Doing and letting the agent add one more line leaves it in
+                    // Doing for the rest of the session
+                    // (tests/cardReview.test.ts).
+                    if (wasWorking || spoke) void fileCardOnEvidence(id)
                 },
                 useSettings.getState().agentIdleMs
             )
         )
+    }
+
+    /**
+     * A dispatched card whose session has produced something and gone quiet
+     * moves to review.
+     *
+     * Unawaited by both callers so the idle timer stays synchronous, and fully
+     * caught: failing to move a card must never break a pty handler.
+     */
+    const fileCardOnEvidence = async (id: string): Promise<void> => {
+        try {
+            // `find`, not the blanket `map` this replaced: a termId belongs to exactly
+            // one dispatched card (dispatchBoardTask stamps it on one), and the
+            // re-check below has to name the card it re-checked to mean anything.
+            const task = get().boardTasks.find(
+                (t) => t.termId === id && t.column === "doing"
+            )
+            if (!task) return
+            // "Quiet with evidence" is also true of "blocked mid-task": an agent that
+            // writes three files and then asks `Do you want to proceed? 1. Yes 2. No`
+            // is quiet, has real evidence, and is waiting on a keystroke. Filing that
+            // as ready for review hands you a half-applied change. detectApproval is
+            // the same classifier the Overview's one-click approve uses - pure,
+            // renderer-side, and cheaper than the git read it skips, so it goes before
+            // the spawn.
+            if (detectApproval(getFullTail(id, 16))) return
+            // sessionCwd, not termCwd directly: a dispatch with the worktree box off
+            // records no termCwd entry at all, and reading termCwd alone stranded every
+            // non-isolated card in doing forever.
+            const cwd = sessionCwd(id)
+            if (!cwd) return
+            // One read per session at a time. The spawn is per PAUSE, not per turn - a
+            // turn with ten thinking pauses is ten `git status` spawns - and without
+            // this a read that outlives the next pause overlaps itself, up to the 8s
+            // execFile timeout each. Skipping is free: the next pause reads again.
+            if (evidenceInFlight.has(id)) return
+            evidenceInFlight.add(id)
+            // A finally BLOCK, not a `.finally()` chained onto the call: if `changes`
+            // throws SYNCHRONOUSLY (a torn-down preload bridge) there is no promise to
+            // chain onto, the add has already happened, and nothing would ever release
+            // it - the outer catch swallows the throw and that session is deaf for the
+            // rest of its life.
+            let files: ChangeFile[]
+            try {
+                files = await window.api.git.changes(cwd)
+            } catch (e) {
+                // Remember the failure so the board can say "couldn't check" rather
+                // than leaving a card in Doing looking indistinguishable from an agent
+                // that simply produced nothing.
+                markCheckFailed(id)
+                throw e
+            } finally {
+                evidenceInFlight.delete(id)
+            }
+            clearCheckFailed(id)
+            const paths = files.map((f) => f.path)
+            // An UNKNOWN baseline used to be permanent: this read is armed only by
+            // onPtyData and runs once per idle expiry, and an agent that has finished
+            // emits nothing more - so one transient `git status` failure at the one
+            // moment it mattered stranded that card in doing for the rest of the
+            // session, silently. Adopt what is dirty NOW as the baseline and let the
+            // next pause judge against it: unknown self-heals instead of being
+            // terminal. Nothing moves on this pass - these paths are a starting point,
+            // not evidence.
+            if (!baselineOf(id)) {
+                // Only for a session still live: this writes into a module Map that
+                // forget() has already cleared if the pane closed while we awaited.
+                if (get().termAgents[id]) adoptBaseline(id, paths)
+                return
+            }
+            const fresh = newPathsSince(baselineOf(id), paths)
+            if (fresh.length === 0) return
+            set((s) => ({
+                boardTasks: s.boardTasks.map((t) =>
+                    t.id === task.id && t.column === "doing"
+                        ? { ...t, column: "review" }
+                        : t
+                )
+            }))
+        } catch {
+            // Leave the card in doing. "Still working" is the honest reading
+            // when we cannot tell.
+        }
     }
 
     const forget = (termId: string): void => {
@@ -1045,6 +1315,8 @@ export const useStore = create<AppState>((set, get) => {
         if (t) clearTimeout(t)
         idleTimers.delete(termId)
         pendingSince.delete(termId)
+        actedOn.delete(termId)
+        spokeSinceHandback.delete(termId)
         evidenceInFlight.delete(termId)
         forgetTail(termId)
         forgetSignals(termId)
@@ -1072,6 +1344,7 @@ export const useStore = create<AppState>((set, get) => {
             delete paneHold[termId]
             return {
                 seen: omit(s.seen, termId),
+                answered: omit(s.answered, termId),
                 agentStatus,
                 termInit,
                 termAgents,
@@ -1180,6 +1453,7 @@ export const useStore = create<AppState>((set, get) => {
         pendingEditorOpen: null,
         agentStatus: {},
         seen: {},
+        answered: {},
         lastAgentTermId: null,
         closedSessions: [],
         zoomedPane: undefined,
@@ -1979,8 +2253,15 @@ export const useStore = create<AppState>((set, get) => {
                     if (st === "attention") setRun({ status: "waiting" })
                     else if (get().pipelineRun?.status === "waiting") setRun({ status: "running" })
                     const elapsed = Date.now() - start
-                    // Require either observed work or a minimum grace, then a stable idle.
-                    if (st === "idle" && (sawWork || elapsed > 4000) && elapsed > 1500)
+                    // Require either observed work or a minimum grace, then a stable
+                    // quiet - and `waiting` is what quiet reads as. `idle` was the
+                    // wrong word for it twice over: `ack` no longer rewrites a status
+                    // to `idle`, so nothing reaches it after a launch, and it is now
+                    // what a session reads as BEFORE its first byte (LAUNCH_STATUS),
+                    // which is the opposite of finished. Left as it was, this loop's
+                    // own 4s grace would have marked a step DONE - a tick in the
+                    // pipeline bar - on an agent that had never produced a byte.
+                    if (st === "waiting" && (sawWork || elapsed > 4000) && elapsed > 1500)
                         return { ok: true }
                     await sleep(300)
                 }
@@ -2111,7 +2392,7 @@ export const useStore = create<AppState>((set, get) => {
                             buf += data
                             if (buf.length > 200_000) buf = buf.slice(buf.length - 200_000)
                         })
-                        window.api.pty.input(termId, step.prompt + "\r")
+                        writePty(termId, step.prompt + "\r")
                         set({ lastAgentTermId: termId })
                         await sleep(600)
                         const result = await waitForIdle(termId)
@@ -2250,22 +2531,31 @@ export const useStore = create<AppState>((set, get) => {
         sendToAgent: (text) => {
             const id = get().lastAgentTermId
             if (!id) return false
-            window.api.pty.input(id, text)
+            writePty(id, text)
             return true
         },
 
         broadcast: (termIds, text) => {
-            for (const id of termIds) window.api.pty.input(id, text)
+            for (const id of termIds) writePty(id, text)
             // Keep the focused-agent notion coherent after a fan-out.
             if (termIds.length) set({ lastAgentTermId: termIds[termIds.length - 1] })
         },
 
         respondApproval: (termId, keys) => {
-            window.api.pty.input(termId, keys)
+            // The send stays first and stays unconditional: qa verified the
+            // keystroke reaches the pty (`RECEIVED "y\r\n"`), and the feedback
+            // below must never be what decides whether the answer goes.
+            writePty(termId, keys)
             // Answering IS acknowledging: whatever the agent's status still says
             // until its next byte arrives, you have dealt with this one.
             markSeen(termId)
             pushActivity("attention", termId, "answered prompt")
+            // Two things nothing was saying before: a transient confirmation
+            // that names what went where, and a per-session record the tile
+            // reads to replace its live Approve/Deny with what it just sent.
+            // Both stop at "sent" - the outcome arrives as output, or does not.
+            set((s) => ({ answered: { ...s.answered, [termId]: { at: Date.now(), keys } } }))
+            toast(`Sent ${describeKeys(keys)} to ${labelForTerm(termId)}`)
         },
 
         /**
@@ -2279,8 +2569,16 @@ export const useStore = create<AppState>((set, get) => {
         replySession: (termId, text) => {
             const line = text.trim()
             if (!line) return
-            window.api.pty.input(termId, line + "\r")
+            writePty(termId, line + "\r")
             pushActivity("attention", termId, "replied")
+        },
+
+        // A Set write and no `set()`, so a keystroke costs no render. Nothing
+        // is recorded in `answered`: that is a record of what DEVDECK sent and
+        // is shown to the user as `Sent "y" · waiting …`, and typing the answer
+        // yourself must not print a confirmation for something you did.
+        notePaneInput: (termId) => {
+            actedOn.add(termId)
         },
 
         setComposerDraft: (projectId, text) => {
@@ -2309,11 +2607,37 @@ export const useStore = create<AppState>((set, get) => {
 
         jumpToPending: () => {
             const status = get().agentStatus
-            const pending = Object.keys(status).filter(
-                (id) => status[id] === "waiting" || status[id] === "attention"
-            )
+            const seen = get().seen
+            const paneHold = get().paneHold
+            const pending = Object.keys(status).filter((id) => {
+                // TWO independent skips, and they compose - neither is the
+                // other in disguise, and either one alone leaves the chord
+                // broken in a different way.
+                //
+                // 1. No process behind the tab. `agentStatus` is what the agent
+                //    last DID and it outlives the pty, so an exited or restored
+                //    session kept the `attention` it died wearing and the chord
+                //    jumped you into a corpse. Through `hasProcess` (tileState),
+                //    the one derivation the dot, the "N running" header and
+                //    `wantsYou` all read - not a second `exitCode === undefined`
+                //    written out here. `deckKeyStatus` is deliberately NOT
+                //    called: it has exactly one caller, the `useKeyStatus` hook,
+                //    and this is a store action with no component to hold a
+                //    subscription (tests/signalSites.test.ts pins that).
+                if (!hasProcess({ exitCode: exitCodeOf(id) }, paneHold[id])) return false
+                // 2. Already acknowledged, on the same axis the wants-you count
+                //    uses. `ack` no longer rewrites the status it lands on (that
+                //    was visibility deciding a classification), so without this
+                //    the chord would jump to the same pane forever: its
+                //    `pendingSince` stamp is gone, which sorts it oldest-first.
+                if (seen[id]) return false
+                return status[id] === "waiting" || status[id] === "attention"
+            })
             if (!pending.length) return
-            // Oldest first; attention outranks waiting at an equal age.
+            // Oldest first; attention outranks waiting at an equal age. Reading
+            // the raw status is safe HERE and only here: every id left after
+            // the filter above has a process behind it, so raw and derived
+            // agree. It is a two-way tie-break, not the follow order.
             pending.sort((a, b) => {
                 const rank = (id: string): number => (status[id] === "attention" ? 0 : 1)
                 if (rank(a) !== rank(b)) return rank(a) - rank(b)
@@ -2370,7 +2694,7 @@ export const useStore = create<AppState>((set, get) => {
                         ? { ...s.termShells, [termId]: shellKind }
                         : s.termShells,
                 agentStatus: isAgentId(agentId)
-                    ? { ...s.agentStatus, [termId]: "working" }
+                    ? { ...s.agentStatus, [termId]: LAUNCH_STATUS }
                     : s.agentStatus,
                 tabsByProject: {
                     ...s.tabsByProject,
@@ -2383,7 +2707,7 @@ export const useStore = create<AppState>((set, get) => {
                 viewByProject: rememberView(s, "terminal", projectId)
             }))
             if (isAgentId(agentId)) {
-                markLaunched(termId)
+                beginAgentSession(termId)
                 pushActivity("start", termId, `${tab.name} · started`)
                 // The directory, not just the project: an isolated session runs in
                 // `cwd` (a worktree), which is its own transcript folder.
@@ -2465,7 +2789,7 @@ export const useStore = create<AppState>((set, get) => {
             // event, so this costs nothing on the ordinary "resume a restored
             // session" path.
             useSettings.getState().logUsageEnd(termId)
-            markLaunched(termId)
+            beginAgentSession(termId)
             useSettings.getState().logUsageStart(termId, agentId, projectId, cwd)
         },
 
@@ -2488,14 +2812,14 @@ export const useStore = create<AppState>((set, get) => {
                     ? { ...s.termInit, [newTermId]: preset.command }
                     : s.termInit,
                 agentStatus: isAgentId(agentId)
-                    ? { ...s.agentStatus, [newTermId]: "working" }
+                    ? { ...s.agentStatus, [newTermId]: LAUNCH_STATUS }
                     : s.agentStatus,
                 tabsByProject: { ...s.tabsByProject, [projectId]: tabs },
                 activePaneByProject: { ...s.activePaneByProject, [projectId]: newTermId },
                 lastAgentTermId: isAgentId(agentId) ? newTermId : s.lastAgentTermId
             })
             if (isAgentId(agentId)) {
-                markLaunched(newTermId)
+                beginAgentSession(newTermId)
                 useSettings
                     .getState()
                     .logUsageStart(
@@ -2637,7 +2961,7 @@ export const useStore = create<AppState>((set, get) => {
                     ? { ...s.termShells, [termId]: entry.shellKind }
                     : s.termShells,
                 agentStatus: entry.isAgent
-                    ? { ...s.agentStatus, [termId]: "working" }
+                    ? { ...s.agentStatus, [termId]: LAUNCH_STATUS }
                     : s.agentStatus,
                 tabsByProject: {
                     ...s.tabsByProject,
@@ -2648,7 +2972,7 @@ export const useStore = create<AppState>((set, get) => {
                 lastAgentTermId: entry.isAgent ? termId : s.lastAgentTermId
             })
             if (entry.isAgent) {
-                markLaunched(termId)
+                beginAgentSession(termId)
                 pushActivity("start", termId, `${entry.name} · reopened`)
                 useSettings
                     .getState()
@@ -2721,7 +3045,7 @@ export const useStore = create<AppState>((set, get) => {
                     termAgents[termId] = n.agentId
                     if (n.init) termInit[termId] = n.init
                     if (isAgentId(n.agentId)) {
-                        agentStatus[termId] = "working"
+                        agentStatus[termId] = LAUNCH_STATUS
                         startedAgents.push(termId)
                     }
                     return leaf(termId)
@@ -2750,7 +3074,7 @@ export const useStore = create<AppState>((set, get) => {
             }))
             window.api.projects.setActive(pid)
             for (const termId of startedAgents) {
-                markLaunched(termId)
+                beginAgentSession(termId)
                 useSettings
                     .getState()
                     .logUsageStart(

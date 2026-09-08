@@ -1,11 +1,36 @@
 import { describe, it, expect } from "vitest"
 import { buildOwnership, holdersOf, holdersSummary } from "../src/renderer/src/ownership"
 
+/**
+ * One session entry. `baseline` is the dirty set the session inherited when it
+ * started — `undefined` means nobody knows, which must produce no evidence at
+ * all rather than the whole dirty list.
+ */
+const own = (
+    termId: string,
+    files: string[],
+    opts: { baseline?: string[]; cwd?: string; name?: string; project?: string } = {}
+): {
+    termId: string
+    sessionName: string
+    projectName: string
+    cwd: string
+    files: string[]
+    baseline: ReadonlySet<string> | undefined
+} => ({
+    termId,
+    sessionName: opts.name ?? termId,
+    projectName: opts.project ?? "App",
+    cwd: opts.cwd ?? "C:/repos/app",
+    files,
+    baseline: opts.baseline ? new Set(opts.baseline) : undefined
+})
+
 describe("buildOwnership", () => {
-    it("flags a file two agents in the same project both touched as a conflict", () => {
+    it("flags a file two agents in the same tree both wrote after starting as a conflict", () => {
         const m = buildOwnership([
-            { termId: "a", sessionName: "claude 1", projectName: "App", files: ["src/x.ts", "src/y.ts"] },
-            { termId: "b", sessionName: "claude 2", projectName: "App", files: ["src/x.ts"] }
+            own("a", ["src/x.ts", "src/y.ts"], { baseline: [], name: "claude 1" }),
+            own("b", ["src/x.ts"], { baseline: [], name: "claude 2" })
         ])
         expect(m.conflicts).toBe(1)
         const x = m.files.find((f) => f.path === "src/x.ts")!
@@ -16,22 +41,101 @@ describe("buildOwnership", () => {
 
     it("does not treat identical paths in different projects as a conflict", () => {
         const m = buildOwnership([
-            { termId: "a", sessionName: "s", projectName: "P1", files: ["index.ts"] },
-            { termId: "b", sessionName: "s", projectName: "P2", files: ["index.ts"] }
+            own("a", ["index.ts"], { baseline: [], cwd: "C:/repos/p1", project: "P1" }),
+            own("b", ["index.ts"], { baseline: [], cwd: "C:/repos/p2", project: "P2" })
         ])
         expect(m.conflicts).toBe(0)
         expect(m.files).toHaveLength(2)
     })
 
     it("dedupes the same owner listed for the same file", () => {
-        const m = buildOwnership([
-            { termId: "a", sessionName: "s", projectName: "P", files: ["a.ts", "a.ts"] }
-        ])
+        const m = buildOwnership([own("a", ["a.ts", "a.ts"], { baseline: [] })])
         expect(m.files[0].owners).toHaveLength(1)
     })
 
     it("returns empty for no entries", () => {
         expect(buildOwnership([])).toEqual({ files: [], conflicts: 0 })
+    })
+
+    /**
+     * The 2026-09-08 walkthrough's finding 9, in one assertion.
+     *
+     * Every session sharing a working tree is handed that tree's WHOLE dirty
+     * list, because the only question git can answer is "what has changed in
+     * this directory" - not "which pty changed it". Counting a shared path as a
+     * collision therefore reported "3 conflicts" in red for two `node` scripts
+     * that cannot write to disk, over files the USER had edited before either
+     * session existed. It fired for any dirty repo with two or more sessions -
+     * the product's headline use case.
+     *
+     * The rule holdersSummary already follows (ownership.ts's own note above it)
+     * applies here too: a change is the TREE's until we have evidence otherwise,
+     * and the evidence is the launch baseline.
+     */
+    it("does not call a file both sessions inherited from a dirty tree a conflict", () => {
+        const m = buildOwnership([
+            own("a", ["README.md", "package.json"], { baseline: ["README.md", "package.json"] }),
+            own("b", ["README.md", "package.json"], { baseline: ["README.md", "package.json"] })
+        ])
+        expect(m.conflicts).toBe(0)
+        // And it is not listed as anyone's in-flight change either: nobody
+        // touched it, so no session's name may appear against it.
+        expect(m.files).toEqual([])
+    })
+
+    it("attributes only what appeared after a session started", () => {
+        const m = buildOwnership([
+            own("a", ["README.md", "src/new.ts"], { baseline: ["README.md"], name: "claude 1" })
+        ])
+        expect(m.files.map((f) => f.path)).toEqual(["src/new.ts"])
+        expect(m.files[0].owners.map((o) => o.sessionName)).toEqual(["claude 1"])
+        expect(m.conflicts).toBe(0)
+    })
+
+    // agentSignals' rule, and the reason it exists: an unknown baseline is no
+    // evidence, never the whole list. The alternative marks every agent in a
+    // dirty repo as having done work.
+    it("claims nothing for a session whose baseline is unknown", () => {
+        const m = buildOwnership([
+            own("a", ["README.md"]),
+            own("b", ["README.md"], { baseline: [] })
+        ])
+        expect(m.conflicts).toBe(0)
+        expect(m.files).toHaveLength(1)
+        expect(m.files[0].owners.map((o) => o.termId)).toEqual(["b"])
+    })
+
+    /**
+     * The worktree toggle's whole point, on this surface too. Two sessions in
+     * separate worktrees of one project share a project NAME and the same
+     * relative paths, and keying the map on the project made them collide -
+     * which is precisely the collision a worktree exists to prevent.
+     */
+    it("does not treat two worktrees of one project as one tree", () => {
+        const m = buildOwnership([
+            own("a", ["src/x.ts"], { baseline: [], cwd: "C:/repos/app" }),
+            own("b", ["src/x.ts"], { baseline: [], cwd: "C:/repos/app.worktrees/feat" })
+        ])
+        expect(m.conflicts).toBe(0)
+        expect(m.files).toHaveLength(2)
+    })
+
+    it("treats one tree spelled two ways as one tree", () => {
+        const m = buildOwnership([
+            own("a", ["src/x.ts"], { baseline: [], cwd: String.raw`C:\Repos\App` + "\\" }),
+            own("b", ["src/x.ts"], { baseline: [], cwd: "c:/repos/app" })
+        ])
+        expect(m.conflicts).toBe(1)
+    })
+
+    // No cwd is no tree: two sessions whose directory could not be resolved
+    // would otherwise key together under "" and conflict with each other.
+    it("claims nothing for a session with no resolved directory", () => {
+        const m = buildOwnership([
+            own("a", ["src/x.ts"], { baseline: [], cwd: "" }),
+            own("b", ["src/x.ts"], { baseline: [], cwd: "" })
+        ])
+        expect(m).toEqual({ files: [], conflicts: 0 })
     })
 })
 
