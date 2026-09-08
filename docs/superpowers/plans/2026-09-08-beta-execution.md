@@ -657,7 +657,7 @@ promissory sentence about the API or database panels.
 - [ ] **Step 5: Note the tag, and decide it deliberately**
 
 `v0.13.0` is `cf38972`; `HEAD` is `cfe2f05`, one ROADMAP-doc commit ahead; the binaries
-were built from `c421f5e` per `07-the-build.md`. **Do not move the tag** — retagging
+were built from `12d25ef` per `07-the-build.md`. **Do not move the tag** — retagging
 changes what the release points at for no gain. State the build commit in the body if it
 is not already there.
 

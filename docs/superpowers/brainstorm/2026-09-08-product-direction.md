@@ -339,7 +339,7 @@ of it, and step 9, whose blocker list has shrunk to document edits.
 | **I** | The UI/UX overhaul interrupt — six surfaces, 78 skins, the crash | 2026-09-04 |
 | 8 | First contact — empty states, presence, the failure a stranger hands back | 2026-09-03, shipped 0.12.0 |
 | 4 | The public flip | **2026-09-07** — verified today: PUBLIC, MIT, issues on, feed URL byte-identical |
-| — | *Added on 2026-09-04*, all three | `e5327ad` (double-spawn), `79c1dae` (unreadable `projects.json`), and the deck measurement |
+| — | *Added on 2026-09-04*, all three | `e5327ad` (double-spawn), `30cfe4a` (unreadable `projects.json`), and the deck measurement |
 
 ### Survives
 

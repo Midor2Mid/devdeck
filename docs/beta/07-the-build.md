@@ -1,6 +1,6 @@
 # The build to hand over
 
-**0.13.0, built from `main` at `c421f5e` on 2026-09-07.**
+**0.13.0, built from `main` at `12d25ef` on 2026-09-07.**
 
 `docs/beta/03-install-watch-protocol.md` needs a build a stranger can run, and
 until now `release/` held only 0.12.0 — which predates the crash fix
@@ -48,7 +48,7 @@ fewer thing to undo if they hate it.
 
 ## Reproducing it
 
-    git checkout c421f5e
+    git checkout 12d25ef
     npm ci
     npm run package
 

@@ -98,7 +98,7 @@ than the other rows because I did not re-read the kill-list files themselves.
 - **Named commits are real and match their claimed content:** `cf35bd5`
   (delete Network view + proxy), `b3d005a` (delete Canvas layout), `cfd31d5`
   (84 skins → 6), `d57c87d` (delete terminal recording), `815b9fe` (modals
-  behind boundaries), `e5327ad` (double-spawn fix), `79c1dae` (unreadable
+  behind boundaries), `e5327ad` (double-spawn fix), `30cfe4a` (unreadable
   projects.json fix), `5792925` (label every deck key) — all found in `git log`
   with exactly the subject lines the two documents quote.
 
