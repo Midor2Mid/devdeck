@@ -914,3 +914,267 @@ What still needs saying out loud to five beta users:
 Neither loses work. Neither is the quiet erosion of trust the two fixed defects
 were. If those two sentences go in the beta note, nothing else here needs
 disclosure.
+
+---
+
+# FINAL CONFIRMATION - the five changes made after the spot-check
+
+Third and last pass, scoped to the five post-spot-check changes only. Nothing
+already verified in the two sections above was re-verified; where a run crossed
+old ground it is mentioned only if it regressed.
+
+**Method.** `npx electron-vite build` clean. `npm run typecheck` = 0 errors.
+`npm test` = 138 files / 1748 passed / 1 skipped, run in full rather than
+per-file. The app was driven over CDP via the `run-app` skill, every launch with
+a **scratch `userDataDir`** under the session scratchpad (`udQ1`...`udQ14`,
+`udS-*`, `udP-*`) and a **unique `debugPort`** (9411-9454). The user's own
+DevDeck was never touched and no process of theirs was killed.
+
+Statuses were produced by real ptys, not by poking the store (it is not exposed
+on `window`). Each scratch profile was seeded **on disk before launch** with a
+scripted agent preset - writing settings through `window.api.settings.save`
+loses the race, because the live renderer's debounced `persist()` writes its own
+hydrated state back over the file. The project folder used is
+`.../scratchpad/projs/alpha app`, a **Windows path containing a space**.
+
+Two scripted agents did the work:
+
+- `QATalker` - prints `Ready for review`, sleeps 25s (well past the 6s idle
+  timer), then prints two lines ~900ms apart, so the "banked first chunk /
+  promoted on the second" rule is exercised deliberately rather than hoped for.
+- `QAMute` - a blank command on a custom shell of `sort.exe`, which blocks on
+  stdin and writes nothing, so the pty is **alive and has genuinely never
+  spoken**.
+
+## 1. The hollow diamond - CONFIRMED, with one honest qualification
+
+Geometry, measured in the running app in **all six skins** (3 themes x 2 styles,
+each a separate boot with the skin seeded into `appearance`, because
+`applyTheme` writes the palette as inline custom properties on `:root` - setting
+`data-theme` by hand changes nothing, and an earlier attempt to do so produced
+six identical readings that were all really Slate):
+
+| context | content box | ring | radius | rotated | animation | painted extent |
+|---|---|---|---|---|---|---|
+| `.term-tab` | 6x6 | `inset 0 0 0 1.5px` | 1px | yes (45deg) | none | **8.49 x 8.49** |
+| `.deck-key` | 6x6 | `inset 0 0 0 1.5px` | 1px | yes (45deg) | none | **8.49 x 8.49** |
+| `.mission-tile-head` | 6x6 | `inset 0 0 0 1.5px` | 1px | yes (45deg) | none | **8.49 x 8.49** |
+| `.ov-grp-mini` (7px) | 7x7 | `inset 0 0 0 1.5px` | 1px | yes (45deg) | none | **9.90 x 9.90** |
+
+Identical in every skin. Contrast on the Mission tile head came back at
+**15.03 (slate) / 12.17 (sumi) / 9.82 (washi)** - exactly the figures recorded
+in the earlier pass, so the ink is genuinely untouched by the shape change.
+
+**Clipping and overlap: none anywhere.** At the deck key's 6px gap the rotated
+paint leaves **4.76px** of clear space to the next element (8.49px in a 6px slot
+overhangs 1.24px each side); in the tab strip's 7px gap, 5.76px. Every parent
+computes `overflow: visible` and `clipped` came back false in all six skins. On
+`.mission-tile-head` the paint does extend past the parent's box
+(`escapes: true`) but nothing clips it. The **7px collapsed mini-strip** is the
+tightest case: two adjacent waiting diamonds sit **1.10px** edge-to-edge (the
+4px gap less 2 x 1.45px of overhang) and a waiting-beside-working pair 2.55px -
+close, but **no overlap** (`overlaps: false`). Measured against the view's real
+CSS with the DOM shaped as `.ov-grp-mini` emits it, since reaching a genuinely
+collapsed group needed setup this run did not justify: the geometry is real, the
+data is synthetic, and that is labelled.
+
+**Chip and dot now agree on shape.** The Mission tile chip renders a diamond
+glyph ahead of `WAITING 7s`, beside a diamond dot, in all six skins. Confirmed.
+
+**Does it read as a state rather than a bullet?** Partly - and this is a
+judgement for the designer's eye rather than a pass or a fail. I first read the
+6x montage as "a soft blob" and that was wrong: an ASCII luminance map of the
+true 1x pixels shows a clean rhombus outline with distinct diagonal edges
+(`final-01-diamond-1x-pixels.png`, 22x nearest-neighbour, no resampling). So it
+is a diamond, and it is unmistakably *not* the filled pulsing circle of
+`working` nor the flat bar of `not-running` - the state distinction does its job
+in a still frame, which was the whole point.
+
+But at 6px the diamond-ness is carried by roughly **four antialiased corner
+pixels** at about 50% ink; the dominant read is still a small hollow ring. It is
+weakest in **Washi**, where those corners are faintest. So "no bullet glyph is a
+diamond" is satisfied in geometry and only weakly in perception at 6px. The 7px
+mini-strip, painting 9.9px, reads as a diamond much more clearly. Not a defect -
+a note that the argument for the rotation is thinner at 6px than the
+measurements alone suggest.
+
+Pixel-verified in the tab strip and the deck key; geometry-verified on the
+Mission tile head. Overview's focus header carries the same rule with identical
+computed geometry, so its raster is identical - that one is **inferred from
+identical computed style**, not separately pixel-mapped.
+
+## 2. Overview's blocked-on-you word - CONFIRMED
+
+Measured on both heads, with the width and the view set *before* the session was
+allowed to reach `waiting`, so nothing the harness did disturbed the state:
+
+- `.ov-main-head` (focus header) at **1384px, 700px and 640px**: renders
+  `waiting for you`, class `ov-flag waiting`, `color: rgb(231,234,241)` =
+  `--text` (the accent is **not** spent on it), `font-weight: 600`, 73x14px,
+  **not clipped**.
+- `.ov-card-head` (grid card head) at **700px**: the same flag, same class, same
+  token, same weight, 73px, not clipped.
+
+The narrow case holds at 700px and below: the flag computes `flex: 0 0 auto`
+(i.e. `flex: none`, so it is not the item that gets squeezed), the name computes
+`white-space: nowrap`, the project computes `text-overflow: ellipsis /
+overflow: hidden / white-space: nowrap`, and neither head overflows
+(`scrollWidth` equals `clientWidth`) at 1384, 700 or 640.
+
+**One gap, stated plainly:** the fixture project is named `alpha app`, short
+enough that the ellipsis never actually engaged (`projTruncated: false` at
+640px). The truncation mechanism is declared and correct; I did not observe it
+truncate. A long project name at 640px is unchecked.
+
+## 3. The terminal tab strip renders waiting - CONFIRMED
+
+Two agent tabs in one strip, one waiting and one working, measured together:
+
+| tab | class | radius | transform | animation | box |
+|---|---|---|---|---|---|
+| `qatalker 1` | `status-waiting` | 1px | 45deg rotation matrix | **none** | 8.49x8.49 |
+| `qatalker 2` | `status-working` | **50%** | none | **dot-pulse** | 6x6 |
+
+They differ in shape, in motion and in ink - three channels, not one. The strip
+no longer collapses `waiting` to `idle`.
+
+**Two agent panes inside one tab could not be reached.** Every split path in
+`TerminalView.tsx` (lines 175-176, 338, 345, 639, 647) spawns `SHELL`, so the
+only way to get a second *agent* pane into a tab is dragging a tab onto a pane -
+**HTML5 drag-and-drop, which cannot be simulated over CDP**. That exact case is
+however pinned at the unit level: the pair loop in `tests/deck.test.ts:265-282`
+asserts a waiting-plus-working pair resolves to `waiting` in **both** orders,
+and it passes.
+
+## 4. A launching session no longer claims to be working - CONFIRMED
+
+Sampled every ~45ms from the instant of the launch click:
+
+```
+    0ms  status-idle      <- launch click
+  229ms  status-idle
+  275ms  status-working   <- the shell's first bytes
+```
+
+Six consecutive samples read `status-idle` before any byte arrived, on both the
+tab strip and the deck key. Nothing ever read `working` before the pty spoke,
+and a normal agent still reaches `working` the moment it does - 275ms here. It
+then went `waiting` on the idle timer at 6521ms.
+
+**The never-speaks case was reproduced deliberately** this time, with `QAMute`
+on a `sort.exe` shell: pty alive, terminal rows empty, zero bytes for the full
+10s observation.
+
+- tab strip dot: `status-idle` throughout
+- deck key: `status-idle` throughout
+- Mission tile: `mission-tile status-idle`, chip **`QUIET 11s`**, section header
+  `1 running` - honest, because the process *is* running
+
+That is exactly the claim: a booting session claims nothing and its tile reads
+`QUIET <ago>`. See `final-04-silent-pty-mission.png`.
+
+Also attacked with a **shell path that does not exist**: the pane explains
+itself ("DevDeck could not start this terminal... Pick a different shell in
+Settings, or fix the path there"), the status is `not-running`, and the tile
+reads `EXITED 1`. Honest. A dropped letter in my own `innerText` dump of that
+tile was an artifact of the probe - the rendered pixels read correctly. Not a
+bug; recorded because I nearly reported it as one.
+
+**Disclosure #2 from the section above can be dropped.**
+
+## 5. The glance blip for waiting - FIXED for the glance, still open by another route
+
+**The original reproduction is closed.** A session was driven to `waiting`
+(confirmed), left off-screen on Mission, then glanced at by clicking its Mission
+tile to jump to the pane. Sampled **70 times from 12ms to 2162ms** after the
+click - my original catch depended on a single 150ms sample, so this is roughly
+30x denser and spans the whole window:
+
+```
+key states: {status-waiting: 70}    tab states: {status-waiting: 70}
+samples showing WORKING during the glance: 0
+```
+
+Zero. The pane was genuinely visible and reading "Ready for review"
+(`final-05-after-glance.png`, which also shows the diamond in the tab and in the
+deck key).
+
+**The intended behaviour still works.** The hand-back held through the first
+resume line at ~25.3s - the banked first chunk did **not** reclassify it - and
+promoted to `working` at **26457ms**, after the second line arrived. So a
+genuinely resuming agent returns to `working` promptly, and the second chunk is
+what does it, exactly as designed.
+
+### CONFIRMED - a waiting agent still reads WORKING for ~6s after you leave and re-enter its tab
+
+`src/renderer/src/store.ts:1180-1187` (the `unactedHandover` gate).
+
+Steps: launch an agent that hands back, let it settle to `waiting`, add a second
+tab, click tab 2, click back to tab 1.
+
+| step | observed |
+|---|---|
+| waiting, untouched for 4s | stays `waiting`, 231 pane chars - stable |
+| click tab 2, click back to tab 1 | `status-working` at **79ms**, holds **5984ms**, returns to `waiting` at 6063ms |
+| repeat | `status-working` at **78ms**, holds **5983ms** - reproducible |
+
+`final-05-tabswitch-blip.png` shows it in a still frame: a filled round
+`working` dot on both the tab and the deck key while the pane plainly reads
+`Ready for review`.
+
+Mechanism: re-entering a tab remounts the xterm, which resizes the pty, which
+emits **more than one chunk** - so the "held until output *continues*" bar is
+cleared by the remount itself. The pane's character count did not even change
+(231 to 231), so the promoting bytes were control sequences, not visible output.
+Switching the terminal **layout** (Tabs to Grid) does the same thing: `working`
+at 276ms, held ~6.0s, self-healed at 6256ms
+(`final-05-layout-recovery.png`, `final-05-layout-flip-overview.png`).
+
+Two things it is **not**:
+
+- **Not a regression.** Before this change a *single* chunk promoted `waiting`
+  with no gate at all, so this path blipped then too, and faster. The gate
+  narrowed the defect; it did not open it.
+- **Not the glance.** Arriving at the pane from Mission is clean (0/70). A plain
+  **window resize** of a mounted pane is also clean - 1384 to 1000 while
+  waiting: no working sample at all, stayed `waiting`. The trigger is
+  specifically a pane **remount** (tab re-entry, layout switch), not visibility
+  and not size.
+
+Ranked by damage x likelihood for one developer running several agent terminals,
+this is the highest finding of the pass. It is the same lie item 5 exists to
+prevent, it lasts ~6s rather than 2-4s, it is self-correcting, and it fires on
+**the most common action in the app** - switching between agent tabs.
+
+## What this method could not see
+
+- **HTML5 drag-and-drop cannot be simulated over CDP.** Two agent panes in one
+  tab, and tab reordering, are verified by a human or not at all.
+- **The renderer store is not exposed on `window`**, so every scenario drove the
+  DOM and real ptys, never the actions directly.
+- The `.ov-grp-mini` 7px geometry used real CSS with a synthetic DOM.
+- Overview's focus-header diamond is inferred from identical computed style, not
+  separately pixel-mapped.
+- A long project name ellipsising at 640px is unchecked.
+- Every skin reading is at `deviceScaleFactor: 1`; there was no HiDPI pass.
+
+## Verdict
+
+| # | change | verdict |
+|---|---|---|
+| 1 | waiting dot became a hollow diamond | **confirmed** - geometry, no clipping, chip agrees; diamond-ness weak at 6px, clear at 7px |
+| 2 | Overview gained the blocked-on-you word | **confirmed** at 1384 / 700 / 640; long-name ellipsis unchecked |
+| 3 | tab strip renders waiting | **confirmed** in-app for one pane; the multi-pane case is pinned by unit test only |
+| 4 | launching session no longer claims to be working | **confirmed**, including a deliberately silent pty reading `QUIET` |
+| 5 | glance blip for waiting | **fixed for the glance**; a ~6s `WORKING` blip remains on tab re-entry / layout switch |
+
+Nothing regressed against either earlier run.
+
+**Can this be handed to a stranger with no disclosures attached?** No - one
+sentence is still needed, and it is a different sentence than this morning's.
+Disclosure #2 (a silent session claiming `WORKING`) is **gone**. Disclosure #1
+has **narrowed but not closed**: it is no longer "glancing at a session", it is
+"leaving and re-entering an agent's tab makes it say `WORKING` for about six
+seconds before settling back to `WAITING`". Harmless, self-correcting, and
+certain to be noticed by anyone switching between two agents. With that one
+sentence in the beta note, nothing else in this pass needs disclosing.
