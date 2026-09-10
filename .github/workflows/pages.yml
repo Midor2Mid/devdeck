@@ -1,0 +1,73 @@
+# Publishes `site/` — and only `site/` — to GitHub Pages.
+#
+# WHY ACTIONS, NOT A `gh-pages` BRANCH. Pages' other mechanism serves a branch's
+# root or its `/docs`, and neither shape fits here: `site/` sits beside `docs/`
+# at repo root, so a branch-root deploy of `main` would publish `docs/beta/`,
+# `docs/qa/` (~350 screenshots) and `docs/superpowers/` — this repository's
+# entire internal record — alongside the homepage. A `gh-pages` orphan branch
+# avoids that, but has to be pushed with a token that has `contents: write` on
+# this repo, and the standing worry here (recorded against the step-4 rename)
+# is a token scope 403. This workflow needs neither a long-lived branch nor a
+# personal token: `actions/upload-pages-artifact` + `actions/deploy-pages` run
+# under the run's own auto-generated `GITHUB_TOKEN`, scoped by the `permissions:`
+# block below, not by whatever scopes `gh auth status` happens to report for a
+# maintainer's PAT.
+#
+# WHAT STILL NEEDS A HUMAN CLICK. Actions can publish nothing until the repo's
+# own Settings → Pages → "Build and deployment" → Source is switched from
+# "Deploy from a branch" (or unset) to "GitHub Actions" — that flip is an
+# owner-only click this workflow cannot make for itself, and until it is made
+# `deploy-pages` fails with "Get Pages site failed". Enabling that source is
+# also the act that turns Pages on for this repo; nothing here does it as a
+# side effect, and this workflow is not wired to any trigger that fires on its
+# own before that click happens (see `on:` below).
+#
+# THE UPLOAD PATH IS THE WHOLE GUARD. `tests/pagesDeployScope.test.ts` pins the
+# `upload-pages-artifact` step's `path:` to exactly `site` and fails if it ever
+# widens — do not add a second upload step or change this one without reading
+# that test first.
+name: pages
+
+on:
+  # No push trigger yet, deliberately: this file is being proven, not switched
+  # on. Wiring `push: branches: [main], paths: ["site/**"]` is the one-line
+  # change that arms it, and it should happen in the same breath as the Pages
+  # source click above, not before. Until then, workflow_dispatch is how this
+  # pipeline gets exercised at all — the same shape `release.yml` uses to prove
+  # itself before step 4 made it real.
+  workflow_dispatch:
+
+# Nothing here can read repo contents beyond checkout, and nothing here can
+# write to the repo itself. `pages: write` and `id-token: write` are the two
+# permissions the Pages deployment API requires; there is no third.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # One live Pages deployment at a time; a second run should queue behind it
+  # rather than race it for the same environment.
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Upload site/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
