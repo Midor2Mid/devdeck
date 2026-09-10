@@ -20,13 +20,10 @@ describe("every language the app can request is bundled", () => {
         expect(missing).toEqual([])
     })
 
-    // ApiPanel picks a language from the response content-type, and DbPanel hardcodes
-    // sql. Both are separate from LANG, so both are checked separately.
-    it("covers the response viewer and the SQL editor", () => {
-        for (const lang of ["json", "html", "xml", "javascript", "css", "sql"]) {
-            expect(BUNDLED_LANGUAGES, `${lang} is requested but not bundled`).toContain(lang)
-        }
-    })
+    // The two panels that asked for a language outside LANG - ApiPanel (from the
+    // response content-type) and DbPanel (hardcoded `sql`) - were deleted by D1,
+    // so their half of this guard went with them. `LANG` above is now the only
+    // way the app names a language, and the first test covers all of it.
 
     it("imports a contribution for every basic language it claims", () => {
         // A language listed with no import is a claim the other tests cannot catch,

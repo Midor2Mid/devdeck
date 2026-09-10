@@ -1,10 +1,7 @@
 import { create } from "zustand"
 import { applyTheme, applyStyle, migrateAppearance, THEMES, type ThemeId, type StyleId } from "./themes"
 import type { Pipeline, PipelineTrigger } from "./pipeline"
-import type { KvRow } from "./components/KeyValueEditor"
 import type { SplitDir } from "./layout"
-import type { ApiTest } from "./apiTests"
-import type { Extractor } from "./apiChain"
 import type { BindMode } from "../../preload/index"
 import type { RoutingRule } from "./routing"
 
@@ -33,63 +30,6 @@ export interface WorkspacePreset {
     tabs: PresetTab[]
 }
 
-/** A named set of {{variables}} for the API client (e.g. dev / UAT / PROD). */
-export interface Environment {
-    id: string
-    name: string
-    vars: KvRow[]
-}
-
-export type ApiBodyType = "none" | "json" | "form"
-export type AuthType = "none" | "bearer" | "basic" | "apikey"
-
-/** Authentication config for a request. Fields support {{variables}}. */
-export interface AuthConfig {
-    type: AuthType
-    token: string
-    username: string
-    password: string
-    apiKeyName: string
-    apiKeyValue: string
-    apiKeyIn: "header" | "query"
-}
-
-export function defaultAuth(): AuthConfig {
-    return {
-        type: "none",
-        token: "",
-        username: "",
-        password: "",
-        apiKeyName: "",
-        apiKeyValue: "",
-        apiKeyIn: "header"
-    }
-}
-
-/** A saved API request (the full editable state of the API client). */
-export interface SavedRequest {
-    id: string
-    name: string
-    method: string
-    url: string
-    params: KvRow[]
-    headers: KvRow[]
-    bodyType: ApiBodyType
-    bodyText: string
-    formRows: KvRow[]
-    auth: AuthConfig
-    /** Assertions evaluated against the response after Send. */
-    tests?: ApiTest[]
-    /** Values pulled from the response into chain variables for later requests. */
-    extractors?: Extractor[]
-}
-
-/** A named folder of saved requests. */
-export interface Collection {
-    id: string
-    name: string
-    requests: SavedRequest[]
-}
 
 export type ShellKind = "powershell" | "cmd" | "gitbash" | "wsl" | "custom"
 
@@ -379,9 +319,6 @@ export interface AppSettings {
     triggers: PipelineTrigger[]
     gitAccounts: GitAccount[]
     sshProfiles: SshProfile[]
-    environments: Environment[]
-    activeEnvId: string | null
-    collections: Collection[]
     appearance: {
         theme: ThemeId
         style: StyleId
@@ -428,8 +365,6 @@ export interface AppSettings {
     }
     workspacePresets: WorkspacePreset[]
     usageLog: UsageEvent[]
-    /** Recent SQL per DB connection id, most-recent-first. */
-    dbQueryHistory: Record<string, string[]>
     /** User-defined launchable shell commands, per project id. */
     projectCommands: Record<string, SavedCommand[]>
     /** Rules that pick which agent preset dispatches a task-board card. */
@@ -437,9 +372,6 @@ export interface AppSettings {
     /** Agent used when no routing rule matches. "" = fall back to agents[0]. */
     defaultAgentId: string
 }
-
-/** Cap recent queries kept per connection. */
-export const DB_HISTORY_CAP = 25
 
 function generateToken(): string {
     const bytes = new Uint8Array(24)
@@ -567,9 +499,6 @@ const DEFAULTS: AppSettings = {
     triggers: [],
     gitAccounts: [],
     sshProfiles: [],
-    environments: [],
-    activeEnvId: null,
-    collections: [],
     appearance: {
         theme: "slate",
         style: "modern",
@@ -603,7 +532,6 @@ const DEFAULTS: AppSettings = {
     },
     workspacePresets: [],
     usageLog: [],
-    dbQueryHistory: {},
     projectCommands: {},
     routingRules: [],
     defaultAgentId: ""
@@ -633,10 +561,6 @@ interface SettingsState extends AppSettings {
     setTriggers: (triggers: PipelineTrigger[]) => void
     setGitAccounts: (accounts: GitAccount[]) => void
     setSshProfiles: (profiles: SshProfile[]) => void
-    setEnvironments: (environments: Environment[]) => void
-    setActiveEnv: (id: string | null) => void
-    activeEnv: () => Environment | undefined
-    setCollections: (collections: Collection[]) => void
     agentById: (id: string) => AgentPreset | undefined
     setAppearance: (patch: Partial<AppSettings["appearance"]>) => void
     setRemote: (patch: Partial<AppSettings["remote"]>) => void
@@ -657,9 +581,6 @@ interface SettingsState extends AppSettings {
     logUsageStart: (id: string, agentId: string, projectId: string, cwd?: string) => void
     /** Stamp an agent session as ended. No-op if unknown/already ended. */
     logUsageEnd: (id: string) => void
-    /** Record a successfully-run query for a connection (deduped, capped). */
-    pushDbQuery: (connId: string, sql: string) => void
-    clearDbHistory: (connId: string) => void
     /** Replace a project's saved commands. */
     setProjectCommands: (projectId: string, commands: SavedCommand[]) => void
     setRoutingRules: (rules: RoutingRule[]) => void
@@ -698,6 +619,23 @@ export const useSettings = create<SettingsState>((set, get) => {
     // migration - would rewrite settings.json with no token to retry from.
     // Set in `load()`; cleared once migration is confirmed.
     let unmigratedLegacyToken: string | null = null
+    // Everything settings.json held at load(), verbatim - so a key this build
+    // does not model is written back untouched instead of being dropped.
+    //
+    // `writeNow` used to save a fixed 24-key destructure of the store, which
+    // meant any other key on disk was pruned by omission on the very next save
+    // - from an unrelated theme tweak, not from anything the user did to that
+    // data. Invisible to the typecheck (the payload is `unknown` at the
+    // bridge) and to every spec. That is what made the D1 ruling "orphan the
+    // keys, do not prune user data" impossible to honour: deleting a store
+    // slice deleted the user's data with it, and an upgrade-then-downgrade
+    // came back empty.
+    //
+    // Spread FIRST in `writeNow`, so a modelled key always wins and this can
+    // only ever re-add what would otherwise be lost. Nested keys are not
+    // merged: a modelled top-level key replaces its whole object (`remote`
+    // relies on that to shed the legacy plaintext token).
+    let retained: Record<string, unknown> = {}
     // Debounced - accent dragging and rapid edits shouldn't hammer the disk.
     let persistTimer: ReturnType<typeof setTimeout> | null = null
     const writeNow = (): void => {
@@ -710,7 +648,7 @@ export const useSettings = create<SettingsState>((set, get) => {
             console.warn("[settings] save requested before load() completed - dropped")
             return
         }
-        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote, mcpServer, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId } = get()
+        const { terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, appearance, remote, mcpServer, proxy, notifications, workspacePresets, usageLog, projectCommands, routingRules, defaultAgentId } = get()
         // Re-attach an unconfirmed legacy token so it survives THIS write too
         // - not just the one migration flush() was supposed to make happen.
         // Any other setting changing (a theme tweak, a new snippet) calls
@@ -718,7 +656,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         // no-token `remote` shape to disk and the legacy value would be gone
         // for good on the next launch, with nothing left to retry.
         const remoteOut = unmigratedLegacyToken ? { ...remote, token: unmigratedLegacyToken } : remote
-        window.api.settings.save({ terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, environments, activeEnvId, collections, appearance, remote: remoteOut, mcpServer, proxy, notifications, workspacePresets, usageLog, dbQueryHistory, projectCommands, routingRules, defaultAgentId })
+        window.api.settings.save({ ...retained, terminal, editor, agents, agentIdleMs, snippets, pipelines, triggers, gitAccounts, sshProfiles, appearance, remote: remoteOut, mcpServer, proxy, notifications, workspacePresets, usageLog, projectCommands, routingRules, defaultAgentId })
     }
     const persist = (): void => {
         if (persistTimer) clearTimeout(persistTimer)
@@ -802,6 +740,14 @@ export const useSettings = create<SettingsState>((set, get) => {
         load: async () => {
             const raw = (await window.api.settings.load()) as Partial<AppSettings> | null
             if (raw) {
+                // See `retained`: hold every key on disk so the ones this build
+                // no longer models survive the next save. Captured before
+                // anything below narrows or migrates, and a shallow copy so a
+                // later mutation of `raw` cannot reach the save payload.
+                retained =
+                    typeof raw === "object" && !Array.isArray(raw)
+                        ? { ...(raw as Record<string, unknown>) }
+                        : {}
                 // Pre-Task-4 settings.json shapes carry a plaintext remote.token
                 // that no longer exists on AppSettings["remote"] - read it off the
                 // raw payload directly. One-way migration: hand it to main once so
@@ -894,9 +840,6 @@ export const useSettings = create<SettingsState>((set, get) => {
                     triggers: raw.triggers ?? DEFAULTS.triggers,
                     gitAccounts: raw.gitAccounts ?? DEFAULTS.gitAccounts,
                     sshProfiles: raw.sshProfiles ?? DEFAULTS.sshProfiles,
-                    environments: raw.environments ?? DEFAULTS.environments,
-                    activeEnvId: raw.activeEnvId ?? DEFAULTS.activeEnvId,
-                    collections: raw.collections ?? DEFAULTS.collections,
                     // A settings.json written before the 84-skin cut can still name
                     // a deleted theme or style; migrateAppearance lands those on the
                     // defaults before anything else reads them.
@@ -935,7 +878,6 @@ export const useSettings = create<SettingsState>((set, get) => {
                     usageLog: (Array.isArray(raw.usageLog) ? raw.usageLog : DEFAULTS.usageLog).map(
                         (e) => (e.endedAt ? e : { ...e, endedAt: e.startedAt })
                     ),
-                    dbQueryHistory: raw.dbQueryHistory ?? DEFAULTS.dbQueryHistory,
                     projectCommands: raw.projectCommands ?? DEFAULTS.projectCommands,
                     routingRules: raw.routingRules ?? DEFAULTS.routingRules,
                     defaultAgentId: raw.defaultAgentId ?? DEFAULTS.defaultAgentId
@@ -1011,23 +953,6 @@ export const useSettings = create<SettingsState>((set, get) => {
             set({ sshProfiles })
             persist()
         },
-        setEnvironments: (environments) => {
-            // Keep the active selection valid if its environment was removed.
-            const activeEnvId = environments.some((e) => e.id === get().activeEnvId)
-                ? get().activeEnvId
-                : null
-            set({ environments, activeEnvId })
-            persist()
-        },
-        setActiveEnv: (activeEnvId) => {
-            set({ activeEnvId })
-            persist()
-        },
-        activeEnv: () => get().environments.find((e) => e.id === get().activeEnvId),
-        setCollections: (collections) => {
-            set({ collections })
-            persist()
-        },
         agentById: (id) => get().agents.find((a) => a.id === id),
         setAppearance: (patch) => {
             set((s) => {
@@ -1101,25 +1026,6 @@ export const useSettings = create<SettingsState>((set, get) => {
             }))
             persist()
         },
-        pushDbQuery: (connId, sql) => {
-            const q = sql.trim()
-            if (!connId || !q) return
-            set((s) => {
-                const prev = s.dbQueryHistory[connId] ?? []
-                if (prev[0] === q) return s // skip consecutive duplicate
-                const next = [q, ...prev.filter((x) => x !== q)].slice(0, DB_HISTORY_CAP)
-                return { dbQueryHistory: { ...s.dbQueryHistory, [connId]: next } }
-            })
-            persist()
-        },
-        clearDbHistory: (connId) => {
-            set((s) => {
-                const next = { ...s.dbQueryHistory }
-                delete next[connId]
-                return { dbQueryHistory: next }
-            })
-            persist()
-        },
         setProjectCommands: (projectId, commands) => {
             set((s) => {
                 const next = { ...s.projectCommands }
@@ -1138,6 +1044,11 @@ export const useSettings = create<SettingsState>((set, get) => {
             persist()
         },
         resetAll: () => {
+            // The one place a prune is honest: the user explicitly asked for
+            // every setting to go. Keeping orphans here would mean "Reset all"
+            // silently didn't, which is the same class of lie as pruning
+            // silently did.
+            retained = {}
             set({ ...DEFAULTS })
             applyTheme(DEFAULTS.appearance.theme, DEFAULTS.appearance.accent)
             applyStyle(DEFAULTS.appearance.style)

@@ -1,17 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from "vitest"
 import { useStore } from "../src/renderer/src/store"
 import { leaf } from "../src/renderer/src/layout"
-import type { WorkItem } from "../src/preload/index"
-
-const workItem = (key: string, title: string): WorkItem => ({
-    provider: "jira",
-    key,
-    title,
-    type: "Task",
-    status: "To Do",
-    url: "",
-    description: ""
-})
 
 const TERM = "t-ready"
 
@@ -222,19 +211,22 @@ describe("a prompt sent to a session that never spoke", () => {
         await useStore.getState().init()
     })
 
+    // Driven through `startReview`, which spawns a session and types a brief
+    // into it the moment it is ready. These two specs used to drive `startWork`
+    // (the Work panel's Jira/Azure hand-off) - D1 deleted that action, and the
+    // behaviour under test is `promptWhenReady`'s, not the caller's, so the
+    // caller was swapped rather than the coverage dropped.
     it("is still sent, and the activity feed says it may not have landed", async () => {
         // Both halves in one test on purpose: they are one behaviour, and reading
         // the feed left behind by a previous test would pass for the wrong reason.
         vi.useFakeTimers()
         try {
             seed()
-            const done = useStore
-                .getState()
-                .startWork(workItem("ABC-1", "do the thing"))
+            const done = useStore.getState().startReview(["correctness"])
             await vi.advanceTimersByTimeAsync(3200)
             await done
             // Never silently dropped - losing the work is worse than a quiet CLI.
-            expect(inputs.some((i) => i.data.includes("ABC-1"))).toBe(true)
+            expect(inputs.some((i) => /correctness/i.test(i.data))).toBe(true)
             // ...but the warning is the part that did not exist before.
             expect(
                 useStore.getState().activity.some((a) => /printed nothing/i.test(a.label))
@@ -248,16 +240,14 @@ describe("a prompt sent to a session that never spoke", () => {
         vi.useFakeTimers()
         try {
             seed()
-            const done = useStore
-                .getState()
-                .startWork(workItem("ABC-2", "the quick one"))
-            // One byte from whichever session startWork just spawned.
+            const done = useStore.getState().startReview(["security"])
+            // One byte from whichever session startReview just spawned.
             await vi.advanceTimersByTimeAsync(50)
             const termId = Object.keys(useStore.getState().termAgents).find((id) => id !== TERM)
             if (termId) ptyData({ id: termId, data: "claude>" })
             await vi.advanceTimersByTimeAsync(3200)
             await done
-            expect(inputs.some((i) => i.data.includes("ABC-2"))).toBe(true)
+            expect(inputs.some((i) => /security/i.test(i.data))).toBe(true)
             expect(
                 useStore.getState().activity.some((a) => /printed nothing/i.test(a.label))
             ).toBe(false)

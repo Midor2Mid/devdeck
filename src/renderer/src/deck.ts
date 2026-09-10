@@ -271,3 +271,25 @@ export function shortSessionLabel(sessionName: string, badge = ""): string {
     // Nothing gained if the pill would only repeat its own badge's opening.
     return badge.toUpperCase().startsWith(short) ? "" : short
 }
+
+/**
+ * The words the deck bar's wants-you control shows for a count.
+ *
+ * `null` at zero, and that is the whole design: the marker only ever ADDS.
+ * A bare digit disappears at zero and never teaches what it is, so it was a
+ * 12px glyph in the corner that a stranger had no way to read; a word arriving
+ * beside the view keys is understood the first time it appears.
+ *
+ * "Want you" rather than "waiting" or "needs": those two words are spent on the
+ * per-session heads, where they distinguish a bell from a finished turn, and the
+ * aggregate sums BOTH. Borrowing one of them would name one mechanism and lie
+ * about the other. It is also the word the old flag's tooltip already used.
+ *
+ * A negative count returns `null` rather than rendering "-1 want you": nothing
+ * can produce one (`wantsYou` counts a filtered array), and the honest answer to
+ * an impossible input is to say nothing rather than to print it.
+ */
+export function wantsYouLabel(count: number): string | null {
+    if (!Number.isFinite(count) || count <= 0) return null
+    return count === 1 ? "1 wants you" : `${count} want you`
+}

@@ -7,7 +7,7 @@
 // points at F1 as the current one, so both must read from here.
 //
 // Keep in sync with the real handlers: App.tsx (global + Alt panes), the map in
-// TerminalView.tsx (Terminal), EditorPanel.tsx and DbPanel.tsx (Monaco commands).
+// TerminalView.tsx (Terminal) and EditorPanel.tsx (Monaco commands).
 
 export type ShortcutGroup = { title: string; items: [keys: string, desc: string][] }
 
@@ -74,10 +74,6 @@ export function shortcutGroups(viewNames: string[]): ShortcutGroup[] {
         {
             title: "Editor",
             items: [["Ctrl + S", "Save file"]]
-        },
-        {
-            title: "Database",
-            items: [["Ctrl + Enter", "Run query"]]
         }
     ]
 }

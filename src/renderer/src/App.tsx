@@ -13,9 +13,7 @@ import { RegionBoundary } from "./components/RegionBoundary"
 import { Topbar } from "./components/Topbar"
 import { Deck } from "./components/Deck"
 import { TerminalView } from "./components/TerminalView"
-import { ApiPanel } from "./components/ApiPanel"
 import { EditorPanel } from "./components/EditorPanel"
-import { DbPanel } from "./components/DbPanel"
 import { BrowserPanel } from "./components/BrowserPanel"
 import { NoProjects } from "./components/NoProjects"
 import { paneAtIndex, pickInDirection, type PaneDir, type PaneRect } from "./paneNav"
@@ -37,7 +35,6 @@ import { PipelineBar } from "./components/PipelineBar"
 import { WorktreesModal } from "./components/WorktreesModal"
 import { ChangesModal } from "./components/ChangesModal"
 import { PrModal } from "./components/PrModal"
-import { WorkPanel } from "./components/WorkPanel"
 import { Toasts } from "./components/Toasts"
 import { ShortcutsModal } from "./components/ShortcutsModal"
 import { ConfirmDialog } from "./components/ConfirmDialog"
@@ -97,7 +94,6 @@ export function App(): JSX.Element {
     const worktreesOpen = useStore((s) => s.worktreesOpen)
     const changesTarget = useStore((s) => s.changesTarget)
     const prTarget = useStore((s) => s.prTarget)
-    const workOpen = useStore((s) => s.workOpen)
 
     // Re-sync the mobile session snapshot whenever sessions/status/projects change.
     const tabsByProject = useStore((s) => s.tabsByProject)
@@ -578,24 +574,6 @@ export function App(): JSX.Element {
                                 <EditorPanel />
                             </RegionBoundary>
                         </div>
-                        <div className="panel" style={{ display: view === "api" ? "flex" : "none" }}>
-                            <RegionBoundary
-                                title="The API view hit an error"
-                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
-                                resetKey={view}
-                            >
-                                <ApiPanel />
-                            </RegionBoundary>
-                        </div>
-                        <div className="panel" style={{ display: view === "database" ? "flex" : "none" }}>
-                            <RegionBoundary
-                                title="The Database view hit an error"
-                                description="Your terminals and sessions are still running, and every other view still works. Switch away and back to retry this one."
-                                resetKey={view}
-                            >
-                                <DbPanel />
-                            </RegionBoundary>
-                        </div>
                         <div className="panel" style={{ display: view === "browser" ? "flex" : "none" }}>
                             <RegionBoundary
                                 title="The Browser view hit an error"
@@ -672,7 +650,6 @@ export function App(): JSX.Element {
             {worktreesOpen && <WorktreesModal />}
             {changesTarget && <ChangesModal />}
             {prTarget && <PrModal />}
-            {workOpen && <WorkPanel />}
             <PipelineBar />
             <Toasts />
             <ConfirmDialog />

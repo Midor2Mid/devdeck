@@ -198,9 +198,9 @@ describe("redaction happens on the way in — the file on disk is clean too", ()
         recordError(
             "renderer",
             {
-                source: "ApiPanel",
+                source: "EditorPanel",
                 message: "request failed with ANTHROPIC_API_KEY=sk-ant-api03-abcdefghijklmnopqrstuvwxyz012345",
-                componentStack: "at ApiPanel (C:\\Users\\Admin\\AppData\\Roaming\\devdeck\\out\\renderer\\index.js:1:2)"
+                componentStack: "at EditorPanel (C:\\Users\\Admin\\AppData\\Roaming\\devdeck\\out\\renderer\\index.js:1:2)"
             },
             T0
         )

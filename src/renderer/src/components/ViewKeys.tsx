@@ -3,23 +3,26 @@ import { useStore, type MainView } from "../store"
 import { useToasts } from "../toast"
 import { Icon, type IconName } from "./Icon"
 
-export const DECK_VIEWS: { view: MainView; icon: IconName; name: string; group?: "verify" }[] = [
+/**
+ * The four keys, in reading order: where am I -> what needs me -> repo facts ->
+ * tools. Ctrl+1..4 is this array's index.
+ *
+ * D1 deleted API and Database and demoted Tasks to the More menu, which took the
+ * bar from seven keys to four - and with it the `verify` grouping and its
+ * hairline between key 2 and key 3. With four keys the supervise-then-verify
+ * order is carried by the order alone, so the hairline was chrome no longer
+ * earning its pixel. The `max-width: 959px` label collapse went with it for a
+ * harder reason: seven fully-labelled keys measured 590px, four measure ~350,
+ * and the window's own minimum is 900 - so that query could never fire again,
+ * and DESIGN.md's rule is that a rule nobody can trigger is a rule nobody can
+ * trust.
+ */
+export const DECK_VIEWS: { view: MainView; icon: IconName; name: string }[] = [
     { view: "mission", icon: "activity", name: "Mission" },
-    { view: "tasks", icon: "list", name: "Tasks" },
     { view: "terminal", icon: "terminal", name: "Terminal" },
-    // Verification tools: where you check what an agent did. Grouped apart so the
-    // deck reads supervision-first, without costing anyone a keystroke — the
-    // order (and so Ctrl+1..7) is unchanged. The group is now marked on all four,
-    // not just the first: it is what the responsive collapse drops labels from,
-    // and the hairline is drawn from "first of the group" instead.
-    { view: "api", icon: "send", name: "API", group: "verify" },
-    { view: "database", icon: "database", name: "Database", group: "verify" },
-    { view: "browser", icon: "appWindow", name: "Browser", group: "verify" },
-    { view: "editor", icon: "code", name: "Editor", group: "verify" }
+    { view: "browser", icon: "appWindow", name: "Browser" },
+    { view: "editor", icon: "code", name: "Editor" }
 ]
-
-/** Index of the first verify key — where the group hairline is drawn. */
-const FIRST_VERIFY = DECK_VIEWS.findIndex((v) => v.group === "verify")
 
 /** Why the keys are off, in the words shown on the key itself. */
 const OFF_REASON = "open a project to use the views"
@@ -46,8 +49,8 @@ export function ViewKeys(): JSX.Element {
     const addProject = useStore((s) => s.addProject)
     const pushToast = useToasts((s) => s.push)
     const dismissToast = useToasts((s) => s.dismiss)
-    // At most one "nothing happened" toast on screen: seven inert keys must not
-    // be able to stack seven copies of the same sentence.
+    // At most one "nothing happened" toast on screen: four inert keys must not
+    // be able to stack four copies of the same sentence.
     const lastToast = useRef<string | null>(null)
     // With no project every view resolves to the same panel, so a live key
     // would be a control that visibly does nothing. NO key takes the accent
@@ -62,17 +65,12 @@ export function ViewKeys(): JSX.Element {
             {DECK_VIEWS.map((v, i) => (
                 <button
                     key={v.view}
-                    className={
-                        "deck-view" +
-                        (!off && view === v.view ? " on" : "") +
-                        (v.group === "verify" ? " verify" : "") +
-                        (i === FIRST_VERIFY ? " group-start" : "")
-                    }
+                    className={"deck-view" + (!off && view === v.view ? " on" : "")}
                     role="tab"
                     // `aria-disabled`, not `disabled`, and that is the whole
                     // fix: Chromium dispatches no mouse OR focus events from a
                     // disabled button, so on first run - every key off - these
-                    // seven glyphs could not be named by hovering, by Tab, or
+                    // four glyphs could not be named by hovering, by Tab, or
                     // by a screen reader, at the first moment of the product.
                     // aria-disabled keeps the key focusable and hoverable and
                     // still announces "unavailable", so the tip and the label
@@ -90,7 +88,7 @@ export function ViewKeys(): JSX.Element {
                         if (off) {
                             // The reason is on the key, but only in a tooltip
                             // that wants a 420ms hover - and a stranger clicks
-                            // first. Seven keys that answer a click with
+                            // first. Keys that answer a click with
                             // nothing at all was the product's first ten
                             // seconds, so the click answers for itself, and the
                             // answer worth giving is the fix rather than a

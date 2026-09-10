@@ -8,6 +8,7 @@ import {
     projectSessionCounts,
     shortSessionLabel,
     tabDotStatus,
+    wantsYouLabel,
     COMPRESS_THRESHOLD
 } from "../src/renderer/src/deck"
 import { hasProcess, resolveTileState, type TileStateInput } from "../src/renderer/src/tileState"
@@ -434,5 +435,27 @@ describe("projectSessionCounts", () => {
             none
         )
         expect(counts.p1).toEqual({ terms: 1, agents: 0, attention: 0 })
+    })
+})
+
+/**
+ * The deck bar's wants-you control. Its LAYOUT is not testable here (vitest is
+ * `environment: "node"` and there are no component tests), but its grammar is:
+ * the zero case renders nothing, and the singular is a real singular.
+ */
+describe("wantsYouLabel", () => {
+    it("renders nothing at zero", () => {
+        expect(wantsYouLabel(0)).toBeNull()
+    })
+
+    it("agrees with its own verb", () => {
+        expect(wantsYouLabel(1)).toBe("1 wants you")
+        expect(wantsYouLabel(2)).toBe("2 want you")
+        expect(wantsYouLabel(11)).toBe("11 want you")
+    })
+
+    it("says nothing rather than printing an impossible count", () => {
+        expect(wantsYouLabel(-1)).toBeNull()
+        expect(wantsYouLabel(Number.NaN)).toBeNull()
     })
 })

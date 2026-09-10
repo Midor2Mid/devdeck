@@ -32,7 +32,6 @@ const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url)
 const APP = src("../src/renderer/src/App.tsx")
 const TERMINAL = src("../src/renderer/src/components/TerminalView.tsx")
 const EDITOR = src("../src/renderer/src/components/EditorPanel.tsx")
-const DB = src("../src/renderer/src/components/DbPanel.tsx")
 
 /**
  * A file's executable text: line and block comments blanked, newlines kept.
@@ -130,8 +129,6 @@ function specialWiring(keys: string): { file: string; needle: string } | undefin
             return { file: APP, needle: `e.altKey && !mod && /^Digit[1-9]$/.test(e.code)` }
         case "Ctrl + S":
             return { file: EDITOR, needle: `monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS` }
-        case "Ctrl + Enter":
-            return { file: DB, needle: `monaco.KeyCode.Enter` }
         default:
             // The Ctrl+1…N row carries the deck's own length, so it is matched
             // by shape rather than by text.
@@ -141,7 +138,11 @@ function specialWiring(keys: string): { file: string; needle: string } | undefin
     }
 }
 
-const DECK = ["Mission", "Tasks", "Terminal", "API", "Database", "Browser", "Network", "Editor"]
+// The real deck, since D1: four keys, and the Ctrl+1…N row is derived from the
+// length. Passed in as a fixture rather than imported so this file stays free of
+// React (`DECK_VIEWS` lives in a component module) - which is also why it has to
+// be kept honest by hand. tests/shortcuts.test.ts imports the real array.
+const DECK = ["Mission", "Terminal", "Browser", "Editor"]
 const documented = shortcutGroups(DECK).flatMap((g) => g.items.map(([keys]) => keys))
 
 describe("the shortcut reference against the handlers", () => {

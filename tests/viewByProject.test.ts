@@ -61,30 +61,30 @@ describe("a project remembers its view", () => {
 
     it("seeds the active project from the global view on the first launch after the upgrade", async () => {
         // A workspace written before `viewByProject` existed: it knows only that
-        // the window was last on `api`.
-        stubApi({ ok: true, data: { view: "api" } })
+        // the window was last on `browser`.
+        stubApi({ ok: true, data: { view: "browser" } })
 
         await useStore.getState().init()
 
-        expect(useStore.getState().view).toBe("api")
-        expect(useStore.getState().viewByProject.p1).toBe("api")
+        expect(useStore.getState().view).toBe("browser")
+        expect(useStore.getState().viewByProject.p1).toBe("browser")
     })
 
     it("records the view under the active project as you switch views", async () => {
         stubApi({ ok: true, data: {} })
         await useStore.getState().init()
 
-        useStore.getState().setView("database")
+        useStore.getState().setView("browser")
 
-        expect(useStore.getState().viewByProject.p1).toBe("database")
+        expect(useStore.getState().viewByProject.p1).toBe("browser")
     })
 
     it("restores the view a project was last looking at", async () => {
-        stubApi({ ok: true, data: { view: "mission", viewByProject: { p1: "editor", p2: "api" } } })
+        stubApi({ ok: true, data: { view: "mission", viewByProject: { p1: "editor", p2: "browser" } } })
         await useStore.getState().init()
 
         await useStore.getState().setActiveProject("p2")
-        expect(useStore.getState().view).toBe("api")
+        expect(useStore.getState().view).toBe("browser")
 
         await useStore.getState().setActiveProject("p1")
         expect(useStore.getState().view).toBe("editor")
@@ -125,6 +125,33 @@ describe("a project remembers its view", () => {
         // Dropped, so p2 is now a project with no recorded view - which lands on
         // Terminal. What matters here is that `seance` was not honoured and the
         // stage is not blank.
+        await useStore.getState().setActiveProject("p2")
+        expect(useStore.getState().view).toBe("terminal")
+    })
+
+    /**
+     * D1 deleted the API and Database views. Their names are exactly the "view
+     * name this build does not know" the guard above exists for, and this is the
+     * first time that guard has had a real instance rather than an invented one
+     * - an upgraded install WILL carry them, because the owner's ruling was to
+     * orphan user data rather than migrate it away.
+     */
+    it("survives a workspace still pointing at a view D1 deleted", async () => {
+        stubApi({
+            ok: true,
+            data: { view: "database", viewByProject: { p1: "api", p2: "database" } }
+        })
+        await useStore.getState().init()
+
+        // Neither name is honoured. A blank stage with nothing to click is the
+        // failure this prevents, and it would have been the upgrade experience.
+        // The global view falls back to Mission, and the ACTIVE project is then
+        // seeded from that fallback rather than from the name that was dropped -
+        // so p1 reads "mission", not "api".
+        expect(useStore.getState().view).toBe("mission")
+        expect(useStore.getState().viewByProject.p1).toBe("mission")
+        expect(useStore.getState().viewByProject.p2).toBeUndefined()
+
         await useStore.getState().setActiveProject("p2")
         expect(useStore.getState().view).toBe("terminal")
     })

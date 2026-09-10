@@ -211,9 +211,6 @@ select:focus {
 .sb-changes.unknown:hover {
     color: var(--text);
 }
-.sb-attn {
-    color: var(--accent);
-}
 .sb-remote {
     color: var(--moss);
 }
@@ -1062,36 +1059,13 @@ button .ic,
     letter-spacing: var(--ls-label);
     color: var(--faint);
 }
-.icon-btn {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    line-height: 1;
-    font-size: 16px;
-    border: none;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.icon-btn:hover {
-    background: transparent;
-    color: var(--accent-soft);
-}
+
 .sidebar-empty {
     padding: 18px 10px;
     line-height: 1.7;
     font-size: 12px;
 }
-.project-remove {
-    color: var(--faint);
-    opacity: 0;
-    padding: 0 4px;
-    transition: opacity 0.15s ease, color 0.15s ease;
-}
-.project-remove:hover {
-    color: var(--danger);
-}
+
 .session-rename {
     width: 100%;
     background: var(--bg-3);
@@ -1634,8 +1608,7 @@ button .ic,
     color: var(--muted);
 }
 /* A large, faint ensō behind empty states - turns void into intentional ma. */
-.empty-state::before,
-.resp-placeholder::before {
+.empty-state::before {
     content: "";
     position: absolute;
     top: 50%;
@@ -2868,275 +2841,13 @@ button .ic,
 }
 
 /* ---------- API panel ---------- */
-.api-panel {
-    height: 100%;
-    display: flex;
-    flex-direction: row;
-    min-height: 0;
-}
-.api-main {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 18px;
-    gap: 12px;
-}
-.api-bar {
-    display: flex;
-    gap: 8px;
-}
-.api-bar select {
-    width: 100px;
-}
-.api-toggle {
-    flex: none;
-    padding: 5px 10px;
-}
 
 /* ---------- collections sidebar ---------- */
-.col-sidebar {
-    width: 230px;
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid var(--border-soft);
-    background: var(--bg);
-}
-.col-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 14px 8px;
-    font-size: var(--fs-label);
-    letter-spacing: var(--ls-label);
-    text-transform: uppercase;
-    color: var(--muted);
-}
-.col-head-actions {
-    display: flex;
-    gap: 2px;
-}
-.col-new {
-    border: none;
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-    padding: 0 6px;
-}
-.col-new:hover {
-    color: var(--accent-soft);
-    background: transparent;
-}
-.col-search {
-    position: relative;
-    padding: 0 10px 8px;
-}
-.col-search input {
-    width: 100%;
-    padding: 5px 24px 5px 9px;
-    font-size: 12px;
-}
-.col-search-clear {
-    position: absolute;
-    right: 18px;
-    top: 5px;
-    cursor: pointer;
-    color: var(--muted);
-    font-size: 13px;
-}
-.col-search-clear:hover {
-    color: var(--text);
-}
-.col-req {
-    position: relative;
-}
-.req-menu {
-    position: absolute;
-    z-index: 20;
-    top: 100%;
-    right: 6px;
-    min-width: 160px;
-    max-height: 240px;
-    overflow-y: auto;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 5px;
-    box-shadow: var(--elev-2);
-}
-.req-menu-item {
-    padding: 6px 9px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.req-menu-item:hover {
-    background: var(--bg-3);
-}
-.req-menu-item.danger {
-    color: var(--danger);
-}
-.req-menu-title {
-    font-size: var(--fs-label);
-    letter-spacing: var(--ls-label);
-    text-transform: uppercase;
-    color: var(--faint);
-    padding: 6px 9px 3px;
-}
-
-.col-scroll {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0 8px 12px;
-}
-.col-empty {
-    padding: 10px 8px;
-}
-.col-group {
-    margin-bottom: 4px;
-}
-.col-group-head {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 6px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-.col-group-head:hover {
-    background: var(--bg-3);
-}
-.col-caret {
-    color: var(--faint);
-    width: 12px;
-    flex: none;
-}
-.col-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 600;
-}
-.col-rename {
-    flex: 1;
-    padding: 2px 6px;
-    font-size: 12px;
-}
-.col-count {
-    font-size: 10px;
-    color: var(--faint);
-}
-.col-del {
-    border: none;
-    background: transparent;
-    color: var(--faint);
-    padding: 0 4px;
-    opacity: 0;
-}
-.col-group-head:hover .col-del,
-.col-req:hover .col-del {
-    opacity: 1;
-}
-.col-del:hover {
-    color: var(--danger);
-    background: transparent;
-}
-.col-req {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 6px 5px 22px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-.col-req:hover {
-    background: var(--bg-3);
-}
-.col-req.active {
-    background: var(--bg-3);
-    box-shadow: inset 2px 0 0 var(--accent);
-}
-.col-method {
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--muted);
-    width: 38px;
-    flex: none;
-}
-.col-method.m-get { color: var(--moss); }
-.col-method.m-post { color: var(--accent-soft); }
-.col-method.m-put,
-.col-method.m-patch { color: var(--clay); }
-.col-method.m-delete { color: var(--danger); }
-.col-req-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-}
 
 /* ---------- save dialog ---------- */
-.save-modal {
-    width: 440px;
-    max-width: 90vw;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius, 10px);
-    box-shadow: var(--elev-3);
-    padding: 18px 20px;
-}
-.save-field {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    margin-top: 12px;
-    font-size: 12px;
-    color: var(--muted);
-}
 
 /* ---------- import modal ---------- */
-.import-modal {
-    width: 600px;
-    max-width: 92vw;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius, 10px);
-    box-shadow: var(--elev-3);
-    padding: 18px 20px;
-}
-.import-text {
-    width: 100%;
-    height: 200px;
-    resize: vertical;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.5;
-}
-.import-error {
-    margin-top: 8px;
-    font-size: 12px;
-    color: var(--danger);
-}
-.import-ok {
-    margin-top: 8px;
-    font-size: 12px;
-    color: var(--moss);
-}
-.save-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 18px;
-}
-.api-url {
-    flex: 1;
-}
+
 .subtabs {
     display: flex;
     gap: 18px;
@@ -3160,14 +2871,6 @@ button .ic,
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
-}
-.api-imported {
-    font-size: 11px;
-    color: var(--moss);
-    border: 1px solid var(--border-soft);
-    border-radius: 6px;
-    padding: 4px 8px;
-    white-space: nowrap;
 }
 
 /* ---------- key/value editor (params, headers, form body) ---------- */
@@ -3221,382 +2924,20 @@ button .ic,
 .kv-del:disabled {
     visibility: hidden;
 }
-.body-pane {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.body-types {
-    display: flex;
-    gap: 16px;
-    font-size: 12px;
-    color: var(--muted);
-}
-.body-types label {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    cursor: pointer;
-}
-.body-types input {
-    accent-color: var(--accent);
-}
-.body-none {
-    padding: 14px 2px;
-    font-size: 12px;
-}
 
 /* ---------- auth pane ---------- */
-.auth-pane {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-width: 460px;
-}
-.auth-type,
-.auth-field {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-    color: var(--muted);
-}
-.auth-type > span,
-.auth-field > span {
-    width: 80px;
-    flex: none;
-}
-.auth-type select,
-.auth-field input,
-.auth-field select {
-    flex: 1;
-}
 
 /* ---------- API environment bar + manager ---------- */
-.api-env-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: -4px;
-}
-.api-env-select {
-    min-width: 150px;
-    padding: 4px 8px;
-}
-.api-unresolved {
-    font-size: 11px;
-    color: var(--danger);
-    margin-left: auto;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 40%;
-}
-.env-backdrop {
-    position: fixed;
-    inset: 0;
-    background: var(--scrim);
-    backdrop-filter: blur(3px);
-    z-index: 70;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: 8vh;
-}
-.env-manager-modal {
-    width: 80vw;
-    max-width: 760px;
-    max-height: 78vh;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius, 10px);
-    box-shadow: var(--elev-3);
-    padding: 18px 20px;
-}
-.env-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.env-head h3 {
-    margin: 0;
-    font-size: 15px;
-}
-.env-hint {
-    margin: 6px 0 12px;
-}
+
 .env-body {
     display: flex;
     gap: 16px;
     min-height: 0;
     flex: 1;
 }
-.env-list {
-    width: 190px;
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    border-right: 1px solid var(--border-soft);
-    padding-right: 12px;
-    overflow-y: auto;
-}
-.env-list-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    padding: 8px 10px;
-    border-radius: 7px;
-    cursor: pointer;
-    border: 1px solid transparent;
-}
-.env-list-item:hover {
-    background: var(--bg-3);
-}
-.env-list-item.sel {
-    background: var(--bg-3);
-    border-color: var(--border-soft);
-}
-.env-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.env-active-dot {
-    font-size: 10px;
-    color: var(--moss);
-    flex: none;
-}
-.env-add {
-    margin-top: 6px;
-    width: 100%;
-    font-size: 12px;
-}
-.env-empty,
-.env-detail-empty {
-    font-size: 12px;
-    padding: 8px 2px;
-}
-.env-detail {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-.env-detail-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.env-name-input {
-    flex: 1;
-    font-weight: 600;
-}
-.env-active-badge {
-    font-size: 11px;
-    color: var(--moss);
-    border: 1px solid var(--border-soft);
-    border-radius: 20px;
-    padding: 3px 10px;
-}
-.env-del:hover {
-    border-color: var(--danger);
-    color: var(--danger);
-}
-.api-resp {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--border-soft);
-    border-radius: 8px;
-    background: var(--bg-3);
-    overflow: hidden;
-}
-.resp-placeholder {
-    padding: 18px;
-    min-height: 240px;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    position: relative;
-}
-.resp-meta {
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border-soft);
-    flex-wrap: wrap;
-}
-.resp-tabs {
-    display: flex;
-    gap: 14px;
-    margin-left: auto;
-}
-.resp-tabs span {
-    cursor: pointer;
-    color: var(--muted);
-    border-bottom: 2px solid transparent;
-    padding-bottom: 2px;
-    font-size: 12px;
-}
-.resp-tabs span.active {
-    color: var(--text);
-    border-bottom-color: var(--accent);
-}
-.resp-tools {
-    display: flex;
-    gap: 6px;
-}
-.resp-tools .tool {
-    padding: 3px 9px;
-    font-size: 11px;
-    color: var(--muted);
-}
-.resp-tools .tool.on {
-    color: var(--accent-soft);
-    border-color: var(--accent);
-}
-.resp-viewer {
-    flex: 1;
-    min-height: 0;
-}
-.resp-headers {
-    flex: 1;
-    overflow: auto;
-    padding: 10px 14px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-}
-.resp-hrow {
-    display: flex;
-    gap: 12px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--border-soft);
-}
-.resp-hkey {
-    color: var(--accent-soft);
-    width: 220px;
-    flex: none;
-    word-break: break-all;
-}
-.resp-hval {
-    color: var(--text);
-    flex: 1;
-    word-break: break-all;
-}
 
 /* ---------- API request tests / assertions ---------- */
-.tests-pane {
-    padding: 10px 12px;
-    overflow: auto;
-}
-.tests-hint {
-    margin-bottom: 10px;
-    line-height: 1.5;
-}
-.test-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 6px;
-}
-.test-row select {
-    flex: none;
-}
-.test-row .test-target {
-    width: 120px;
-}
-.test-row .test-value {
-    flex: 1;
-    min-width: 60px;
-}
-.resp-tabs span.tests-pass {
-    color: var(--moss, #8c9a68);
-    font-weight: 600;
-}
-.resp-tabs span.tests-fail {
-    color: var(--clay, #c4855d);
-    font-weight: 600;
-}
-.chain-vars {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    flex-wrap: wrap;
-}
-.chain-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 11px;
-    font-family: var(--font-mono);
-    background: var(--bg-3);
-    border: 1px solid var(--border-soft);
-    border-radius: 5px;
-    padding: 1px 4px 1px 6px;
-    color: var(--text);
-}
-.chain-chip-x,
-.chain-clear {
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0 2px;
-    font-size: 11px;
-}
-.chain-chip-x:hover,
-.chain-clear:hover {
-    color: var(--accent);
-}
-.resp-extracted {
-    font-size: 11px;
-    color: var(--moss, #8c9a68);
-    font-family: var(--font-mono);
-}
-.resp-tests {
-    flex: 1;
-    overflow: auto;
-    padding: 10px 14px;
-    font-size: 12px;
-}
-.test-result {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding: 6px 0;
-    border-bottom: 1px solid var(--border-soft);
-}
-.test-icon {
-    flex: none;
-    font-weight: 700;
-}
-.test-result.pass .test-icon {
-    color: var(--moss, #8c9a68);
-}
-.test-result.fail .test-icon {
-    color: var(--clay, #c4855d);
-}
-.test-desc {
-    flex: 1;
-    color: var(--text);
-}
-.test-actual {
-    color: var(--muted);
-    font-family: var(--font-mono);
-    max-width: 45%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+
 .status {
     font-weight: 600;
 }
@@ -3885,199 +3226,6 @@ button .ic,
 }
 
 /* ---------- Database panel ---------- */
-.db-panel {
-    height: 100%;
-    width: 100%;
-}
-.db-sidebar {
-    height: 100%;
-    background: var(--bg);
-    border-right: 1px solid var(--border-soft);
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-}
-.db-conn-list {
-    padding: 2px 8px;
-}
-.db-conn {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 7px 9px;
-    border-radius: 7px;
-    cursor: pointer;
-    color: var(--muted);
-}
-.db-conn:hover {
-    background: var(--bg-2);
-    color: var(--text);
-}
-.db-conn.active {
-    background: var(--bg-2);
-    color: var(--text);
-    box-shadow: inset 2px 0 0 var(--accent);
-}
-.db-conn-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.db-conn-edit {
-    opacity: 0;
-    color: var(--faint);
-    font-size: 11px;
-}
-.db-conn:hover .db-conn-edit {
-    opacity: 1;
-}
-.db-conn-edit:hover {
-    color: var(--accent-soft);
-}
-.db-table-list {
-    padding: 2px 8px 12px;
-    overflow-y: auto;
-}
-.db-table {
-    padding: 4px 9px 4px 22px;
-    border-radius: 5px;
-    cursor: pointer;
-    color: var(--muted);
-    font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.db-table:hover {
-    background: var(--bg-2);
-    color: var(--text);
-}
-.db-main {
-    height: 100%;
-    background: var(--bg-2);
-}
-.db-query {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-}
-.db-query-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-bottom: 1px solid var(--border-soft);
-    background: var(--bg);
-}
-.db-history {
-    position: relative;
-}
-.db-history-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    z-index: 20;
-    margin-top: 4px;
-    min-width: 280px;
-    max-width: 460px;
-    max-height: 320px;
-    overflow: auto;
-    background: var(--bg-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: var(--elev-2);
-    padding: 4px;
-}
-.db-history-item {
-    padding: 7px 9px;
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
-}
-.db-history-item:hover {
-    background: var(--bg-3);
-}
-.db-history-item.danger {
-    color: var(--muted);
-    border-top: 1px solid var(--border-soft);
-    margin-top: 4px;
-    font-family: inherit;
-}
-.db-history-item.danger:hover {
-    color: var(--accent);
-}
-.db-editor-host {
-    flex: 1;
-    min-height: 0;
-    background: var(--bg-3);
-}
-.db-results {
-    height: 100%;
-    background: var(--bg-3);
-    border-top: 1px solid var(--border-soft);
-    overflow: hidden;
-}
-.grid-wrap {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-}
-.grid-meta {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border-soft);
-}
-.grid-scroll {
-    flex: 1;
-    overflow: auto;
-}
-.result-grid {
-    border-collapse: collapse;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    width: max-content;
-    min-width: 100%;
-}
-.result-grid th,
-.result-grid td {
-    border: 1px solid var(--border-soft);
-    padding: 4px 10px;
-    text-align: left;
-    max-width: 360px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.result-grid th {
-    position: sticky;
-    top: 0;
-    background: var(--bg);
-    color: var(--accent-soft);
-    font-weight: 600;
-    z-index: 1;
-}
-.result-grid td {
-    color: var(--text);
-}
-.result-grid .rownum {
-    color: var(--faint);
-    background: var(--bg);
-    text-align: right;
-    position: sticky;
-    left: 0;
-}
-.result-grid .null-cell {
-    color: var(--faint);
-    font-style: italic;
-}
 
 /* ---------- Modal (connection form) ---------- */
 .modal-backdrop {
@@ -4118,33 +3266,14 @@ button .ic,
     font-size: 12px;
     text-align: right;
 }
-.file-pick {
-    display: flex;
-    gap: 6px;
-}
-.file-pick input {
-    flex: 1;
-    min-width: 0;
-}
-.file-pick button {
-    flex: none;
-}
+
 .form-grid .checkbox {
     width: 16px;
     height: 16px;
     justify-self: start;
     accent-color: var(--accent);
 }
-.test-msg {
-    margin-top: 12px;
-    font-size: 12px;
-}
-.test-msg.ok {
-    color: var(--ok);
-}
-.test-msg.err {
-    color: var(--danger);
-}
+
 .modal-actions {
     display: flex;
     align-items: center;
@@ -4650,7 +3779,6 @@ button .ic,
     gap: 8px;
     justify-content: flex-end;
 }
-
 
 /* One region failed, not the app. Deliberately the same card vocabulary as the
    root crash above and no new tokens — a region crash must be recognisable as
@@ -5345,62 +4473,6 @@ button .ic,
 .pr-msg { font-size: 12px; color: var(--accent-soft); }
 
 /* ---------- Work drawer ---------- */
-.work-drawer { width: 420px; }
-.work-warn, .work-err {
-    font-size: 12px;
-    border-radius: 7px;
-    padding: 8px 10px;
-    margin-bottom: 8px;
-}
-.work-warn { color: var(--accent-soft); background: var(--bg-3); }
-.work-err { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
-.work-wt-toggle {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    color: var(--muted);
-    padding: 4px 2px 10px;
-}
-.work-wt-toggle input { width: 14px; height: 14px; accent-color: var(--accent); }
-.work-item {
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius, 10px);
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    background: var(--bg-3);
-}
-.work-item-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.work-key {
-    font-family: var(--mono, monospace);
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--accent);
-}
-.work-key.p-azure { color: #4a9eda; }
-.work-type, .work-status {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--faint);
-    border: 1px solid var(--border-soft);
-    border-radius: 10px;
-    padding: 1px 7px;
-}
-.work-title { font-size: 13px; color: var(--text); margin-bottom: 9px; line-height: 1.4; }
-.work-actions { display: flex; align-items: center; gap: 6px; }
-.work-actions .accent { font-size: 12px; padding: 4px 11px; }
-
-.work-setup h3 { font-size: 13px; margin: 0 0 8px; }
-.work-setup input, .work-setup textarea { width: 100%; margin-bottom: 7px; }
-.work-jql { min-height: 44px; font-family: var(--mono, monospace); font-size: 11px; resize: vertical; }
-.work-en {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 12px; color: var(--muted); margin-bottom: 8px;
-}
-.work-en input { width: 14px; height: 14px; accent-color: var(--accent); }
-.work-msg { font-size: 12px; color: var(--accent-soft); margin: 6px 0; }
-.work-save { width: 100%; margin-top: 10px; }
 
 /* ---------- Design style picker (settings) ---------- */
 .style-cards { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -5439,8 +4511,6 @@ button .ic,
 [data-style="modern"] .term-tab,
 [data-style="modern"] .tab-rename,
 [data-style="modern"] .chip,
-[data-style="modern"] .work-type,
-[data-style="modern"] .work-status,
 [data-style="modern"] .mtile-chip {
     border-radius: 7px;
     transition-duration: 0.12s;
@@ -5448,7 +4518,6 @@ button .ic,
 [data-style="modern"] .switcher-card,
 [data-style="modern"] .theme-card,
 [data-style="modern"] .style-card,
-[data-style="modern"] .work-item,
 [data-style="modern"] .wt-row,
 [data-style="modern"] .pipe-edit,
 [data-style="modern"] .pipe-step,
@@ -5698,18 +4767,8 @@ kbd {
 }
 
 /* ---------- Drag & drop affordances ---------- */
-.col-req,
-.col-group-head {
-    cursor: grab;
-}
+
 /* Drop indicator: an accent line at the top edge of the hovered target. */
-.col-req.drag-over {
-    box-shadow: inset 0 2px 0 var(--accent);
-}
-.col-group-head.drag-over {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
-}
 
 /* ---------- Tab drag-to-split ---------- */
 .term-tab.tab-dragging {
@@ -5779,8 +4838,7 @@ kbd {
 }
 
 /* ---------- Cross-panel drag: drop a file/table onto an agent session ---------- */
-.tree-row.file,
-.db-table {
+.tree-row.file {
     cursor: grab;
 }
 
@@ -6212,8 +5270,7 @@ kbd {
 .drawer-backdrop { animation: dd-fade-in 0.14s var(--ease-out); }
 .drawer { animation: dd-slide-in-right 0.22s var(--ease-out); }
 .ctx-menu,
-.agent-menu,
-.db-history-menu { animation: dd-menu-in 0.13s var(--ease-out); transform-origin: top; }
+.agent-menu { animation: dd-menu-in 0.13s var(--ease-out); transform-origin: top; }
 
 /* Press feedback — transform only, so it never clobbers a component's own
    transition. A refined, subtle press reads as responsive across every button. */
@@ -6221,13 +5278,8 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 .task-chip:not(:disabled):active { transform: scale(0.96); }
 
 @media (prefers-reduced-motion: reduce) {
-    .modal-backdrop,
-    .modal,
-    .drawer-backdrop,
-    .drawer,
-    .ctx-menu,
-    .agent-menu,
-    .db-history-menu { animation: none; }
+    .modal-backdrop, .modal, .drawer-backdrop, .drawer, .ctx-menu, .agent-menu { animation: none; }
+
     button:not(:disabled):active,
     .task-chip:not(:disabled):active { transform: none; }
 }
@@ -6448,7 +5500,7 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     color: var(--muted);
 }
 /* Focusable now means focus-ringed, and the base ring is the accent - which
-   would put seven accents on the first screen of the app, all on controls that
+   would put four accents on the first screen of the app, all on controls that
    cannot act. The ring keeps its existence and its shape (the base rule allows
    a style to change only the shape) and gives up only the colour: form carries
    "you are here", the accent stays reserved for "you can act here". */
@@ -6460,27 +5512,58 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     box-shadow: inset 0 -2px 0 var(--accent);
     border-radius: 0;
 }
-/* Supervision keys, then the verification tools. A hairline, not a border box:
-   the deck should read as two groups without gaining chrome. */
-.deck-view.group-start {
-    margin-left: var(--sp-sm);
-    border-left: 1px solid var(--border-soft);
-    padding-left: var(--sp-sm);
-}
-/* Guard against styles whose generic `button:hover` reaches through and tints
-   this hairline with the accent — it marks a grouping, not something
-   actionable, so it must never carry accent. `.deck-view` is a <button>, so
-   `[data-style=…] button:hover` (0,2,1) outranks the rule above (0,2,0) and
-   its `border-color` reaches `border-left-color`. Two classes plus the
-   pseudo-class is (0,3,0), which wins. Not redundant — do not delete. */
-.deck-view.group-start:hover {
-    border-left-color: var(--border-soft);
-}
+/* The `.deck-view.group-start` hairline that used to sit between the
+   supervision keys and the verification tools is gone with D1: at four keys the
+   supervise-then-verify order is carried by the order itself, and a hairline
+   between key 2 and key 3 was chrome no longer earning its pixel. */
 /* Every view key carries its label, always. Active-label-only spent the label
-   on the one view whose identity the user already knew and left the other six
+   on the one view whose identity the user already knew and left the other three
    as unnamed glyphs; the active state is the underline above, on its own. */
 .deck-view-name {
     font-size: 12px;
+}
+/* The wants-you control: the one number on this bar that changes what you do
+   next, and until D1 it was a 12px glyph in the bottom-right corner beside the
+   git branch. It sits immediately after the view keys because the bar reads
+   where-am-I -> what-needs-me -> repo facts -> tools.
+
+   Chrome-less, like `.sb-pull`, and for the same reason: it is a real <button>
+   for keyboard reach and has to sit level with the bar's other text. No new
+   colour token - the flag glyph is the accent (the bar's one Tier-3 spend) and
+   the word is `--text`, because colouring both would be the same spend twice
+   and `--accent` at 12px on Washi's `--bg` is the 2.92:1 mark this system
+   removed. The word carries the state in form as well: at zero the control
+   renders nothing at all, so its mere presence is the signal. */
+.deck-wants {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    margin-left: var(--sp-lg);
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+}
+.deck-wants:hover {
+    color: var(--accent-soft);
+}
+.deck-wants-flag {
+    display: grid;
+    place-items: center;
+    /* The accent lives on the marker, never on the word. */
+    color: var(--accent);
+}
+/* Styles with a generic `button:hover { border-color: … }` would otherwise tint
+   a border this control does not have; keeping the reset at two classes plus
+   the pseudo-class (0,3,0) also stops a style's `button:hover` recolouring the
+   flag away from the accent. Not redundant - do not delete. */
+.deck-wants:hover .deck-wants-flag {
+    color: var(--accent);
 }
 .deck-tools {
     display: flex;
@@ -6523,6 +5606,12 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     box-shadow: var(--elev-2);
     z-index: 40;
 }
+/* Anchored to a tool at the RIGHT end of the bar, where `left: 0` would run the
+   popover off the window edge. */
+.deck-popover-right {
+    left: auto;
+    right: 0;
+}
 .deck-status {
     display: flex;
     align-items: center;
@@ -6532,42 +5621,21 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     overflow: hidden;
     justify-content: flex-end;
 }
-.deck-status-spacer {
-    flex: 1;
-}
-/* Narrow windows, in the order the deck can afford to lose them: the verify
-   group goes icon-only and the supervision three keep their words, because
-   "is anything waiting on me" is the question the deck exists to answer while
-   API/Database/Browser/Editor are places you go on purpose. A collapsed key
-   keeps its data-tip and its aria-label, so it is still named.
+/* There is deliberately NO responsive collapse on this bar any more.
+   `@media (max-width: 959px)` used to drop the labels from the four verify keys
+   so the status region kept its room; at four keys it can never fire, and
+   DESIGN.md's rule is that a rule nobody can trigger is a rule nobody can
+   trust, so it was deleted rather than left as a dead branch.
 
-   959px is measured, not guessed, and it is the same number in all six
-   surviving skins - Chromium's UA stylesheet resets `letter-spacing` on
-   `button`, so Modern Pro's tracking never reaches a deck key and the two
-   styles come out identical to the hundredth of a pixel. Fully labelled the
-   key row is 590.45px; the tool cluster is 148px; the bar spends 20px on
-   padding and 24px on its two gaps. That leaves the status region 177.55px at
-   a 960px viewport, against the 139.48px its branch + changes + identity
-   content occupies - and only 117.55px at 900.
-
-   What 900 does to it was looked at, not assumed: `.deck-status` is
-   `justify-content: flex-end`, so the overflow goes off the LEFT edge, where
-   `scrollWidth` cannot see it. Branch `main` rendered as `in`, icon gone, with
-   nothing on screen saying it had been cut. A truncated value that still looks
-   like a value is the defect class this app removes on sight, so the labels
-   yield first and the status keeps its room.
-
-   There is deliberately no second stage dropping the supervision three: the
-   window's own minimum (900) cannot get narrow enough to need one, and a media
-   query that can never fire is a rule nobody can trust. */
-@media (max-width: 959px) {
-    .deck-view.verify .deck-view-name {
-        display: none;
-    }
-    .deck-view.verify {
-        justify-content: center;
-    }
-}
+   The arithmetic at the window's own 900px minimum: keys ~350 + wants ~110 +
+   three tools 88 + 20px bar padding + 36px of gaps = ~604, leaving ~296px for
+   a status region whose branch + changes + identity content occupies 139.48px.
+   Nothing overflows, so nothing has to yield. (The measurement that mattered:
+   `.deck-status` is `justify-content: flex-end`, so an overflow goes off the
+   LEFT edge where `scrollWidth` cannot see it - branch `main` once rendered as
+   `in`, icon gone, with nothing on screen saying it had been cut. A truncated
+   value that still looks like a value is the defect class this app removes on
+   sight, which is why the room is checked rather than assumed.) */
 
 /* ---------- Topbar brand + project button ---------- */
 .topbar-brand {

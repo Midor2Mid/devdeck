@@ -510,7 +510,12 @@ describe("no renderer surface paints a raw agent status", () => {
         // type-checks and puts the flag back to counting restored panes, with
         // the whole suite green. `alive` is NOT the same fact: it means "this
         // tab is an agent", and a pane whose process died keeps it.
-        const deck = codeLines(src("../src/renderer/src/components/DeckStatus.tsx"))
+        //
+        // The count moved out of `DeckStatus` into `DeckWants` when D1 took it
+        // out of the bar's far corner and put it beside the view keys. It is
+        // still exactly ONE assembly - `callSite` asserts that - and DeckStatus
+        // is checked below to be sure the move was a move and not a copy.
+        const deck = codeLines(src("../src/renderer/src/components/DeckWants.tsx"))
         const call = callSite("wantsYou(", deck, 22)
         expect(call).toContain("exitCode: exitCodeOf(s.termId)")
         expect(call).toContain("held: paneHold[s.termId]")
@@ -518,6 +523,12 @@ describe("no renderer surface paints a raw agent status", () => {
         // And `seen` is what dims the nag - a literal `false` here is the nag
         // that never stops, which is the half of the ruling this pass applied.
         expect(call).toContain("!!seen[s.termId]")
+        // The status region must not count as well. Two numbers for one
+        // question on one bar is the defect this app has already paid to fix
+        // once, and a move that left the old site behind would recreate it.
+        expect(
+            linesWith("wantsYou(", codeLines(src("../src/renderer/src/components/DeckStatus.tsx")))
+        ).toEqual([])
     })
 
     it("keeps deckKeyStatus to one caller - the shared hook", () => {

@@ -1,6 +1,6 @@
 ---
 name: DevDeck
-version: 0.9.2
+version: 0.9.3
 description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
@@ -525,8 +525,8 @@ apply neither, because those count what *exists* and claim nothing about it.
 ### The blocked-on-you word
 
 **A 6px mark is enough only where a nag channel already exists.** The deck has
-one — `.deck-key.key-waiting`'s breathing accent edge, and the `⚑ N` count in
-the status region — so the deck key can carry `waiting` on the dot alone.
+one — `.deck-key.key-waiting`'s breathing accent edge, and the `⚑ N want you`
+control on the bar — so the deck key can carry `waiting` on the dot alone.
 Mission has one too: the tile prints the state in words, `WAITING 13s`, 20px
 under its dot. **Overview has neither**, and its session heads set the name in
 `--text`/600, which is where the mark also read most like a bullet. When the
@@ -563,6 +563,57 @@ agree with the dot: one token for one state. `attention` still outranks
 `not-running` deliberately has no word here. Nothing in there is listening, and
 the flat bar plus the pane's own Start gate is the whole of that story.
 
+### The deck bar, and its wants-you control
+
+**The bar reads left to right in the order the questions arrive:** where am I
+(the four view keys, `Ctrl+1..4`) → what needs me (`.deck-wants`) → facts about
+the repo (`.deck-status`: branch, pull, changes, identity, remote) → tools
+(`.deck-tools`: Scripts, Settings, More). It used to put the tools between the
+keys and the facts and the wants-you count at the far right end, so the eye had
+to cross the whole bar to reach the only number on it that changes what you do
+next. DOM order is visual order, so the tab order agrees with the reading order.
+
+**The wants-you control is the aggregate form of the word above.** Same rule,
+one scale up: the per-session heads say `needs you` / `waiting for you` for one
+session; this says how many want you across every project, off the same
+`wantsYou` predicate Mission's header counts, so the two cannot disagree.
+
+| Count | Renders |
+| --- | --- |
+| 0 | nothing at all — the marker only ever *adds* |
+| 1 | `⚑ 1 wants you` |
+| n | `⚑ n want you` |
+
+- **Zero renders nothing**, which is why it can be a word rather than a badge:
+  there is no `0 want you` to learn to ignore, and its mere presence is the
+  signal. A bare digit does the opposite — it vanishes at zero *and* never
+  teaches what it counts, which is what the old corner glyph did for a year.
+- **"Want you", not "waiting" or "needs".** Those two words are spent on the
+  per-session heads, where they distinguish a bell from a finished turn. The
+  aggregate sums BOTH mechanisms, so borrowing either word would name one and
+  lie about the other.
+- **The accent is on the flag, never on the word.** Same spend-once rule as the
+  blocked-on-you word: the flag glyph is the marker, the word is `--text`/600.
+  `--accent` at 12px on Washi's `--bg` is the 2.92:1 mark this system removed.
+  It is the bar's one Tier-3 accent — the active view key's 2px underline is the
+  other, and no third accent is added.
+- **It is one control carrying the state and the act it invites** (the
+  `.sb-pull` precedent): clicking it opens the session that has waited longest,
+  and the tip says so. Because it *offers* a door, it has to be able to find out
+  there was none — the store's jump reports whether it moved, and the control
+  says so rather than answering a click with silence. A stall counts here and
+  has no pending turn to open, so that is not a hypothetical case.
+- **Nothing here moves.** The deck's nag is the key edge; a second breathing
+  thing on the same bar would be the additive mistake.
+
+**No responsive collapse.** At four keys the bar cannot overflow the window's
+own 900px minimum (keys ~350 + wants ~110 + three tools 88 + 20 padding + 36 of
+gaps ≈ 604, against a status region needing 139), so the `max-width: 959px`
+rule that used to drop the verify keys' labels was **deleted** rather than left
+as a branch that can never fire. A rule nobody can trigger is a rule nobody can
+trust. The `.deck-view.group-start` hairline went for the neighbouring reason:
+with four keys the supervise-then-verify order is carried by the order itself.
+
 ### Badge tiers
 
 Distinguished by *treatment* rather than color, so urgency is never confused with
@@ -575,9 +626,9 @@ identity:
 - **Accent fill** — reserved for the primary CTA (`button-accent`), and otherwise
   scarce. If something is filled, it is the one thing to act on.
 
-Attention/urgency is **not** a badge tier — it is form plus the accent: a flag
-icon beside the count in the status region (`.sb-attn`), and a bare `!` glyph on a
-deck key. There is no filled count badge in the app.
+Attention/urgency is **not** a badge tier — it is form plus the accent: the
+accent flag beside the deck bar's wants-you word (`.deck-wants`), and a bare `!`
+glyph on a deck key. There is no filled count badge in the app.
 
 ### Risk marker
 

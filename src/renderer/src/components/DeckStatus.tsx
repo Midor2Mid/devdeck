@@ -4,30 +4,20 @@ import { useSettings } from "../settings"
 import { toast } from "../toast"
 import type { GitStatus, GitIdentity, PullResult } from "../../../preload/index"
 import { Icon } from "./Icon"
-import { awaitedTermIds, getLastAt, promptFor } from "../missionTail"
-import { exitCodeOf } from "../termExit"
-import { useKeyStatus } from "../keyStatus"
-import { wantsYou } from "../tileState"
 
+/**
+ * Facts about the repo you are in: branch, pull, changes, identity, remote.
+ *
+ * The wants-you count used to live at the end of this row, which put the one
+ * number that changes what you do next in the far corner of the window among
+ * facts you merely glance at. It is now `DeckWants`, immediately after the view
+ * keys. Nothing was duplicated in the move - this file no longer counts.
+ */
 export function DeckStatus(): JSX.Element {
     const project = useStore((s) => s.activeProject())
-    const sessions = useStore((s) => s.sessions)
     const remoteEnabled = useSettings((s) => s.remote.enabled)
     const openChanges = useStore((s) => s.openChanges)
     const gitAccounts = useSettings((s) => s.gitAccounts)
-    // Stable slices only — the awaited Set below is derived in the component
-    // body, not inside a useStore selector, to avoid the getSnapshot trap (a
-    // selector returning a fresh object/array every call blanks the component).
-    const seen = useStore((s) => s.seen)
-    const boardTasks = useStore((s) => s.boardTasks)
-    const pipelineRun = useStore((s) => s.pipelineRun)
-    const termAgents = useStore((s) => s.termAgents)
-    // Read for `wantsYou`'s `held`, and a stable slice - the same one
-    // useKeyStatus subscribes to, so the flag repaints when a process goes away.
-    const paneHold = useStore((s) => s.paneHold)
-    // `promptFor` is gated on the DERIVED status, so the flag cannot count a
-    // question relayed by a tab with nothing behind it.
-    const keyStatusOf = useKeyStatus()
     const [git, setGit] = useState<GitStatus | null>(null)
     const [identity, setIdentity] = useState<GitIdentity | null>(null)
     const [pickerOpen, setPickerOpen] = useState(false)
@@ -104,43 +94,15 @@ export function DeckStatus(): JSX.Element {
         refreshGit()
     }
 
-    // The ONE count in the frame for "who wants you". It covers both bell
-    // "attention" and finished-a-turn "waiting", because the user's question is
-    // "does anything need me", not "which mechanism raised it". The inbox used
-    // to render a second, filled-accent badge on this same bar counting exactly
-    // this set while the flag here counted only attention - two numbers for one
-    // question, 200px apart, disagreeing by construction. Now both this flag and
-    // Mission's header count read the same `wantsYou` predicate (tileState.ts),
-    // so they cannot drift apart again.
-    const now = Date.now()
-    const awaited = awaitedTermIds(boardTasks, pipelineRun)
-    const attention = sessions().filter((s) =>
-        wantsYou(
-            {
-                status: s.status,
-                // Without this the flag cannot see a session blocked on a
-                // permission prompt that was acknowledged as a quiet hand-back.
-                prompt: promptFor(s, keyStatusOf(s)),
-                exitCode: exitCodeOf(s.termId),
-                lastAt: getLastAt(s.termId),
-                awaited: awaited.has(s.termId),
-                alive: !!termAgents[s.termId],
-                // `alive` is "this tab is an agent", not "this agent is
-                // running" - a pane whose process died keeps it. `held` is the
-                // other half of `hasProcess`, and without it the flag counted a
-                // restored pane.
-                held: paneHold[s.termId]
-            },
-            now,
-            !!seen[s.termId]
-        )
-    ).length
-
     return (
         <div className="deck-status">
             {/* Project name lives in the topbar; version lives in Settings → About.
                 The deck keeps only what you actively watch: branch + changes, and
-                compact icon indicators for identity / attention / remote / release. */}
+                compact icon indicators for identity and remote access. The whole
+                row right-aligns as one group (`justify-content: flex-end`), which
+                is why there is no spacer inside it any more - the flag the spacer
+                used to push to the far end is now `DeckWants`, up beside the
+                view keys. */}
             {git?.isRepo && (
                 <>
                     <span className="sb-item" data-tip="Current branch" data-tip-pos="top">
@@ -226,12 +188,6 @@ export function DeckStatus(): JSX.Element {
                         )}
                     </span>
                 </>
-            )}
-            <span className="deck-status-spacer" />
-            {attention > 0 && (
-                <span className="sb-item sb-attn" data-tip="Agent sessions that want you - asking a question, or finished a turn" data-tip-pos="top">
-                    <Icon name="flag" size={12} /> {attention}
-                </span>
             )}
             {remoteEnabled && (
                 <span className="sb-item sb-remote" data-tip="Remote access enabled" data-tip-pos="top">

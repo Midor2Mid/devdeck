@@ -1,7 +1,7 @@
 import { create } from "zustand"
-import type { NotifyState, Project, WorkItem, ChangeFile } from "../../preload/index"
+import type { NotifyState, Project, ChangeFile } from "../../preload/index"
 import { useSettings, aiModeAgents } from "./settings"
-import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
+import type { PresetNode, PresetTab, ShellKind } from "./settings"
 import {
     type LayoutNode,
     type SplitDir,
@@ -60,7 +60,7 @@ import { createRunRecorder } from "./runRecorder"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
-export type MainView = "mission" | "tasks" | "terminal" | "editor" | "api" | "database" | "browser"
+export type MainView = "mission" | "tasks" | "terminal" | "editor" | "browser"
 // working = producing output; waiting = finished a turn, your move (soft);
 // attention = rang the bell / blocked on input, needs you now (loud); idle = quiet.
 export type AgentStatus = "working" | "idle" | "attention" | "waiting"
@@ -310,11 +310,6 @@ interface AppState extends Persisted {
     openPr: (cwd: string, label: string) => void
     closePr: () => void
 
-    // Work items (Jira / Azure DevOps)
-    workOpen: boolean
-    setWorkOpen: (open: boolean) => void
-    startWork: (item: WorkItem, opts?: { worktree?: boolean }) => Promise<void>
-
     // Agent pipelines (runtime-only)
     pipelineRun: PipelineRun | null
     /** Transient signal: set by resumePipeline to release a paused checkpoint. */
@@ -416,7 +411,18 @@ interface AppState extends Persisted {
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
     /** Jump to the oldest agent session that wants you (waiting or attention). */
-    jumpToPending: () => void
+    /**
+     * Jump to the agent that has been waiting on you longest.
+     *
+     * Returns whether it actually moved. The chord could ignore that - it was
+     * fire-and-forget for as long as its only callers were a keystroke and a
+     * palette row, both of which a user aims deliberately. The deck's wants-you
+     * control cannot: it is rendered FROM a count, it invites a click in its own
+     * tooltip, and `wantsYou` counts one thing this filter does not (a stall
+     * carries no `waiting`/`attention` status). A control that offers a door has
+     * to be able to find out there was none behind it.
+     */
+    jumpToPending: () => boolean
     newTabIn: (projectId: string, agentId: string, initialCommand?: string) => void
 
     tabsFor: (projectId: string) => Tab[]
@@ -692,15 +698,11 @@ function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
     return next
 }
 
-const MAIN_VIEWS: readonly MainView[] = [
-    "mission",
-    "tasks",
-    "terminal",
-    "editor",
-    "api",
-    "database",
-    "browser"
-]
+// Includes "tasks", which D1 demoted out of DECK_VIEWS: a demoted view is still
+// a real view - reachable from More and the palette - and workspace.json may
+// already hold it for a project. Only a view that no longer EXISTS is dropped
+// here (see `sanitizeViews`).
+const MAIN_VIEWS: readonly MainView[] = ["mission", "tasks", "terminal", "editor", "browser"]
 
 const isMainView = (v: unknown): v is MainView =>
     typeof v === "string" && (MAIN_VIEWS as readonly string[]).includes(v)
@@ -1539,7 +1541,6 @@ export const useStore = create<AppState>((set, get) => {
         worktreesOpen: false,
         changesTarget: null,
         prTarget: null,
-        workOpen: false,
         pipelineRun: null,
         pipelineResume: false,
         switcherOpen: false,
@@ -2172,8 +2173,6 @@ export const useStore = create<AppState>((set, get) => {
         openPr: (cwd, label) => set({ prTarget: { cwd, label } }),
         closePr: () => set({ prTarget: null }),
 
-        setWorkOpen: (workOpen) => set({ workOpen }),
-
         startReview: async (lensIds) => {
             const proj = get().activeProject()
             if (!proj) return
@@ -2198,39 +2197,6 @@ export const useStore = create<AppState>((set, get) => {
                 spawned.map(({ termId, lens }) => promptWhenReady(termId, reviewPrompt(lens)))
             )
             if (spawned.length) set({ lastAgentTermId: spawned[spawned.length - 1].termId })
-        },
-
-        startWork: async (item, opts) => {
-            const proj = get().activeProject()
-            if (!proj) {
-                pushActivity("attention", "", "Pick a project before starting work")
-                return
-            }
-            const agentId = useSettings.getState().agents[0]?.id ?? "claude"
-            const brief =
-                `I'm starting work on ${item.key}: ${item.title}\n` +
-                `Type: ${item.type}${item.status ? ` · Status: ${item.status}` : ""}\n` +
-                `Link: ${item.url}\n\n` +
-                (item.description ? item.description + "\n\n" : "") +
-                `Please investigate this ticket first: find the relevant code and the root cause, ` +
-                `then propose a short plan before changing anything. Don't edit until I confirm the plan.`
-
-            let termId: string | undefined
-            if (opts?.worktree) {
-                const res = await window.api.git.worktreeAdd(proj.path, `${item.key} ${item.title}`)
-                if (!res.ok || !res.path) {
-                    pushActivity("attention", "", `worktree failed: ${res.error ?? "error"}`)
-                    return
-                }
-                termId = get().newTab(agentId, undefined, item.key, res.path)
-            } else {
-                termId = get().newTab(agentId, undefined, item.key)
-            }
-            if (!termId) return
-            set({ workOpen: false, composerDrafts: { ...get().composerDrafts, [proj.id]: "" } })
-            pushActivity("start", termId, `${item.key} · ${item.title}`.slice(0, 80))
-            await promptWhenReady(termId, brief)
-            set({ lastAgentTermId: termId })
         },
 
         fireTrigger: (triggerId) => {
@@ -2744,7 +2710,7 @@ export const useStore = create<AppState>((set, get) => {
                 if (seen[id]) return false
                 return status[id] === "waiting" || status[id] === "attention"
             })
-            if (!pending.length) return
+            if (!pending.length) return false
             // Oldest first; attention outranks waiting at an equal age. Reading
             // the raw status is safe HERE and only here: every id left after
             // the filter above has a process behind it, so raw and derived
@@ -2755,6 +2721,7 @@ export const useStore = create<AppState>((set, get) => {
                 return (pendingSince.get(a) ?? 0) - (pendingSince.get(b) ?? 0)
             })
             get().jumpToTerm(pending[0])
+            return true
         },
 
         newTabIn: (projectId, agentId, initialCommand) => {

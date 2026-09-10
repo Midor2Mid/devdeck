@@ -1667,9 +1667,9 @@ function AboutSection(): JSX.Element {
         <div className="settings-section">
             <h3>DevDeck</h3>
             <p className="settings-hint">
-                A command deck for terminal-first, Claude-driven development - multiple terminals,
-                fast project switching, editor, API client, database, and remote access in one
-                window.
+                A command deck for terminal-first, Claude-driven development - multiple
+                terminals, agent sessions you can see the state of, fast project switching, an
+                editor, git status and remote access in one window.
             </p>
             <p className="muted small">Version {version || "…"} · Electron + React</p>
 
@@ -2333,8 +2333,7 @@ function ProxySection(): JSX.Element {
                 Sets <code>HTTP(S)_PROXY</code>, <code>NO_PROXY</code> and{" "}
                 <code>NODE_EXTRA_CA_CERTS</code> for <b>newly-opened</b> terminals and the tools
                 they run (npm, git, dotnet, gh). Existing terminals keep their old environment —
-                reopen them to pick up a change. The built-in API client and updater aren't routed
-                through the proxy yet.
+                reopen them to pick up a change. The updater isn't routed through the proxy yet.
             </p>
         </div>
     )

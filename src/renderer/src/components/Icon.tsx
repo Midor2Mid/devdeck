@@ -32,8 +32,6 @@ export type IconName =
     | "flag"
     | "broadcast"
     | "code"
-    | "send"
-    | "database"
     | "appWindow"
     | "more"
     | "chart"
@@ -214,19 +212,6 @@ const P: Record<IconName, JSX.Element> = {
         <>
             <polyline points="16 18 22 12 16 6" />
             <polyline points="8 6 2 12 8 18" />
-        </>
-    ),
-    send: (
-        <>
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-        </>
-    ),
-    database: (
-        <>
-            <ellipse cx="12" cy="5" rx="9" ry="3" />
-            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
         </>
     ),
     appWindow: (

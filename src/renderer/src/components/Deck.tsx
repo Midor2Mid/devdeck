@@ -2,6 +2,7 @@ import { useStore } from "../store"
 import { deriveDeckStrips } from "../deck"
 import { ProjectStrip } from "./ProjectStrip"
 import { ViewKeys } from "./ViewKeys"
+import { DeckWants } from "./DeckWants"
 import { ToolCluster } from "./ToolCluster"
 import { DeckStatus } from "./DeckStatus"
 
@@ -58,10 +59,17 @@ export function Deck(): JSX.Element {
                     strips.map((s) => <ProjectStrip key={s.projectId} strip={s} />)
                 )}
             </div>
+            {/* Left to right, and the order is the point: where am I (the view
+                keys) -> what needs me (the wants-you control) -> facts about the
+                repo -> tools. It used to put the tools between the keys and the
+                facts and the wants-you count at the far end, so the eye had to
+                cross the whole bar to find the only number that changes what you
+                do next. DOM order is visual order here, so the tab order agrees. */}
             <div className="deck-bar">
                 <ViewKeys />
-                <ToolCluster />
+                <DeckWants />
                 <DeckStatus />
+                <ToolCluster />
             </div>
         </div>
     )

@@ -49,14 +49,22 @@ export function CommandPalette(): JSX.Element {
 
     const commands = useMemo<Command[]>(() => {
         const cmds: Command[] = []
-        // Every deck view (derived from DECK_VIEWS so new views show up here).
-        for (const v of DECK_VIEWS)
+        // Every deck view (derived from DECK_VIEWS so new views show up here),
+        // carrying the chord the deck key itself advertises - the index IS
+        // Ctrl+1..4, so the two cannot disagree.
+        DECK_VIEWS.forEach((v, i) =>
             cmds.push({
                 id: "view:" + v.view,
                 section: "Go to",
                 title: "Go to " + v.name,
+                kbd: `Ctrl+${i + 1}`,
                 run: () => store.setView(v.view)
             })
+        )
+        // Tasks is NOT in DECK_VIEWS any more (D1 demoted it out of the deck),
+        // but it is still a view and still needs a door. No `kbd`: it has no
+        // chord, and Ctrl+2 - the one it used to have - is Terminal now.
+        cmds.push({ id: "view:tasks", section: "Go to", title: "Go to Tasks", run: () => store.setView("tasks") })
 
         cmds.push({ id: "new:shell", section: "New", title: "New terminal (shell)", run: () => store.newTab(SHELL) })
         for (const a of agents) {
@@ -167,7 +175,6 @@ export function CommandPalette(): JSX.Element {
         cmds.push({ id: "act:recent", section: "Actions", title: "Recent project - flip back", kbd: "Ctrl+Shift+K", run: () => store.switchToPreviousProject() })
         cmds.push({ id: "act:search", section: "Actions", title: "Search across projects", kbd: "Ctrl+Shift+F", run: () => store.setSearchOpen(true) })
         cmds.push({ id: "act:pending", section: "Actions", title: "Jump to the agent waiting longest", kbd: "Ctrl+Shift+J", run: () => store.jumpToPending() })
-        cmds.push({ id: "act:tasks", section: "Actions", title: "Task board", kbd: "Ctrl+2", run: () => store.setView("tasks") })
         cmds.push({ id: "act:review-panel", section: "Actions", title: "Review changes — agent panel", kbd: "Ctrl+Shift+R", run: () => store.setReviewOpen(true) })
         cmds.push({ id: "act:zoom", section: "Actions", title: "Zoom the focused pane", kbd: "Ctrl+Shift+Z", run: () => { store.setView("terminal"); store.toggleZoomPane() } })
         cmds.push({ id: "act:reopen", section: "Actions", title: "Reopen the last closed session", run: () => store.reopenLastClosed() })
@@ -186,7 +193,6 @@ export function CommandPalette(): JSX.Element {
                 title: "Run pipeline: " + p.name,
                 run: () => store.runPipeline(p.id)
             })
-        cmds.push({ id: "act:work", section: "Actions", title: "Work - Jira / Azure items", run: () => store.setWorkOpen(true) })
         cmds.push({ id: "act:worktrees", section: "Actions", title: "Worktrees - new agent in a worktree", run: () => store.setWorktreesOpen(true) })
         cmds.push({
             id: "act:review-project",

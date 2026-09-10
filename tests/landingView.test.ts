@@ -20,6 +20,6 @@ describe("resolveViewFor", () => {
     })
 
     it("does not borrow another project's remembered view", () => {
-        expect(resolveViewFor("fresh", { viewByProject: { other: "database" } })).toBe("terminal")
+        expect(resolveViewFor("fresh", { viewByProject: { other: "browser" } })).toBe("terminal")
     })
 })
