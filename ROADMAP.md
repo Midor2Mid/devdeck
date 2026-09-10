@@ -1,303 +1,541 @@
 # Roadmap — DevDeck
 
-DevDeck is a terminal-first cockpit: a project is the unit of context, and one row answers which agent is waiting on you. Everything else — the editor, the verification tools — is built to serve that row, not to compete with it. Default to removing. The build is sequenced into milestones so there's a usable daily-driver early, with every later panel plugging into the same workspace shell. Keep each milestone ruthlessly shippable.
+DevDeck is a **supervision cockpit**: one window where a project is the unit of
+context, and one row answers *which of my agents is waiting on me*. Around that
+row sit four things and only four — Mission, a terminal, an embedded browser, and
+a diff-and-read editor. The build is sequenced into milestones so there is a
+usable daily-driver early. Keep each milestone ruthlessly shippable, and default
+to removing.
+
+> *Amended 2026-09-11.* On 2026-09-08 `product-director` ordered this line
+> replaced because it read *"The vision is all-in-one"* — a claim ruled **Not
+> real** on 2026-08-25. That edit was never applied, and it is now obsolete twice
+> over. Someone had already struck "all-in-one" (`3afe11d`), and the replacement
+> text I proposed described "verification panels that are on notice (see kill
+> criterion **D1**)". Both halves of that sentence are now wrong: **the panels
+> are gone** (D1 executed 2026-09-10, `74e969b` / `d45d732`), and **D1 was never
+> a kill criterion in the end** — the owner authorised it outright on 2026-09-08
+> on the author's own empty stores, so the three user-conditions it was
+> pre-registered against are moot, and this deletion must never be written up as
+> though users decided it (`NOTES.md` → Decisions).
 
 **Design north star:** ease of use + Japanese **wabi-sabi** — simplicity, calm, restraint, natural/imperfect beauty, quiet space. One earthy accent, minimal chrome, an ensō brand mark. Every feature must earn its visual weight; default to removing. (See `NOTES.md` → "Design north star".)
 
-> Direction confirmed 2026-06-27: pursue **all four** next-step tracks over time (terminal polish, Monaco editor, API depth, deeper Claude). Default shell stays PowerShell.
+> ~~Direction confirmed 2026-06-27: pursue **all four** next-step tracks over time
+> (terminal polish, Monaco editor, API depth, deeper Claude).~~ **Superseded
+> 2026-09-11.** Two of those four tracks no longer exist: API depth was deleted
+> with the API client on 2026-09-10, and "deeper Claude" is now bounded by a
+> refusal — see *What this roadmap now forbids*. Default shell stays PowerShell.
 
 ---
 
-## Next — the path to 5–10 real users
+## Next — the path to five recorded sessions
 
-**Everything below Milestone 1 is history.** This section is the only live plan;
-read it first. Ordered by `product-director` on 2026-09-03 and **re-ordered
-2026-09-04**, against the standing decision in the Decisions log: the ambition is
-**a product with users**, and the next milestone is **5–10 real external users** —
-not a public launch and not revenue.
+**Everything below the closed-history divider is history.** This section is the
+only live plan; read it first. Ordered by `product-director` on 2026-09-03,
+re-ordered 2026-09-04 and 2026-09-08, and **re-ruled 2026-09-11** — the ruling
+below. Standing decision in the Decisions log: the ambition is **a product with
+users**, and the next milestone is **five recorded first sessions from people who
+are not the author**. Not a public launch and not revenue.
 
-The one test every item passes: *does this get a stranger closer to running
-DevDeck and saying something back?* Work that does not is **not yet**, however
-good it is.
+Evidence for the 2026-09-08 ordering:
+`docs/superpowers/brainstorm/2026-09-08-product-direction.md`. Row-by-row audit
+of it: `docs/superpowers/brainstorm/2026-09-08-roadmap-audit.md` — ten rows
+checked, seven true, three stale, none false. The market facts that change it:
+`docs/superpowers/brainstorm/2026-09-10-competitive-review.md`, **including the
+verification section appended to it.** The three waves of work between:
+`docs/superpowers/plans/2026-09-10-pre-beta-development.md`.
 
-**What changed on 2026-09-04, and it is the important sentence in this file: the
-milestone is no longer blocked on engineering.** A mid-milestone interrupt
-(row **I**) deleted six surfaces, 78 skins and the crash that bricked the app,
-and labelled the path a stranger walks. What remains is **two human acts** — one
-authorisation from the owner (step 4) and one person at a keyboard holding a
-phone (step 7) — plus the work that hangs off them. No agent can move either.
-Writing more code will not make this milestone move, and any proposal to write
-more is a way of not asking for the authorisation.
+### Where this stands on 2026-09-11, and it is not where 2026-09-08 predicted
+
+**The important sentence in this file: every engineering blocker has been gone
+since 2026-09-07, and in the four days since, three waves of engineering shipped
+while not one lying document was corrected and not one person was contacted.**
+
+What landed, and it is real work: three proven security holes closed, including a
+diagnostics record that carried the user's home path — the exact leak that gated
+`field`'s own plan of having candidates paste diagnostics into a public issue;
+**the Desktop-notifications toggle, which had never delivered a notification and
+had never said so**, fixed by notifying from main over IPC; seven must-fix
+defects fixed and verified across seven `qa` passes; an `npm audit` gate in CI; a
+`SECURITY.md`; an architecture-boundary test; the accent budget returned to one
+accent; and **D1 in full** — `DbPanel`, `ApiPanel` and `WorkPanel` deleted with
+their handlers and stores, Tasks demoted out of the deck, the deck reduced to
+**four keys** (Mission · Terminal · Browser · Editor), and production
+dependencies **9 → 5**.
+
+What did not land, and it is the whole milestone: `README.md` still says the
+current release is **0.12.0**, still tells a stranger the repository "is still
+private", and still offers them "terminal, editor, API client, and database
+panels", two of which no longer exist; `site/index.html` says the repository is
+private and contradicts its own hero about the SignPath filing; **step 7 — the
+phone card on real hardware — is now seven days idle with nothing in front of
+it**; the SignPath form is unfiled; and **nobody has been contacted.** `K6` fires
+on **2026-09-22**. That is eleven days.
+
+**I set a rule on 2026-09-08 and it failed. Naming it, because the register of
+this project is to say what changed and why.** The rule was: *steps 10, 11 and 12
+are the last code-and-document work I am willing to order before an invitation
+goes out; a fourth is a delay and will be named as one.* Three waves appeared. I
+uphold two of them — Wave 1 (the security holes and the dead notification toggle)
+is work that would have made a stranger's first session **wrong**, and Wave 2 was
+the owner's own authorisation, not an agent's proposal. I name **Wave 3** as the
+delay: the accent budget and the `termExit` boundary test correct things no
+stranger would ever have noticed, and they were ordered inside the fortnight in
+which `K6` fires. The rule failed because it counted *pieces* instead of asking
+what each piece was for. Sharpened below.
+
+### The two tests every item passes
+
+1. **Does this get a stranger closer to running DevDeck and saying something
+   back?** Kept, unchanged since 2026-09-03. It is still the test that killed a
+   creativity brainstorm on 2026-09-07 and that ranks a document edit above every
+   item in `IDEAS.md`.
+2. **Would a stranger's first session be *wrong* without this?** This replaces
+   2026-09-08's *"is this a human act or a code change?"*, which was too blunt to
+   apply: it would have refused the notification fix and the home-path
+   redaction, both of which belonged, and it did not in fact refuse the accent
+   budget, which did not. The sharpened form separates them cleanly — a session
+   on the old build would have shown a toggle that lied and leaked a real user's
+   name into a public paste; no session would have been wrong because one
+   Terminal frame spent the accent on fourteen things.
+
+Anything that passes neither is **not yet**, however good it is. There is no
+third test; three tests is a framework, and this seat does not write those.
 
 | # | Step | Owner | Unblocks | State |
 |---|---|---|---|---|
-| 1 | `LICENSE` (MIT) + a provenance audit of every vendored file | `release-eng` / `technical-director` | The SignPath application, which cannot be filed without it | **done** 2026-09-02 |
-| 2 | Scrub the tracked tree and its history of employer and client identifiers | `docs-writer` / `technical-director` | The public flip. **The irreversible step** | **done** 2026-09-02 — and it is *why* step 4 is a deletion. Verified 2026-09-04: local history is clean (`git log --all -- .claude/skills/apple-design/` is empty; every remaining identifier lives in `.superpowers/`, `.remember/` and `.claude/settings.local.json`, all gitignored). But `origin/main` is an ancestor of `HEAD`, so the pre-strip objects were force-pushed over and **remain on the remote, retrievable by SHA**. They are harmless while the repo is private and unforked; they become permanent the instant it flips. **Identity half CLOSED 2026-09-05:** the 2026-09-02 pass rewrote names in file *contents* and commit *messages* but never the author/committer fields, so 654 of 741 commits still carried `<employer-domain>` on both. A `filter-branch --env-filter` pass mapped them to `Midor2Mid@users.noreply.github.com`; `refs/original` was dropped, reflogs expired and the repo gc'd, so no reachable *or* unreachable object retains the old address. 741 commits and 59 tags preserved, tree byte-identical, 1,657 specs green. Every hash changed, so 21 SHA citations across 6 tracked files were remapped from the old→new pairing (`6fc101e`). **Content half CLOSED 2026-09-05 too.** `docs/release/step-4-public-flip.md` was the last source of the literals anywhere — it names them in its own grep patterns, so it carried them in the working tree *and* in its history. A second `filter-branch --index-filter`, scoped to the 10 commits that carry the file, replaced them with `<employer-domain>` / `<Client-A|B|C>` / `[CLIENT]` placeholders across every version of it, and the remap was re-run for the 2 citations that moved. `git grep` over the whole object store now returns nothing for any of them. The runbook is still runnable, but its operator must substitute the real strings from a list kept OUTSIDE this repository — which is the point: the repo can no longer supply them. **One thing remains, and it is not an employer or client identifier:** two commits by `Tran Quang Son <14520777@gm.uit.edu.vn>` are untouched — a university address is neither an employer nor a client identifier, and rewriting a person's attribution is the owner's call, not an agent's. Also note `git config --global user.email` is still the employer address, so a fresh clone without the repo-local override reintroduces it |
-| 3 | Rewrite the competitor kill-lists in a register that survives publication | `docs-writer` / `product-director` | The public flip | **done** 2026-09-02 |
-| **I** | **Interrupt — the UI/UX overhaul.** Not one of steps 1–9. It arrived mid-milestone as a user request to "enhance massively the UI/UX"; `product-director` ruled *against* an overhaul and prescribed **deletions plus a small number of proven fixes**, and that is what shipped, in full: the folder-moved crash fixed at three levels; Network view + capture proxy, ReleaseBoard, StandupModal, DotnetPanel, terminal recording and Canvas all deleted; Mission's ports wall collapsed; **84 skins → 6**; 8 view keys → 7; every deck key labelled; disabled keys made readable; an application menu with `Ctrl+O` and a **visible** menu bar; one verb (`Open folder…`); drag-and-drop that animated but never worked, fixed; a three-state folder probe so a moved folder is attributed instead of misreported by three separate features; 10 modals behind boundaries; `Claude YOLO` → `Claude (no permission prompts)` with a `SKIPS PROMPTS` marker; the worktree default off; a spawning state. Spec `docs/superpowers/specs/2026-09-04-ui-ux-overhaul-design.md`, plan `docs/superpowers/plans/2026-09-04-ui-ux-overhaul.md`, four audits in `docs/superpowers/brainstorm/2026-09-04-ui-ux/` | `pm` → `frontend-dev` / `backend-dev` → `qa` / `design-reviewer` | The half of step 8 that step 8 did not do, `PRODUCT.md`'s validation rewrite, and roughly every later UI change (six skins to verify instead of 84) | **done** 2026-09-04 — 37 commits, tests 1,536 → **1,610** (128 files), typecheck zero, tree clean. **Unpublished.** See *The 0.13.0 ruling* |
-| 4 | **Delete + recreate the remote** (same owner and name), push clean history, flip public, file with SignPath Foundation | `release-eng` | Everything that is left. A certificate that clears SmartScreen; the release feed; the updater; step 5's deploy; step 6; the installer step 9 hands a stranger | **done 2026-09-07**, by a route the runbook did not anticipate. `delete_repo` never reached the token after three attempts, so instead of deleting: the old repo was **renamed** to `devdeck-archive-private` (id 1283307443, still private, its 14 releases intact) and a fresh `Midor2Mid/devdeck` created (id 1360167450) — **same owner and name, so `build.publish`'s update-feed URL is byte-identical**, which was the one constraint that could silently stop every installed copy updating. Pushed 751 commits and 59/59 tags, verified remote HEAD == local, then flipped **public**. The trade: the pre-scrub objects survive in a private archive instead of being destroyed. Exposure is zero (private, 0 forks, 0 collaborators) and deleting it needs no scope — but **never flip that repo public**. Pre-flip verification: 0 commits touch <employer-domain>/<Client-A>/<Client-B>/<Client-C>/[CLIENT] by pickaxe over all refs, identities are the owner's no-reply plus 2 deliberately-untouched commits, MIT LICENSE present. **Remaining: the SignPath filing**, which is a web form and needs the repo public — which it now is. |
-| 5 | A one-page homepage: SignPath attribution, the code-signing policy, **Windows-only**, **single maintainer, PRs by invitation** | `marketing` / `docs-writer` | Step 4 — the application requires the attribution line and a published policy | **drafted and content-complete** 2026-09-03 — `site/index.html`, self-contained, no build step, carries a real `run-app` screenshot rather than a mockup. The SignPath attribution line is **not asserted** (the certificate isn't granted); `#code-signing` holds a marked, empty slot for it plus the team-roles and privacy statements SignPath's terms require now. **Undeployed:** Pages needs the public flip, i.e. **step 4** — *not* step 6, as this row wrongly said until 2026-09-04. Deploying it is the first thing that happens after 4 |
-| 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run without meeting SmartScreen; ends the Avast dependency in the release path | **CI half done and PROVEN 2026-09-07**; the signing half still waits on the certificate. `.github/workflows/release.yml` ran for the first time on the `v0.13.0` tag and produced a **draft** release with all four assets — Setup, Portable, blockmap and `latest.yml`, which `electron-updater` reads and without which auto-update breaks. Draft on purpose: a *published* release is what installed copies poll, and these binaries are **unsigned** (no cert on a runner; the SignPath stage is present and inert, gated on a secret that does not exist yet). So the Avast dependency in the release path is gone — that was this step's stated goal — but the artefact a stranger should be handed is still the locally *self-signed* build, because an unsigned binary draws more AV noise than a self-signed one. First run also found three failures that only exist on a runner: `check.yml` lacked `fetch-depth: 0` (so the identity guard saw one commit) and two probe specs compared an 8.3 short path to a resolved long one (`RUNNER~1` vs `runneradmin`) — both fixed in `cf38972`. **Remaining: file with SignPath, then set the secret.** |
-| 7 | Verify the approve/deny card on a **physical phone** — and in the same sitting the four things CDP cannot observe (the native folder dialog, and `addProjectByPath` failing silently on a bad path; `F1`/`Ctrl+K` via real keys; the "none found on your PATH" state; the crash card), plus a look at the phone client's own palette | `qa` (a human at the keyboard) | Step 9's first impression. The most distinctive thing in the product has **never rendered on real hardware**, and 0.11.0/0.11.1 exist as tags precisely because it was never published | **not started — needs a human, and blocked on nothing else.** Moved ahead of 4 in wall-clock order 2026-09-04: it is the only remaining step needing neither the remote nor an authorisation, and it can start today against the signed build already in `release/` |
-| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9 | **done** — both halves ruled *met, with conditions* 2026-09-03, shipped in 0.12.0. Its outstanding condition, `PRODUCT.md`'s validation rewrite, was closed by row **I** on 2026-09-04 (`5feb82d`) |
-| 9 | Recruit 5–10, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent) — the one accepted gap that shows wrong information rather than no information | `field` | The evidence this whole milestone exists to get | **not started — needs a human. Nobody has been contacted.** Materials drafted 2026-09-04: `docs/beta/` (archetypes, recruiting message, install-watch protocol, session template, criteria, shell-mismatch watch); destination `NOTES.md` → "Beta — external users (step 9)", deliberately empty. Three blockers, none of them code: **a build from current `main`** (`release/` holds 0.12.0, which predates every fix in row I including the freeze), **a delivery path** (repo private, newest published release `v0.10.0`, so README's "download from Releases" is a dead end for an outsider), and **one reply address** (no issues on a private repo; diagnostics is clipboard-only by design, so a stranger's failure reaches the author only if they are asked to paste it). `field` dissents on the dependency: hand-delivering a verified build with SHA-256s to 5–10 *named* people needs neither 4 nor 6, and whether SmartScreen actually stops them is a pre-registered prediction (kill criterion K4) — i.e. the way to find out if the certificate is urgent instead of assuming it. 7 still gates the phone card being demoed at all. |
+| 1 | `LICENSE` (MIT) + a provenance audit of every vendored file | `release-eng` / `technical-director` | The SignPath application, which cannot be filed without it | **closed** 2026-09-02. Confirmed live: `gh api …/license` → MIT |
+| 2 | Scrub the tracked tree and its history of employer and client identifiers | `docs-writer` / `technical-director` | The public flip. The irreversible step | **closed 2026-09-11 — one commit later than this row claimed twice.** Both halves shipped 2026-09-05: an `--env-filter` pass remapped 654 of 741 commits whose author/committer fields still carried the employer domain, and an `--index-filter` pass replaced the literals in every version of `docs/release/step-4-public-flip.md`. Then `po`'s audit found the class had **recurred**: commit `5aa3443` — the very commit recording step 4 as done — typed the real employer domain into this file's own prose as an example, on the day of the flip, and it sat on the public remote for a day. Fixed, and this time the fix is a **test**: `tests/publishedIdentifiers.test.ts` (`1ebb38c`) guards tracked *content*, not just commit metadata, against identifier tokens and non-allowlisted email domains. Two things remain and neither is an identifier: `git config --global user.email` is still the employer address, so a fresh clone without the repo-local override reintroduces it; and the pre-scrub objects survive in the private archive repo, which `scripts/check-repo-visibility.mjs` exists to watch — **never flip that repo public** |
+| 3 | Rewrite the competitor kill-lists in a register that survives publication | `docs-writer` / `product-director` | The public flip | **closed** 2026-09-02 |
+| **I** | **Interrupt — the UI/UX overhaul.** `product-director` ruled *against* an overhaul and prescribed deletions plus a small number of proven fixes; that is what shipped. Six surfaces deleted, 84 skins → 6, every deck key labelled, the folder-moved crash fixed at three levels, 10 modals behind boundaries, the worktree default off | `pm` → `frontend-dev` / `backend-dev` → `qa` / `design-reviewer` | Roughly every later UI change, and `PRODUCT.md`'s validation rewrite | **closed** 2026-09-04, shipped in the `v0.13.0` tag. Independently re-derived by `po` 2026-09-08: six surfaces absent from the tree, 3 themes × 2 styles = 6, all eight named commits real |
+| 4 | **The public flip** — clean history pushed, repo public, filed with SignPath | `release-eng` | Everything left. The certificate; the release feed; the updater; step 5's deploy; step 6 | **closed 2026-09-11**, by a route the runbook did not anticipate: `delete_repo` never reached the token, so the old repo was **renamed** to a private archive and a fresh repo created under the **same owner and name**, keeping `build.publish`'s update-feed URL byte-identical — the one constraint that could silently stop every installed copy updating. Verified 2026-09-11: **PUBLIC, MIT, issues enabled, 0 stars / 0 forks / 0 issues.** On 2026-09-08 this row was marked done on the strength of *metadata* while the tree it had just published was leaking; it is done now because row 2 is. **Remaining: the SignPath filing**, a web form, which gates nothing on this list |
+| 5 | A one-page homepage carrying SignPath's required attribution and the code-signing policy | `marketing` / `docs-writer` | The SignPath application, which requires a published policy | **survives, and it got worse rather than better.** `site/index.html` is self-contained and content-complete, but `:246` still says the repository "is still private" (public since 2026-09-07); `:158` says SignPath has been "applied for" while `:246` says it has not — a live self-contradiction on the most-skimmed part of the page; and its copy describes the seven-key suite D1 deleted. Pages is **not configured** (`gh api …/pages` → 404). Deploying it as written publishes three falsehoods, so step 10 goes first |
+| 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run without meeting SmartScreen; ends the Avast dependency in the release path | **CI half closed and proven** 2026-09-07 — `release.yml` ran on the `v0.13.0` tag and produced a draft with Setup, Portable, blockmap and `latest.yml`, which `electron-updater` reads and without which auto-update breaks. The SignPath stage is present and inert, gated on a secret that does not exist. Strengthened 2026-09-10 by an `npm audit` gate in `check.yml`, as a separate job so a red audit cannot hide a red build. **The signing half survives and is a third party's approval queue. Reclassified 2026-09-08 and re-affirmed: not a gate on step 9** |
+| 7 | Verify the approve/deny card on a **physical phone** — and in the same sitting the five things CDP cannot observe (the native folder dialog; `addProjectByPath` on a bad path; `F1`/`Ctrl+K` via real keys; the "none found on your PATH" state; the crash card), plus a look at the phone client's own palette | `qa` (a human at the keyboard) | Step 9's first impression | **not started. Seven days idle, blocked on nothing, and it is now the most exposed item in this file.** The competitive review's verification section names the phone card as one of only three things that survive comparison with Herdr — and it **has still never rendered on real hardware.** Every published sentence that leans on it is leaning on an unverified claim. Protocol: `docs/qa/phone-approval-verification.md` |
+| 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9 | **closed** — both halves ruled *met, with conditions* 2026-09-03, shipped in 0.12.0; the outstanding condition (`PRODUCT.md`'s validation rewrite) closed 2026-09-04 (`5feb82d`) |
+| 9 | Recruit five, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent), and for the usage-ledger data-loss bug if anyone opens the Usage view | `field` | The evidence this whole milestone exists to get | **not started. Nobody has been contacted.** Materials drafted 2026-09-04 (`docs/beta/`); destination `NOTES.md` → "Beta — external users (step 9)", deliberately empty. **Blockers as of 2026-09-11: steps 10, 11 and 13. Not step 6, and not step 7** — 7 gates the card being *demoed*, not the invitation being *sent*. This row's blocker list has now been stale twice: on 2026-09-08 it still cited "repo private, newest published release v0.10.0", and my own 2026-09-08 replacement text cited "publish 0.13.0 signed", which step 11 below reverses |
+| **10** | **The documents that still lie to a stranger** — `README.md` (release is 0.12.0; the Releases-page instruction, true only after 11; "terminal, editor, API client, and database panels", two of which are deleted; SignPath "cannot be applied for … this one is still private"); `site/index.html:158` against `:246`; `docs/beta/02-recruiting-message.md:10` ("the repo is private, so the user cannot open an issue"); `.superpowers/HANDOFF.md` §1–2, still "0.11.1 is cut"; `IDEAS.md`'s moat list | `docs-writer` / `marketing` | Steps 5, 9 and 11 | **ordered 2026-09-08. Not done, and its scope has grown** — D1 added a second class of falsehood (documents promising deleted panels) on top of the first (documents describing a private repo). Two of these files are what a stranger reads first. **Nothing else goes out before this** |
+| **11** | **Cut, sign and publish `0.14.0` from current `main`** — and **delete** the draft `v0.13.0` release | `release-eng` + `marketing` | Step 9's delivery path; the README's download link stops being a dead end; the updater gets a real feed | **new, and it replaces the 2026-09-08 order to publish 0.13.0.** See *The 0.14.0 ruling*. Both existing artefacts are the wrong product: the draft's four assets are the **unsigned** CI set built at the `v0.13.0` tag, and `release/`'s **self-signed** `DevDeck-Setup-0.13.0.exe` was built 2026-09-07 — both **22 commits behind HEAD**, before D1, before the three security fixes and before the notification fix. **No build of the four-key product exists anywhere** |
+| **12** | **Lead with the cockpit, demote the suite** — the published claim must match the repo's own description and survive D1 | `marketing` / `product-director` | Step 10 being coherent; the recruiting message being true | **ordered 2026-09-08, partly done.** `README.md:3`, this file's line 3 and GitHub's own repo description are now cockpit-first. Still outstanding: `PRODUCT.md`'s value-proposition paragraph, which promises "terminals, editor, **API client, database client, task board**" snapping to a project, and `site/index.html`'s hero |
+| **13** | **Two sentences in two beta documents, and one adoption** — the fourth **asked, not gating** fact in `docs/beta/01-who-to-approach.md` (which agent CLIs a candidate runs, and whether they already use `claude agents`, Claude Code Desktop, `/remote-control`, the Codex app, Herdr, Orca or Warp for the same job); the **S4 weak-pass amendment** in `docs/beta/05-validation-criteria.md`; and **`K6` adopted into that file** under its own dated amendment rule | `field` / `po` | Step 9 asking the one question whose answer cannot be recovered once a session is spent | **new, and it is a precondition of candidate one rather than a nicety.** See *Ruling on the milestone*. `po` established 2026-09-08 that `K6` exists only as prose in a brainstorm and in this file, never in the criteria document that carries the anti-gaming amendment rule — and a bar that lives only where a later reader can mistake it for policy is how a milestone's bar moves quietly |
 
 ### The order, in wall-clock terms
 
-The table is numbered as it was ordered. This is the sequence to execute.
+Re-ordered **2026-09-11**. `pm` sequences and assigns; it does not re-open the
+ordering. Items marked 🔒 need a person and no agent can move them.
 
-1. **Cut 0.13.0 locally** — version bump, a `CHANGELOG.md` entry rolling up
-   0.11.0 / 0.11.1 / 0.12.0 / 0.13.0, tag, `npm run package:signed`.
-   `release-eng` + `marketing`. **Unblocks:** step 7 has something to test, and
-   the beta has a version number. **Do not publish it** — see the ruling below.
-2. **Step 7's human sitting** — the phone card on real hardware, the four
-   CDP-blind observations, the phone-client palette look. `qa`. **Unblocks:** the
-   beta's first impression. It needs nothing from anyone else, so it must not
-   wait behind an authorisation.
-3. **Ask for step 4's authorisation, with the price attached.** Priced below; the
-   owner rules. **Unblocks:** everything remaining.
-4. **Step 4, in one sitting:** harvest (below) → delete → recreate as
-   `Midor2Mid/devdeck` → push clean history and tags → flip public → file with
-   SignPath. `release-eng`. The delete and the flip are the **same** sitting: a
-   flip before the delete publishes the identifiers, and "we deleted it
-   afterwards" is not a fact about what was published.
-5. **Deploy `site/index.html` to Pages** and link it from the README.
-   `marketing`.
-6. **Step 6** — CI plus SignPath in the release path. `release-eng`.
-7. **Publish 0.13.0** as the new remote's first release: Setup + Portable +
-   **blockmap + `latest.yml`**, because `electron-updater` reads that manifest and
-   a beta you cannot update is a beta you cannot fix.
-8. **Step 9** — recruit, one at a time. `field`.
+1. **Step 10 — correct the documents that lie**, including the panels D1
+   deleted. `docs-writer` + `marketing`, one sitting, one `po` pass.
+   *Unblocks 5, 9, 11.*
+2. **Step 12's remainder — `PRODUCT.md`'s value proposition and the homepage
+   hero.** `marketing`. Same sitting as 1, same review.
+3. **Step 13 — the fourth asked fact, the S4 amendment, and `K6` adopted.**
+   `field` drafts, `po` rules. *Unblocks 9.* Half a day, and it must precede the
+   first invitation because the answer is unrecoverable afterwards.
+4. **Step 11 — cut `0.14.0`, sign it, publish it, delete the `v0.13.0` draft.**
+   `release-eng` + `marketing`. Version bump, a `CHANGELOG.md` entry for D1 and
+   the three waves, tag, `npm run package:signed`, then
+   `node scripts/update-manifest.mjs --check` before anything is attached.
+   *Unblocks 9.*
+5. 🔒 **Step 7 — the human sitting.** The phone card on real hardware, the five
+   CDP-blind observations, the phone client's palette. `qa`, a human with a
+   phone. **In parallel with 1–4, against the 0.14.0 build once it exists.**
+   Seven days idle with nothing in front of it; it must not now wait behind a
+   document edit.
+6. 🔒 **File with the SignPath Foundation.** The owner. A web form, ten minutes.
+   **In parallel, gating nothing on this list.** *Unblocks users 6–10.*
+7. 🔒 **Step 9 — invite candidate one.** `field` drafts, a human sends.
+   **Preconditions: 10, 11, 13. Not 6, and not 7.**
+8. 🔒 Repeat to five recorded sessions, then write the milestone verdict against
+   S1–S4 / R1–R3 / E1–E5 and record which predictions fired. `field` → `po`.
+   **Deadline 2026-10-06. `K6` fires if item 7 has not happened by 2026-09-22.**
+9. **Step 5 — enable Pages and deploy the homepage**, after 1–2 have merged.
+   `marketing`. Moved *below* the invitation on purpose: the homepage is a
+   requirement of the SignPath filing, not of a hand-delivered build, and it has
+   twice been used as a reason to delay.
+10. Then, and only then: the usage-ledger data-loss bug, then Q1.
 
-**Left off this list on purpose:** every feature; every residual in *Added on
-2026-09-04* except the three rows marked *before the cut*; and any further UI work
-at all. The milestone has enough product and no distribution.
+**Left off this list on purpose:** every feature; any further UI, motion, colour
+or boundary work; a fifth wave of pre-beta engineering under any name; the
+homepage's redesign as opposed to its correction; macOS, Linux, `remote.enabled`
+on by default; a seventh skin (refused in advance three times); a sixth
+competitor study (permanently); and everything in *What this roadmap now
+forbids*.
 
-### The 0.13.0 ruling (2026-09-04)
+### Ruling on the milestone: it stands, the deadline stands, its meaning changes
 
-**Cut 0.13.0 now. Publish nothing until step 4 has landed. Then 0.13.0 is the new
-remote's first published release, and it is what a beta user installs.**
+**Five recorded first sessions from five people who are not the author, each on
+their own machine, each carrying at least one verbatim dated quote in
+`NOTES.md`, by 2026-10-06.** Unchanged. The countable unit is a **recorded
+session** as `docs/beta/05-validation-criteria.md` defines it, and that file's
+bars stay at their stated thresholds. Five sessions with R1–R3 all failing is a
+**completed** milestone with a **negative** result, and that remains a legitimate
+outcome.
+
+**What changed is what five sessions can tell you.** The milestone was set when
+this repository believed the question *"which of my agents is waiting on me"* was
+answered nowhere else. Verified 2026-09-10, it is answered in at least five other
+places: **Herdr** — 37.2k stars, Apache-2.0, one Rust binary, native Windows
+including "endpoint-protected Windows", every pane badged working/blocked/idle,
+its own README saying *"when an agent stops and needs an answer, herdr says
+so"*, and positioned explicitly as **"no electron"**, an argument aimed precisely
+at this product's form factor; **`microsoft/intelligent-terminal`**, a Windows
+Terminal fork with an agent status bar over ACP, shipped at Build 2026; **Claude
+Code's own `claude agents`**, which sorts needs-input to the top with each
+session's last response; Claude Code Desktop's session sidebar and notifications;
+and the Codex app on Windows.
+
+So this milestone stops being a test of **the problem** and becomes a test of
+**the residue**: cross-vendor, in the user's own Windows shell, no account, no
+relay, no daemon, a GUI rather than a TUI, a phone approve/deny card bound to the
+exact screen that produced the question, and a *project* — not a repo, not a
+worktree — as the unit of context. That residue is narrower than the claim this
+milestone was written under, and nobody has ever tested it. Note what makes it
+narrower still: D1 deleted most of the panels that made "one window" mean
+anything, and the phone card has never rendered on hardware.
+
+**Which is why step 13 is a precondition and not a nicety.** Without the fourth
+asked fact, five recorded sessions cannot distinguish *"the residue is wanted"*
+from *"these five happened to have no alternative"* — and S4 as written scores a
+sentence the vendor already sells for free. `field`'s proposal is adopted in
+full: record which CLIs each candidate runs and which first-party tools they
+already use for this job, verbatim, **as a question and never as a
+disqualifier**; and amend S4 so a pass sentence naming **more than one vendor**,
+or naming their **own terminals**, is a full pass, while *"a terminal with tabs
+that shows Claude waiting"* is recorded as a **weak pass**, because `claude
+agents` already gives a Claude-only user that sentence with no install.
+
+**The deadline does not move in either direction, and here is what I rejected.**
+Extending it because the ground moved: refused — the ground moving is an argument
+for evidence sooner, not later, and every remaining blocker is under two days of
+work. Lowering the count to three because a thinner differentiator means fewer
+people will accept an install: refused — that lowers the bar exactly when the
+evidence needs to be stronger, and S1's ≥4/5 and R1's ≥3/5 stop meaning anything
+below five. Raising it because the competition demands more proof: refused — the
+binding constraint is invitations sent, which is zero, not sample size.
+Abandoning the beta because five competitors got there first: **refused, and this
+is the one worth stating.** The competition makes the beta *more* necessary, not
+less. The residue is a hypothesis, the author cannot test it on the one machine
+that has ever run this app, and `K6`'s alternative — keep DevDeck as a personal
+instrument — is a respectable outcome that should be chosen on evidence rather
+than reached by running out of days.
+
+**Costing this, as I am required to.** Committing: the fourth asked fact will
+probably produce answers that weaken the product's case, in the candidates' own
+words, recorded permanently, before anything has been sold to anyone.
+Abandoning it: you save two document edits and you spend five irreplaceable first
+sessions on a question the market has already answered — much the more expensive
+mistake.
+
+### What this roadmap now forbids that it did not on 2026-09-08
+
+The 2026-09-08 forbidden list (`…2026-09-08-product-direction.md` §5) stands in
+full and is not re-argued here — teams, a hosted service, a relay or a daemon,
+telemetry of any kind, macOS and Linux, a native mobile app, "all-in-one" as a
+published claim, a guided tour, a seventh skin, a sixth competitor study. Six
+things are **new**, and they are new because the product is now smaller and the
+differentiator thinner than when I last ruled.
+
+- **Answering "which agent needs me" a second time, in any form.** *Not real.*
+  No second list, panel, badge, tray window, pop-out or view that re-answers the
+  question the deck's one row already answers. Eleven surfaces once answered it
+  here and the whole recovery was deleting ten of them; the market now holds at
+  least eleven answers across five vendors. DevDeck's claim is that it has
+  **one**. *Belongs to:* `claude agents`, Claude Code Desktop, Intelligent
+  Terminal's agent panel, Orca's dashboard — every one of which ships theirs off
+  by default or behind a flag, having learned the same lesson elsewhere.
+- **Re-adding a panel or a deck key to make "one window" mean something again.**
+  *Not us.* D1 removed three panels, four database drivers, five MCP tools and
+  **830 ms of every cold start**. The first proposal to add a fifth key back —
+  under any name, for any stack, however well argued — is spending the only
+  thing D1 bought, exactly as a seventh skin would spend the skin cut.
+  **Refused in advance.** *Belongs to:* whatever tool already owns that job,
+  which is the argument that deleted each of them.
+- **Competing with Herdr on Herdr's axis.** *Not us, and losing is certain.*
+  Speed, binary size, "no Electron", agent-preset breadth, a TUI mode,
+  multi-machine session lists, sessions that survive closing the window. Herdr
+  has a Rust binary, 37.2k stars and roughly a hundred times this project's
+  throughput; DevDeck loses that race the day it enters it. *Belongs to:* Herdr.
+  Copy nothing from it except the lesson already encoded at
+  `styles.css:1165-1172` — that *done* must not become a status — which this
+  repo reached independently.
+- **Adopting a structured protocol as the session transport.** *Not us.* Running
+  agents over ACP instead of in a pty buys exact permission prompts at the price
+  of replacing the real Windows shell the identity is built on with a JSON-RPC
+  subprocess whose UI DevDeck would then have to draw. That is a chat client.
+  *Belongs to:* Zed, JetBrains, Microsoft. Copy the **stance** — structured over
+  scraped — via Q1's hooks; never the transport. "An ACP client mode as an
+  addition" is the same kill plus a second session model beside the pty one: two
+  truths about one agent.
+- **Publishing any differentiator sentence that does not name the alternative.**
+  *New rule, and it is the register `PRODUCT.md` now sets.* Any README, homepage,
+  release note or recruiting message asserting that DevDeck tells you which
+  agent needs you, without saying in the same breath that `claude agents`,
+  Claude Code Desktop and Herdr also do, is a false premise re-published — and
+  `PRODUCT.md` was corrected on 2026-09-10 precisely because that sentence had
+  gone untrue. This generalises the correction instead of applying it once and
+  waiting for the next drift. It binds the phone card twice over: **the card has
+  never rendered on real hardware**, so no published sentence may present it as
+  proven until step 7 has happened.
+- **Recruiting a candidate without recording what they already use.** *Not a
+  forbid on the product; a forbid on the evidence.* A session record with no
+  answer to the fourth fact cannot be scored against S4's amended bars, and
+  spending one of five on an unscoreable record is unrecoverable.
+
+And one refusal carried forward with its wording repaired: **a fifth wave of
+pre-beta engineering, whatever it is and however good.** The 2026-09-08 version
+failed because it counted pieces. The repaired version is test 2 above — if a
+stranger's first session would not be *wrong* without it, it waits until after
+the fifth recorded session. The 0.14.0 cut is not a wave; it is the act of
+handing over what already exists.
+
+### K6 — pre-registered, and not yet adopted where it belongs
+
+**`K6` — the owner does not send the first invitation.** If **no candidate has
+been contacted by 2026-09-22**, with every engineering blocker gone since
+2026-09-07 and steps 10, 11 and 13 costing under two days between them, the
+finding is that the standing decision of 2026-09-02 — *"a product with users"* —
+is not held by the person who must act on it. **Then:** revert `PRODUCT.md` to
+"for me, first", close the distribution programme (no SignPath follow-up, no
+Pages, no recruiting), un-publish nothing, and keep DevDeck as a personal
+instrument — which is a respectable thing and a cheaper thing.
+
+It is the only kill criterion that fires on the author rather than on the users,
+and on the evidence of the last seven days it is **the most likely of the six to
+fire.** Written down now rather than discovered in December.
+
+**It is not yet a criterion.** `po` verified on 2026-09-08 that
+`docs/beta/05-validation-criteria.md` contains K1–K5 and nothing else, and that
+is still true today. `K6` lives in a brainstorm document and in this file. That
+is exactly the gap the criteria file's own amendment rule exists to close, and
+step 13 closes it. **D1 needs no such adoption:** it was pre-registered as a
+conditional kill and then authorised outright by the owner on 2026-09-08 on the
+author's own empty stores, so its three user-conditions are moot — recorded in
+`NOTES.md` → Decisions, together with the instruction that this deletion must
+never be written up as though users decided it.
+
+### What would prove this ordering wrong
+
+1. **Three of the first five ask, unprompted, where the Database, API or Network
+   view went.** Then the agent-edge and empty-table tests that killed nine
+   surfaces are too narrow, the subtraction thesis is wrong, and D1 was a
+   mistake made on one machine's habits. Note that authorising D1 outright
+   removed the test that would have caught this *before* the deletion; this is
+   now the only place it can surface.
+2. **A candidate already runs Herdr, `claude agents` or Intelligent Terminal and
+   installs DevDeck anyway, and says in their own words why.** Then the residue
+   is the product and this ruling is right for the right reason. Only the fourth
+   asked fact can produce that sentence.
+3. **Four of five are Claude-only and name `claude agents` or Claude Code
+   Desktop.** Then the cross-vendor residue is not the product either, and the
+   milestone's honest verdict is negative however well the sessions go.
+4. **S1 passes 5 of 5 through SmartScreen.** Then the certificate was never the
+   gate, prediction 3 fails, and holding the sequence open for the filing would
+   have cost the whole milestone.
+5. **K4 fires at candidate one.** Then upholding `field`'s dissent cost a
+   candidate the certificate would have saved, and the 2026-09-04 ordering was
+   right. L4 caps that at one.
+
+### The 0.14.0 ruling (2026-09-11)
+
+**Cut `0.14.0` from current `main`, sign it locally, publish it, and delete the
+draft `v0.13.0` release.** This reverses step 11 as I ordered it on 2026-09-08,
+which said to publish that draft with `release/`'s locally signed 0.13.0 assets.
 
 The facts it is ruled on:
 
-- The last **published** release is **0.10.0** (2026-08-29). `v0.11.0`, `v0.11.1`
-  and `v0.12.0` are tags only. There are **42 unreleased commits**.
-- **Across 14 published releases and 28 installers, the lifetime download count
-  is 1** — and that one is `latest.yml` on 0.10.0, i.e. an updater poll, almost
-  certainly from this machine. Measured 2026-09-04 with
-  `gh release view <tag> --json assets`. Zero issues, zero stars, repo private.
-
-**Cut it, because a changelog is perishable.** 42 commits and four versions of
-prose have to be written by the people who did the work, while they still
-remember it, and a tag costs nothing. `release/` already holds a signed 0.12.0,
-so the packaging path is known to work; 0.13.0 re-runs it.
-
-**Do not publish it to the current remote, because step 4 deletes that remote.**
-A 0.13.0 release on `Midor2Mid/devdeck` today is a fifteenth release destroyed by
-the very next step, and a `latest.yml` on a feed that stops existing. Publishing
-into a repo you have decided to delete is work that deletes itself.
-
-**Do not publish it anywhere yet, because the only installer that exists is
-signed `CN=DevDeck Dev`.** A stranger who runs it meets SmartScreen — the exact
-wall this milestone exists to remove, and the wall step 6 removes. Spending a
-first impression on a security warning buys "is this safe?" instead of a first
-session, which is the one thing the milestone is trying to buy.
-
-**On the crash fix, which is the strongest argument for shipping and still does
-not carry it.** A project whose folder moved crashed the main process *and*
-persisted the failed tab, so every later launch died before the UI loaded, with
-hand-editing userData as the only recovery. That is as bad as a defect gets. Then
-ask who it protects: nobody has ever downloaded a DevDeck installer. It protects
-**the first stranger**, so its deadline is the beta install, not this week — and
-it will be in that install either way. The crash fix sets the *floor* for what
-may ship. It does not set the date.
-
-**On the phone card, which argues the same direction.** It is unverified on
-hardware (step 7). An unproven distinctive feature is an argument against a wider
-audience and *for* the narrow one this milestone already chose.
-
-**The update path survives the delete**, and this is the thing to check rather
-than assume: `package.json` → `build.publish` names
-`{ provider: github, owner: Midor2Mid, repo: devdeck }`, so recreating under the
-**same owner and name** restores a byte-identical feed URL. `electron-updater` on
-an existing install reads the new `latest.yml` and offers 0.13.0. The only loss is
-differential download — the old blockmaps are gone, so it falls back to a full
-download. Nobody is on an old version, so that costs nothing today, and it must
-stay true tomorrow: **if step 4 ever changes the owner or the repo name, every
-installed DevDeck silently stops updating.**
-
-**0.13.0's notes must roll up four versions** (0.11.0, 0.11.1, 0.12.0, 0.13.0),
-exactly as 0.10.0's notes rolled up 0.9.0 / 0.9.1 / 0.10.0. There is precedent in
-this repo and `marketing` should reuse it. `CHANGELOG.md` is not that text — see
-the harvest item below.
-
-### What step 4 costs, priced (2026-09-04)
-
-The roadmap ordered step 4 without pricing it. Priced: **deleting and recreating
-the remote destroys 14 published releases and their 28 attached installers.**
-
-**Take the trade.** The two sides are not close:
-
-- **Given up:** binaries **no human has ever downloaded** — lifetime total across
-  all 14 releases is 1 download, of a 346-byte manifest. Zero issues, zero stars,
-  no forks. And they are reproducible: every tag from `v0.1.0` to `v0.12.0` is an
-  ancestor of `HEAD`, so any historical version can be checked out and packaged
-  again.
-- **Bought:** not publishing an employer's and a client's identifiers,
-  permanently, at the moment of the flip. GitHub keeps unreachable objects
-  retrievable by SHA, so a force-push leaves the pre-scrub commits on the remote.
-  Only deleting the repository removes them.
-
-**The sequencing matters more than the trade.** Those objects are harmless right
-now — the repo is private and unforked, so exposure is zero. The delete is
-therefore not remediation of a live leak; it is a **precondition of the flip**,
-and it belongs in the same sitting.
-
-**Harvest before the delete — and none of it is an installer:**
-
-1. **The release-note bodies of all 14 published releases.** Verified 2026-09-04
-   that these are **not** in `CHANGELOG.md`: six of eight distinctive paragraphs
-   in 0.10.0's body appear nowhere in this repo, including the install
-   instructions, the SmartScreen warning, and the multi-version rollup framing.
-   ~16 KB across 0.5.0–0.5.9, 0.6.0, 0.7.12, 0.8.0, 0.10.0. It is the **only
-   prior art for how this product has ever described itself to an outsider**, and
-   `marketing` needs it for 0.13.0's notes. One `gh release view --json body`
-   loop. `release-eng` writes it under `docs/release/`; `marketing` uses it.
-2. **The download counts and the publication timeline**, before they cease to
-   exist. This is the only external-engagement data DevDeck has ever generated,
-   and its value is precisely that it is **zero** — that number is evidence for
-   `PRODUCT.md`'s validation section and for every future argument about what
-   distribution is worth. Once the releases are gone, "nobody ever downloaded
-   it" becomes an assertion instead of a measurement.
-3. **Nothing else.** Skip the 0.10.0 binaries (~230 MB): `release/` already holds
-   a signed 0.12.0, which is strictly more useful, and `release/` is gitignored,
-   so it survives every remote operation.
-
-**One gate `release-eng` must run before `git push --tags`**, because the failure
-mode is republishing exactly what the delete removed. Verified safe today — every
-tag is an ancestor of `HEAD`, so no tag reaches a stripped object — but it is one
-command and it must be re-checked at push time, not assumed:
-
-```
-for t in $(git tag); do git merge-base --is-ancestor "$t" HEAD || echo "UNSAFE: $t"; done
-```
-
-It must print nothing.
-
-### Added on 2026-09-04 — what the milestone needs that it did not on 2026-09-03
-
-Four audits produced findings the 25-task plan deferred with triggers. **No
-trigger moved** — every one of them waits on a recorded first session, which is
-step 9. Three things did change:
-
-- ~~**BEFORE the 0.13.0 cut — measure the labelled deck at `minWidth`.**~~
-  **CLOSED, and it was already done** — corrected 2026-09-04 after this row was
-  written. The spec ordered `minWidth: 900 → 1040` justified on Bauhaus 978px,
-  CRT 916px and Flat 935px; Phase 1 deleted all three, so the change correctly
-  did not ship. But the six survivors were **not** left unmeasured: `5792925`
-  re-measured them in the running app and records the numbers in its own commit
-  message — the labelled key row is **590.45px, identical in all six skins**
-  (Chromium's UA stylesheet resets `letter-spacing` on `button`, so Modern Pro's
-  tracking never reaches a deck key), and row + tools + bar chrome is 782.45px
-  against the ~886px of CSS width a 900px window actually gives the page. Twelve
-  measurements — each skin at 900px and at 1386px — no key clipped, no bar,
-  topbar or document overflow. `minWidth: 900` stands **on evidence**, not by
-  omission. What 900 does cost is the status region, which is why the collapse
-  drops the verify group's labels first. Kept here rather than deleted, because
-  a plan that quietly loses a closed item is how the same work gets ordered twice.
-- **BEFORE the 0.13.0 cut — re-run `qa`'s D6.** Double-clicking `+ Claude`
-  launched two agents. The spawning state shipped, which gives feedback but does
-  not debounce. These are paid CLIs: if it still reproduces, one stray
-  double-click costs a beta user money, and that moves it from cosmetic to a
-  defect. One observation, not a build. `qa`.
-- **ADDED to the pre-beta build — `projects.json` unreadable is still read by
-  zero renderer code.** Verified 2026-09-04: no project-facing renderer code
-  reads `ProjectStore.unreadable`, which main sets diligently. A corrupt or
-  locked `projects.json` therefore presents as *"you have no projects"*, and every
-  project action silently no-ops **forever**, with no explanation anywhere. This
-  is the same defect class the last two releases were spent removing — absent,
-  unknown and zero are three states — it is a first-five-minutes failure with no
-  recovery, and the repo already holds the working precedent
-  (`PersistBlockedBar` handles the `workspace.json` equivalent properly). It
-  survived a 25-task plan because no task owned it. `frontend-dev` /
-  `technical-director`. **This is the only build work being added.**
-
-**Ruled *not yet*, with triggers, so nobody re-opens them:**
-
-- **The seeded preset icons are still `✳ ✦ ⚡ ◆ ◇ ▶ ⚒ ✓`**
-  (`settings.ts:242-258`) — a direct violation of fixed point 7 of the spec that
-  shipped today, by the product's own defaults. It is decoration; the beta will
-  not fail on it, and it is not worth pre-flip verification budget across six
-  skins. **Trigger: the first beta screenshot.**
-- **Path dedupe is exact string equality** (`main/projects.ts`), so `C:\Repos\Foo`
-  and `c:\repos\foo` become two project cards. **Trigger: a beta user does it.**
-- **In Settings → Agents, `on PATH` and `unchecked` still differ only by the
-  word** — verified still open; the string does not appear in `SettingsModal.tsx`,
-  while the launcher carries three channels for the same distinction. Close it by
-  adding a channel or by deciding out loud that one word is enough on a form —
-  not by re-reading the tradeoff. **Not a beta blocker.**
-- **A slot-aware sizing variant for a crashed top bar.** Region cards no longer
-  escape their slots, but on a slot shorter than the card (~44px for the top
-  bar's row) `Copy diagnostics` needs an in-card scroll. `frontend-dev` /
-  `design-reviewer`.
-- **The redactor's four known gaps**, to watch in beta reports rather than
-  pre-solve: URL- and base64-encoded secrets (decoding arbitrary text would
-  false-positive on every hash and cache path in the record); uncovered issuers
-  (SendGrid, Slack and Discord webhooks, Google OAuth); `AKIA` followed
-  immediately by an alphanumeric, since dropping the trailing word boundary would
-  widen the rule into base64 runs and commit SHAs; and space-separated flag
-  values (`mysql -p hunter2`), genuinely indistinguishable from a positional
-  argument. `field` / `security-engineer`.
-- **The report rate limit is a fixed window**, so 30 refusals at the end of one
-  window plus 30 at the start of the next is 60 in an instant. Promote to a
-  sliding window only if a beta report actually shows burst loss; the record
-  already declares refusals in its own `Incomplete` block.
-- **Deck geometry, the new-project → new-terminal mechanics, starter-command
-  discoverability, the tasks board / pipelines UI** — all deferred on triggers
-  only step 9 can move (five recorded first sessions; two of the first five
-  hesitate; asked a second time). Re-checked 2026-09-04: none moved.
-- **A guided tour / onboarding modal** — refused, not deferred. The fix for "the
-  app explains itself once" is self-describing empty states, not a modal
-  dismissed in two seconds.
-
-**And one thing the skin cut must not be spent on.** 84 → 6 makes every future UI
-change roughly an order of magnitude cheaper to verify. That saving is the
-*point*, not a budget for a seventh skin. The first proposal to add a theme
-because "we can afford it now" is spending the only thing the cut bought.
-**Refused in advance.**
-
-### Closed 2026-09-04
-
-- **The 17 unguarded overlays** — closed. Four were deleted outright
-  (`DotnetPanel`, `RecordingsModal`, `ReleaseBoard`, `StandupModal`) and the
-  remainder sit behind their own boundary (`815b9fe`). `WorktreesModal`, the one
-  confirmed to blank the window, is among them.
-- **`PRODUCT.md`'s false validation claim** — closed (`5feb82d`). It now says, in
-  its own words, that no external user has ever run this app.
-- **The `Ctrl+O` menu-bar question**, which the spec insisted be decided
-  explicitly rather than by default — decided: `autoHideMenuBar: false`
-  (`index.ts:301`). The bar is visible, and a visible menu bar is itself a
-  discoverability affordance for a stranger.
-- **The two builds behind step 8** — the three-state agent-CLI presence probe and
-  the diagnostics record both shipped in 0.12.0. See `CHANGELOG.md`.
-- **`Ctrl+1..8` bypassing the disabled view keys** — closed (`App.tsx:219`).
+- **Neither existing artefact is this product.** The draft's four assets are the
+  **unsigned** CI set built at the `v0.13.0` tag; `release/`'s
+  `DevDeck-Setup-0.13.0.exe` is the **self-signed** local build of the same tag,
+  dated 2026-09-07. HEAD is **22 commits** past that tag — 600 files, D1's two
+  breaking commits among them, plus three security fixes and the notification
+  fix. Publishing either would hand a stranger a seven-key app with a toggle
+  that lies and a diagnostics record carrying their own name, and then tell them
+  in a release note that those had been fixed.
+- **The version cannot be 0.13.0.** `package.json` still says 0.13.0 and the tag
+  is taken. Two commits are marked `feat!`, and they remove three views, four
+  production dependencies and five MCP tools. Pre-1.0, that is **0.14.0**.
+- **Sign locally; do not publish the CI set.** Established at step 6 and
+  unchanged: an unsigned binary draws more antivirus noise than a self-signed
+  one, and the SignPath stage stays inert until the filing lands and the secret
+  exists. Run `node scripts/update-manifest.mjs --check` before attaching
+  anything, because `latest.yml`'s sha512 must match what is actually there or
+  auto-update breaks on first contact.
+- **Delete the draft rather than publish it.** A draft is invisible to an
+  anonymous visitor, so deleting it costs a stranger nothing; publishing it
+  would make an unsigned build of a deleted product the thing `electron-updater`
+  polls. The `v0.13.0` **tag** and its `CHANGELOG.md` entry stay — they are
+  accurate history of what shipped on 2026-09-07.
+- **The update path is unaffected**, and this is checked rather than assumed:
+  nobody is installed anywhere, so there is no differential-download loss and no
+  live feed to break. `build.publish` still names the same owner and repo, so
+  the feed URL is byte-identical — and that must stay true. **If the owner or
+  the repo name ever changes, every installed DevDeck silently stops updating.**
+- **0.14.0's notes must carry D1 and the three waves**, in the rolled-up register
+  0.13.0 and 0.10.0 used, and must open by stating what the build is: private
+  beta, one maintainer, Windows-only, self-signed. Prior art:
+  `docs/release/0.13.0-notes.md` and `published-release-notes.md`.
 
 ### Behind those, in order
 
-The confirmed usage-ledger data-loss bug (it rewrites every session the user did
-not hand-close to 0 ms), then `claude --session-id <uuid>` per-pane transcripts,
-which turns per-session cost from an attribution into a receipt and makes
-`runRecorder.ts`'s attribution machinery deletable.
+1. **The usage-ledger data-loss bug** — it rewrites every session the user did
+   not hand-close to 0 ms, on the one surface that shows money. Still *not yet*:
+   it corrupts a ledger nobody but the author reads and loses no user's work. It
+   is on the **watch list**, not the build list — `field` carries it in
+   `docs/beta/03-install-watch-protocol.md` beside the shell-mismatch false
+   negative. **Trigger: any beta user opens the Usage view in a recorded
+   session.**
+2. **Q1 — CLI-declared attention signals**: Claude, Codex and Gemini hooks
+   posting to the local MCP server DevDeck already runs on `127.0.0.1:8787`.
+   *This replaces the item that used to sit here* — `claude --session-id <uuid>`
+   per-pane transcripts — because the hook payload carries `transcript_path`
+   exactly, so `usage.ts` stops guessing which transcript belongs to which pane.
+   It is the only mechanism in the market that beats a screen-scrape for Claude
+   Code, and it is the same structural move Intelligent Terminal made without
+   giving up the pty. Two constraints if it is ever built: a hooked session that
+   goes quiet with **no** event must fall back to the screen classifier rather
+   than to silence, and the tile must show which source it is reading from —
+   otherwise a missing hook is a silent false negative, the worst class this
+   product has. Do **not** hold a `PermissionRequest` hook open until a human
+   taps; that is a daemon in disguise and it dies at the hook timeout.
+3. **Q2 — the Windows taskbar overlay badge**, riding on the notification fix
+   that has now landed: same file, same count, no new surface.
+
+Neither Q1 nor Q2 is build-now, and neither may precede a recorded session.
 
 ### Explicitly not on this path
 
 Every feature: cost surfacing, quota, context fill, terminal colour, launch
 templates, the `+Claude` menu. **Trigger: three users installed.** Also off:
-turning `remote.enabled` on (its own trigger stands), macOS and Linux (the 5–10
-are recruited on Windows or not recruited), a sixth competitor study —
-permanently — and, added 2026-09-04, **any further UI or motion work before step
-9**. Not one item on the path to ten users is a UI item that is not already named
-in this section.
+turning `remote.enabled` on (its own trigger stands — and F-1 established the
+server ships off, while being a proven remote SSRF the moment a user ticks the
+box); macOS and Linux (the five are recruited on Windows or not recruited); a
+sixth competitor study — permanently, **including "install Herdr for two
+weeks"**, because that two-week test is now cheaper as step 13's fourth asked
+fact, answered by five strangers instead of by the author; and **any further UI,
+motion, colour or boundary work before step 9.** Not one item on the path to five
+sessions is a UI item that is not already named in this section.
+
+---
+
+## Closed history — kept for its reasoning, not as live plan
+
+A plan that deletes its own reasoning is how the same argument gets had twice.
+Nothing in this section is an open item.
+
+### The 0.13.0 ruling (2026-09-04) — superseded twice
+
+Ruled: *cut 0.13.0 now, publish nothing until step 4 lands, then 0.13.0 is the
+new remote's first published release.* Its evidence was that across 14 published
+releases and 28 installers the **lifetime download count was 1** — a 346-byte
+`latest.yml` poll, almost certainly from this machine (`gh release view <tag>
+--json assets`, 2026-09-04) — so there was no installed base; the folder-moved
+crash fix protected only the first stranger; and the only installer that existed
+was self-signed, so publishing spent a first impression on SmartScreen. It also
+predicted correctly that publishing into a repo about to be deleted is work that
+deletes itself.
+
+**Superseded 2026-09-08 on its own terms** — step 4 landed, so "publish nothing
+until step 4" is satisfied. **Superseded again 2026-09-11:** 0.13.0 is no longer
+the build to publish at all, because HEAD is 22 commits and one deleted deck past
+it. See *The 0.14.0 ruling*.
+
+### What step 4 costs, priced (2026-09-04) — closed
+
+Priced at 14 published releases and 28 attached installers, against not
+publishing an employer's and a client's identifiers permanently, since GitHub
+keeps unreachable objects retrievable by SHA and only deleting the repository
+removes them. **The trade was taken and the price was never paid:** `delete_repo`
+never reached the token, so the old repo was renamed to a private archive with
+its 14 releases intact and a fresh repo was created under the same owner and
+name. The pre-scrub objects therefore **survive in a private archive instead of
+being destroyed** — exposure is zero (private, 0 forks, 0 collaborators), and
+`scripts/check-repo-visibility.mjs` exists to assert that, deliberately not from
+CI and deliberately naming no repository in this tree. **That repo must never be
+flipped public.** The harvest ran first: the 14 release-note bodies — verified
+*not* to be in `CHANGELOG.md`, and the only prior art for how this product has
+ever described itself to an outsider — and the download counts, whose value is
+precisely that they are zero. Once the releases are gone, "nobody ever downloaded
+it" becomes an assertion instead of a measurement.
+
+### Ruled *not yet*, with triggers, so nobody re-opens them
+
+Re-checked 2026-09-11. **No trigger has moved**, because every one of them waits
+on a recorded first session and there are none.
+
+- **The seeded preset icons** (`settings.ts`) violate fixed point 7 of the spec
+  that shipped on 2026-09-04, by the product's own defaults. It is decoration.
+  **Trigger: the first beta screenshot.**
+- **Path dedupe is exact string equality** (`main/projects.ts`), so `C:\Repos\Foo`
+  and `c:\repos\foo` become two project cards. **Trigger: a beta user does it.**
+- **In Settings → Agents, `on PATH` and `unchecked` still differ only by the
+  word.** Close it by adding a channel or by deciding out loud that one word is
+  enough on a form — not by re-reading the tradeoff. Not a beta blocker.
+- **A slot-aware sizing variant for a crashed top bar** — on a slot shorter than
+  the card, `Copy diagnostics` needs an in-card scroll.
+- **The redactor's remaining gaps**, to watch in beta reports rather than
+  pre-solve: URL- and base64-encoded secrets; uncovered issuers (SendGrid, Slack
+  and Discord webhooks, Google OAuth); `AKIA` followed immediately by an
+  alphanumeric; and space-separated flag values (`mysql -p hunter2`), genuinely
+  indistinguishable from a positional argument. The **home-path** gap that used
+  to head this list closed on 2026-09-10 (F-3) — it gated `field`'s plan of
+  having candidates paste diagnostics into a public issue.
+- **The report rate limit is a fixed window**, so 30 refusals at the end of one
+  window plus 30 at the start of the next is 60 in an instant. Promote to a
+  sliding window only if a beta report actually shows burst loss.
+- **The tab-remount blip** — re-entering an agent's tab flips `waiting` →
+  `WORKING` for about six seconds, because a remount replays chunks and the
+  `waiting` gate's bar is that output *continues*. `qa` observed that the pane's
+  characters do not change, and that is the discriminator. Not a regression, and
+  the last remaining disclosure.
+- **Deck geometry, the new-project → new-terminal mechanics, starter-command
+  discoverability** — all deferred on triggers only step 9 can move.
+- **HiDPI verification of the 6 px diamond.** Every measurement was taken at 1×;
+  most Windows laptops run at 125–150%.
+- **A guided tour / onboarding modal** — refused, not deferred. The fix for "the
+  app explains itself once" is self-describing empty states, not a modal
+  dismissed in two seconds.
+- **A seventh skin.** 84 → 6 made every UI change roughly an order of magnitude
+  cheaper to verify. That saving is the *point*, not a budget. Refused in advance
+  2026-09-04, refused 2026-09-07, refused again here.
+
+### Closed between 2026-09-04 and 2026-09-11
+
+- **The 17 unguarded overlays** — four deleted outright, the remainder behind
+  their own boundary (`815b9fe`), `WorktreesModal` among them.
+- **`PRODUCT.md`'s false validation claim** — closed `5feb82d`. It now says, in
+  its own words, that no external user has ever run this app. Its *status-quo*
+  premise was a separate falsehood — *"none of them can tell me which agent needs
+  me"* — corrected 2026-09-10 once Herdr and Intelligent Terminal were verified.
+- **The `Ctrl+O` menu-bar question** — decided: `autoHideMenuBar: false`. A
+  visible menu bar is itself a discoverability affordance for a stranger.
+- **`Ctrl+1..8` bypassing the disabled view keys** — closed, and the chord range
+  is now `Ctrl+1..4`.
+- **The three items added on 2026-09-04** — the `+ Claude` double-spawn
+  (`e5327ad`), `projects.json` unreadable presenting as *"you have no projects"*
+  (`30cfe4a`), and the labelled deck measured at `minWidth` (`5792925`). Note
+  that the measurement's headline figure — "590.45px, identical in all six
+  skins" — describes a **seven-key** deck that no longer exists. The four-key
+  deck measures roughly 350px, which is why the collapse query that shipped
+  alongside it can never fire again.
+- **Seven defects that lied to a stranger** (`a0d925a`), verified across seven
+  `qa` passes.
+- **Three proven security holes and a toggle that had never worked**
+  (`0746eac`): every IPv4-in-IPv6 embedding past `isBlockedAddress` — including
+  a test that had been *asserting* a bypass; `/xterm.js` re-read
+  unauthenticated from disk on every request, on the thread that relays every
+  PTY byte; the home path in the diagnostics record; and Desktop notifications,
+  which had never fired because `Notification.permission` reads `denied` under
+  the deny-all handler while the constructor does not throw, so a `try/catch`
+  reported success forever.
+- **D1** (`74e969b`, `d45d732`) — three panels with their handlers, channels and
+  stores; `pg`, `mysql2`, `mssql` and `node-sqlite3-wasm`; five MCP tools and the
+  phone's `db:*` routes; Tasks demoted. Deck **7 keys → 4**, production
+  dependencies **9 → 5**, and **830 ms off every cold start**, all of it
+  `require()`d eagerly before `app.whenReady()`.
+- **An `npm audit` gate in CI, a `SECURITY.md` and an architecture-boundary
+  test** (`36fda76`); the accent budget returned to one accent (`80a9caf`).
 
 ---
 
