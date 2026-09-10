@@ -341,8 +341,28 @@ const api = {
         kill: (id: string): void => ipcRenderer.send("pty:kill", { id }),
         buffer: (id: string): Promise<{ buffer: string; exitCode: number | undefined }> =>
             ipcRenderer.invoke("pty:buffer", id),
-        onData: (cb: (p: { id: string; data: string }) => void): (() => void) => {
-            const handler = (_e: unknown, p: { id: string; data: string }): void => cb(p)
+        onData: (
+            cb: (p: {
+                id: string
+                data: string
+                /**
+                 * True only for the buffer main RESENDS when a pane attaches to
+                 * a session that already had output - a transcript, not news.
+                 *
+                 * Typed here rather than left to a cast in the renderer because
+                 * `global.d.ts` binds `window.api` to this object, so the
+                 * typecheck is what finds a consumer of the stream that has not
+                 * been told the difference. Undefined on a live chunk, and on
+                 * anything sent by a main older than this field, so the safe
+                 * reading of a missing flag is "live".
+                 */
+                replay?: boolean
+            }) => void
+        ): (() => void) => {
+            const handler = (
+                _e: unknown,
+                p: { id: string; data: string; replay?: boolean }
+            ): void => cb(p)
             ipcRenderer.on("pty:data", handler)
             return () => ipcRenderer.removeListener("pty:data", handler)
         },

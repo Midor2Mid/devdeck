@@ -1171,7 +1171,21 @@ export const useStore = create<AppState>((set, get) => {
         return ready
     }
 
-    const onPtyData = ({ id, data }: { id: string; data: string }): void => {
+    /**
+     * `replay` is main's own answer to the question this handler kept getting
+     * wrong: were these bytes just printed, or are they a transcript being
+     * resent so a remounted pane has something to draw?
+     *
+     * Three defects have now come out of the renderer INFERRING that - the
+     * `WORKING` blip on re-entering a tab, the "output continued" bar being
+     * satisfied by a remount, and a bell out of replayed scrollback summoning
+     * the user to a question they had already answered. Main knows for a fact
+     * (it is the side that resends the buffer, index.ts's `pty:create`), so it
+     * now says so, and the renderer stops guessing. A missing flag reads as
+     * live, which is the safe direction: it classifies, and classification is
+     * self-healing in a way a swallowed bell is not.
+     */
+    const onPtyData = ({ id, data, replay }: { id: string; data: string; replay?: boolean }): void => {
         // Ahead of everything, including the agent gate: readiness is about the
         // shell having started, and a plain shell tab waits on it too.
         const waiting = readyWaiters.get(id)
@@ -1202,7 +1216,40 @@ export const useStore = create<AppState>((set, get) => {
         // state change at all when you were on the pane - so no user could
         // reproduce, confirm, or falsify a DevDeck attention claim. Tuning could
         // never fix that; only moving the check could.
-        if (hasBell(id, data)) {
+        //
+        // A REPLAYED chunk cannot ring a bell. A BEL inside replayed scrollback
+        // is the record of a bell that already rang - re-entering a tab whose
+        // buffer still holds an ANSWERED question flipped `waiting` ->
+        // `attention` and summoned the user to an agent they had already
+        // answered, which is an attention FALSE POSITIVE on the product's core
+        // claim (tests/ptyReplay.test.ts).
+        //
+        // NOTHING IS LOST BY THIS, and that is the load-bearing half. This
+        // handler is subscribed ONCE, app-wide, in `init` below, and main
+        // broadcasts every live chunk to the window whether or not a pane is
+        // mounted (index.ts's `ptyEvents.on("data")`). So a bell that rings
+        // while you are in another tab is classified WHEN IT RINGS; the replay
+        // that arrives on re-attach is only ever a second showing of bytes this
+        // store has already acted on. The one case where it is not is a
+        // renderer RELOAD, and honouring it there would be the worse trade: the
+        // whole 256KB scrollback replays at once, every long-answered BEL in the
+        // transcript raises a fresh `attention`, and `attention` is terminal -
+        // only an act of the user's clears it. That is a permanent nag over
+        // agents that are mid-turn, manufactured from a transcript in which an
+        // answered bell and an unanswered one are indistinguishable. A reload
+        // loses the whole acknowledgement axis (`seen`, `answered`, `actedOn`
+        // are all runtime-only), so the honest reading there is "unknown", not
+        // "you are needed" - and a live bell after the reload still rings.
+        //
+        // Skipping the CALL, not just its result, is also what protects a real
+        // bell: `hasBell` carries per-session OSC state, main trims its buffer
+        // to the next line break with no regard for escape sequences, and a
+        // replay that starts or ends mid-OSC would leave that state inverted -
+        // manufacturing a bell out of a title-set's terminator, or swallowing
+        // the next genuine one as if it terminated an OSC that was never
+        // opened. The live stream's state is already correct; the replay must
+        // not touch it.
+        if (!replay && hasBell(id, data)) {
             const was = get().agentStatus[id]
             // A new question, whatever we sent the last one. Tied to the bell
             // rather than to the status transition on purpose: a second bell on
@@ -1268,7 +1315,18 @@ export const useStore = create<AppState>((set, get) => {
         // keeps paneEcho's regex off the chunks of a session that is working.
         // See paneEcho.ts for why a remount's replay and refit-repaint both
         // have to be answerable at all.
-        const news = st !== "waiting" || paintsNewText(screenAt.get(id) ?? "", data)
+        //
+        // BOTH DISCRIMINATORS, deliberately, because they cover different
+        // chunks and neither subsumes the other. A remount delivers two: the
+        // buffer main resends, which only main can identify, and the refit
+        // repaint, which is genuinely live pty output - the far end really did
+        // write those bytes, because the pane really did resize - and no flag
+        // from main could ever say otherwise. The flag is a fact about one
+        // chunk; the character comparison is the only thing that can dismiss
+        // the other one, and it still carries the bare-glance and layout-switch
+        // repaints that arrive with no replay in front of them at all. Dropping
+        // either leaves a lane open (tests/ptyReplay.test.ts pins both lanes).
+        const news = !replay && (st !== "waiting" || paintsNewText(screenAt.get(id) ?? "", data))
         const handover = !actedOn.has(id) && (st === "attention" || st === "waiting")
         const unactedHandover = handover && !(st === "waiting" && spokeSinceHandback.has(id))
         // `news` narrows ONE lane and no other: an unanswered hand-back, whose

@@ -512,7 +512,16 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             switch (msg.t) {
                 case "attach":
                     ws.attached?.add(id)
-                    send(ws, { t: "data", id, data: getBuffer(id) })
+                    // Same fact as the window's re-attach replay (index.ts's
+                    // `pty:create`), on the other transport and for the same
+                    // reason: this is a transcript being resent so a freshly
+                    // attached client has something to draw, not output that
+                    // just happened. The bundled client only writes it to
+                    // xterm, but a client that classifies must not have to
+                    // guess - the renderer's attempts to infer exactly this
+                    // are what produced attention over already-answered
+                    // agents. Additive field; ignored by older clients.
+                    send(ws, { t: "data", id, data: getBuffer(id), replay: true })
                     break
                 case "detach":
                     ws.attached?.delete(id)

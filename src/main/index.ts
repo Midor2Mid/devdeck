@@ -570,8 +570,18 @@ function registerIpc(): void {
         // Read AFTER the create, because a restart over a corpse clears it and
         // must not re-print the dead process's screen over the live one.
         const buf = ptyMgr.getBuffer(opts.id)
+        // `replay: true` is the one thing the renderer cannot work out for
+        // itself, and every attempt to infer it has produced a false claim about
+        // an agent. These bytes are a TRANSCRIPT: they were printed at some
+        // point in the past, classified when they arrived live (the store's pty
+        // listener is app-wide and permanent, so it hears every chunk whether or
+        // not a pane is mounted), and are being resent only so a remounted xterm
+        // has something to draw. Read as news they announce a question that was
+        // answered minutes ago - see src/renderer/src/store.ts's bell branch and
+        // tests/ptyReplay.test.ts. Main is the only side that knows, so main
+        // says so.
         if (buf && prior && !e.sender.isDestroyed())
-            e.sender.send("pty:data", { id: opts.id, data: buf })
+            e.sender.send("pty:data", { id: opts.id, data: buf, replay: true })
     })
     // --- Pipeline file-triggers ---
     triggers.onTriggerFired((triggerId) => {
