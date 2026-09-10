@@ -248,9 +248,16 @@ describe("the record is allow-listed, not filtered", () => {
         )
         const res = await buildRecord(tick())
         if (!res.ok) throw new Error("unreadable")
-        // Byte-identical: the command line and the resolved path are the answer.
+        // The command line is byte-identical, and so is the resolved path apart
+        // from the segment that names its owner. F-3, 2026-09-10: this record is
+        // pasted into a public issue tracker, so `redact` now folds the home
+        // directory's owner segment and keeps everything that answers the
+        // question ("found, under Roaming\\npm, as a .cmd shim"). See
+        // PATH_RULES in src/main/redact.ts.
         expect(res.record.agents?.list[0].command).toBe("claude --dangerously-skip-permissions")
-        expect(res.record.agents?.list[0].resolved).toBe("C:\\Users\\Admin\\AppData\\Roaming\\npm\\claude.cmd")
+        expect(res.record.agents?.list[0].resolved).toBe(
+            "C:\\Users\\[redacted:user]\\AppData\\Roaming\\npm\\claude.cmd"
+        )
         // Normal-mode presets are counted, never given a state they cannot have.
         expect(res.record.agents?.list.length).toBe(2)
         expect(res.record.agents?.skippedNormalMode).toBe(1)

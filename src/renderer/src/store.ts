@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { Project, WorkItem, ChangeFile } from "../../preload/index"
+import type { NotifyState, Project, WorkItem, ChangeFile } from "../../preload/index"
 import { useSettings, aiModeAgents } from "./settings"
 import type { SavedRequest, PresetNode, PresetTab, ShellKind } from "./settings"
 import {
@@ -35,6 +35,7 @@ import {
     markLaunched,
     getFullTail
 } from "./missionTail"
+import { ECHO_LINES, paintsNewText } from "./paneEcho"
 import { detectApproval } from "./approval"
 import { describeKeys } from "./answered"
 import {
@@ -379,6 +380,20 @@ interface AppState extends Persisted {
     lastAgentTermId: string | null
     notifications: AppNotification[]
     dismissNotification: (id: string) => void
+    /**
+     * Whether main can actually deliver a desktop notification, and why the
+     * last attempt failed. `null` until asked.
+     *
+     * A capability, not a setting: it belongs to the machine, so it is never
+     * persisted and never written back into `AppSettings`. The Desktop-
+     * notifications toggle reads it so it cannot show `on` over a channel that
+     * delivers nothing - which is exactly what it did until 2026-09-10, when
+     * the renderer's own `new Notification(...)` was measured to be denied and
+     * silently dropped (see main/notify.ts for the measurement and the fix).
+     */
+    notifyState: NotifyState | null
+    /** Ask main whether desktop notifications work here. Safe to call again. */
+    refreshNotifyState: () => Promise<void>
     sessions: () => AnySession[]
     agentSessions: () => AnySession[]
     sendToAgent: (text: string) => boolean
@@ -548,6 +563,16 @@ const actedOn = new Set<string>()
  * turn. A second chunk is, and a genuinely resumed agent sends it in the same
  * burst, so the wrong word lasts microseconds instead of seconds.
  *
+ * A COUNT OF CHUNKS ALONE WAS NOT ENOUGH, and this is the last defect the gate
+ * had. A tab REMOUNT delivers two chunks and no agent is behind either: main
+ * replays the whole kept buffer on re-attach, and the remounted pane's refit
+ * resizes the pty, which makes the far end redraw. Two chunks, one gesture,
+ * ~6s of `WORKING` over a finished turn — reproduced in this file. So only a
+ * chunk that puts characters on the screen the session was not already showing
+ * banks here or spends what is banked (`paneEcho.ts` holds that test, and the
+ * reason it is a character test rather than an event flag). The bar itself is
+ * unchanged: output still has to continue.
+ *
  * Re-armed by every fresh silence, not just the first: the idle timer clears
  * this when it confirms a session is still quiet. Without that, one glance
  * would spend the grace and the SECOND glance at the same session would blip
@@ -556,8 +581,26 @@ const actedOn = new Set<string>()
 const spokeSinceHandback = new Set<string>()
 
 /**
- * Forget that a session was answered, and that it has spoken since handing
- * back.
+ * What each session's screen was showing WHEN IT HANDED BACK — its cleaned tail
+ * at that moment, in `getFullTail`'s shape.
+ *
+ * Snapshotted once per hand-back (in `setStatus`, beside the other two
+ * hand-back resets) rather than kept current per chunk, for two reasons. It is
+ * the honest reference: the question a chunk arriving at a `waiting` session has
+ * to answer is "has anything changed since the turn ended", so the thing it is
+ * compared against must be the screen from then and must NOT move while a
+ * remount replays the transcript over it. And it keeps a regex and an
+ * allocation off the pty relay path: nothing here runs for a session that is
+ * working, which is every chunk that matters for throughput.
+ *
+ * A module Map for the same reason `spokeSinceHandback` is a module Set: it is
+ * written from the pty stream and no component reads it.
+ */
+const screenAt = new Map<string, string>()
+
+/**
+ * Forget that a session was answered, that it has spoken since handing back,
+ * and what its screen was showing.
  *
  * Called on close, and by tests that drive the pty handler directly - the Sets
  * outlive a `useStore.setState`, so a case that left an entry behind would
@@ -566,6 +609,7 @@ const spokeSinceHandback = new Set<string>()
 export function clearActed(termId: string): void {
     actedOn.delete(termId)
     spokeSinceHandback.delete(termId)
+    screenAt.delete(termId)
 }
 
 /**
@@ -850,6 +894,10 @@ export const useStore = create<AppState>((set, get) => {
         if (status === "waiting") {
             actedOn.delete(termId)
             spokeSinceHandback.delete(termId)
+            // The screen this session handed back on. Everything that arrives
+            // afterwards is measured against it - see paneEcho.ts, and the
+            // remount cases in tests/visibilityGate.test.ts.
+            screenAt.set(termId, getFullTail(termId, ECHO_LINES))
         }
         // A transition is news, so it is unseen - except when it happened in
         // front of you. `ack` only runs when you NAVIGATE to a pane, so without
@@ -940,19 +988,55 @@ export const useStore = create<AppState>((set, get) => {
         }
     }
 
-    // Fire a desktop notification / sound when an agent needs attention, per settings.
+    /**
+     * The one sentence the loud tier says about one bell.
+     *
+     * Built here and read by every surface that repeats it - the ⚑ inbox entry
+     * and the desktop notification. Those two used to compose the same string
+     * independently, which is what makes a notification a SECOND source of
+     * truth about who wants you rather than a second channel for the first: two
+     * statements of one fact, drifting the moment either is edited.
+     */
+    const attentionText = (termId: string): string => `${labelForTerm(termId)} needs attention`
+
+    /**
+     * Fire a desktop notification / sound when an agent needs attention, per
+     * settings. The scope is deliberately unchanged: the LOUD tier only (a
+     * bell — how an agent blocked on a question announces itself), only on a
+     * NEW question, and only when the session's pane is not the one in front of
+     * you — see the call site's own comment, and `notifyWaiting` for why the
+     * soft tier has no desktop notification at all.
+     *
+     * THE DESKTOP HALF IS RAISED FROM MAIN. It used to be `new Notification()`
+     * right here, and that had never delivered anything: `applySecurity()`'s
+     * `setPermissionCheckHandler(() => false)` denies renderer notifications,
+     * and Chromium answers a denied notification by constructing the object and
+     * dropping it silently, so the `try/catch` this leaned on was the one signal
+     * that cannot fire. Measured 2026-09-10 — `Notification.permission` reads
+     * `denied` and the constructor does not throw. main/notify.ts carries the
+     * measurement, and the reason the fix is not an exemption from that handler.
+     *
+     * The state that comes back is stored: an attempt that main could not make
+     * is how Settings learns to stop claiming this works.
+     */
     const notifyAttention = (termId: string): void => {
         const cfg = useSettings.getState().notifications
-        if (cfg.desktop && typeof Notification !== "undefined") {
-            try {
-                const n = new Notification("DevDeck", { body: `${labelForTerm(termId)} needs attention` })
-                n.onclick = () => {
-                    window.focus()
-                    get().jumpToTerm(termId)
-                }
-            } catch {
-                /* notifications unavailable - ignore */
-            }
+        if (cfg.desktop) {
+            window.api.notify
+                .attention({ termId, body: attentionText(termId) })
+                .then((st) => set({ notifyState: st }))
+                .catch(() =>
+                    // The channel itself failed. That is not something the
+                    // user's OS did, so it is reported as what it is rather
+                    // than as a refusal — but it is reported: a delivery we
+                    // cannot even attempt must not leave the toggle reading on.
+                    set({
+                        notifyState: {
+                            supported: false,
+                            error: "DevDeck could not hand the notification to Windows"
+                        }
+                    })
+                )
         }
         if (cfg.sound) beep()
     }
@@ -969,7 +1053,7 @@ export const useStore = create<AppState>((set, get) => {
         set((s) => ({
             notifications: [
                 ...s.notifications,
-                { id: newId(), termId, text: `${labelForTerm(termId)} needs attention` }
+                { id: newId(), termId, text: attentionText(termId) }
             ]
         }))
     }
@@ -1176,15 +1260,31 @@ export const useStore = create<AppState>((set, get) => {
         // legitimately refutes it, and the status underneath a stalled session
         // is `waiting`, which this now covers.
         const st = get().agentStatus[id]
-        const unactedHandover =
-            (st === "attention" && !actedOn.has(id)) ||
-            (st === "waiting" && !actedOn.has(id) && !spokeSinceHandback.has(id))
-        if (!unactedHandover) setStatus(id, "working")
+        // Did this chunk put anything on the screen the session was not already
+        // showing when it handed back? Only a hand-back asks - `true` for every
+        // other state says "not consulted", and computing it lazily is what
+        // keeps paneEcho's regex off the chunks of a session that is working.
+        // See paneEcho.ts for why a remount's replay and refit-repaint both
+        // have to be answerable at all.
+        const news = st !== "waiting" || paintsNewText(screenAt.get(id) ?? "", data)
+        const handover = !actedOn.has(id) && (st === "attention" || st === "waiting")
+        const unactedHandover = handover && !(st === "waiting" && spokeSinceHandback.has(id))
+        // `news` narrows ONE lane and no other: an unanswered hand-back, whose
+        // evidence bar is continued output, may not be promoted by a chunk that
+        // put no characters on the screen. Everything else is untouched -
+        // `!handover` covers a session the user has acted on (the first byte
+        // back is evidence because they asked for work, whatever it paints) and
+        // one that is already `working`.
+        if (!unactedHandover) {
+            if (!handover || news) setStatus(id, "working")
+        }
         // The hand-back keeps its state and banks the chunk: the NEXT one is
         // evidence the turn resumed. Only for `waiting` - letting an unanswered
         // question bank its own follow-up line would put the attention defect
-        // straight back, which tests/visibilityGate.test.ts pins.
-        else if (st === "waiting") spokeSinceHandback.add(id)
+        // straight back, which tests/visibilityGate.test.ts pins. And only a
+        // chunk carrying new characters is bankable, or a remount's replay
+        // would bank and its repaint would spend, which is the blip itself.
+        else if (st === "waiting" && news) spokeSinceHandback.add(id)
         const existing = idleTimers.get(id)
         if (existing) clearTimeout(existing)
         idleTimers.set(
@@ -1317,6 +1417,7 @@ export const useStore = create<AppState>((set, get) => {
         pendingSince.delete(termId)
         actedOn.delete(termId)
         spokeSinceHandback.delete(termId)
+        screenAt.delete(termId)
         evidenceInFlight.delete(termId)
         forgetTail(termId)
         forgetSignals(termId)
@@ -1459,6 +1560,10 @@ export const useStore = create<AppState>((set, get) => {
         zoomedPane: undefined,
         notifications: [],
         persistBlocked: null,
+        notifyState: null,
+        refreshNotifyState: async () => {
+            set({ notifyState: await window.api.notify.state() })
+        },
         dismissNotification: (id) =>
             set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 
@@ -1505,6 +1610,12 @@ export const useStore = create<AppState>((set, get) => {
                     set((s) => ({ paneHold: { ...s.paneHold, [id]: "restart" as const } }))
                 })
                 window.api.triggers.onFired(({ triggerId }) => get().fireTrigger(triggerId))
+                // Clicking a desktop notification lands on the session it names.
+                // Main raises the window (the renderer cannot focus itself
+                // reliably from a background click) and sends the id here; the
+                // jump is the whole point of the toast - it says WHICH agent
+                // needs you, so it has to be able to take you there.
+                window.api.notify.onActivate((termId) => get().jumpToTerm(termId))
                 dataSubscribed = true
             }
             const [store, ws] = await Promise.all([

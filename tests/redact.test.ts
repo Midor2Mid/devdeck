@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { redact, sanitizeLabel, sanitizeLine, sanitizeText } from "../src/main/redact"
+import { homedir } from "os"
 
 /**
  * The redactor has two duties and they pull against each other, so both are
@@ -109,26 +110,24 @@ describe("redact — a secret must not survive", () => {
 /**
  * The other direction. Each of these strings is the *evidence* the record
  * exists to carry, and every one of them must come out byte-identical.
+ *
+ * Property 2 acquired exactly one exception on 2026-09-10, and the paths that
+ * used to sit in this list (and in STILL_SURVIVES) moved to `HOME_FOLDED`
+ * below: a path now survives except for the one segment that names its owner.
+ * See that block for why.
  */
 const MUST_SURVIVE = [
-    "C:\\Users\\Admin\\AppData\\Roaming\\devdeck",
-    "C:\\Users\\Admin\\AppData\\Local\\Programs\\devdeck\\resources\\app.asar",
     "D:\\Personal\\Personal Projects\\Products\\devdeck\\src\\main\\index.ts:194:12",
     "C:\\Program Files\\Git\\bin\\bash.exe",
     "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
     "\\\\server\\share\\bin\\claude.cmd",
-    "/home/user/.local/bin/claude",
-    "/Users/someone/Library/Application Support/devdeck/settings.json",
-    "file:///C:/Users/Admin/AppData/Local/Programs/devdeck/resources/app.asar/out/renderer/index.html",
     "at EditorPanel (file:///C:/app/out/renderer/assets/index-4f1a2b.js:12:3456)",
     // A folder whose *name* contains a credential word. The name-based env rule
     // must not reach into a path, and this is the case that proves it.
     "C:\\dev\\secrets\\notes.md",
-    "C:\\Users\\Admin\\.ssh\\id_rsa",
     "C:\\keys\\my-api-key\\readme.txt",
     // The two PATH variables. A blanket NAME=value rule eats both, and losing
     // them blinds the record to the exact thing a `missing` agent is about.
-    "PATH=C:\\Windows\\System32;C:\\Users\\Admin\\AppData\\Roaming\\npm",
     "PATHEXT=.COM;.EXE;.BAT;.CMD",
     "SystemRoot=C:\\Windows",
     "NODE_ENV=production",
@@ -144,6 +143,207 @@ const MUST_SURVIVE = [
     "0xC0000409"
 ]
 
+/**
+ * F-3. The one exception to property 2, and the reason it exists.
+ *
+ * This record is clipboard-only by design, and the first thing a user does with
+ * it is paste it into an issue tracker — which for this project is now a public
+ * repo, and `docs/beta/02-recruiting-message.md` proposes asking beta
+ * candidates to do exactly that. `shell.resolved`, `shell.customPath` and every
+ * `agents[].command` are file paths taken out of settings.json and rendered
+ * verbatim, and on Windows an agent CLI routinely lives under
+ * `C:\Users\<the user's real name>\AppData\…`. This repo rewrote its own history
+ * twice in one week to remove the author's identifiers from tracked files;
+ * `tests/publishedIdentifiers.test.ts` guards those. Nothing guarded a
+ * stranger's identifier in a paste, one level out.
+ *
+ * The fold keeps the whole path except the segment that names its owner,
+ * because the path IS the evidence: "the agent resolved to
+ * `C:\Users\[redacted:user]\AppData\Local\…\claude.exe`" answers *wrong shell*,
+ * *not on PATH*, *installed per-user not per-machine* and *which package
+ * manager put it there* — and the username answers none of those.
+ */
+const HOME_FOLDED: [string, string][] = [
+    [
+        "C:\\Users\\Admin\\AppData\\Roaming\\devdeck",
+        "C:\\Users\\[redacted:user]\\AppData\\Roaming\\devdeck"
+    ],
+    [
+        "C:\\Users\\Admin\\AppData\\Local\\Programs\\devdeck\\resources\\app.asar",
+        "C:\\Users\\[redacted:user]\\AppData\\Local\\Programs\\devdeck\\resources\\app.asar"
+    ],
+    ["C:\\Users\\Admin\\.ssh\\id_rsa", "C:\\Users\\[redacted:user]\\.ssh\\id_rsa"],
+    ["/home/user/.local/bin/claude", "/home/[redacted:user]/.local/bin/claude"],
+    [
+        "/Users/someone/Library/Application Support/devdeck/settings.json",
+        "/Users/[redacted:user]/Library/Application Support/devdeck/settings.json"
+    ],
+    [
+        "file:///C:/Users/Admin/AppData/Local/Programs/devdeck/resources/app.asar/out/renderer/index.html",
+        "file:///C:/Users/[redacted:user]/AppData/Local/Programs/devdeck/resources/app.asar/out/renderer/index.html"
+    ],
+    // The env dumps. The variable NAME is kept, as everywhere else in this
+    // module, and so is every segment that is not the username.
+    [
+        "PATH=C:\\Windows\\System32;C:\\Users\\Admin\\AppData\\Roaming\\npm",
+        "PATH=C:\\Windows\\System32;C:\\Users\\[redacted:user]\\AppData\\Roaming\\npm"
+    ],
+    [
+        "PWD=/home/user/Personal Projects/devdeck",
+        "PWD=/home/[redacted:user]/Personal Projects/devdeck"
+    ],
+    ["OLDPWD=/home/user/.local/bin", "OLDPWD=/home/[redacted:user]/.local/bin"],
+    // Git Bash and WSL spell a Windows profile two more ways, and both appear
+    // in a `PWD=` on the one platform this app ships on.
+    ["/c/Users/Admin/dev/api", "/c/Users/[redacted:user]/dev/api"],
+    ["/mnt/c/Users/Admin/dev/api", "/mnt/c/Users/[redacted:user]/dev/api"],
+    // A username with a space in it. The fold has to take the whole segment or
+    // it leaks the surname, which is the more identifying half.
+    [
+        "C:\\Users\\John Smith\\AppData\\Roaming\\npm\\claude.cmd",
+        "C:\\Users\\[redacted:user]\\AppData\\Roaming\\npm\\claude.cmd"
+    ]
+]
+
+describe("redact — a home directory is an identifier (F-3)", () => {
+    // Every case below passes a home that matches nothing, so what is under
+    // test is the GENERIC shape rule and not this machine's own home. Without
+    // it, `C:\Users\Admin\…` would fold here via the known-home rule on the
+    // author's machine and via the generic rule on a CI runner — green in both
+    // places, for two different reasons, one of which nobody checked.
+    const NO_HOME = "C:\\nowhere\\nobody"
+
+    for (const [text, expected] of HOME_FOLDED) {
+        it(`folds the owner out of ${JSON.stringify(text)}`, () => {
+            expect(redact(text, NO_HOME)).toBe(expected)
+        })
+    }
+
+    it("folds this machine's own home with no argument at all", () => {
+        // The other half: that the default parameter is actually wired to the
+        // real homedir. Machine-independent, because it derives the expectation
+        // from the same source the implementation reads.
+        const owner = homedir().split(/[\\/]/).pop() ?? ""
+        expect(owner.length).toBeGreaterThan(0)
+        const out = redact(`resolved ${homedir()}\\bin\\claude.exe`)
+        expect(out).not.toContain(owner)
+        expect(out).toContain("[redacted:user]")
+        expect(out).toContain("bin\\claude.exe")
+    })
+
+    it("keeps the diagnostic tail, which is the whole point of the record", () => {
+        const out = redact(
+            "resolved C:\\Users\\Admin\\AppData\\Local\\Programs\\claude\\claude.exe",
+            NO_HOME
+        )
+        expect(out).not.toContain("Admin")
+        // Per-user install, under AppData\Local\Programs, named claude.exe:
+        // every fact a reader needs survives.
+        expect(out).toContain("AppData\\Local\\Programs\\claude\\claude.exe")
+    })
+
+    it("does not eat the message that follows a path", () => {
+        // The record folds newlines to spaces before redacting (sanitizeLine),
+        // so a greedy segment class that allowed spaces to the end of the line
+        // would swallow the error text sitting after the path.
+        expect(redact("cwd C:\\Users\\Admin was not found", NO_HOME)).toBe(
+            "cwd C:\\Users\\[redacted:user] was not found"
+        )
+        expect(redact("spawn /home/user failed with ENOENT", NO_HOME)).toBe(
+            "spawn /home/[redacted:user] failed with ENOENT"
+        )
+    })
+
+    it("leaves the shared profiles alone — they name no one", () => {
+        for (const shared of [
+            "C:\\Users\\Public\\Documents\\shared.txt",
+            "C:\\Users\\Default\\AppData\\Roaming",
+            "C:\\Users\\All Users\\npm",
+            "C:\\Users\\Default User\\ntuser.dat"
+        ]) {
+            expect(redact(shared, NO_HOME)).toBe(shared)
+        }
+        // A real username that merely STARTS with a shared name is not shared.
+        expect(redact("C:\\Users\\Publicity\\x", NO_HOME)).toBe(
+            "C:\\Users\\[redacted:user]\\x"
+        )
+    })
+
+    it("folds a home that is not under Users or /home at all", () => {
+        // A redirected or roaming profile — ordinary in a managed estate, and
+        // outside every generic shape above. `redact` takes the home to fold as
+        // an argument (defaulting to the real `os.homedir()`) so this is
+        // testable without touching the environment.
+        expect(redact("D:\\profiles\\ray\\bin\\claude.exe", "D:\\profiles\\ray")).toBe(
+            "D:\\profiles\\[redacted:user]\\bin\\claude.exe"
+        )
+        // UNC, the other shape a redirected profile takes.
+        expect(redact("\\\\corp\\home$\\ray\\.claude\\settings.json", "\\\\corp\\home$\\ray")).toBe(
+            "\\\\corp\\home$\\[redacted:user]\\.claude\\settings.json"
+        )
+        // Same path in the forward-slash spelling a file:// URL uses.
+        expect(redact("file:///D:/profiles/ray/x.log", "D:\\profiles\\ray")).toBe(
+            "file:///D:/profiles/[redacted:user]/x.log"
+        )
+        // A space-containing username at the END of a path, with no trailing
+        // separator to bound it: only the known home can take this whole.
+        expect(redact("cwd was C:\\Users\\John Smith", "C:\\Users\\John Smith")).toBe(
+            "cwd was C:\\Users\\[redacted:user]"
+        )
+    })
+
+    it("does not fold a different user under the same parent", () => {
+        // The known-home rule must match the whole segment, not a prefix of it.
+        expect(redact("D:\\profiles\\raymond\\x", "D:\\profiles\\ray")).toBe(
+            "D:\\profiles\\raymond\\x"
+        )
+    })
+
+    it("refuses a home it cannot fold safely rather than throwing", () => {
+        // Fail closed on shape, not on an exception: a root-level or empty home
+        // has no owner segment to remove, and a guard that threw here would
+        // take the whole diagnostics record with it.
+        for (const home of ["", "   ", "/", "C:\\", "\\", "C:"]) {
+            expect(redact("C:\\dev\\api", home)).toBe("C:\\dev\\api")
+        }
+    })
+
+    it("folds the OS account name and machine name out of an env dump", () => {
+        // Neither is a path, and neither explains anything in this record. A
+        // COMPUTERNAME is routinely a person's name or an employer's asset tag.
+        expect(redact("USERNAME=Admin")).toBe("USERNAME=[redacted:user]")
+        expect(redact("USERDOMAIN=ACME-CORP")).toBe("USERDOMAIN=[redacted:user]")
+        expect(redact("LOGNAME=ray")).toBe("LOGNAME=[redacted:user]")
+        expect(redact("COMPUTERNAME=RAY-LAPTOP")).toBe("COMPUTERNAME=[redacted:host]")
+        expect(redact("HOSTNAME=ray-mbp.local")).toBe("HOSTNAME=[redacted:host]")
+        // USERPROFILE is a PATH: it keeps its shape and loses only the owner.
+        expect(redact("USERPROFILE=C:\\Users\\Admin")).toBe(
+            "USERPROFILE=C:\\Users\\[redacted:user]"
+        )
+        // A name that merely contains one of these words is not one of them.
+        expect(redact("USERNAME_FILE=/etc/x")).toBe("USERNAME_FILE=/etc/x")
+    })
+
+    it("is idempotent over every folded shape", () => {
+        const once = redact(HOME_FOLDED.map(([text]) => text).join("\n"), NO_HOME)
+        expect(redact(once, NO_HOME)).toBe(once)
+        // And a second pass with a known home does not chew the marker either.
+        expect(redact(redact("D:\\profiles\\ray\\x", "D:\\profiles\\ray"), "D:\\profiles\\ray")).toBe(
+            "D:\\profiles\\[redacted:user]\\x"
+        )
+    })
+
+    it("still redacts a credential that shares the line with a home path", () => {
+        const out = redact(
+            `spawn C:\\Users\\Admin\\AppData\\Roaming\\npm\\claude.cmd; ANTHROPIC_API_KEY=${SECRETS.anthropic}`,
+            NO_HOME
+        )
+        expect(out).not.toContain(SECRETS.anthropic)
+        expect(out).not.toContain("Admin")
+        expect(out).toContain("AppData\\Roaming\\npm\\claude.cmd")
+    })
+})
+
 describe("redact — a file path must survive", () => {
     for (const text of MUST_SURVIVE) {
         it(`leaves ${JSON.stringify(text)} byte-identical`, () => {
@@ -154,7 +354,7 @@ describe("redact — a file path must survive", () => {
     it("leaves a path untouched when a secret sits in the same string", () => {
         const line = `spawn C:\\Users\\Admin\\AppData\\Roaming\\npm\\claude.cmd failed; ANTHROPIC_API_KEY=${SECRETS.anthropic}`
         const out = redact(line)
-        expect(out).toContain("C:\\Users\\Admin\\AppData\\Roaming\\npm\\claude.cmd")
+        expect(out).toContain("C:\\Users\\[redacted:user]\\AppData\\Roaming\\npm\\claude.cmd")
         expect(out).not.toContain(SECRETS.anthropic)
     })
 
@@ -170,7 +370,7 @@ describe("redact — a file path must survive", () => {
             PEM
         ].join("\n")
         const out = redact(blob)
-        expect(out).toContain("C:\\Users\\Admin\\AppData\\Roaming\\devdeck")
+        expect(out).toContain("C:\\Users\\[redacted:user]\\AppData\\Roaming\\devdeck")
         expect(out).toContain("claude --dangerously-skip-permissions")
         for (const s of [SECRETS.ghp, SECRETS.akia, SECRETS.jwt]) expect(out).not.toContain(s)
         expect(out).not.toContain("MIIEowIBAAKCAQEA")
@@ -319,8 +519,12 @@ describe("redact — issuers next door to a covered one", () => {
     it("redacts an npm token without eating an npm_ variable NAME", () => {
         expect(redact("npm_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789")).toBe("[redacted:npm-token]")
         // These are names, not values, and they explain a `missing` agent.
+        // The username folds (F-3); everything that explains where the
+        // cache lives survives.
         const cache = "npm_config_cache=C:\\Users\\Admin\\AppData\\Local\\npm-cache"
-        expect(redact(cache)).toBe(cache)
+        expect(redact(cache)).toBe(
+            "npm_config_cache=C:\\Users\\[redacted:user]\\AppData\\Local\\npm-cache"
+        )
         expect(redact("npm_lifecycle_event=dev")).toBe("npm_lifecycle_event=dev")
     })
 })
@@ -352,7 +556,8 @@ describe("redact — its own markers are not input", () => {
             "X-Api-Key: 8f3a9b2c1d4e5f60718293a4b5c6d7e8",
             "PASSWORD=hunter2",
             "sk_live_51AbCdEfGhIjKlMnOpQrStUvWx",
-            ...MUST_SURVIVE
+            ...MUST_SURVIVE,
+            ...HOME_FOLDED.map(([text]) => text)
         ].join("\n")
         const once = redact(blob)
         expect(redact(once)).toBe(once)
@@ -366,9 +571,6 @@ describe("redact — its own markers are not input", () => {
  * eaten before the carve-out existed.
  */
 const STILL_SURVIVES = [
-    "PWD=/home/user/Personal Projects/devdeck",
-    "OLDPWD=/home/user/.local/bin",
-    "PATH=C:\\Windows\\System32;C:\\Users\\Admin\\AppData\\Roaming\\npm",
     "PATHEXT=.COM;.EXE;.BAT;.CMD",
     "SystemRoot=C:\\Windows",
     // The colon rule must not reach into a path segment or a docker tag.
@@ -451,6 +653,10 @@ describe("sanitizeText — what a clipboard cannot hold", () => {
 
     it("leaves every path in the must-survive corpus byte-identical", () => {
         for (const text of MUST_SURVIVE) expect(sanitizeText(text)).toBe(text)
+        // Sanitisation is about what a string IS, not what it means: the home
+        // paths that `redact` folds are untouched here, in both directions.
+        for (const [text] of HOME_FOLDED) expect(sanitizeText(text)).toBe(text)
+        for (const [, folded] of HOME_FOLDED) expect(sanitizeText(folded)).toBe(folded)
     })
 })
 

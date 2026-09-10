@@ -1729,6 +1729,17 @@ function AboutSection(): JSX.Element {
 function NotificationsSection(): JSX.Element {
     const notifications = useSettings((s) => s.notifications)
     const setNotifications = useSettings((s) => s.setNotifications)
+    // The capability, from main. Asked on mount rather than at launch: this is
+    // the only surface that reads it, and it is a fact about the machine that
+    // can change under a running app (a Windows notification setting).
+    const notifyState = useStore((s) => s.notifyState)
+    const refreshNotifyState = useStore((s) => s.refreshNotifyState)
+    useEffect(() => {
+        void refreshNotifyState()
+    }, [refreshNotifyState])
+    // Only an explicit `false` blocks. `null` is "not asked yet", which is not
+    // evidence of anything and must not be rendered as a failure.
+    const unavailable = notifyState !== null && !notifyState.supported
     return (
         <div className="settings-section">
             <h3>Attention notifications</h3>
@@ -1739,13 +1750,40 @@ function NotificationsSection(): JSX.Element {
             </p>
             <div className="setting-row">
                 <label>Desktop notification (loud)</label>
+                {/* `checked` is the setting AND the capability, so this box
+                    cannot read on while nothing is being delivered - which is
+                    exactly what it did until 2026-09-10: the renderer's
+                    notifications were denied by DevDeck's own permission
+                    handler and dropped without an error anywhere. It is now
+                    sent from main, and this is the honest reading of whether
+                    that can work here. */}
                 <input
                     type="checkbox"
                     className="checkbox"
-                    checked={notifications.desktop}
+                    checked={notifications.desktop && !unavailable}
+                    disabled={unavailable}
                     onChange={(e) => setNotifications({ desktop: e.target.checked })}
                 />
             </div>
+            {/* What the toggle says when the capability is absent. Only what
+                is actually known gets claimed: `Notification.isSupported()`
+                says whether anything can be delivered here, and the OS's own
+                `failed` event says Windows turned one down. Neither can tell us
+                the user SAW a toast - Focus Assist and quiet hours are
+                invisible to the app - so neither sentence says it did. */}
+            {unavailable && (
+                <p className="settings-hint warn">
+                    Desktop notifications aren&apos;t available on this machine, so DevDeck is
+                    delivering none and this box stays off. The flag count on the deck and the
+                    sound below don&apos;t depend on it.
+                </p>
+            )}
+            {!unavailable && notifyState?.error && (
+                <p className="settings-hint warn">
+                    Windows turned down the last desktop notification: {notifyState.error}. The
+                    flag count on the deck doesn&apos;t depend on this one working.
+                </p>
+            )}
             <div className="setting-row">
                 <label>Sound when an agent needs you (loud)</label>
                 <input

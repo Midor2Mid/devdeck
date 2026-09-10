@@ -49,6 +49,7 @@ import * as diagnostics from "./diagnostics"
 import * as crashSink from "./crashSink"
 import { redact, sanitizeLine } from "./redact"
 import { closePrompt } from "./closePrompt"
+import * as notify from "./notify"
 
 let mainWindow: BrowserWindow | null = null
 /** Latched once the user has confirmed a close, or a quit is already running. */
@@ -591,6 +592,22 @@ function registerIpc(): void {
     // Read-only: a held pane fetches its own corpse rather than being pushed it
     // through pty:data, which the renderer treats as proof of life.
     ipcMain.handle("pty:buffer", (_e, id: string) => ptyMgr.bufferOf(id))
+
+    // --- Desktop notifications ---
+    // Raised from main because the renderer's own Notification is denied by
+    // applySecurity()'s permission handler and dropped silently - measured, see
+    // notify.ts. A click raises the window here (a background renderer cannot
+    // do that for itself) and the session id goes on to the renderer, which
+    // jumps to it.
+    notify.onNotifyActivate((termId) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+        mainWindow.webContents.send("notify:activate", { termId })
+    })
+    ipcMain.handle("notify:state", () => notify.notifyState())
+    ipcMain.handle("notify:attention", (_e, p) => notify.showAttention(p))
 
     // --- Projects ---
     ipcMain.handle("projects:list", () => projects.listProjects())
@@ -1343,6 +1360,10 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.whenReady().then(() => {
+    // Before any window or notification exists: Windows attributes a toast to
+    // an installed shortcut carrying this id, so it has to be set for a
+    // notification to be shown at all (notify.ts).
+    notify.applyAppUserModelId()
     registerIpc()
     applyNavigationGuards()
     applySecurity()

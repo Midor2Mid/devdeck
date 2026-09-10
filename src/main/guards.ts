@@ -40,21 +40,72 @@ export function isBlockedAddress(ip: string): boolean {
     if (h.includes(":")) {
         const groups = parseIpv6(h)
         if (!groups) return true // an address we cannot read is not an address we allow
-        // IPv4-mapped (::ffff:0:0/96) is an IPv4 address wearing a hat, and it
-        // is NOT reliably spelled with dots: WHATWG URL normalises
-        // `[::ffff:127.0.0.1]` to `[::ffff:7f00:1]`, and a resolver hands back
-        // the same hex. Judging the text would have let every private range
-        // through in that spelling.
-        if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
-            return blockedV4([groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff])
-        }
-        if (groups.every((g) => g === 0)) return true // ::
-        if (groups.slice(0, 7).every((g) => g === 0) && groups[7] === 1) return true // ::1
+        // Any IPv4 address this literal CARRIES is judged as that address.
+        // `::ffff:/96` used to be the only embedding enumerated here, and the
+        // bare `return false` below answered "not local" for 127.0.0.1 wearing
+        // any of the other five hats - see embeddedV4. `::` and `::1` need no
+        // branch of their own any more: they come out of ::/96 as 0.0.0.0 and
+        // 0.0.0.1, both of which blockedV4 already refuses.
+        const v4 = embeddedV4(groups)
+        if (v4.length > 0) return v4.some(blockedV4)
         if ((groups[0] & 0xffc0) === 0xfe80) return true // fe80::/10, link-local
         if ((groups[0] & 0xfe00) === 0xfc00) return true // fc00::/7, unique-local
+        if ((groups[0] & 0xffc0) === 0xfec0) return true // fec0::/10, deprecated site-local
+        if ((groups[0] & 0xff00) === 0xff00) return true // ff00::/8, multicast
         return false
     }
     return true
+}
+
+/**
+ * Every IPv4 address an IPv6 address carries, as four-octet quads. Empty when
+ * it carries none.
+ *
+ * "Is this loopback?" is a question about where the packet lands, and several
+ * prefixes exist whose entire purpose is to carry an IPv4 destination inside an
+ * IPv6 literal. Enumerating one of them (`::ffff:/96`) and answering "allowed"
+ * for the rest was the `[::ffff:7f00:1]` bug again in five more spellings:
+ * `[64:ff9b::a9fe:a9fe]`, `[2002:7f00:1::]`, `[::7f00:1]`, `[::ffff:0:7f00:1]`
+ * and `[2001:0:0:0:0:0:3f57:fffe]` all reached `fetch` through
+ * `httpSend({ guardRemote: true })`.
+ *
+ * There is no second layer behind this for a literal: `dns.lookup(h, {
+ * verbatim: true })` returns a numeric host unchanged (confirmed on Windows for
+ * all five), so `http.ts`'s "check the RESOLVED address" pass asks this same
+ * function the same question and gets the same answer. This IS the boundary.
+ *
+ * A quad is returned even when the carried address is public - `2002:5db8:d822::`
+ * is 6to4 for 93.184.216.34 and stays allowed - because the caller judges the
+ * address, not the prefix. Returning a LIST rather than one quad is what lets
+ * Teredo be judged on both the addresses it embeds instead of a chosen one.
+ *
+ * What this cannot do: a site-specific NAT64 prefix (RFC 6052 allows any
+ * network-specific prefix, not only 64:ff9b::/96) is not enumerable from the
+ * address alone. That exposure is unclosed and is an argument for pinning the
+ * resolved address on plain-http targets, not something this function can fix.
+ */
+function embeddedV4(g: number[]): number[][] {
+    const split = (hi: number, lo: number): number[] => [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff]
+    const zeros = (from: number, to: number): boolean => g.slice(from, to).every((x) => x === 0)
+    // ::ffff:0:0/96 IPv4-mapped - and ::/96 IPv4-compatible (RFC 4291 2.5.5.1),
+    // deprecated but still parsed by every stack and still returned verbatim by
+    // a resolver, which is all it needs to be a route to loopback.
+    if (zeros(0, 5) && (g[5] === 0xffff || g[5] === 0)) return [split(g[6], g[7])]
+    // ::ffff:0:0:0/96 IPv4-translated (RFC 2765 SIIT).
+    if (zeros(0, 4) && g[4] === 0xffff && g[5] === 0) return [split(g[6], g[7])]
+    // 64:ff9b::/96 NAT64 well-known prefix (RFC 6052) - every IPv6-only mobile
+    // network runs one of these, and it is a plain /96 translation.
+    if (g[0] === 0x0064 && g[1] === 0xff9b && zeros(2, 6)) return [split(g[6], g[7])]
+    // 2002::/16 6to4 (RFC 3056): the v4 address is the next 32 bits.
+    if (g[0] === 0x2002) return [split(g[1], g[2])]
+    // 2001:0::/32 Teredo (RFC 4380). Two v4 addresses: the client's, in the
+    // last 32 bits stored bitwise-inverted, and the relay server's in groups
+    // 2-3. Both are judged, because either one being local is enough - and
+    // "check only the one I thought of" is the exact mistake above.
+    if (g[0] === 0x2001 && g[1] === 0) {
+        return [split(~g[6] & 0xffff, ~g[7] & 0xffff), split(g[2], g[3])]
+    }
+    return []
 }
 
 function blockedV4(o: number[]): boolean {
@@ -122,7 +173,13 @@ export function isBlockedRemoteUrl(raw: string): boolean {
     try {
         const u = new URL(raw)
         if (u.protocol !== "http:" && u.protocol !== "https:") return true
-        const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+        // A single trailing dot is the DNS root, not part of the name:
+        // `localhost.` resolves to 127.0.0.1 on every stack and, read as text,
+        // was neither "localhost" nor a dotted quad. Same for `nas.local.`.
+        const h = u.hostname
+            .toLowerCase()
+            .replace(/^\[|\]$/g, "")
+            .replace(/\.$/, "")
         if (h === "localhost" || h.endsWith(".local") || h.endsWith(".internal")) return true
         // Any literal address - v4 or v6 - is judged by the one function that
         // knows what an address means. The v6 checks used to be duplicated here

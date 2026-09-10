@@ -79,7 +79,14 @@ describe("isBlockedAddress and IPv4-mapped IPv6", () => {
     it("blocks all of fe80::/10, not just addresses starting fe80:", () => {
         expect(isBlockedAddress("feb0::1")).toBe(true)
         expect(isBlockedAddress("febf::1")).toBe(true)
-        expect(isBlockedAddress("fec0::1")).toBe(false) // outside the /10
+        // `fec0::1` IS outside fe80::/10 - which is what this `it` pins - but
+        // it is inside fec0::/10, deprecated site-local, which had no branch
+        // at all. The expectation was reversed on 2026-09-10: asserting `false`
+        // here was a test asserting a bypass, and it was the line that kept the
+        // suite green while five other IPv4-in-IPv6 embeddings walked through
+        // `guardRemote`. The boundary this test exists for is pinned by `febf::1`
+        // above and by the global-IPv6 cases in the next describe.
+        expect(isBlockedAddress("fec0::1")).toBe(true) // fec0::/10, not fe80::/10
     })
     it("refuses a malformed IPv6 literal rather than reading it as public", () => {
         for (const junk of ["::ffff:zz", "1::2::3", "12345::1", ":::1"]) {
@@ -91,6 +98,93 @@ describe("isBlockedAddress and IPv4-mapped IPv6", () => {
         expect(isBlockedRemoteUrl("http://[::ffff:7f00:1]:8787/tools")).toBe(true)
         expect(isBlockedRemoteUrl("http://[::ffff:169.254.169.254]/")).toBe(true)
         expect(isBlockedRemoteUrl("https://[2606:2800:220:1:248:1893:25c8:1946]/")).toBe(false)
+    })
+})
+
+/**
+ * The bug this pins is not "::ffff: was wrong" - that one was found and fixed.
+ * It is that `::ffff:/96` was the only embedding ENUMERATED, and a bare
+ * `return false` answered for every other way of writing an IPv4 address inside
+ * an IPv6 one. One instance of a class is not the class.
+ *
+ * These are not theoretical spellings. `dns.lookup(h, { verbatim: true })`
+ * hands a numeric host straight back - re-confirmed on this machine 2026-09-10
+ * for all five - so `blockedTarget`'s "check the RESOLVED address" second layer
+ * asks the same question of the same literal and gets the same wrong answer.
+ * There is no defence in depth behind this function for a literal address; it
+ * IS the boundary. See tests/http-ssrf.test.ts for the same inputs driven
+ * through `httpSend({ guardRemote: true })` with fetch stubbed.
+ */
+describe("isBlockedAddress: every embedding of an IPv4 address, not just ::ffff:", () => {
+    const embedded: [string, string][] = [
+        ["::7f00:1", "IPv4-compatible, RFC 4291 2.5.5.1"],
+        ["::127.0.0.1", "IPv4-compatible, dotted"],
+        ["::ffff:0:7f00:1", "IPv4-translated, RFC 2765"],
+        ["64:ff9b::7f00:1", "NAT64 well-known prefix, RFC 6052"],
+        ["64:ff9b::a00:1", "NAT64 -> 10.0.0.1"],
+        ["64:ff9b::c0a8:1", "NAT64 -> 192.168.0.1"],
+        ["64:ff9b::a9fe:a9fe", "NAT64 -> the cloud metadata address"],
+        ["2002:7f00:1::", "6to4, RFC 3056"],
+        ["2002:c0a8:1::1", "6to4 -> 192.168.0.1"],
+        ["2001:0:0:0:0:0:3f57:fffe", "Teredo, RFC 4380 - client v4 is the last 32 bits, inverted"]
+    ]
+    for (const [addr, why] of embedded) {
+        it(`blocks ${addr} (${why})`, () => expect(isBlockedAddress(addr)).toBe(true))
+    }
+
+    it("blocks the two IPv6 scopes that had no branch at all", () => {
+        // fec0::/10 is the one the suite was asserting REACHABLE (see above).
+        // ff00::/8 is included on fail-closed grounds rather than a
+        // demonstrated exploit: TCP does not establish to a multicast address,
+        // so no request test can be written for it, and the decision point is
+        // already parsing the address anyway.
+        expect(isBlockedAddress("fec0::1")).toBe(true)
+        expect(isBlockedAddress("feff::1")).toBe(true)
+        expect(isBlockedAddress("ff02::1")).toBe(true)
+        expect(isBlockedAddress("ff05::1:3")).toBe(true)
+    })
+
+    it("still allows ordinary global IPv6 - the fix must not be a blanket refusal", () => {
+        expect(isBlockedAddress("2606:2800:220:1:248:1893:25c8:1946")).toBe(false)
+        expect(isBlockedAddress("2606:4700::1111")).toBe(false)
+        // 2001:4860::/32 is Google, not Teredo: Teredo is 2001:0::/32, so the
+        // second group is what separates them. A prefix check on "2001:" would
+        // have taken half the modern internet with it.
+        expect(isBlockedAddress("2001:4860:4860::8888")).toBe(false)
+        // 6to4 and NAT64 carrying a PUBLIC v4 address are allowed, because the
+        // question is where the packet lands, not which prefix it wears.
+        expect(isBlockedAddress("2002:5db8:d822::")).toBe(false)
+        expect(isBlockedAddress("64:ff9b::5db8:d822")).toBe(false)
+    })
+
+    it("keeps failing closed on a literal it cannot parse", () => {
+        for (const junk of ["::ffff:zz", "1::2::3", "12345::1", ":::1", "64:ff9b::gg"]) {
+            expect(isBlockedAddress(junk)).toBe(true)
+        }
+    })
+})
+
+describe("isBlockedRemoteUrl: the text layer reads the URL forms too", () => {
+    it("blocks an embedded IPv4 address in a URL host", () => {
+        expect(isBlockedRemoteUrl("http://[64:ff9b::a9fe:a9fe]/latest/meta-data/")).toBe(true)
+        expect(isBlockedRemoteUrl("http://[2002:7f00:1::]:8787/mcp")).toBe(true)
+        expect(isBlockedRemoteUrl("http://[::7f00:1]:8787/mcp")).toBe(true)
+        expect(isBlockedRemoteUrl("http://[::ffff:0:7f00:1]:8787/mcp")).toBe(true)
+        expect(isBlockedRemoteUrl("http://[2001:0:0:0:0:0:3f57:fffe]/")).toBe(true)
+    })
+
+    it("reads a trailing root dot as the name it is", () => {
+        // Defence in depth, not the boundary: the resolver layer catches
+        // `localhost.` because it resolves to ::1 + 127.0.0.1. But a text guard
+        // that cannot see the most common FQDN spelling of the one name it
+        // hard-codes is not doing its job, and `.local.` / `.internal.` are the
+        // same shape.
+        expect(isBlockedRemoteUrl("http://localhost./")).toBe(true)
+        expect(isBlockedRemoteUrl("http://LOCALHOST./")).toBe(true)
+        expect(isBlockedRemoteUrl("http://nas.local./")).toBe(true)
+        expect(isBlockedRemoteUrl("http://api.internal./")).toBe(true)
+        // A trailing dot on an ordinary public name is still ordinary.
+        expect(isBlockedRemoteUrl("https://api.github.com./repos")).toBe(false)
     })
 })
 

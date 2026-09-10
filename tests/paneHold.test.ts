@@ -27,6 +27,20 @@ function stubApi(): void {
                 kill: (): void => undefined,
                 input: (): void => undefined
             },
+            // Desktop notifications are main's now (src/main/notify.ts); the
+            // renderer only subscribes to a click on one. `init()` throws without
+            // it, and these stubs are untyped casts, so nothing else would notice.
+            notify: {
+                state: async (): Promise<{ supported: boolean; error: string | null }> => ({
+                    supported: true,
+                    error: null
+                }),
+                attention: async (): Promise<{ supported: boolean; error: string | null }> => ({
+                    supported: true,
+                    error: null
+                }),
+                onActivate: (): (() => void) => (): void => undefined
+            },
             triggers: { onFired: (): (() => void) => (): void => undefined },
             projects: {
                 list: async (): Promise<{ projects: unknown[]; activeId: string | null }> => ({

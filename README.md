@@ -1,6 +1,6 @@
 # DevDeck
 
-> A command deck for terminal-first, AI-CLI-driven development — multiple terminals, agent sessions (Claude, Codex, Gemini), fast project switching, an editor, an API client, and a database client in one window.
+> A Windows desktop cockpit for driving Claude Code, Codex, or Gemini across more than one project at once — one deck that shows every terminal and agent session you have running, and which of them is waiting on you.
 
 See `PRODUCT.md` for the problem and target user, and `ROADMAP.md` for the milestone history and the live plan.
 

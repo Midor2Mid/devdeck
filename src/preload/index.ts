@@ -12,6 +12,7 @@ import type { MenuCommand } from "../main/index"
 import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
+import type { NotifyState } from "../main/notify"
 import type { Loaded } from "../shared/loaded"
 import type { ProbeReport, ProbeRequest, ProbeResult, ProbeState } from "../shared/probe"
 import type {
@@ -50,6 +51,12 @@ export type { RunKind, RunRecord, RunExclusionReason }
 // value import anywhere along that path would drag the native pty binding into
 // the preload bundle. It would typecheck and then fail at runtime.
 export type { DecisionView, DecisionSnapshot }
+// Whether this machine can show a desktop notification, and why the last one
+// failed. From main, because main is the only process that can answer it: the
+// renderer's own `Notification` is denied by `setPermissionCheckHandler` and
+// drops silently (main/notify.ts). Settings reads this so the toggle cannot
+// claim a delivery nobody made.
+export type { NotifyState }
 // The probe's contract, from `shared/` for the same reason: `main/shellPath.ts`
 // spawns a shell, and a value import along that path would drag child_process
 // wiring into the preload bundle. `unknown` and `blank` are first-class answers
@@ -843,6 +850,25 @@ const api = {
     env: {
         check: (names: string[]): Promise<Record<string, boolean>> =>
             ipcRenderer.invoke("env:check", names)
+    },
+    notify: {
+        /** Can main deliver a desktop notification here, and did the last one fail? */
+        state: (): Promise<NotifyState> => ipcRenderer.invoke("notify:state"),
+        /**
+         * Raise one attention notification and get the state back afterwards.
+         *
+         * `body` is composed by the renderer on purpose: it is the same
+         * sentence the in-app inbox entry carries, so the toast is a second
+         * CHANNEL for one fact rather than a second statement of it.
+         */
+        attention: (p: { termId: string; body: string }): Promise<NotifyState> =>
+            ipcRenderer.invoke("notify:attention", p),
+        /** A click on a toast, forwarded by main after it has raised the window. */
+        onActivate: (cb: (termId: string) => void): (() => void) => {
+            const h = (_e: unknown, p: { termId: string }): void => cb(p.termId)
+            ipcRenderer.on("notify:activate", h)
+            return () => ipcRenderer.removeListener("notify:activate", h)
+        }
     }
 }
 

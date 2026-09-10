@@ -1,6 +1,6 @@
 # Roadmap — DevDeck
 
-The vision is all-in-one. The build is sequenced into milestones so there's a usable daily-driver early, with every later panel plugging into the same workspace shell. Keep each milestone ruthlessly shippable.
+DevDeck is a terminal-first cockpit: a project is the unit of context, and one row answers which agent is waiting on you. Everything else — the editor, the verification tools — is built to serve that row, not to compete with it. Default to removing. The build is sequenced into milestones so there's a usable daily-driver early, with every later panel plugging into the same workspace shell. Keep each milestone ruthlessly shippable.
 
 **Design north star:** ease of use + Japanese **wabi-sabi** — simplicity, calm, restraint, natural/imperfect beauty, quiet space. One earthy accent, minimal chrome, an ensō brand mark. Every feature must earn its visual weight; default to removing. (See `NOTES.md` → "Design north star".)
 

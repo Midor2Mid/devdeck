@@ -57,6 +57,20 @@ function stubApi(): void {
                     exitCode: undefined
                 })
             },
+            // Desktop notifications are main's now (src/main/notify.ts); the
+            // renderer only subscribes to a click on one. `init()` throws without
+            // it, and these stubs are untyped casts, so nothing else would notice.
+            notify: {
+                state: async (): Promise<{ supported: boolean; error: string | null }> => ({
+                    supported: true,
+                    error: null
+                }),
+                attention: async (): Promise<{ supported: boolean; error: string | null }> => ({
+                    supported: true,
+                    error: null
+                }),
+                onActivate: (): (() => void) => (): void => undefined
+            },
             triggers: { onFired: (): (() => void) => (): void => undefined },
             projects: {
                 list: async (): Promise<{ projects: unknown[]; activeId: string | null }> => ({
@@ -389,6 +403,86 @@ describe("visibility gates the notification, not the classification", () => {
 
         useStore.getState().respondApproval(TERM, "y" + CR)
         ptyData({ id: TERM, data: "ok, continuing" })
+
+        expect(useStore.getState().agentStatus[TERM]).toBe("working")
+        vi.useRealTimers()
+    })
+    /**
+     * The tab-remount blip - the last remaining disclosure of the 2026-09-09
+     * verification, and the reason `paneEcho.ts` exists.
+     *
+     * Re-entering an agent's tab flipped a hand-back to WORKING for the whole
+     * idle window, and a layout switch did the same, while a window resize was
+     * clean. A remount UNMOUNTS the pane, so main replays the entire kept
+     * buffer when it re-attaches (`pty:create` -> `getBuffer`), and the
+     * remounted xterm then refits, which resizes the pty, which makes the far
+     * end redraw: TWO chunks from one gesture, which is exactly the bar the
+     * hand-back gate sets for "the output continued". A resize produces the
+     * second of those and not the first, which is why it never blipped.
+     *
+     * Neither chunk changes a character on screen - qa's own observation, and
+     * the discriminator here.
+     */
+    it("keeps WAITING when re-entering the tab replays the buffer AND repaints", async () => {
+        seed(false)
+        const turn = "Refactored 4 files." + CRLF + "Ready for review." + CRLF
+        ptyData({ id: TERM, data: turn })
+        await vi.advanceTimersByTimeAsync(200)
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+
+        useStore.getState().jumpToTerm(TERM)
+        // 1: main's replay of the whole session. 2: the refit-repaint.
+        ptyData({ id: TERM, data: turn })
+        ptyData({ id: TERM, data: REDRAW + "Ready for review." })
+
+        // Was "working" for the whole ~6s idle window, over a finished turn.
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+        expect(useStore.getState().seen[TERM]).toBe(true)
+        vi.useRealTimers()
+    })
+
+    /**
+     * The direction that must NOT be traded away for the one above. An agent
+     * that pauses past the idle timer mid-turn and then resumes has to promote
+     * promptly - `waiting` is DevDeck's own inference from silence, so its own
+     * continued output is what refutes it. Two chunks, the same bar as before
+     * the remount fix, and the remount's own chunks did not spend it.
+     */
+    it("still promotes a genuinely resuming agent after a remount", async () => {
+        seed(false)
+        const turn = "Refactored 4 files." + CRLF + "Ready for review." + CRLF
+        ptyData({ id: TERM, data: turn })
+        await vi.advanceTimersByTimeAsync(200)
+
+        useStore.getState().jumpToTerm(TERM)
+        ptyData({ id: TERM, data: turn })
+        ptyData({ id: TERM, data: REDRAW + "Ready for review." })
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+
+        // Now it really does resume, and says something new.
+        ptyData({ id: TERM, data: "reading store.ts" + CRLF })
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+        ptyData({ id: TERM, data: "editing store.ts" + CRLF })
+        expect(useStore.getState().agentStatus[TERM]).toBe("working")
+        vi.useRealTimers()
+    })
+
+    /**
+     * And the act axis is untouched by the character test. Answering a session
+     * is a statement that you expect it to work, so the first byte back is
+     * evidence whatever it paints - a repaint included. Pinned because the
+     * remount fix must not leak into this lane: if it did, an answered
+     * hand-back whose agent redraws before it speaks would sit on "your move"
+     * after the user had already moved.
+     */
+    it("reclassifies an answered hand-back on a first byte that only repaints", async () => {
+        seed(false)
+        ptyData({ id: TERM, data: "Ready for review." })
+        await vi.advanceTimersByTimeAsync(200)
+        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+
+        useStore.getState().respondApproval(TERM, "y" + CR)
+        ptyData({ id: TERM, data: REDRAW + "Ready for review." })
 
         expect(useStore.getState().agentStatus[TERM]).toBe("working")
         vi.useRealTimers()

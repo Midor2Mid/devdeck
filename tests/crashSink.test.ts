@@ -206,8 +206,16 @@ describe("redaction happens on the way in — the file on disk is clean too", ()
         )
         const raw = readFileSync(storePath(), "utf8")
         expect(raw).not.toContain("sk-ant-api03-abcdefghijklmnopqrstuvwxyz012345")
-        // And the path — the thing the record exists to carry — survived.
-        expect(raw).toContain("C:\\\\Users\\\\Admin\\\\AppData\\\\Roaming\\\\devdeck")
+        // And the path — the thing the record exists to carry — survived, minus
+        // the one segment that names its owner. F-3, 2026-09-10: this log is
+        // pasted into a public issue tracker, and a home directory is an
+        // identifier as well as evidence. `src/main/redact.ts` folds the owner
+        // and keeps every other segment; see PATH_RULES there and the
+        // `HOME_FOLDED` corpus in tests/redact.test.ts.
+        expect(raw).not.toContain("Admin")
+        expect(raw).toContain(
+            "C:\\\\Users\\\\[redacted:user]\\\\AppData\\\\Roaming\\\\devdeck"
+        )
     })
 })
 

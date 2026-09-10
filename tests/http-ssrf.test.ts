@@ -10,6 +10,16 @@ const dnsMock = vi.hoisted(() => ({
 }))
 vi.mock("dns/promises", () => ({
     lookup: async (host: string) => {
+        // Real getaddrinfo hands a NUMERIC host straight back - re-confirmed on
+        // Windows 2026-09-10 for 64:ff9b::7f00:1, ::7f00:1, 2002:7f00:1::,
+        // ::ffff:0:7f00:1 and 2001:0:0:0:0:0:3f57:fffe. Without this branch the
+        // mock throws ENOTFOUND for a literal, `blockedTarget` refuses it for
+        // "would not resolve", and the suite cannot see that both layers of the
+        // guard ask the same question of a literal and get the same answer -
+        // i.e. it would pass for a reason production does not have.
+        if (host.includes(":") && /^[0-9a-f:.]+$/i.test(host)) {
+            return [{ address: host, family: 6 }]
+        }
         const addrs = dnsMock.map.get(host)
         if (!addrs) throw new Error(`ENOTFOUND ${host}`)
         return addrs.map((address) => ({ address, family: address.includes(":") ? 6 : 4 }))
@@ -218,5 +228,82 @@ describe("relayed HTTP - the guard runs on every hop (remedy 14)", () => {
         expect(res.ok).toBe(true)
         expect(res.body).toBe("up")
         expect(calls[0].redirect).toBeUndefined()
+    })
+})
+
+/**
+ * The hole F-1 names, driven end to end: `isBlockedAddress` enumerated exactly
+ * one IPv4-in-IPv6 embedding and answered "not local" for the rest, and the
+ * resolved-address layer cannot save it because a resolver returns a literal
+ * verbatim. Every case below reached the stubbed `fetch` with
+ * `{ ok: true, body: "REACHED" }` before the fix - the guard did not
+ * mis-rank the address, it never refused the request.
+ */
+describe("relayed HTTP - IPv4 wearing a hat other than ::ffff:", () => {
+    const cases: [string, string][] = [
+        [
+            "NAT64 well-known prefix -> the cloud metadata address",
+            "http://[64:ff9b::a9fe:a9fe]/latest/meta-data/"
+        ],
+        ["6to4 -> loopback", "http://[2002:7f00:1::]:8787/mcp"],
+        ["IPv4-compatible -> loopback", "http://[::7f00:1]:8787/mcp"],
+        ["IPv4-translated -> loopback", "http://[::ffff:0:7f00:1]:8787/mcp"],
+        ["Teredo -> 192.168.0.1", "http://[2001:0:0:0:0:0:3f57:fffe]/"]
+    ]
+    for (const [why, url] of cases) {
+        it(`refuses ${why}`, async () => {
+            const calls = stubFetch({})
+            const res = await httpSend({ method: "GET", url }, { guardRemote: true })
+            expect(res.error).toBe(BLOCKED)
+            expect(calls).toEqual([])
+        })
+    }
+
+    it("refuses a hostname whose AAAA record is a NAT64-mapped private address", async () => {
+        // The attacker owns the zone, so the address is theirs to choose and
+        // the text layer never sees it. This is the reachable form: no literal
+        // in the URL at all.
+        dnsMock.map.set("rebind.example.com", ["64:ff9b::c0a8:1"])
+        const calls = stubFetch({})
+        const res = await httpSend(
+            { method: "GET", url: "http://rebind.example.com/" },
+            { guardRemote: true }
+        )
+        expect(res.error).toBe(BLOCKED)
+        expect(calls).toEqual([])
+    })
+
+    it("refuses a redirect hop into a NAT64-mapped loopback", async () => {
+        const calls = stubFetch({
+            "https://api.example.com/": {
+                status: 302,
+                location: "http://[64:ff9b::7f00:1]:8787/mcp"
+            }
+        })
+        const res = await httpSend(
+            { method: "GET", url: "https://api.example.com/" },
+            { guardRemote: true }
+        )
+        expect(res.error).toBe(BLOCKED)
+        expect(calls.map((c) => c.url)).toEqual(["https://api.example.com/"])
+    })
+
+    it("still relays an ordinary public request - the control case", async () => {
+        const calls = stubFetch({ "https://api.example.com/x": { status: 200, body: "ok" } })
+        const res = await httpSend(
+            { method: "GET", url: "https://api.example.com/x" },
+            { guardRemote: true }
+        )
+        expect(res.ok).toBe(true)
+        expect(res.body).toBe("ok")
+        expect(calls).toHaveLength(1)
+    })
+
+    it("still relays to a global IPv6 literal", async () => {
+        const url = "https://[2606:2800:220:1:248:1893:25c8:1946]/"
+        const calls = stubFetch({ [url]: { status: 200, body: "ok" } })
+        const res = await httpSend({ method: "GET", url }, { guardRemote: true })
+        expect(res.ok).toBe(true)
+        expect(calls).toHaveLength(1)
     })
 })

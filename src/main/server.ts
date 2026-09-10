@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws"
 import { getCert } from "./tlscert"
 import { app } from "electron"
 import { readFileSync, mkdirSync } from "fs"
+import { createHash } from "crypto"
 import { join, dirname, basename } from "path"
 import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
@@ -108,12 +109,43 @@ let clients = new Set<Client>()
 let onData: ((d: { id: string; data: string }) => void) | null = null
 let onExit: ((d: { id: string; exitCode: number }) => void) | null = null
 
-function xtermAsset(file: "xterm.js" | "xterm.css"): string {
+type XtermFile = "xterm.js" | "xterm.css"
+const xtermCache = new Map<XtermFile, { body: Buffer; etag: string }>()
+
+/**
+ * The two static library assets, read once per **process** rather than once per
+ * request.
+ *
+ * These are the only two paths served above `authFor` (see `handleRequest`), so
+ * anyone who can open a socket to this port can ask for them with no token, no
+ * cookie and no device record. Each request used to re-read 488,663 bytes
+ * synchronously and decode them as UTF-8: 3.45 ms of blocked event loop per
+ * request, measured - and this is the single thread that relays every PTY byte,
+ * answers every IPC call and runs `authenticate()`. ~290 requests/second is a
+ * fully stalled main process. The failure throttle in `devices.ts` exists
+ * because `authenticate()` was "attacker-paced, on the same thread that drives
+ * the UI"; this path was an order of magnitude more expensive per request and
+ * sat in FRONT of that throttle, handing an anonymous client exactly the stall
+ * the throttle was added to deny them.
+ *
+ * The cache is per-process and never invalidated because the files live inside
+ * the app bundle and cannot change while it runs. A `Buffer` rather than a
+ * string so a response is a socket write of bytes already in hand, with no
+ * per-request UTF-8 re-encode of half a megabyte. The ETag is content-derived,
+ * which is what lets a real client fetch each file once for the life of the
+ * install.
+ */
+function xtermAsset(file: XtermFile): { body: Buffer; etag: string } {
+    const hit = xtermCache.get(file)
+    if (hit) return hit
     // Resolve @xterm/xterm from node_modules at runtime (it is externalized).
     const main = require.resolve("@xterm/xterm") // .../lib/xterm.js
     const pkgDir = dirname(dirname(main))
     const path = file === "xterm.js" ? join(pkgDir, "lib", "xterm.js") : join(pkgDir, "css", "xterm.css")
-    return readFileSync(path, "utf8")
+    const body = readFileSync(path)
+    const asset = { body, etag: `"${createHash("sha256").update(body).digest("base64url")}"` }
+    xtermCache.set(file, asset)
+    return asset
 }
 
 /** LAN + Tailscale (100.64.0.0/10) IPv4 addresses for building connect URLs. */
@@ -322,15 +354,42 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
             res.end("Bad Request")
             return
         }
-        // Static library assets are harmless; everything else requires the token.
-        if (url.pathname === "/xterm.js") {
-            res.writeHead(200, { "Content-Type": "text/javascript" })
-            res.end(xtermAsset("xterm.js"))
-            return
-        }
-        if (url.pathname === "/xterm.css") {
-            res.writeHead(200, { "Content-Type": "text/css" })
-            res.end(xtermAsset("xterm.css"))
+        // Static library assets carry nothing of the user's, and a phone that
+        // cannot fetch them cannot render the page it was authenticated to
+        // see - the sub-resource request is a fresh HTTP request that need not
+        // carry the same credential the page did (a `?token=` enrolment does
+        // not travel to a sub-resource at all, and a cookie can be absent for
+        // reasons ranging from a `__Host-` prefix to a phone's cookie policy).
+        // So they stay ABOVE authFor deliberately, and the cost of that
+        // decision is bounded instead: read once per process (see xtermAsset),
+        // answered with a 304 for any client that already has it, and never
+        // re-encoded. What remains for an anonymous flood is one socket write
+        // of bytes already in memory, which is what any static file server
+        // costs.
+        const assetName: XtermFile | null =
+            url.pathname === "/xterm.js" ? "xterm.js" : url.pathname === "/xterm.css" ? "xterm.css" : null
+        if (assetName) {
+            const { body, etag } = xtermAsset(assetName)
+            const cache: Record<string, string> = {
+                ETag: etag,
+                // Revalidate, do not pin. These URLs carry no version, so an
+                // `immutable` year would leave a phone holding one DevDeck
+                // release's xterm.js against the next release's page - a broken
+                // pane with no diagnostic - for up to a year. A conditional GET
+                // costs a 304 with no body and, now, no disk read.
+                "Cache-Control": "no-cache"
+            }
+            if (req.headers["if-none-match"] === etag) {
+                res.writeHead(304, cache)
+                res.end()
+                return
+            }
+            res.writeHead(200, {
+                ...cache,
+                "Content-Type": assetName === "xterm.js" ? "text/javascript" : "text/css",
+                "Content-Length": String(body.length)
+            })
+            res.end(body)
             return
         }
         const { auth, token } = authFor(req, url, true)

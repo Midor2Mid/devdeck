@@ -19,8 +19,23 @@ const h = vi.hoisted(() => {
         tails: {} as Record<string, string>,
         // Every byte the server sent to a pty. The choice handler's whole point
         // is that most refusals write nothing, and a no-op mock cannot show that.
-        writes: [] as { id: string; data: string }[]
+        writes: [] as { id: string; data: string }[],
+        /** Every path handed to readFileSync, for the F-2 asset test. */
+        reads: [] as string[]
     }
+})
+
+// F-2 needs to count the actual disk reads behind /xterm.js, and node's `fs`
+// namespace refuses `vi.spyOn` ("Cannot redefine property: readFileSync"), so
+// the count is taken with a pass-through module mock instead. Everything else
+// in `fs` is the real thing.
+vi.mock("fs", async (orig) => {
+    const actual = await orig<typeof import("fs")>()
+    const readFileSync = ((...args: Parameters<typeof actual.readFileSync>) => {
+        h.reads.push(String(args[0]))
+        return actual.readFileSync(...args)
+    }) as typeof actual.readFileSync
+    return { ...actual, readFileSync, default: { ...actual, readFileSync } }
 })
 
 vi.mock("electron", () => ({
@@ -717,5 +732,65 @@ describe("answering a prompt from a phone (Task 6)", () => {
         })
         expect(after.find((s) => s.termId === "t1")).not.toHaveProperty("pending")
         ws.close()
+    })
+})
+
+/**
+ * F-2. `/xterm.js` and `/xterm.css` are the two paths served ABOVE `authFor`,
+ * so anyone who can open a TCP socket to this port can request them with no
+ * token, no cookie and no device record - and each request used to re-read
+ * 488,663 bytes from disk synchronously: 3.45 ms of blocked event loop per
+ * request, measured, on the single thread that relays every PTY byte, answers
+ * every filesystem and git IPC call, and runs `authenticate()`. ~290 rps is a
+ * fully stalled main process. `devices.ts`'s failure throttle exists precisely
+ * because `authenticate()` was "attacker-paced, on the same thread that drives
+ * the UI"; this path was an order of magnitude more expensive per request and
+ * sat IN FRONT of that throttle.
+ *
+ * Two things are pinned here, and the first is a decision rather than a bug:
+ * the assets stay unauthenticated (a phone that cannot fetch them cannot
+ * render, and they are third-party library files carrying nothing of the
+ * user's), and the per-request cost of that decision is bounded - read once
+ * per process, and answerable with a 304.
+ */
+describe("remote server - the unauthenticated static assets (F-2)", () => {
+    it("serves both assets with no credential at all - the deliberate half", async () => {
+        for (const path of ["/xterm.js", "/xterm.css"]) {
+            const res = await fetch(`${base}${path}`)
+            expect(res.status, path).toBe(200)
+            expect((await res.text()).length, path).toBeGreaterThan(1000)
+        }
+        // The contrast that makes the above a decision and not an oversight:
+        // every other path on this server refuses an anonymous request.
+        expect((await fetch(`${base}/`)).status).toBe(401)
+    })
+
+    it("reads each asset from disk ONCE, however many times it is requested", async () => {
+        // The assertion is on the syscall, not on elapsed time: a timing
+        // assertion would be flaky on a loaded runner, and the syscall is what
+        // the fix actually removes.
+        h.reads.length = 0
+        for (let i = 0; i < 12; i++) {
+            expect((await fetch(`${base}/xterm.js`)).status).toBe(200)
+            expect((await fetch(`${base}/xterm.css`)).status).toBe(200)
+        }
+        // At most one read per file, and in practice zero: the cache is
+        // per-process and `waitForListen` in beforeEach has already fetched
+        // /xterm.js. Against the pre-fix code this same loop records 24 reads
+        // of 488,663 bytes.
+        expect(h.reads.filter((f) => f.includes("xterm"))).toHaveLength(0)
+    })
+
+    it("answers a repeat request 304 from its ETag, so a real client fetches once", async () => {
+        const first = await fetch(`${base}/xterm.js`)
+        const etag = first.headers.get("etag")
+        expect(etag).toBeTruthy()
+        // no-cache = "revalidate before use", not "do not store". These URLs
+        // carry no version, so pinning them would strand a phone on a stale
+        // xterm.js after a DevDeck upgrade.
+        expect(first.headers.get("cache-control")).toBe("no-cache")
+        const again = await fetch(`${base}/xterm.js`, { headers: { "If-None-Match": etag ?? "" } })
+        expect(again.status).toBe(304)
+        expect((await again.text()).length).toBe(0)
     })
 })
