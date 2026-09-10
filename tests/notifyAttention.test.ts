@@ -65,6 +65,9 @@ function stubApi(): void {
                     exitCode: undefined
                 })
             },
+            // CLI-declared attention signals (src/shared/attention.ts). Subscribed
+            // unconditionally in init(), like onData, so a stub without it throws.
+            attention: { onDeclared: (): (() => void) => (): void => undefined },
             triggers: { onFired: (): (() => void) => (): void => undefined },
             notify: {
                 state: async (): Promise<{ supported: boolean; error: string | null }> => mainState,

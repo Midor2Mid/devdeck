@@ -22,6 +22,7 @@ import {
 } from "./git"
 import { readMcp, writeMcp, registerDevdeck, unregisterDevdeck, type McpServer } from "./mcp"
 import * as mcpserver from "./mcpserver"
+import * as attention from "./attention"
 import * as mcptools from "./mcptools"
 import * as checks from "./checks"
 import * as skills from "./skills"
@@ -557,6 +558,19 @@ function registerIpc(): void {
             const key = aikeys.getKey(opts.agentId)
             if (key) env[opts.keyEnv] = key
         }
+        // LAST, so nothing above can shadow it. These three vars are facts
+        // DevDeck asserts about itself - which pane this is, where its hooks
+        // post, and the token they authenticate with - and a project env var
+        // called DEVDECK_SESSION must not be able to redirect another pane's
+        // attention signals. Empty when the MCP server is off, which is the
+        // default: no server, no hook endpoint, nothing to advertise.
+        //
+        // Here rather than in TerminalPane's `extraEnv` because a component is
+        // the wrong owner for it. That one runs for agent PRESETS only, so a
+        // shell pane the user then types `claude` into gets nothing; and main
+        // is the only layer that knows both the live server port and the pty id
+        // at the moment of the spawn. See mcpserver.hookEnv.
+        Object.assign(env, mcpserver.hookEnv(opts.id, !!opts.agentId))
         // Whether this id already had output BEFORE the create decides if the
         // replay below is a re-attach or an echo. A spawn that fails writes its
         // corpse notice during `createPty` and emits it live on the shared `data`
@@ -868,6 +882,23 @@ function registerIpc(): void {
         consoleLog: (id, limit) => browserNet.getConsole(id, limit),
         networkLog: (id, limit) => browserNet.getRecent(id, limit)
     }
+    // The hook route's two halves: which sessions are live (main owns the pty
+    // registry, so main owns the correlation) and where a matched signal goes.
+    // Wired once, before the server can start, so a hook that arrives on the
+    // first millisecond of a start is not silently dropped.
+    attention.setDeps({
+        liveSessions: () => ptyMgr.liveSessions(),
+        emit: (signal) => {
+            // No queue and no retry. A declaration is a statement about a
+            // session's state RIGHT NOW; replaying one at a window that was not
+            // there to hear it would be the replayed-transcript defect again,
+            // in a new place. If the window is gone the signal is gone, and the
+            // pty's own bytes still classify the session.
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send("attention:declared", signal)
+            }
+        }
+    })
     ipcMain.handle("mcpsrv:start", async (_e, cfg: { port: number; token: string }) => {
         const res = await mcpserver.start(cfg, mcpDeps)
         return { ...res, ...mcpserver.status() }

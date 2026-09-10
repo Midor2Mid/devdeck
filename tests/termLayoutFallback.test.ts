@@ -32,6 +32,9 @@ function stubApi(workspace: unknown): void {
                 }),
                 onActivate: (): (() => void) => (): void => undefined
             },
+            // CLI-declared attention signals (src/shared/attention.ts). Subscribed
+            // unconditionally in init(), like onData, so a stub without it throws.
+            attention: { onDeclared: (): (() => void) => (): void => undefined },
             triggers: { onFired: (): (() => void) => (): void => undefined },
             projects: {
                 list: async (): Promise<{ projects: unknown[]; activeId: string | null }> => ({

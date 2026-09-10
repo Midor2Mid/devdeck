@@ -22,6 +22,16 @@ interface Live {
      * without the renderer being asked at teardown time.
      */
     agentId?: string
+    /**
+     * The directory this pty was actually spawned into - `resolveCwd`'s answer,
+     * not `opts.cwd`, which is optional and falls back.
+     *
+     * Kept because a CLI-declared attention hook arrives out of band and has to
+     * be matched to a session (`main/attention.ts`). The exact match is an env
+     * var; this is the fallback, and it has to be the cwd DevDeck really used or
+     * the comparison is against a value nobody spawned into.
+     */
+    cwd: string
 }
 
 /**
@@ -353,7 +363,7 @@ export function createPty(opts: CreateOpts): void {
         reportDead(id, notice)
         return
     }
-    const live: Live = { kind: "live", proc, buffer: "", agentId: opts.agentId }
+    const live: Live = { kind: "live", proc, buffer: "", agentId: opts.agentId, cwd }
     sessions.set(id, live)
     // A restart (spawning over a corpse) reaches here with a fresh, empty
     // buffer above — the tail must reset the same way, or it stays seeded
@@ -433,6 +443,23 @@ export function liveAgents(): string[] {
     const out: string[] = []
     for (const e of sessions.values()) {
         if (e.kind === "live" && e.agentId) out.push(e.agentId)
+    }
+    return out
+}
+
+/**
+ * Every session with a process behind it right now, for the hook correlator.
+ *
+ * Live only, and re-read per hook rather than cached: a session can die between
+ * two events of the same agent turn, and a correlator that resolved to a corpse
+ * would attribute a live question to a dead pane. Corpses are deliberately
+ * absent - `sessions` keeps them (see `Corpse`), and this is the one caller
+ * that must not see them.
+ */
+export function liveSessions(): { id: string; cwd: string; agentId?: string }[] {
+    const out: { id: string; cwd: string; agentId?: string }[] = []
+    for (const [id, e] of sessions.entries()) {
+        if (e.kind === "live") out.push({ id, cwd: e.cwd, agentId: e.agentId })
     }
     return out
 }

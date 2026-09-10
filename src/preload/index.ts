@@ -13,6 +13,7 @@ import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 import type { NotifyState } from "../main/notify"
+import type { DeclaredSignal } from "../shared/attention"
 import type { Loaded } from "../shared/loaded"
 import type { ProbeReport, ProbeRequest, ProbeResult, ProbeState } from "../shared/probe"
 import type {
@@ -532,6 +533,23 @@ const api = {
             ipcRenderer.invoke("mcpsrv:register", { cwd, port }),
         unregister: (cwd: string): Promise<McpServer[]> =>
             ipcRenderer.invoke("mcpsrv:unregister", cwd)
+    },
+    /**
+     * CLI-declared attention signals, arriving on the MCP server's `/hook` route.
+     *
+     * One direction only, and there is no `invoke` here on purpose: the renderer
+     * has nothing to ask and nothing to send. A hook is an inbound fact about a
+     * session, main correlates it to a DevDeck session id, and this is the wire
+     * it comes down. `DeclaredSignal.termId` is null for a hook main could not
+     * attribute - carried rather than dropped, because a supervision signal that
+     * silently fails to land is the failure the user cannot detect.
+     */
+    attention: {
+        onDeclared: (cb: (signal: DeclaredSignal) => void): (() => void) => {
+            const h = (_e: unknown, signal: DeclaredSignal): void => cb(signal)
+            ipcRenderer.on("attention:declared", h)
+            return () => ipcRenderer.removeListener("attention:declared", h)
+        }
     },
     /** Ground-truth checks for pipeline command gates: run it, read the exit code. */
     checks: {

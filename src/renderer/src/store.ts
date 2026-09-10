@@ -57,6 +57,7 @@ import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./
 import { confirm } from "./confirm"
 import { routeAgent } from "./routing"
 import { createRunRecorder } from "./runRecorder"
+import type { DeclaredSignal } from "../../shared/attention"
 
 /** An agent id is a preset id (e.g. "claude", "codex") or the literal "shell". */
 export const SHELL = "shell"
@@ -64,6 +65,16 @@ export type MainView = "mission" | "tasks" | "terminal" | "editor" | "browser"
 // working = producing output; waiting = finished a turn, your move (soft);
 // attention = rang the bell / blocked on input, needs you now (loud); idle = quiet.
 export type AgentStatus = "working" | "idle" | "attention" | "waiting"
+/**
+ * Where a status came from: the agent SAID so, or DevDeck worked it out.
+ *
+ * Not a field on the status and not a fifth status. `AgentStatus` answers "what
+ * is this session", and every surface in the app reads it; this answers "how do
+ * we know", which exactly one gate and one tooltip care about. Fusing them
+ * would double the state space of a type that already fans out to eleven
+ * surfaces, for a distinction ten of them do not make.
+ */
+export type SignalSource = "declared" | "inferred"
 
 /**
  * What a session IS between the moment its pty is asked for and its first byte.
@@ -342,6 +353,39 @@ interface AppState extends Persisted {
 
     // Agent session awareness (runtime-only)
     agentStatus: Record<string, AgentStatus>
+    /**
+     * What each session's agent has STATED about itself, most recent only.
+     *
+     * A PROVENANCE axis, not a second status - the same shape of thing `seen`
+     * is, and for the same reason. `agentStatus` stays the one fact every
+     * surface reads and the one `wantsYou` counts; a declaration writes THAT
+     * field, so a declared question and an inferred one land in one number and
+     * eleven surfaces cannot come to disagree about it. What lives here is
+     * where the fact came from, plus the two things only the agent could have
+     * told us: its own words for the question, and the transcript path.
+     *
+     * So a surface that wants to distinguish them subscribes to this slice
+     * (a stable reference between changes - do not derive a fresh object in a
+     * selector, see the zustand trap in `keyStatus.ts`) and asks whether the
+     * session it is about to describe has a record here. Absent means DevDeck
+     * worked it out from bytes; present means the agent said so, and
+     * `matchedBy` says how sure DevDeck is that it was THIS agent.
+     *
+     * Runtime-only and deliberately not persisted: it is a claim about a live
+     * turn, and a restored one would be exactly the aged-transcript lie this
+     * feature exists to remove.
+     */
+    declared: Record<string, DeclaredSignal>
+    /**
+     * A hook DevDeck received and could not attribute to any session.
+     *
+     * See `noteDeclared`. Kept out of `declared` because it belongs to no
+     * termId; the count is what a settings surface would show to say "your
+     * hooks are firing and DevDeck cannot tell which pane they are from".
+     */
+    unmatchedHooks: number
+    /** One declared signal from an agent CLI's hook (main correlates it). */
+    noteDeclared: (signal: DeclaredSignal) => void
     /**
      * Sessions whose current state you have already looked at or acted on.
      *
@@ -880,8 +924,69 @@ export const useStore = create<AppState>((set, get) => {
         ensureBaseline(termId, sessionCwd(termId))
     }
 
-    const setStatus = (termId: string, status: AgentStatus): void => {
-        if (get().agentStatus[termId] === status) return
+    /**
+     * Is a DECLARED hand-over standing on this session, unanswered?
+     *
+     * The whole content of "a declared signal outranks an inferred one" is this
+     * predicate, and it is scoped on purpose:
+     *
+     *  - **Only the two hand-over states hold.** `attention` and `waiting` are
+     *    statements that the session is done and it is your move. DevDeck's own
+     *    reading of the same fact is a guess from the same session's bytes, and
+     *    where the two disagree the statement wins. A declared `working` holds
+     *    NOTHING: it says a turn started, not how it ends, and freezing the
+     *    inference on it would invent the one failure this feature could add -
+     *    a session whose CLI declares the start of every turn and the end of
+     *    none, reading WORKING for the rest of its life. The competitive
+     *    review's own ruling: a hooked session that goes quiet with no event
+     *    falls back to the screen classifier, not to silence.
+     *  - **An ACT spends it**, through the Set the codebase already has. `actedOn`
+     *    is set by every write to a pty on the user's behalf and by a keystroke
+     *    the user types themselves, so answering a declared question hands the
+     *    session straight back to the inference. Reading `actedOn` here rather
+     *    than deleting the record is what keeps a keystroke free of a render
+     *    (see `notePaneInput`), and it keeps the record itself readable
+     *    afterwards - "the agent asked this, and you answered it" is a true
+     *    sentence a surface may want.
+     *  - **A newer declaration replaces it**, because `noteDeclared` overwrites.
+     */
+    const declaredHold = (termId: string): boolean => {
+        const d = get().declared[termId]
+        if (!d || (d.state !== "attention" && d.state !== "waiting")) return false
+        return !actedOn.has(termId)
+    }
+
+    /** Drop a session's declaration record. See the invariant in `setStatus`. */
+    const clearDeclared = (termId: string): void => {
+        if (!get().declared[termId]) return
+        set((s) => ({ declared: omit(s.declared, termId) }))
+    }
+
+    const setStatus = (termId: string, status: AgentStatus, source: SignalSource = "inferred"): void => {
+        // An inferred write may not speak over an unanswered declaration. This
+        // is the ONE gate: putting it at the single site every classification
+        // goes through is why a new inference site cannot be added that forgets
+        // it - the same argument as the one gate in `onPtyData`.
+        if (source === "inferred" && declaredHold(termId)) return
+        // Reaching here on an inferred write means any declaration is SPENT -
+        // the user answered it - so DevDeck's own reading is now the freshest
+        // thing known about this session and the record goes with the status it
+        // described. THE INVARIANT: `declared[id]` is the provenance of
+        // `agentStatus[id]`, or it is absent. A stale record would label an
+        // inferred state as one the agent stated, which is the one thing this
+        // whole feature exists to keep apart.
+        //
+        // It also has to happen HERE rather than in the bell branch, and that
+        // was a real ordering defect: the bell clears `actedOn` first (a new
+        // question is unanswered, whatever we sent the last one), which re-armed
+        // `declaredHold` and made the branch's own `setStatus` refuse the
+        // attention it had just decided to raise. Pinned by "still lets a bell
+        // through once the user has answered the declaration".
+        const dropDeclared = source === "inferred" && !!get().declared[termId]
+        if (get().agentStatus[termId] === status) {
+            if (dropDeclared) set((s) => ({ declared: omit(s.declared, termId) }))
+            return
+        }
         // Stamp / clear when a session enters or leaves a wants-you state.
         if (status === "waiting" || status === "attention") {
             if (!pendingSince.has(termId)) pendingSince.set(termId, Date.now())
@@ -910,7 +1015,8 @@ export const useStore = create<AppState>((set, get) => {
         const seenNow = status === "waiting" && isVisible(termId)
         set((s) => ({
             agentStatus: { ...s.agentStatus, [termId]: status },
-            seen: seenNow ? { ...s.seen, [termId]: true as const } : omit(s.seen, termId)
+            seen: seenNow ? { ...s.seen, [termId]: true as const } : omit(s.seen, termId),
+            declared: dropDeclared ? omit(s.declared, termId) : s.declared
         }))
     }
 
@@ -1048,6 +1154,27 @@ export const useStore = create<AppState>((set, get) => {
     // count carry it. No desktop notification (that's reserved for the loud tier).
     const notifyWaiting = (): void => {
         if (useSettings.getState().notifications.waitingSound) beep()
+    }
+
+    /**
+     * One question announced, on every channel that announces one.
+     *
+     * Extracted when the declared signal arrived, because there are now TWO
+     * things that can raise a question - a bell DevDeck read off the screen and
+     * a hook the agent posted - and the notification fix of 2026-09-10
+     * established the rule that a second channel reads the same fact from one
+     * builder. Two call sites composing the same three effects independently is
+     * how they drift: one grows a guard, the other does not, and the desktop
+     * toast starts disagreeing with the inbox about who wants you.
+     *
+     * `visible` gates the ANNOUNCEMENT and never the classification (M4) - the
+     * caller has already recorded what the session is.
+     */
+    const raiseAttention = (termId: string, visible: boolean): void => {
+        if (visible) return
+        pushNotification(termId)
+        pushActivity("attention", termId)
+        notifyAttention(termId)
     }
 
     const pushNotification = (termId: string): void => {
@@ -1253,19 +1380,47 @@ export const useStore = create<AppState>((set, get) => {
         // the next genuine one as if it terminated an OSC that was never
         // opened. The live stream's state is already correct; the replay must
         // not touch it.
-        if (!replay && hasBell(id, data)) {
+        //
+        // A DECLARATION SUPPRESSES THE BRANCH'S EFFECTS, not the call that
+        // detects a bell, and the order below is the whole of that distinction.
+        //
+        // Why the effects are suppressed: two of the three are not status
+        // writes at all - `actedOn.delete` re-arms the question and the
+        // notification block wakes the user - so letting them run and relying
+        // on `setStatus` to refuse would nag over a session whose agent has
+        // already stated exactly where it is. Most agent CLIs also ring on
+        // FINISHING a turn, and DevDeck's BEL reading cannot tell that ring
+        // from a question: it calls both `attention`, the loud tier. A declared
+        // `Stop` says which one it was, so the ring must not overrule it.
+        //
+        // Why the call is NOT suppressed: `hasBell` carries per-session OSC
+        // parser state, and it is only correct if it sees every live byte in
+        // order. Skipping it for the duration of a hold would leave that state
+        // behind the stream - an `ESC ]` opened inside a suppressed chunk, the
+        // hold spent, and the next chunk's BEL read as a bell when it was that
+        // OSC's terminator. That is the OSC-cut false positive this feature
+        // exists to remove, re-manufactured by the fix for it. `replay` still
+        // short-circuits ahead of the call, which is deliberate and unchanged -
+        // see the paragraph above for why replayed bytes must not touch this
+        // state at all.
+        const bell = !replay && hasBell(id, data)
+        if (bell && !declaredHold(id)) {
             const was = get().agentStatus[id]
             // A new question, whatever we sent the last one. Tied to the bell
             // rather than to the status transition on purpose: a second bell on
             // an already-`attention` session is a new question too, and
             // `setStatus` takes no transition for it to hang off.
             actedOn.delete(id)
+            // In the same breath, and it has to be here rather than left to
+            // `setStatus`: clearing `actedOn` above re-arms `declaredHold`, so
+            // a declaration left standing at this point would refuse the very
+            // attention this branch has just decided to raise. Semantically the
+            // same statement either way - the previous hand-over event is over,
+            // this is a new question, and the old record is not the provenance
+            // of the new status.
+            clearDeclared(id)
             setStatus(id, "attention")
-            if (was !== "attention" && !visible) {
-                pushNotification(id)
-                pushActivity("attention", id)
-                notifyAttention(id)
-            }
+            if (was !== "attention") raiseAttention(id, visible)
             return
         }
         // An attention flag survives the agent's own follow-up output, and the
@@ -1510,6 +1665,10 @@ export const useStore = create<AppState>((set, get) => {
             return {
                 seen: omit(s.seen, termId),
                 answered: omit(s.answered, termId),
+                // The declaration goes with the session. It is a claim about a
+                // live turn, so it must not outlive the pty and be inherited by
+                // a pane that reuses the id.
+                declared: omit(s.declared, termId),
                 agentStatus,
                 termInit,
                 termAgents,
@@ -1616,6 +1775,8 @@ export const useStore = create<AppState>((set, get) => {
         dragPayload: null,
         pendingEditorOpen: null,
         agentStatus: {},
+        declared: {},
+        unmatchedHooks: 0,
         seen: {},
         answered: {},
         lastAgentTermId: null,
@@ -1672,6 +1833,11 @@ export const useStore = create<AppState>((set, get) => {
                     // the normal path, not an edge case.
                     set((s) => ({ paneHold: { ...s.paneHold, [id]: "restart" as const } }))
                 })
+                // CLI-declared attention signals. App-global for the same
+                // reason `onData` is: a hook fires for the agent in a tab you
+                // are not looking at, and that is precisely the case the signal
+                // exists to serve.
+                window.api.attention.onDeclared((signal) => get().noteDeclared(signal))
                 window.api.triggers.onFired(({ triggerId }) => get().fireTrigger(triggerId))
                 // Clicking a desktop notification lands on the session it names.
                 // Main raises the window (the renderer cannot focus itself
@@ -2718,6 +2884,65 @@ export const useStore = create<AppState>((set, get) => {
         // yourself must not print a confirmation for something you did.
         notePaneInput: (termId) => {
             actedOn.add(termId)
+        },
+
+        /**
+         * An agent CLI has stated its own state, over the hook route on the MCP
+         * server DevDeck already runs (`main/attention.ts` did the correlation;
+         * `shared/attention.ts` decided what the event MEANS).
+         *
+         * This writes `agentStatus` - the same field the bell branch and the
+         * idle timer write, which is the same field `wantsYou` counts and
+         * `useKeyStatus` derives from. That is the requirement, not an
+         * implementation detail: a declared question has to feed the ONE count
+         * the deck and Mission already read, or this becomes the twelfth
+         * surface with its own opinion about who needs you, which is the bug
+         * this codebase spent a week removing. What makes it distinguishable is
+         * the record kept BESIDE the status, not a parallel count.
+         *
+         * Agent sessions only, and the reason is an invariant rather than
+         * taste: `agentStatus` has only ever held agent sessions (every launch
+         * path gates on `isAgentId`), `buildSessions` forces a shell session's
+         * status to `idle` regardless, and `jumpToPending` walks the keys of
+         * this record. Writing a shell pane's id into it would make the chord
+         * jump to a pane no agent surface describes. A NAMED GAP: someone who
+         * types `claude` into a plain shell pane and wires the hook gets the
+         * activity row below and no status, because promoting a shell pane to
+         * an agent session on the strength of a hook is a product decision and
+         * a component change, neither of which belongs here.
+         */
+        noteDeclared: (signal) => {
+            const { termId } = signal
+            if (!termId || !isAgentId(get().agentOf(termId))) {
+                // NEVER SILENT. A hook that fires and lands nowhere is the
+                // worst failure this feature has - the user believes they are
+                // being told and they are not - and it is invisible by nature:
+                // nothing changes, exactly as if the agent had said nothing.
+                // So the arrival is reported even though the signal is not
+                // usable, with the two facts needed to fix the config.
+                set((st) => ({ unmatchedHooks: st.unmatchedHooks + 1 }))
+                pushActivity(
+                    "attention",
+                    "",
+                    termId
+                        ? `A ${signal.event} hook matched a session with no agent (${termId})`
+                        : `A ${signal.event} hook could not be matched to a session` +
+                          (signal.cwd ? ` - it reported ${signal.cwd}` : "") +
+                          " - check the X-DevDeck-Session header in your hook config"
+                )
+                return
+            }
+            const was = get().agentStatus[termId]
+            set((st) => ({ declared: { ...st.declared, [termId]: signal } }))
+            // `declared` is set FIRST so the hold is already standing when the
+            // agent's next byte arrives - a chunk racing a declaration must not
+            // find the gate open.
+            setStatus(termId, signal.state, "declared")
+            if (was === signal.state) return
+            // The same two tiers the inferred path uses, from the same
+            // builders: loud for a question, a beep at most for a hand-back.
+            if (signal.state === "attention") raiseAttention(termId, isVisible(termId))
+            else if (signal.state === "waiting" && !isVisible(termId)) notifyWaiting()
         },
 
         setComposerDraft: (projectId, text) => {
