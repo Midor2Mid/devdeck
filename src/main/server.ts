@@ -26,7 +26,7 @@ import {
     noteAuthFailure,
     type AuthResult
 } from "./devices"
-import { exitNotice } from "../renderer/src/termExit"
+import { exitNotice } from "../shared/termExit"
 import { consumeDecision, decisionFor, decisionOwner } from "./decisions"
 
 export interface RemoteSession {

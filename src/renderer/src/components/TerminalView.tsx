@@ -439,7 +439,14 @@ export function TerminalView(): JSX.Element {
                     {primaryAgent && (
                         <span className="term-launch">
                             <button
-                                className="accent term-launch-new"
+                                // Ghost, not `accent`. The accent FILL is the
+                                // frame's one primary act, and a Terminal frame
+                                // is not waiting on you to start another agent -
+                                // it was spending the loudest thing in the app on
+                                // a control that is always available and never
+                                // urgent. The empty state's launcher cards still
+                                // offer the same act at full width.
+                                className="term-launch-new"
                                 // The money case: a double-click here started two
                                 // paid CLI processes. See launchGuard.
                                 onClick={() => {

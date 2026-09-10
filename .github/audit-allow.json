@@ -1,0 +1,26 @@
+{
+    "//": [
+        "Dated acknowledgements for `scripts/audit-gate.mjs`. Read that file first.",
+        "",
+        "An entry does NOT say the advisory is harmless. It says a human looked at",
+        "where the affected code is actually reached from, decided the fix could not",
+        "be taken on that day, and wrote down the date the decision has to be made",
+        "again. Past `until`, the gate FAILS on the entry - an acknowledgement that",
+        "cannot expire is a suppression, and this repository has already been bitten",
+        "twice by a rule that was only a fact somebody remembered.",
+        "",
+        "Fields: `ghsa` (the GHSA id, as printed by the gate), `until` (YYYY-MM-DD,",
+        "compared in UTC), `why` (where it is reached from, and what taking the fix",
+        "would cost). All three are required; the gate refuses to run without them.",
+        "",
+        "This is not the place to record an advisory with no published fix. Those are",
+        "reported and never gated, so they need no entry."
+    ],
+    "allow": [
+        {
+            "ghsa": "GHSA-2883-XCG3-V3HH",
+            "until": "2026-09-24",
+            "why": "js-yaml < 4.3.2, CPU exhaustion via empty YAML merge sources, in the PRODUCTION tree via electron-updater@6.8.9 -> js-yaml@4.3.1. It is genuinely reachable from a remote input: Provider.js:97 `parseUpdateInfo` runs `js_yaml.load` over the `latest.yml` fetched from the GitHub release, and AppUpdater.js:486 loads the shipped `app-update.yml`. The bound on it is that reaching it requires controlling the update feed - GitHub, or the maintainer's account - and anyone who controls the feed can already offer a whole installer, which electron-updater gates on the Authenticode publisher rather than on YAML. A hang is strictly less than that. Held rather than fixed because the fix is a lockfile bump to js-yaml >= 4.3.2 and three agents were editing this tree on 2026-09-10; `npm audit fix` on that day also wanted to add 40+ optional cross-platform binaries, which is not a diff to take blind. THE ACTION: `npm i -D js-yaml@^4.3.2` as an `overrides` entry, or a targeted `npm audit fix`, then delete this entry and confirm the gate goes green on its own."
+        }
+    ]
+}

@@ -101,6 +101,22 @@ jobs:
       - name: Tests
         run: npm test
 
+      # The same gate `check.yml` runs on every push, repeated here on purpose.
+      # `check.yml` proved this commit clean when it was pushed; an advisory
+      # published in the days between that push and this tag is new information
+      # about the bytes that are about to be handed to a stranger, and the
+      # release is the last point at which anyone looks. Identical arguments to
+      # check.yml's, so a commit that is green there is green here - the only
+      # thing that can differ is the advisory database, which is the point.
+      #
+      # If this stops a release: the honest options are to take the fix and
+      # retag, or to add a dated entry to .github/audit-allow.json with a reason
+      # and commit that. Both are a human decision recorded in the repository.
+      # Raising --level or dropping --tree to get the release out is not an
+      # option; it is how the gate becomes decoration.
+      - name: Advisory gate (production dependencies, high and above)
+        run: node scripts/audit-gate.mjs --tree prod --level high
+
       # ---------------------------------------------------------------------
       # Is a real signing credential available? Answered once, here, because
       # `secrets` cannot be read from a step's `if:` expression - only from

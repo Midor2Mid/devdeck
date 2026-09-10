@@ -1,6 +1,6 @@
 ---
 name: DevDeck
-version: 0.9.4
+version: 0.9.5
 description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
@@ -117,9 +117,77 @@ One accent carries the eye; semantic colors are separate from it.
 - **text / muted / faint:** primary copy, secondary metadata, decorative hints
   (muted/faint are tuned to clear WCAG-AA contrast on the ground).
 - **accent (#eba65c):** the single warm amber that drives interaction — active
-  states, focus, the primary CTA. Never more than one accent on screen.
+  states, focus, the primary CTA. Spent in **three tiers**, below.
 - **ok (#5fce8f) / danger (#e9786b):** semantic only — success and destructive.
   They never stand in for the accent.
+
+### The accent budget
+
+The rule here used to read *"never more than one accent on screen"*, and the
+stylesheet contradicted it 130 times. One ordinary Terminal frame spent the
+accent on fourteen things — the ensō, the active tab underline, the `+ Claude`
+fill and its chevron, the active deck key's stripe **and** its tint, the active
+view key's underline, `● 3 changes`, the wants-you flag, the cursor, the
+attention dot and its halo, and four breathing key edges. Each had a local
+justification and the sum pointed at nothing. **A rule nobody can obey is not a
+rule**, so it is restated as three tiers, each with a ceiling a stylesheet can
+actually be held to:
+
+| Tier | Means | Ceiling |
+| --- | --- | --- |
+| **1 · Fill** | *the act* — a solid accent block with `--on-accent` ink | one per frame for a frame-level act; one per **blocked session** in a list of sessions |
+| **2 · Stripe / underline** | *where you are* | one per surface — a surface being a set of peers among which exactly one is selected |
+| **3 · Ink** | *you can act here, now* | the `attention` dot and its `!`, the wants-you flag, focus rings, hover |
+
+Everything else — decoration, brand, and **facts** — takes `--text`, `--muted`
+or `--faint`. The test is one question: *if this is accent and a stranger cannot
+act on it, it is wrong.*
+
+Three things fall out of that, and all three were live defects:
+
+- **Tier 1 is the only tier where the accent still buys a signal.** `qa`
+  measured `--accent` against `--clay` at **1.32 : 1 (Slate) · 1.01 : 1 (Sumi) ·
+  1.15 : 1 (Washi)**, and a 100% accent fill against Washi's ground at 2.92:1.
+  As *ink*, the accent is barely a colour at all in two of three themes. As a
+  filled block it stops being a hue comparison and becomes a shape, and its
+  label clears the text floor everywhere (`--on-accent` on `--accent`: 9.09 /
+  6.07 / 5.13). This is why spending the accent widely costs the one place it
+  works.
+- **A segment never takes the fill.** `--seg-tint` + weight 600, per the
+  active-state grammar. `.ov-seg button.on` and `.usage-windows .btn-min.on`
+  used a full fill for a time range and an Overview mode; both are now the tint,
+  which puts the AI usage modal's loudest element back on its content instead of
+  on `24h`.
+- **One active, one marker.** `.deck-key.active` carried the 3px stripe *and* a
+  14% accent tint. The tint measured **1.28 / 1.23 / 1.14** against `--bg-2` —
+  a second accent spend for no signal — and is gone; the stripe plus the row's
+  existing `--muted` → `--text` ink step carry it.
+
+The cuts this rule required, recorded so they are not quietly re-added:
+`.topbar-brand` and the `.empty-state` ensō watermark (brand is not an act) →
+`--muted`; `.sb-changes` and `.sb-pull.behind` (facts about the repo) → `--text`
+with the accent only on hover; `+ Claude` and its split-button caret → ghost;
+and `✓ Approve` **gains** the fill it should always have had. A Terminal frame
+now spends the accent on the three Tier-2 actives (document tab, deck key, view
+key), the Tier-3 marks that mean an agent is blocked on you, and the terminal's
+own cursor. Nothing else.
+
+`✓ Approve` is the reason the Tier-1 ceiling is written per *blocked session*
+rather than per window: two agents both asking a question is two acts, and the
+honest answer is two fills. What the ceiling forbids is a fill that is not an
+act. `✕ Deny` stays a ghost with `--danger` text (6.35 / 4.12 / 3.94 on
+`--bg-2`) — only one of two answers may be the fill, and destroying work is not
+the one to make easiest to hit.
+
+**A user can pick their own accent**, so no rule above may depend on the shipped
+value. None does: every tier is a *form* first (a fill, a stripe, a glyph) and
+the accent is what fills it. One known consequence is recorded rather than
+hidden — `button.accent:hover` swaps in `--accent-soft`, which `applyTheme`
+derives by *darkening* on a light theme, so `--on-accent` on that hover measures
+**4.07:1 in Washi**, a hair under the 4.5:1 text floor. It is app-wide and
+pre-existing on every primary CTA, not something Approve introduced, and the fix
+is to derive `--on-accent` from the resolved accent's luminance rather than
+pinning it near-black per theme. Not done here; named so it is not rediscovered.
 
 There is deliberately **no warning/attention color token**, and that constraint is
 load-bearing: the default accent *is* amber, so an "attention amber" would be the
@@ -207,6 +275,49 @@ component changes:
 - **section-label:** muted, uppercase, letter-spaced.
 - **terminal:** `surfaceDeep` ground, mono type, generous line-height.
 
+### Modal head
+
+A modal whose title sits beside **controls** — a close `×`, a `refresh`, a tab
+row, a segment picker — puts them in a `.modal-head`: a flex line, title first,
+controls last, `justify-content: space-between`, weight 600, and a 1px `--border`
+divider beneath. Eight modals use it (Review changes, Saved commands, Extend
+agent, Open pull request, Environment variables, Project appearance, AI usage,
+Worktrees). A modal with a bare title and no controls uses `.modal-title`
+instead and gets no divider — there is no toolbar to separate.
+
+This is here because the rule was **deleted**, on 2026-09-04, along with the
+recordings modal it appeared to belong to — the same commit and the same mistake
+that took `.modal-body`. For six days `.modal-head` had **zero own rules** while
+eight components rendered against it, and the give-away is still in the
+stylesheet: `.identity-modal .modal-head` overrides `padding: 0` and
+`border-bottom: none`, i.e. it is written against a base that had both.
+
+**Painted is not laid out.** A 96-screenshot sweep opened these modals and
+reported every one "painted, in all six skins", and it was right: a head with no
+rule is still a block div inside a bordered, rounded, shadowed card. What it is
+not is a row. The six heads whose controls are inline rendered the `×` glued to
+the end of the title text, where it reads as punctuation rather than as a
+control; the three whose controls are block or flex — Review changes' button
+pair, AI usage' window segments, Extend agent's tabs — dropped them onto a
+second line under the title. None of that trips a "did it render" check, which is
+the lesson worth keeping: **a screenshot proves paint, not layout, and a missing
+flex row fails silently in a way a missing colour does not.**
+
+Two details the restoration got right on the second pass rather than the first:
+
+- **The original padding is not restored.** `padding: 12px 16px` belonged to a
+  modal that declared `padding: 0`; five of the eight sit inside `.modal`'s own
+  18/20px and would have been double-inset. `.changes-modal`, the one head in a
+  `padding: 0` modal, states its own inset — as `.extend-head` already did.
+- **The divider is unconditional, and it is not a scroll cue.** Every one of the
+  eight heads holds a control that acts on the body, and the line is what
+  separates a toolbar from the thing it acts on. It earns its keep twice over now
+  that `.modal-body` scrolls: content moving under an undivided title makes the
+  title look like the first row that scrolled away. `--border` on `--bg-2` is
+  **1.26 / 1.22 / 1.25** — a hairline, correctly, because it is structure and
+  carries no state, so the 3:1 floor for a meaningful non-text mark does not
+  apply to it.
+
 ### Disabled controls
 
 **A disabled control must still say what it is and why it is off.** Both halves,
@@ -286,12 +397,13 @@ them as precedent:
 - `.deck-view.on` (the main view switcher) uses the *document-tab* underline. It's
   a segment by shape but selects the main view, so the tab idiom is arguable — it
   is called out here rather than silently contradicting the table.
+
+  Two exceptions that were listed here are gone: `.deck-key.active`'s second
+  axis (the 14% accent tint) and the accent *fill* on `.ov-seg button.on` /
+  `.usage-windows .btn-min.on`. Both were struck by the accent budget above.
 - `.switcher-card.active` marks the active project with a `--moss` ring, i.e. the
   semantic success color standing in for an active state. Should be an accent
   stripe.
-- `.deck-key.active` carries *two* axes — the 3px stripe plus a 14% accent tint.
-- `.ov-seg button.on` and `.usage-windows .btn-min.on` use a full accent fill for
-  a segment, which the badge tiers reserve for urgency.
 - On/off **toggles** (`.icon-action.on`, `.net-toggle.on`, …) are marked by border
   or text color only. The table has no axis for toggles; that's a gap in both.
 - Menu/keyboard-cursor highlights (`.mention-item.active`) intentionally share
@@ -623,8 +735,10 @@ identity:
   `--clay`). Outline marks it as "this is *what*, not *how urgent*".
 - **Bare uppercase** micro-label — **classification** (`--faint`, letter-spaced).
 - **Tint fill + weight** — **active segment** (see above).
-- **Accent fill** — reserved for the primary CTA (`button-accent`), and otherwise
-  scarce. If something is filled, it is the one thing to act on.
+- **Accent fill** — Tier 1 of the accent budget: the primary CTA
+  (`button-accent`), and `✓ Approve` on a Mission tile or an Overview card,
+  which is the act the product exists for. If something is filled, it is the
+  thing to act on; a fill that is not an act is a bug.
 
 Attention/urgency is **not** a badge tier — it is form plus the accent: the
 accent flag beside the deck bar's wants-you word (`.deck-wants`), and a bare `!`

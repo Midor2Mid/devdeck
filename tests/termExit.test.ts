@@ -1,5 +1,23 @@
 import { describe, it, expect } from "vitest"
 import { exitNotice, FASTFAIL, recordExit, exitCodeOf, clearExit } from "../src/renderer/src/termExit"
+import {
+    exitNotice as sharedNotice,
+    FASTFAIL as sharedFastfail
+} from "../src/shared/termExit"
+
+// The notice moved to `shared/` so main could stop importing out of `renderer/`
+// (the only value import that crossed that boundary; see
+// tests/architectureBoundaries.test.ts). The renderer keeps importing it by the
+// old path, so the two paths must stay the SAME binding — a hand-written copy
+// here is how a phone and a pane start describing one exit two ways, which is
+// the whole failure the move exists to prevent. Same pin as
+// tests/sharedApproval.test.ts.
+describe("the notice moved without changing", () => {
+    it("is the same function and the same constant through either path", () => {
+        expect(exitNotice).toBe(sharedNotice)
+        expect(FASTFAIL).toBe(sharedFastfail)
+    })
+})
 
 describe("exitNotice", () => {
     it("shows a plain notice on clean exit (code 0)", () => {

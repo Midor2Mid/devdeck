@@ -194,12 +194,21 @@ select:focus {
     gap: 5px;
     white-space: nowrap;
 }
+/* TIER 3 (ink) is "you can act here, now" - and a count of files you have
+   already changed is a FACT. The leading dot glyph is the form that says there
+   is something here; --text is the ink for a fact the app can vouch for. The
+   accent arrives only under the cursor, where it means "this chip is a door".
+   --text on --bg: 16.03 Slate / 12.87 Sumi / 10.73 Washi (it was --accent-soft
+   at 11.38 / 7.30 / 4.03, i.e. the accent's weakest reading was on the one
+   light theme). Hover is --accent-soft, not --accent: 10.70 / 7.07 / 4.49
+   against --accent's 9.32 / 5.61 / 3.20, because a chip must not get HARDER to
+   read when you point at it. */
 .sb-changes {
-    color: var(--accent-soft);
+    color: var(--text);
     cursor: pointer;
 }
 .sb-changes:hover {
-    color: var(--accent);
+    color: var(--accent-soft);
 }
 /* "We couldn't look" is not "there is nothing" and must not borrow the accent
    that means reviewable work. --muted is the token for a fact the app cannot
@@ -235,11 +244,15 @@ select:focus {
 .sb-pull:hover:not(:disabled) {
     color: var(--accent-soft);
 }
+/* "Behind by 3" is the same kind of fact as the changes chip beside it, so it
+   takes the same ink. Leaving this one on the accent while the changes chip
+   moved to --text would have said the pull was the more urgent of two facts,
+   which is not a claim this region can make. */
 .sb-pull.behind {
-    color: var(--accent-soft);
+    color: var(--text);
 }
 .sb-pull.behind:hover:not(:disabled) {
-    color: var(--accent);
+    color: var(--accent-soft);
 }
 .sb-pull:disabled {
     opacity: 0.5;
@@ -1607,7 +1620,11 @@ button .ic,
     border-style: dashed;
     color: var(--muted);
 }
-/* A large, faint ensō behind empty states - turns void into intentional ma. */
+/* A large, faint ensō behind empty states - turns void into intentional ma.
+   --muted, not --accent: the brand mark is not something you can act on, and a
+   watermark is the least act-like thing on any screen. At 7% opacity this is a
+   near-invisible change; it is made anyway so "brand never spends the accent"
+   has no exception to remember. */
 .empty-state::before {
     content: "";
     position: absolute;
@@ -1616,7 +1633,7 @@ button .ic,
     width: 200px;
     height: 200px;
     transform: translate(-50%, -50%);
-    background: var(--accent);
+    background: var(--muted);
     opacity: 0.07;
     -webkit-mask: var(--enso-mask) center / contain no-repeat;
     mask: var(--enso-mask) center / contain no-repeat;
@@ -1831,26 +1848,26 @@ button .ic,
 .launch-card-unsafe .launch-card-cmd {
     color: color-mix(in srgb, var(--danger) 70%, var(--muted));
 }
-/* Split-button caret: reads as part of the accent launch button, not a second
-   control competing with it. */
+/* Split-button caret: reads as part of the launch button beside it, not a
+   second control competing with it. Both halves are now ghost - TIER 1 (a
+   filled accent) is the frame's one primary ACT, and starting another agent is
+   not the act a Terminal frame is waiting on; the pane's own launcher cards
+   offer the same thing at full width in the empty state. It keeps only what is
+   about geometry - the tight padding and the stretched height that match the
+   button beside it - and takes its border, ink and hover from the base `button`
+   rule, so the pair lights together. The old `border-left-color` seam went with
+   the fill: it was drawn to make two accent blocks read as one control, and on
+   two ghost buttons 4px apart a single lighter border edge reads as a mistake
+   rather than a join. */
 .term-launch-caret {
     padding: 0 6px;
-    color: var(--on-accent);
-    background: var(--accent);
-    border: 1px solid var(--accent);
-    border-left-color: color-mix(in srgb, var(--on-accent) 30%, transparent);
-    border-radius: 6px;
+    color: var(--muted);
     display: inline-flex;
     align-items: center;
     line-height: 1;
     /* Match the launch button's height exactly rather than guessing padding —
        an icon-only button's line box is shorter than a text one's. */
     align-self: stretch;
-}
-.term-launch-caret:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent-soft);
-    color: var(--on-accent);
 }
 .deck-add-wrap {
     position: relative;
@@ -2310,7 +2327,12 @@ button .ic,
 .ov-seg { display: flex; border: 1px solid var(--border); border-radius: var(--radius, 7px); overflow: hidden; }
 .ov-seg button { border: none; background: transparent; color: var(--muted); font-size: 12px; padding: 4px 11px;
     display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.ov-seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+/* A segment, so --seg-tint + weight 600 per DESIGN.md's active-state grammar -
+   never the accent FILL, which is TIER 1 and belongs to the frame's one act.
+   The weight is the load-bearing half: the tint is 1.41 / 1.31 / 1.18 against
+   --bg-2 and never clears 3:1 on its own. Label ink --text on the tinted
+   ground: 10.68 Slate / 9.26 Sumi / 8.30 Washi. */
+.ov-seg button.on { background: var(--seg-tint); color: var(--text); font-weight: 600; }
 .ov-seg button:not(.on):hover { color: var(--text); background: var(--bg-2); }
 
 /* focus + rail */
@@ -2415,12 +2437,32 @@ button .ic,
     border: 1px solid var(--border);
     cursor: pointer;
 }
+/* TIER 1. Answering an agent that cannot continue without you is the act this
+   product exists for, and it is the only control on a Mission tile or an
+   Overview card that unblocks anything - so it takes the accent FILL rather
+   than an outline that read as a peer of `Review` beside it.
+   The fill is also the one place the accent still buys a real signal: qa
+   measured --accent against --clay at 1.32 / 1.01 / 1.15, so as INK the accent
+   is barely a colour signal at all in Sumi or Washi. As a filled block it stops
+   being a hue comparison and becomes a shape, and its label clears the text
+   floor on the fill in every theme: --on-accent on --accent is 9.09 Slate /
+   6.07 Sumi / 5.13 Washi.
+   The Tier-1 ceiling is per BLOCKED SESSION, not per window: two agents both
+   asking is two acts, and the honest answer is two fills. What the ceiling
+   forbids is a fill that is not an act.
+   `Deny` deliberately stays a ghost with --danger text (6.35 / 4.12 / 3.94 on
+   --bg-2): only one of the two answers may be the fill, and destroying work is
+   not the one to make easiest to hit. */
 .ov-approve-yes {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
 }
 .ov-approve-yes:hover {
-    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
+    color: var(--on-accent);
 }
 .ov-approve-no {
     color: var(--danger);
@@ -3257,6 +3299,55 @@ button .ic,
 .modal-body::-webkit-scrollbar-thumb:hover,
 .wt-list::-webkit-scrollbar-thumb:hover {
     background: var(--muted);
+}
+/* The head of a modal that carries CONTROLS beside its title. Restored
+   2026-09-10 for the same reason `.modal-body` was one commit earlier: the
+   2026-09-04 recordings deletion took this rule with that modal's own CSS, and
+   EIGHT shipping modals render a head written against it - Review changes,
+   Saved commands, Extend agent, Open pull request, Environment variables,
+   Project appearance, AI usage, Worktrees. Every one of them puts a title first
+   and its controls last, which is a layout that only exists if something makes
+   the row a flex line and pushes the second child to the end.
+
+   Without the rule the div was a plain block, and "painted" is not "laid out":
+   the six heads whose controls are inline (a `×` button, a `refresh`) rendered
+   them glued to the end of the title text instead of at the modal's right edge,
+   and the three whose controls are block or flex - Review changes' button pair,
+   AI usage' window segments, Extend agent's tabs - dropped them onto a second
+   line under the title. A close button one character after the title reads as
+   punctuation, not as a control, which is why 96 screenshots did not flag it.
+
+   The proof it was deleted rather than outgrown is 40 lines below in this file:
+   `.identity-modal .modal-head` still overrides `padding: 0` and
+   `border-bottom: none`, i.e. it is written against a base rule that had both.
+
+   What is deliberately NOT restored is the original `padding: 12px 16px`. That
+   belonged to a modal declaring `padding: 0`, and five of the eight sit inside
+   `.modal`'s own 18px/20px, where re-adding it would double the inset - the
+   same trap `.modal-body`'s note records. `.changes-modal` is the one head that
+   does need it and states it itself, next to `.extend-head`'s precedent.
+
+   The divider is `--border`, DESIGN.md's "visible divider", matching
+   `.extend-head` - the other modal head that survived the deletion. It is
+   unconditional and not a scroll cue: all eight heads hold controls that act on
+   the body, and the line is what separates a toolbar from the thing it acts on.
+   It does earn its keep twice over now that `.modal-body` scrolls, because
+   content moving under an undivided title makes the title look like the first
+   row that scrolled away. --border on --bg-2 is 1.26 Slate / 1.22 Sumi / 1.25
+   Washi: a hairline, correctly, since it is structure and carries no state.
+
+   `flex: none` because four of these modals are flex columns and a head is not
+   the part that may shrink. */
+.modal-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-sm, 8px);
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
 }
 .modal-title {
     font-size: var(--fs-title);
@@ -4363,6 +4454,14 @@ button .ic,
 .btn-min.danger:hover { color: var(--danger); }
 
 /* ---------- Changes (diff review) modal ---------- */
+/* The one bare `.modal-head` in a modal that sets `padding: 0`, so it supplies
+   its own inset - and gives back the base rule's bottom margin, because here
+   the divider is a full-bleed rule between the head and a flush body rather
+   than a line under an inset title. Same shape as `.extend-head`. */
+.changes-modal .modal-head {
+    padding: 12px 16px;
+    margin-bottom: 0;
+}
 .changes-modal {
     width: 920px;
     max-width: 96vw;
@@ -4949,9 +5048,14 @@ kbd {
     align-items: center;
     gap: 4px;
 }
+/* The 24h / 7d / 30d window picker is a SEGMENT, and segments are --seg-tint +
+   weight 600 - the same cut as `.ov-seg button.on`. It sits in a `.modal-head`
+   whose only other control is a close button, so an accent fill there was the
+   loudest thing in the AI usage modal while pointing at a time range. */
 .usage-windows .btn-min.on {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--seg-tint);
+    color: var(--text);
+    font-weight: 600;
 }
 .usage-body {
     display: flex;
@@ -5384,9 +5488,15 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     background: var(--panel);
     color: var(--text);
 }
+/* One active, ONE marker. DESIGN.md listed the 14% accent tint here as a known
+   exception - "carries two axes" - and the measurement says the second axis was
+   never carrying anything: the tint reads 1.28 / 1.23 / 1.14 against --bg-2, so
+   it was a second accent SPEND for no signal. What remains is the container
+   idiom from the active-state table (the 3px left stripe below) plus the ink
+   step the row already had, --muted to --text: 4.46 -> 9.82 in Washi, 6.98 ->
+   15.03 in Slate, 5.49 -> 12.17 in Sumi. */
 .deck-key.active {
     color: var(--text);
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 .deck-key.active::before {
     content: "";
@@ -5647,10 +5757,15 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
    sight, which is why the room is checked rather than assumed.) */
 
 /* ---------- Topbar brand + project button ---------- */
+/* The ensō is the brand, and the brand is not an act - nothing happens when you
+   click it. It was the first accent the eye met on every screen, which is the
+   whole "the accent points at nothing" defect in one glyph. --muted on --bg is
+   7.44 Slate / 5.81 Sumi / 4.88 Washi; the mark it replaces measured 9.32 /
+   5.61 / 3.20, so the light theme's ensō gets MORE legible, not less. */
 .topbar-brand {
     display: grid;
     place-items: center;
-    color: var(--accent);
+    color: var(--muted);
 }
 /* One-click Run for the active project. Calm ghost by default; the play mark
    picks up the accent on hover to read as the "go" action. State is in form
@@ -6095,6 +6210,10 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
     gap: 14px;
     padding: 14px 18px;
     border-bottom: 1px solid var(--border);
+    /* `.modal-head`'s inset bottom margin is for a head inside a padded modal;
+       this one is full-bleed against a flush body, so it takes the divider and
+       gives the margin back. */
+    margin-bottom: 0;
 }
 .extend-head h3 {
     margin: 0;

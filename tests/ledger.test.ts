@@ -166,7 +166,12 @@ describe("appendRun / readRuns", () => {
         for (let i = 0; i < 20; i++) appendRun(rec({ id: `after${i}` }))
 
         expect(readFileSync).not.toHaveBeenCalled()
-    })
+        // Same cost as the rotation test above: RUN_CAP synchronous appends, and
+        // it asserts a behaviour rather than a duration. Two agents watched it
+        // time out on a machine running three concurrent builds and pass in
+        // isolation - a busy box, not a broken store - and CI runners are
+        // shared, so the budget is stated instead of inherited.
+    }, 30000)
 
     it("does not read the file on repeated appends below the cap", () => {
         // The store's own rationale (top of ledger.ts) is that appending must

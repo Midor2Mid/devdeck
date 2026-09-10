@@ -105,11 +105,29 @@ describe("criterion 1 - the answer comes from the shell's PATH, not main's", () 
     it("reports missing for a binary main's PATH has and the hydrated PATH does not", async () => {
         // Something certainly on the PATH of the process running these tests.
         const onMain = WIN ? "node" : "sh"
-        const viaMainPath = await probeCommand(onMain, {
+        // Retried for the same reason, and in the same way, as the precondition
+        // in criterion 1's first spec above: under a full parallel run the PATH
+        // walk occasionally times out and answers `unknown` rather than `found`.
+        // That retry was added for one of this file's two preconditions and not
+        // the other, and the suite grew past the threshold on 2026-09-10 (139
+        // files -> 141) which is when this one started failing. One instance of
+        // a class is not the class.
+        //
+        // The assertion is unchanged: `unknown` is still not accepted. If we
+        // did not manage to resolve this on main's PATH, then "the hydrated
+        // PATH does not have it" proves nothing about which PATH answered,
+        // which is the whole point of the spec. Ask again; do not weaken.
+        let viaMainPath = await probeCommand(onMain, {
             path: process.env.PATH ?? null,
             pathext: process.env.PATHEXT
         })
-        expect(viaMainPath.state).toBe("found")
+        for (let i = 0; i < 3 && viaMainPath.state === "unknown"; i++) {
+            viaMainPath = await probeCommand(onMain, {
+                path: process.env.PATH ?? null,
+                pathext: process.env.PATHEXT
+            })
+        }
+        expect(viaMainPath.state, "precondition: main's PATH must resolve this").toBe("found")
 
         const empty = mkdtempSync(join(tmpdir(), "qa-emptypath-"))
         const rep = await probe(

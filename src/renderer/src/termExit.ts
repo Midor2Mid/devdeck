@@ -1,40 +1,21 @@
-// Turns a pty exit code into the notice shown inside the dead terminal. A bare
-// "[process exited]" hides *why* a shell died — most painfully on Windows, where
-// antivirus (e.g. Avast Behavior Shield) force-kills powershell.exe on spawn and
-// the whole session vanishes with no explanation.
-
-/**
- * Windows __fastfail / security-cookie abort (STATUS_STACK_BUFFER_OVERRUN,
- * 0xC0000409) as a signed int32 — the code a process reports when it is
- * force-terminated by security software before it can run.
- */
-export const FASTFAIL = -1073740791
-
-/**
- * Notice written to the terminal when its process exits. Clean exits stay quiet;
- * abnormal exits report the code (decimal + hex), and the Windows fast-fail code
- * gets an actionable antivirus hint. Returns plain text (with CRLFs); the caller
- * applies terminal styling.
- */
-export function exitNotice(exitCode: number, isWindows: boolean): string {
-    if (exitCode === 0) return "[process exited]"
-    const hex = "0x" + (exitCode >>> 0).toString(16).toUpperCase()
-    if (isWindows && exitCode === FASTFAIL) {
-        return (
-            `[process exited: ${exitCode} (${hex})]\r\n` +
-            "The shell was killed before it could start — on Windows this is usually\r\n" +
-            "antivirus (e.g. Avast Behavior Shield) terminating powershell.exe.\r\n" +
-            "Fix: allow powershell.exe in your antivirus, or switch shells in\r\n" +
-            "Settings → Terminal (Command Prompt and Git Bash are unaffected)."
-        )
-    }
-    return `[process exited: ${exitCode} (${hex})]`
-}
+// The renderer's record of which sessions have exited, plus the one door to the
+// exit *notice* — `FASTFAIL` and `exitNotice` moved to src/shared so the main
+// process can write the same notice onto the wire without importing anything out
+// of `renderer/` (see src/shared/termExit.ts for what that import cost).
+//
+// Re-exported here, rather than repointed at every call site, because the
+// renderer already imports them by this path — `components/TerminalPane.tsx`
+// (`exitNotice`), `tileState.ts` (`FASTFAIL`) and three suites — the same reason
+// `approval.ts` re-exports `shared/approval`. Importing either name from here or
+// from `../../shared/termExit` reaches the identical binding
+// (`tests/termExit.test.ts` asserts that); the Map below is renderer-only and has
+// no counterpart in shared, deliberately.
+export { FASTFAIL, exitNotice } from "../../shared/termExit"
 
 /**
  * The code each session's process exited with, if it has exited.
  *
- * The notice above is written into the dead pane and then gone — nothing stored
+ * The exit notice is written into the dead pane and then gone — nothing stored
  * it, so no surface outside that terminal could tell a dead session from a
  * silent one. `isStalled`'s `alive` argument is `!!termAgents[id]`, which stays
  * true for a pane whose process died but whose tab is still open, so without
@@ -42,6 +23,11 @@ export function exitNotice(exitCode: number, isWindows: boolean): string {
  *
  * A module Map, like missionTail's tails: written from the pty stream, read by
  * a polling consumer, never React state.
+ *
+ * It stays in the renderer, and `shared/` must never grow a copy: main already
+ * owns pty exits, so a second Map there would be filled by the next edit and
+ * `exitCodeOf` would answer differently per process — the disagreement
+ * 2026-09-08 spent a day removing from eleven surfaces.
  */
 const exitCodes = new Map<string, number>()
 

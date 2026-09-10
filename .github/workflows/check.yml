@@ -32,3 +32,56 @@ jobs:
       # matches the types it exercises fails here rather than passing green.
       - run: npm run typecheck
       - run: npm test
+
+  # ---------------------------------------------------------------------------
+  # Dependency advisories. A SEPARATE JOB, on purpose: a red audit must not hide
+  # a green typecheck, and a failing test must not hide a new critical advisory.
+  # Two facts read side by side beat one that has swallowed the other.
+  #
+  # ubuntu-latest, unlike `check` above: nothing here runs DevDeck, spawns a pty
+  # or reasons about a Windows path. It reads `package-lock.json` and asks the
+  # registry, which is platform-independent - and the runner is cheaper and
+  # starts faster. See `scripts/audit-gate.mjs` for why this needs no `shell:`.
+  #
+  # No `npm ci`. `npm audit` answers from the lockfile alone (verified), so this
+  # job cannot be broken by an install failure, and it finishes in seconds. No
+  # `fetch-depth: 0` either - nothing here walks history, so it gets the default
+  # shallow clone. Both omissions are deliberate; the three failures on the
+  # first-ever CI run were all "the runner is not the author's machine", and the
+  # answer is to depend on less of the runner rather than to configure more of
+  # it.
+  # ---------------------------------------------------------------------------
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # THE GATE. Production dependencies only, high and above, and only when a
+      # fix is actually published - read the top of scripts/lib/audit-decide.mjs
+      # for the argument. In short: `--omit=dev` because these five packages are
+      # the ones whose bytes reach a beta user's machine, and a dev-only
+      # advisory in the build toolchain is not a thing a stranger can reach;
+      # `high` because that is the level a single maintainer can be asked to
+      # stop and act on, and moderate noise in a transitive dev dependency at
+      # 2am produces a red `main` nobody clears and a maintainer who learns that
+      # red means nothing; and fix-available because an advisory with no
+      # published fix cannot be cleared by anyone, so gating on it stops all
+      # work and changes nothing about the risk.
+      #
+      # An advisory that cannot be fixed today is held with a DATED entry in
+      # .github/audit-allow.json and fails again on its own date. Do not raise
+      # the level or widen the tree to clear a red build.
+      - name: Advisory gate (production dependencies, high and above)
+        run: node scripts/audit-gate.mjs --tree prod --level high
+
+      # THE REPORT. Everything, down to `low`, dev dependencies included, and it
+      # can never fail the build. This is the half that keeps the gate honest:
+      # the narrow gate above is only defensible if the wider picture is visible
+      # somewhere, and this is where. `continue-on-error` covers the exit-2 case
+      # too - a registry outage must not turn an informational step red.
+      - name: Advisory report (everything, informational)
+        continue-on-error: true
+        run: node scripts/audit-gate.mjs --tree all --level low --report

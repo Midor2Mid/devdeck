@@ -1,102 +1,105 @@
 {
-  "name": "devdeck",
-  "version": "0.13.0",
-  "description": "A command deck for terminal-first, Claude-driven development.",
-  "author": "Raymond Tran",
-  "license": "MIT",
-  "main": "./out/main/index.js",
-  "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "package": "electron-vite build && electron-builder",
-    "package:dir": "electron-vite build && electron-builder --dir",
-    "cert:make": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-signing-cert.ps1",
-    "package:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-signed.ps1",
-    "verify:terminal": "node scripts/verify-terminal.mjs",
-    "worktree": "node scripts/worktree.mjs",
-    "verify:packaged": "node scripts/verify-packaged.mjs",
-    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1 -WaitSeconds 600 -Relaunch"
-  },
-  "dependencies": {
-    "@lydell/node-pty": "1.2.0-beta.12",
-    "@xterm/xterm": "^6.0.0",
-    "electron-updater": "^6.8.9",
-    "selfsigned": "^5.5.0",
-    "ws": "^8.21.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.0",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@types/ws": "^8.18.1",
-    "@vitejs/plugin-react": "^5.2.0",
-    "electron": "^43.4.1",
-    "electron-builder": "^26.15.3",
-    "electron-vite": "^5.0.0",
-    "typescript": "^5.7.2",
-    "vite": "^7.3.6",
-    "vitest": "^4.1.11",
-    "monaco-editor": "^0.52.2",
-    "@monaco-editor/react": "^4.7.0",
-    "@fontsource-variable/geist-mono": "^5.2.8",
-    "@fontsource-variable/inter": "^5.2.8",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/addon-search": "^0.16.0",
-    "allotment": "^1.20.5",
-    "dompurify": "^3.4.11",
-    "marked": "^15.0.12",
-    "qrcode": "^1.5.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zustand": "^5.0.2"
-  },
-  "build": {
-    "appId": "com.devdeck.app",
-    "productName": "DevDeck",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
+    "name": "devdeck",
+    "version": "0.13.0",
+    "description": "A command deck for terminal-first, Claude-driven development.",
+    "author": "Raymond Tran",
+    "license": "MIT",
+    "main": "./out/main/index.js",
+    "scripts": {
+        "dev": "electron-vite dev",
+        "build": "electron-vite build",
+        "preview": "electron-vite preview",
+        "start": "electron-vite preview",
+        "typecheck": "tsc --noEmit -p tsconfig.json",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "package": "electron-vite build && electron-builder",
+        "package:dir": "electron-vite build && electron-builder --dir",
+        "cert:make": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-signing-cert.ps1",
+        "package:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-signed.ps1",
+        "verify:terminal": "node scripts/verify-terminal.mjs",
+        "worktree": "node scripts/worktree.mjs",
+        "verify:packaged": "node scripts/verify-packaged.mjs",
+        "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-local.ps1 -WaitSeconds 600 -Relaunch"
     },
-    "files": [
-      "out/**/*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "**/node_modules/@lydell/**",
-      "**/node_modules/@xterm/xterm/**"
-    ],
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ],
-      "icon": "build/icon.png",
-      "signtoolOptions": {
-        "publisherName": "DevDeck Dev",
-        "certificateSubjectName": "DevDeck Dev"
-      }
+    "dependencies": {
+        "@lydell/node-pty": "1.2.0-beta.12",
+        "@xterm/xterm": "^6.0.0",
+        "electron-updater": "^6.8.9",
+        "selfsigned": "^5.5.0",
+        "ws": "^8.21.0"
     },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+    "devDependencies": {
+        "@types/node": "^22.10.0",
+        "@types/qrcode": "^1.5.6",
+        "@types/react": "^18.3.12",
+        "@types/react-dom": "^18.3.1",
+        "@types/ws": "^8.18.1",
+        "@vitejs/plugin-react": "^5.2.0",
+        "electron": "^43.4.1",
+        "electron-builder": "^26.15.3",
+        "electron-vite": "^5.0.0",
+        "typescript": "^5.7.2",
+        "vite": "^7.3.6",
+        "vitest": "^4.1.11",
+        "monaco-editor": "^0.52.2",
+        "@monaco-editor/react": "^4.7.0",
+        "@fontsource-variable/geist-mono": "^5.2.8",
+        "@fontsource-variable/inter": "^5.2.8",
+        "@xterm/addon-fit": "^0.11.0",
+        "@xterm/addon-search": "^0.16.0",
+        "allotment": "^1.20.5",
+        "dompurify": "^3.4.11",
+        "marked": "^15.0.12",
+        "qrcode": "^1.5.4",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "zustand": "^5.0.2"
     },
-    "portable": {
-      "artifactName": "${productName}-Portable-${version}.${ext}"
+    "build": {
+        "appId": "com.devdeck.app",
+        "productName": "DevDeck",
+        "directories": {
+            "output": "release",
+            "buildResources": "build"
+        },
+        "files": [
+            "out/**/*",
+            "package.json"
+        ],
+        "asarUnpack": [
+            "**/node_modules/@lydell/**",
+            "**/node_modules/@xterm/xterm/**"
+        ],
+        "win": {
+            "target": [
+                "nsis",
+                "portable"
+            ],
+            "icon": "build/icon.png",
+            "signtoolOptions": {
+                "publisherName": "DevDeck Dev",
+                "certificateSubjectName": "DevDeck Dev"
+            }
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true,
+            "artifactName": "${productName}-Setup-${version}.${ext}"
+        },
+        "portable": {
+            "artifactName": "${productName}-Portable-${version}.${ext}"
+        },
+        "publish": [
+            {
+                "provider": "github",
+                "owner": "Midor2Mid",
+                "repo": "devdeck"
+            }
+        ]
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "Midor2Mid",
-        "repo": "devdeck"
-      }
-    ]
-  }
+    "overrides": {
+        "js-yaml": "^4.3.2"
+    }
 }
