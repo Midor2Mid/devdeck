@@ -9,7 +9,6 @@ import { join, dirname, basename } from "path"
 import { networkInterfaces } from "os"
 import { ptyEvents, getBuffer, writePty, resizePty } from "./pty"
 import { httpSend } from "./http"
-import { allConnections, runQuery, listTables } from "./db"
 import {
     chooseBind,
     cookieToken,
@@ -637,32 +636,6 @@ export async function start(config: ServerConfig, deps: ServerDeps): Promise<voi
                     )
                     break
                 }
-                case "db:conns":
-                    send(ws, { t: "db:conns", conns: allConnections() })
-                    break
-                case "db:tables":
-                    listTables(id)
-                        .then((tables) => send(ws, { t: "db:tables", profileId: id, tables }))
-                        .catch((e) =>
-                            send(ws, {
-                                t: "db:tables",
-                                profileId: id,
-                                tables: [],
-                                error: String(e?.message ?? e)
-                            })
-                        )
-                    break
-                case "db:query": {
-                    // Read-only is enforced by the driver now, not by a regex
-                    // on the first word here - see runReadOnly in db.ts. The
-                    // refusal for a driver that has no read-only mode
-                    // (SQL Server) comes back as an ordinary error result.
-                    const sql = String(msg.sql)
-                    runQuery(id, sql, { readOnly: true }).then((res) =>
-                        send(ws, { t: "db:res", res })
-                    )
-                    break
-                }
                 case "projects":
                     // Full project list (not just those with a live session) so the
                     // Files/AI views work even before any terminal is open.
@@ -889,7 +862,7 @@ const CLIENT_HTML = `<!doctype html>
   nav#nav::-webkit-scrollbar{display:none}
   nav#nav button{flex:none;padding:5px 10px;font-size:13px;color:var(--mu);border-color:transparent}
   nav#nav button.active{color:var(--tx);border-color:var(--bd)}
-  #http-view,#db-view,#files-view,#ai-view{flex:1;display:none;flex-direction:column;min-height:0;overflow:auto;padding:12px;gap:8px}
+  #http-view,#files-view,#ai-view{flex:1;display:none;flex-direction:column;min-height:0;overflow:auto;padding:12px;gap:8px}
   #http-view .row{display:flex;gap:6px;margin-bottom:8px}
   .crumb{font-size:12px;color:var(--mu);font-family:monospace;padding:2px 4px;word-break:break-all}
   #f-content{min-height:52vh;font-family:monospace;font-size:13px}
@@ -937,7 +910,6 @@ const CLIENT_HTML = `<!doctype html>
       <button data-v="files">Files</button>
       <button data-v="ai">AI</button>
       <button data-v="http">HTTP</button>
-      <button data-v="db">DB</button>
     </nav>
     <span id="status">connecting…</span>
   </header>
@@ -953,16 +925,6 @@ const CLIENT_HTML = `<!doctype html>
     <textarea id="h-body"></textarea>
     <button class="send-btn" id="h-send">Send</button>
     <div class="res" id="h-res" style="display:none"></div>
-  </div>
-  <div id="db-view">
-    <div class="row">
-      <select id="d-conn"><option value="">Select connection…</option></select>
-    </div>
-    <div id="d-tables"></div>
-    <div class="lbl">SQL</div>
-    <textarea id="d-sql">SELECT 1;</textarea>
-    <button class="send-btn" id="d-run">Run</button>
-    <div class="res" id="d-res" style="display:none"></div>
   </div>
   <div id="files-view">
     <div class="row" id="f-projrow">
@@ -1028,7 +990,7 @@ const CLIENT_HTML = `<!doctype html>
   var termView = document.getElementById('term-view');
   var titleEl = document.getElementById('title');
   var backBtn = document.getElementById('back');
-  var httpView=document.getElementById('http-view'), dbView=document.getElementById('db-view');
+  var httpView=document.getElementById('http-view');
   var filesView=document.getElementById('files-view'), aiView=document.getElementById('ai-view');
   var ws, term, attachedId = null, sessions = [], prevStatus = {}, notifyAsked = false;
   var projs=[], froot='', fcur='', fpath='', aFiles=[];
@@ -1058,7 +1020,6 @@ const CLIENT_HTML = `<!doctype html>
     listEl.style.display = v==='list'?'block':'none';
     termView.style.display = v==='term'?'flex':'none';
     httpView.style.display = v==='http'?'flex':'none';
-    dbView.style.display = v==='db'?'flex':'none';
     filesView.style.display = v==='files'?'flex':'none';
     aiView.style.display = v==='ai'?'flex':'none';
     document.getElementById('nav').style.display = v==='term'?'none':'flex';
@@ -1067,7 +1028,6 @@ const CLIENT_HTML = `<!doctype html>
     if(v!=='term'){ attachedId=null; dnote=''; renderDecision(); }
     if(v==='list') titleEl.textContent='DevDeck';
     if(v==='http') titleEl.textContent='HTTP';
-    if(v==='db'){ titleEl.textContent='Database'; sendMsg({t:'db:conns'}); }
     if(v==='files'){ titleEl.textContent='Files'; sendMsg({t:'projects'}); }
     if(v==='ai'){ titleEl.textContent='AI'; fillSessSelect(); }
   }
@@ -1105,9 +1065,6 @@ const CLIENT_HTML = `<!doctype html>
       else if(m.t === 'exit' && m.id === attachedId && term){ term.write('\\r\\n\\x1b[90m'+(m.notice||'[process exited]')+'\\x1b[0m\\r\\n'); }
       else if(m.t === 'upload:done'){ statusEl.textContent = m.error ? ('upload failed: '+m.error) : ('attached → path inserted'); setTimeout(function(){statusEl.textContent='connected';},2500); }
       else if(m.t === 'http:res'){ renderResult(document.getElementById('h-res'), m.res); }
-      else if(m.t === 'db:res'){ renderResult(document.getElementById('d-res'), m.res); }
-      else if(m.t === 'db:conns'){ var sel=document.getElementById('d-conn'); var cur=sel.value; sel.innerHTML='<option value="">Select connection…</option>'+m.conns.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+' ('+c.kind+')</option>';}).join(''); sel.value=cur; }
-      else if(m.t === 'db:tables'){ var dt=document.getElementById('d-tables'); dt.innerHTML=(m.tables||[]).map(function(t){return '<div class="tbl-item" data-t="'+esc(t)+'">'+esc(t)+'</div>';}).join(''); [].forEach.call(dt.querySelectorAll('.tbl-item'),function(el){ el.onclick=function(){ document.getElementById('d-sql').value='SELECT * FROM '+el.getAttribute('data-t')+' LIMIT 100;'; }; }); }
       else if(m.t === 'projects'){ projs=m.projects||[]; var ps=document.getElementById('f-proj'); var cur=ps.value; ps.innerHTML='<option value="">Select project…</option>'+projs.map(function(p){return '<option value="'+esc(p.path)+'">'+esc(p.name)+'</option>';}).join(''); ps.value=cur; }
       else if(m.t === 'fs:tree'){ if(m.error){ document.getElementById('f-tree').innerHTML='<div class="empty">'+esc(m.error)+'</div>'; } else { renderTree(m.path, m.entries||[]); } }
       else if(m.t === 'fs:read'){ if(m.error){ fstatus(m.error,true); } else { openEditor(m.path, m.content); } }
@@ -1133,11 +1090,6 @@ const CLIENT_HTML = `<!doctype html>
     var headers={}; document.getElementById('h-headers').value.split('\\n').forEach(function(l){ var i=l.indexOf(':'); if(i>0) headers[l.slice(0,i).trim()]=l.slice(i+1).trim(); });
     var req={ method:document.getElementById('h-method').value, url:document.getElementById('h-url').value.trim(), headers:headers, body:document.getElementById('h-body').value||undefined };
     if(!req.url) return; var r=document.getElementById('h-res'); r.style.display='block'; r.textContent='Sending…'; sendMsg({t:'http',req:req});
-  };
-  document.getElementById('d-conn').onchange=function(){ var pid=this.value; if(pid) sendMsg({t:'db:tables',id:pid}); else document.getElementById('d-tables').innerHTML=''; };
-  document.getElementById('d-run').onclick=function(){
-    var pid=document.getElementById('d-conn').value, sql=document.getElementById('d-sql').value;
-    if(!pid||!sql.trim()) return; var r=document.getElementById('d-res'); r.style.display='block'; r.textContent='Running…'; sendMsg({t:'db:query',id:pid,sql:sql});
   };
 
   function renderList(){

@@ -172,47 +172,6 @@ export interface ProjectEnvPair {
     value: string
     enabled: boolean
 }
-export interface HttpRequest {
-    method: string
-    url: string
-    headers?: Record<string, string>
-    body?: string
-}
-export interface HttpResponse {
-    ok: boolean
-    status?: number
-    statusText?: string
-    headers?: Record<string, string>
-    body?: string
-    timeMs: number
-    error?: string
-}
-
-export type DbKind = "postgres" | "mysql" | "sqlite" | "sqlserver"
-export interface ConnProfile {
-    id: string
-    projectId: string
-    name: string
-    kind: DbKind
-    host: string
-    port: number
-    database: string
-    user: string
-    ssl?: boolean
-}
-export interface ConnInput extends Omit<ConnProfile, "id"> {
-    id?: string
-    password?: string
-}
-export interface QueryResult {
-    ok: boolean
-    columns?: string[]
-    rows?: Record<string, unknown>[]
-    rowCount?: number
-    command?: string
-    timeMs: number
-    error?: string
-}
 export interface RemoteSession {
     termId: string
     projectId: string
@@ -589,9 +548,6 @@ const api = {
             return () => ipcRenderer.removeListener("mobile:new", handler)
         }
     },
-    http: {
-        send: (req: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke("http:send", req)
-    },
     app: {
         version: (): Promise<string> => ipcRenderer.invoke("app:version")
     },
@@ -617,19 +573,6 @@ const api = {
             ipcRenderer.invoke("ai:setKey", { agentId, key }),
         status: (): Promise<Record<string, boolean>> => ipcRenderer.invoke("ai:status"),
         clearKey: (agentId: string): Promise<void> => ipcRenderer.invoke("ai:clearKey", agentId)
-    },
-    db: {
-        list: (projectId: string): Promise<ConnProfile[]> =>
-            ipcRenderer.invoke("db:list", projectId),
-        save: (input: ConnInput): Promise<ConnProfile[]> => ipcRenderer.invoke("db:save", input),
-        remove: (id: string): Promise<void> => ipcRenderer.invoke("db:remove", id),
-        test: (input: ConnInput): Promise<QueryResult> => ipcRenderer.invoke("db:test", input),
-        query: (profileId: string, sql: string): Promise<QueryResult> =>
-            ipcRenderer.invoke("db:query", { profileId, sql }),
-        tables: (profileId: string): Promise<string[]> =>
-            ipcRenderer.invoke("db:tables", profileId),
-        disconnect: (profileId: string): void => ipcRenderer.send("db:disconnect", profileId),
-        pickFile: (): Promise<string> => ipcRenderer.invoke("db:pickFile")
     },
     search: {
         code: (query: string): Promise<SearchHit[]> => ipcRenderer.invoke("search:code", { query })

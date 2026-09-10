@@ -3,12 +3,10 @@ import { join } from "path"
 import { mkdirSync, readFileSync } from "fs"
 import * as ptyMgr from "./pty"
 import * as projects from "./projects"
-import { httpSend } from "./http"
 import * as files from "./files"
 import { atomicWrite } from "./atomic"
 import { loadWorkspace, saveWorkspace } from "./workspace"
 import { loadSettings, saveSettings } from "./settings"
-import * as db from "./db"
 import * as server from "./server"
 import type { RemoteSession, ServerConfig, ServerDeps, ServerStartResult } from "./server"
 import * as devices from "./devices"
@@ -106,8 +104,8 @@ function crashLine(err: unknown): string {
  * default does, so this replaces the *dialog*, not the outcome.
  *
  * It quits **through `teardown()`**, not through `process.exit`: the pty trees,
- * the sqlite handles, the WS server and the sink's unflushed repeat counts all
- * need the same shutdown a normal quit gets. A crash is the worst moment to
+ * the WS server and the sink's unflushed repeat counts all need the same
+ * shutdown a normal quit gets. A crash is the worst moment to
  * leave a process tree running.
  *
  * Nothing here transmits anything. The record goes to `crashes.jsonl` in
@@ -711,9 +709,6 @@ function registerIpc(): void {
         return run
     })
 
-    // --- API client ---
-    ipcMain.handle("http:send", (_e, req) => httpSend(req))
-
     // --- AI agent keys (encrypted at rest; injected at pty spawn) ---
     ipcMain.handle("ai:setKey", (_e, { agentId, key }: { agentId: string; key: string }) =>
         aikeys.setKey(agentId, key)
@@ -854,26 +849,11 @@ function registerIpc(): void {
 
     // --- MCP server (DevDeck's own tools, exposed to agent CLIs) ---
     // Every dep reads fresh on each tool call so an agent always sees the current
-    // state — the projects open now, the requests saved now — not a snapshot from
+    // state — the projects open now, the pages captured now — not a snapshot from
     // when the server started.
     const mcpDeps: mcptools.McpDeps = {
         projects: () =>
             projects.listProjects().projects.map((p) => ({ id: p.id, name: p.name, path: p.path })),
-        // Saved requests live in settings.json under `collections`; flatten them
-        // and tag each with its collection name so the agent can tell them apart.
-        savedRequests: () => {
-            const raw = loadSettings() as
-                | { collections?: { name?: string; requests?: mcptools.McpSavedRequest[] }[] }
-                | undefined
-            const out: mcptools.McpSavedRequest[] = []
-            for (const c of raw?.collections ?? []) {
-                for (const r of c.requests ?? []) {
-                    if (r && typeof r.id === "string") out.push({ ...r, collection: c.name })
-                }
-            }
-            return out
-        },
-        httpSend: (req) => httpSend(req),
         browserPages: () => browserNet.attachedPages(),
         consoleLog: (id, limit) => browserNet.getConsole(id, limit),
         networkLog: (id, limit) => browserNet.getRecent(id, limit)
@@ -908,58 +888,6 @@ function registerIpc(): void {
         guardRepo(cwd)
         unregisterDevdeck(cwd)
         return readMcp(cwd)
-    })
-
-    // --- Database ---
-    // A SQLite "connection" is a file path, so creating or testing one is a
-    // file read - the one path-taking channel that had no confinement, and
-    // therefore the way around the confinement on all the others. Allowed if
-    // the file is inside an open project, or if the user personally picked it
-    // in the dialog (db:pickFile records that in the main process, where a
-    // renderer cannot add to it). Not narrowed to project roots alone: a
-    // database in D:\data is an ordinary thing to point DevDeck at, and
-    // removing that would be a worse bug than the one being fixed.
-    const dbInputRefusal = (input: { kind?: string; database?: string }): string | null => {
-        if (!input || input.kind !== "sqlite") return null
-        const file = String(input.database ?? "")
-        if (!file) return "A SQLite connection needs a database file."
-        if (inProject(file) || db.isApprovedDbFile(file)) return null
-        return "That database file is outside every open project - use Browse to choose it."
-    }
-    ipcMain.handle("db:list", (_e, projectId: string) => db.listConnections(projectId))
-    ipcMain.handle("db:save", (_e, input) => {
-        const refusal = dbInputRefusal(input)
-        if (refusal) throw new Error(refusal)
-        return db.saveConnection(input)
-    })
-    ipcMain.handle("db:remove", (_e, id: string) => db.removeConnection(id))
-    // A refusal here is RETURNED, not thrown: db:test's contract has always
-    // been that a connection failure comes back as `{ ok: false, error }`, and
-    // the panel renders exactly that. Rejecting instead would have made the
-    // one input a user can plausibly get wrong - a path - the one that skips
-    // the error banner.
-    ipcMain.handle("db:test", (_e, input) => {
-        const refusal = dbInputRefusal(input)
-        if (refusal) return { ok: false, error: refusal, timeMs: 0 }
-        return db.testConnection(input)
-    })
-    ipcMain.handle("db:query", (_e, { profileId, sql }) => db.runQuery(profileId, sql))
-    ipcMain.handle("db:tables", (_e, profileId: string) => db.listTables(profileId))
-    ipcMain.on("db:disconnect", (_e, profileId: string) => db.disconnect(profileId))
-    ipcMain.handle("db:pickFile", async () => {
-        const res = await dialog.showOpenDialog(mainWindow!, {
-            title: "Select a SQLite database file",
-            properties: ["openFile"],
-            filters: [
-                { name: "SQLite", extensions: ["db", "sqlite", "sqlite3", "db3"] },
-                { name: "All files", extensions: ["*"] }
-            ]
-        })
-        const picked = res.canceled ? "" : (res.filePaths[0] ?? "")
-        // The dialog IS the boundary: this is the moment the user chose a file
-        // outside their projects, and it is a choice the renderer cannot forge.
-        if (picked) db.approveDbFile(picked)
-        return picked
     })
 
     // Generic open-file picker (returns "" if cancelled).
@@ -1410,7 +1338,7 @@ app.whenReady().then(() => {
  * This used to live only in `window-all-closed`, which is one of several ways
  * DevDeck stops: an `app.quit()` from the updater, an OS shutdown, a quit from
  * anywhere that is not the last window closing, all skipped it - leaving pty
- * trees alive, sqlite handles open, and the WS server bound.
+ * trees alive and the WS server bound.
  */
 function teardown(): void {
     if (tornDown) return
@@ -1420,7 +1348,6 @@ function teardown(): void {
     // where the last state is the one worth having next session.
     crashSink.flushSink()
     ptyMgr.killAll()
-    db.closeAll()
     server.stop()
     void mcpserver.stop()
 }

@@ -195,10 +195,13 @@ export function isBlockedRemoteUrl(raw: string): boolean {
 // whole security model" by the tool that depended on it. It let through
 // `WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x` (starts with "with")
 // and, on pg's simple-query protocol, `SELECT 1; DROP TABLE t` (one call, two
-// statements). It is deliberately not replaced by a better regex: read-only is
-// a capability the driver has - a transaction, or a connection flag - and
-// db.ts's runReadOnly now uses it per driver, refusing the one kind
-// (SQL Server) that has none.
+// statements). Its replacement asked each driver for its own read-only mode
+// instead, and that whole path - db.ts, the four drivers, the SQL tools - is
+// now gone too.
+//
+// Kept as a tombstone because the lesson outlives the feature: if SQL ever
+// comes back here, "read-only" is a capability the connection has, never a
+// property of how a statement is spelled. Do not re-introduce the regex.
 
 export type BindMode = "tailscale" | "lan" | "auto"
 export type BindChoice = { ok: true; host: string } | { ok: false; reason: string }

@@ -26,17 +26,11 @@
     "@lydell/node-pty": "1.2.0-beta.12",
     "@xterm/xterm": "^6.0.0",
     "electron-updater": "^6.8.9",
-    "mssql": "^12.6.0",
-    "mysql2": "^3.22.5",
-    "node-sqlite3-wasm": "^0.8.58",
-    "pg": "^8.22.0",
     "selfsigned": "^5.5.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@types/mssql": "^12.3.0",
     "@types/node": "^22.10.0",
-    "@types/pg": "^8.20.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -75,7 +69,6 @@
     ],
     "asarUnpack": [
       "**/node_modules/@lydell/**",
-      "**/node_modules/node-sqlite3-wasm/**",
       "**/node_modules/@xterm/xterm/**"
     ],
     "win": {

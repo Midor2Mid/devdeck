@@ -60,11 +60,6 @@ vi.mock("../src/main/pty", async () => {
             createHash("sha256").update(lastLines(h.tails[id] ?? "", n)).digest("hex")
     }
 })
-vi.mock("../src/main/db", () => ({
-    allConnections: () => [],
-    runQuery: async () => ({ ok: true, timeMs: 0 }),
-    listTables: async () => []
-}))
 vi.mock("../src/main/projects", () => ({
     listProjects: () => ({ projects: [], activeId: null })
 }))

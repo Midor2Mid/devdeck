@@ -44,7 +44,7 @@ vi.mock("electron", () => ({
 }))
 
 // Native/heavy modules server.ts imports but this file has no interest in
-// exercising - stubbed the same way tests/mcpserver.test.ts stubs db.ts.
+// exercising.
 vi.mock("../src/main/pty", async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { EventEmitter } = require("events")
@@ -72,11 +72,6 @@ vi.mock("../src/main/pty", async () => {
             createHash("sha256").update(lastLines(h.tails[id] ?? "", n)).digest("hex")
     }
 })
-vi.mock("../src/main/db", () => ({
-    allConnections: () => [],
-    runQuery: async () => ({ ok: true, timeMs: 0 }),
-    listTables: async () => []
-}))
 vi.mock("../src/main/projects", () => ({
     listProjects: () => ({ projects: [], activeId: null })
 }))

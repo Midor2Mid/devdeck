@@ -365,8 +365,8 @@ describe("what the probe is willing to tell a caller", () => {
         //
         // That is accepted, not fixed: the only caller is a sandboxed,
         // context-isolated `file://` renderer, and anything executing there
-        // already holds `fs:readDir`, `fs:allFiles`, `db:query` and `search:code`
-        // on the same bridge. Narrowing the probe to project roots would be
+        // already holds `fs:readDir`, `fs:allFiles` and `search:code` on the same
+        // bridge. Narrowing the probe to project roots would be
         // false confinement while those exist, and would also break the feature
         // — an agent CLI lives in `%APPDATA%\npm`, not in a project.
         const dir = dirWith("claude.cmd")

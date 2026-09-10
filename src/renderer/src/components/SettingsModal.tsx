@@ -144,12 +144,14 @@ function DevdeckMcpBlock(): JSX.Element {
                 </label>
             </div>
             <p className="muted small">
-                Lets your agent CLI query this project&apos;s database itself — no copy-paste. Exposes{" "}
-                <code>devdeck_projects</code>, <code>devdeck_db_connections</code>,{" "}
-                <code>devdeck_db_tables</code> and <code>devdeck_db_query</code>.
+                Lets your agent CLI read what DevDeck can see, instead of asking you to copy it out.
+                Exposes <code>devdeck_projects</code> — which project a path belongs to — and{" "}
+                <code>devdeck_console_logs</code>, the console messages, failed requests and uncaught
+                exceptions from the Browser panel, so an agent can diagnose a page without you
+                pasting DevTools output.
             </p>
             <p className="muted small mcp-safety">
-                Read-only: writes are refused, and credentials are never sent to the agent. Bound to
+                Read-only: nothing here writes to a terminal, a file or the network. Bound to
                 127.0.0.1 and guarded by a bearer token, so nothing off this machine can reach it.
                 The token is <em>not</em> written into <code>.mcp.json</code> — that file references{" "}
                 <code>${"{"}

@@ -1,7 +1,7 @@
 /**
  * DevDeck as an MCP server.
  *
- * Claude Code (and any MCP client) can reach DevDeck's own panels as tools, so an
+ * Claude Code (and any MCP client) can reach DevDeck's own state as tools, so an
  * agent pulls context instead of us pushing it. Registered in a project's
  * `.mcp.json` as an HTTP server:
  *
@@ -12,10 +12,10 @@
  *
  * Why HTTP rather than the more common stdio transport: a stdio server is a
  * separate process the client spawns, which could not see DevDeck's in-memory
- * connection pools — it would need a second bridge back into this process, and it
- * would have to ship as an unpacked script outside app.asar. Hosting the endpoint
- * here removes both problems: the tools run in the process that already holds the
- * live state.
+ * state — the attached browser pages, the open projects. It would need a second
+ * bridge back into this process, and it would have to ship as an unpacked script
+ * outside app.asar. Hosting the endpoint here removes both problems: the tools
+ * run in the process that already holds the live state.
  *
  * Security posture:
  *  - Binds to 127.0.0.1 only. Never all-interfaces — unlike the mobile remote
@@ -217,8 +217,9 @@ export async function start(config: McpServerConfig, d: McpDeps): Promise<{ ok: 
                     : err.message
             resolve({ ok: false, error: msg })
         })
-        // Loopback only. This is not negotiable for this server: it is unattended
-        // and its tools read your databases.
+        // Loopback only. This is not negotiable for this server: it is
+        // unattended, and it answers for the projects and pages this desktop
+        // has open.
         s.listen(config.port, "127.0.0.1", () => {
             server = s
             console.log(`[mcp] DevDeck MCP server on http://127.0.0.1:${config.port}/mcp`)

@@ -1,28 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect } from "vitest"
 
-// db.ts imports native drivers (pg / mysql2 / sqlite-wasm / mssql), so stub the
-// whole module — these tests are about dispatch and the read-only guard, not SQL.
-const listConnections = vi.fn()
-const allConnections = vi.fn()
-const listTables = vi.fn()
-const runQuery = vi.fn()
-
-vi.mock("../src/main/db", () => ({
-    listConnections: (...a: unknown[]) => listConnections(...a),
-    allConnections: (...a: unknown[]) => allConnections(...a),
-    listTables: (...a: unknown[]) => listTables(...a),
-    runQuery: (...a: unknown[]) => runQuery(...a)
-}))
-
-const { TOOLS, callTool, MAX_ROWS } = await import("../src/main/mcptools")
-const { handleRpc } = await import("../src/main/mcpserver")
+// No module stub is needed any more: mcptools.ts is pure dispatch over injected
+// deps since the database tools went, and with them the only import of db.ts -
+// which is what pulled pg / mysql2 / sqlite-wasm / mssql into this suite.
+import { TOOLS, callTool, RETIRED_TOOLS } from "../src/main/mcptools"
+import { handleRpc } from "../src/main/mcpserver"
 
 const deps = { projects: () => [{ id: "p1", name: "web-api", path: "C:/repos/web-api" }] }
 const text = (r: { content: { text: string }[] }): string => r.content[0].text
-
-beforeEach(() => {
-    vi.resetAllMocks()
-})
 
 describe("mcp tool surface", () => {
     it("declares valid tool schemas", () => {
@@ -45,137 +30,45 @@ describe("mcp tool surface", () => {
     })
 })
 
-describe("devdeck_db_connections", () => {
-    it("never leaks host, user, or password", async () => {
-        allConnections.mockReturnValue([
-            {
-                id: "c1",
-                projectId: "p1",
-                name: "prod",
-                kind: "postgres",
-                host: "db.internal",
-                port: 5432,
-                database: "app",
-                user: "admin",
-                passwordEnc: "SECRET"
-            }
-        ])
-        const out = text(await callTool("devdeck_db_connections", {}, deps))
-        expect(out).toContain("prod")
-        expect(out).toContain("postgres")
-        expect(out).not.toContain("db.internal")
-        expect(out).not.toContain("admin")
-        expect(out).not.toContain("SECRET")
+// A tool that vanishes from the catalog an agent was told about is its own small
+// lie: the client read `tools/list` at the start of its session, and a habit or a
+// CLAUDE.md can carry a name across sessions. These assert the withdrawal is
+// stated rather than silent.
+describe("the withdrawn tools", () => {
+    it("advertises none of them", () => {
+        const advertised = TOOLS.map((t) => t.name)
+        for (const name of Object.keys(RETIRED_TOOLS)) {
+            expect(advertised).not.toContain(name)
+        }
     })
 
-    it("explains itself when nothing is configured", async () => {
-        allConnections.mockReturnValue([])
-        const r = await callTool("devdeck_db_connections", {}, deps)
-        expect(text(r)).toMatch(/no database connections/i)
-        expect(r.isError).toBeUndefined()
-    })
-
-    it("scopes to a project when asked", async () => {
-        listConnections.mockReturnValue([])
-        await callTool("devdeck_db_connections", { projectId: "p1" }, deps)
-        expect(listConnections).toHaveBeenCalledWith("p1")
-        expect(allConnections).not.toHaveBeenCalled()
-    })
-})
-
-describe("devdeck_db_query is read-only", () => {
-    // The tool no longer judges the SQL before running it - a regex on the
-    // first word was walked through by `WITH x AS (DELETE ...) SELECT`. What
-    // it must do instead is ask the db layer for the read-only path on EVERY
-    // call, so the driver refuses the write inside the database. These are the
-    // same statements the old guard listed; the assertion is now that each one
-    // reaches a driver that cannot execute it, rather than a regex that
-    // happens to recognise it.
-    const writes = [
-        "DELETE FROM users",
-        "DROP TABLE users",
-        "UPDATE users SET admin = 1",
-        "INSERT INTO users VALUES (1)",
-        "TRUNCATE users",
-        "ALTER TABLE users ADD col int",
-        "GRANT ALL ON users TO bob",
-        "  \n  delete from users",
-        // The two the regex let straight through.
-        "WITH x AS (DELETE FROM users RETURNING *) SELECT * FROM x",
-        "SELECT 1; DROP TABLE users"
-    ]
-
-    for (const sql of writes) {
-        it(`runs read-only: ${sql.trim().slice(0, 28)}`, async () => {
-            runQuery.mockResolvedValue({ ok: true, columns: [], rows: [], timeMs: 1 })
-            await callTool("devdeck_db_query", { connectionId: "c1", sql }, deps)
-            expect(runQuery).toHaveBeenCalledWith("c1", sql, { readOnly: true })
-        })
-    }
-
-    it("never asks for a writable query, whatever the SQL looks like", async () => {
-        runQuery.mockResolvedValue({ ok: true, columns: [], rows: [], timeMs: 1 })
-        await callTool("devdeck_db_query", { connectionId: "c1", sql: "SELECT 1" }, deps)
-        const opts = runQuery.mock.calls[0][2]
-        expect(opts).toEqual({ readOnly: true })
-    })
-
-    it("surfaces the driver's refusal as an error instead of an empty result", async () => {
-        // What a write actually looks like now: the database says no, and the
-        // agent has to be told that rather than shown zero rows.
-        runQuery.mockResolvedValue({
-            ok: false,
-            error: "cannot execute DELETE in a read-only transaction",
-            timeMs: 2
-        })
-        const r = await callTool("devdeck_db_query", { connectionId: "c1", sql: "DELETE FROM users" }, deps)
-        expect(r.isError).toBe(true)
-        expect(text(r)).toMatch(/read-only transaction/i)
-    })
-
-    it("allows a SELECT and returns rows", async () => {
-        runQuery.mockResolvedValue({
-            ok: true,
-            columns: ["id"],
-            rows: [{ id: 1 }, { id: 2 }],
-            timeMs: 3
-        })
-        const r = await callTool(
+    it("names the five that were withdrawn", () => {
+        expect(Object.keys(RETIRED_TOOLS).sort()).toEqual([
+            "devdeck_db_connections",
             "devdeck_db_query",
-            { connectionId: "c1", sql: "SELECT id FROM users" },
-            deps
-        )
-        expect(r.isError).toBeUndefined()
-        const parsed = JSON.parse(text(r))
-        expect(parsed.rows).toHaveLength(2)
-        expect(parsed.truncated).toBe(false)
+            "devdeck_db_tables",
+            "devdeck_http_requests",
+            "devdeck_http_send"
+        ])
     })
 
-    it("caps rows and says so", async () => {
-        runQuery.mockResolvedValue({
-            ok: true,
-            columns: ["n"],
-            rows: Array.from({ length: MAX_ROWS + 50 }, (_, i) => ({ n: i })),
-            timeMs: 9
-        })
-        const parsed = JSON.parse(
-            text(await callTool("devdeck_db_query", { connectionId: "c1", sql: "SELECT n FROM t" }, deps))
-        )
-        expect(parsed.rows).toHaveLength(MAX_ROWS)
-        expect(parsed.rowCount).toBe(MAX_ROWS + 50)
-        expect(parsed.truncated).toBe(true)
+    it("says the tool was removed, not that the server does not know it", async () => {
+        for (const name of Object.keys(RETIRED_TOOLS)) {
+            const r = await callTool(name, { connectionId: "c1", sql: "SELECT 1" }, deps)
+            expect(r.isError).toBe(true)
+            expect(text(r)).toContain("removed")
+            expect(text(r)).not.toContain("Unknown tool")
+        }
     })
 
-    it("reports a failed query as a tool error, not a crash", async () => {
-        runQuery.mockResolvedValue({ ok: false, error: "syntax error", timeMs: 1 })
-        const r = await callTool("devdeck_db_query", { connectionId: "c1", sql: "SELECT boom" }, deps)
-        expect(r.isError).toBe(true)
-        expect(text(r)).toContain("syntax error")
+    it("still says Unknown tool for a name that never existed", async () => {
+        expect(text(await callTool("devdeck_db_delete", {}, deps))).toContain("Unknown tool")
     })
 
-    it("requires both arguments", async () => {
-        expect((await callTool("devdeck_db_query", { sql: "SELECT 1" }, deps)).isError).toBe(true)
-        expect((await callTool("devdeck_db_query", { connectionId: "c1" }, deps)).isError).toBe(true)
+    // The point of the retired list is that a name is answered once and never
+    // re-used for something else.
+    it("never re-uses a retired name for a live tool", () => {
+        for (const t of TOOLS) expect(RETIRED_TOOLS[t.name]).toBeUndefined()
     })
 })
 
@@ -189,7 +82,7 @@ describe("JSON-RPC layer", () => {
 
     it("lists tools", async () => {
         const r = JSON.parse((await handleRpc({ id: 2, method: "tools/list" }, deps))!)
-        expect(r.result.tools.map((t: { name: string }) => t.name)).toContain("devdeck_db_query")
+        expect(r.result.tools.map((t: { name: string }) => t.name)).toContain("devdeck_projects")
     })
 
     it("returns no body for notifications", async () => {

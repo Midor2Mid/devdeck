@@ -1,44 +1,29 @@
 /**
  * The tool surface DevDeck exposes to agent CLIs over MCP.
  *
- * Why this exists: DevDeck already holds live connections to the things an agent
- * keeps asking about — the project's database above all. Until now the only way
- * to get that context to the agent was to *push* it (run a query in the DB panel,
- * click "→ Agent", paste a table into the prompt). This lets the agent *pull*
- * instead: it queries the schema and the data itself, mid-task, when it needs to.
+ * Why this exists: DevDeck holds live state an agent keeps asking about, and the
+ * only way to get it there used to be to *push* it (copy the pane, paste the
+ * error). This lets the agent *pull* instead, mid-task, when it needs to.
+ *
+ * What is left, and why the list is short. The five tools that made this
+ * module worth writing - three database tools and two HTTP-replay tools - are
+ * gone with the panels and drivers they read from (see `RETIRED_TOOLS`).
+ * They were dispatch over `db.ts` and over the API panel's saved `collections`,
+ * neither of which exists any more, and their precondition (a saved connection,
+ * a saved request) had never been met on any machine that ran DevDeck.
  *
  * Safety posture, deliberately narrow:
- *  - The database tools are read-only, and that is now enforced by the driver
- *    rather than by inspecting the SQL: `devdeck_db_query` runs inside a
- *    read-only transaction (postgres/mysql) or on a read-only connection
- *    (sqlite), and is refused outright for SQL Server, which has no such mode.
- *    The claim "an agent cannot mutate or drop anything" is a claim about
- *    where the statement executes, not about how it is spelled — the regex
- *    this replaced was walked through by `WITH x AS (DELETE …) SELECT`.
- *  - `devdeck_http_send` is the one tool that isn't read-only, because an HTTP
- *    request is whatever the endpoint makes of it. It is contained by only ever
- *    replaying a request the *user already saved*: the agent picks one by id and
- *    cannot supply a URL, so it can't be aimed at an arbitrary host, and there is
- *    no equivalent of SSRF here — the target set is exactly what the user wrote.
- *    Its description warns the agent off replaying anything that mutates state
- *    unasked.
- *  - No secrets are ever returned: connection listings carry names/kinds/database,
- *    never host, user, or password; the saved-request listing omits the query
- *    string, which routinely holds API keys, and never echoes headers or auth.
- *  - Results are capped — rows for queries, characters for response bodies,
- *    entries for logs — so one call can't flood the agent's context (or DevDeck's
- *    memory).
+ *  - Everything here is read-only. Nothing in this module writes to a pty, a
+ *    file, a database or the network. The one tool that did perform a real
+ *    request (`devdeck_http_send`) is retired, so there is no longer any
+ *    outbound-request path on the agent edge at all.
+ *  - No secrets are ever returned.
+ *  - Results are capped - entries per log section - so one call can't flood the
+ *    agent's context (or DevDeck's memory).
  *
- * This module is pure dispatch over the db layer so it can be unit-tested without
- * Electron or a live socket; the transport lives in `mcpserver.ts`.
+ * This module is pure dispatch over injected deps so it can be unit-tested
+ * without Electron or a live socket; the transport lives in `mcpserver.ts`.
  */
-import * as db from "./db"
-
-/** Hard ceiling on rows returned to an agent, regardless of the query's own LIMIT. */
-export const MAX_ROWS = 200
-
-/** Hard ceiling on a replayed response body, so one call can't flood the context. */
-export const MAX_BODY = 20_000
 
 export interface McpToolDef {
     name: string
@@ -46,58 +31,11 @@ export interface McpToolDef {
     inputSchema: Record<string, unknown>
 }
 
-/** A project as the agent sees it — enough to map a repo to its DB connections. */
+/** A project as the agent sees it - enough to map a path to an open project. */
 export interface McpProject {
     id: string
     name: string
     path: string
-}
-
-/** A key/value row as stored on disk. Read permissively — this is parsed JSON. */
-export interface McpKvRow {
-    enabled?: boolean
-    key?: string
-    value?: string
-}
-
-/** A saved API request, as much of it as replaying needs. */
-export interface McpSavedRequest {
-    id: string
-    name: string
-    method?: string
-    url?: string
-    params?: McpKvRow[]
-    headers?: McpKvRow[]
-    bodyType?: string
-    bodyText?: string
-    formRows?: McpKvRow[]
-    auth?: {
-        type?: string
-        token?: string
-        username?: string
-        password?: string
-        apiKeyName?: string
-        apiKeyValue?: string
-        apiKeyIn?: string
-    }
-    /** Name of the collection it lives in, for the listing. */
-    collection?: string
-}
-
-export interface McpHttpRequest {
-    method: string
-    url: string
-    headers: Record<string, string>
-    body?: string
-}
-
-export interface McpHttpResponse {
-    ok: boolean
-    status?: number
-    statusText?: string
-    body?: string
-    timeMs: number
-    error?: string
 }
 
 export interface McpConsoleEntry {
@@ -122,162 +60,51 @@ export interface McpBrowserPage {
 }
 
 /**
- * Injected so this module stays pure dispatch — testable without Electron, a
+ * Injected so this module stays pure dispatch - testable without Electron, a
  * live socket, or a real network.
  */
 export interface McpDeps {
     projects: () => McpProject[]
-    /** Every saved request across all collections, each tagged with its collection. */
-    savedRequests?: () => McpSavedRequest[]
-    httpSend?: (req: McpHttpRequest) => Promise<McpHttpResponse>
     browserPages?: () => McpBrowserPage[]
     consoleLog?: (pageId: number, limit: number) => McpConsoleEntry[]
     networkLog?: (pageId: number, limit: number) => McpNetEntry[]
 }
 
-const enabledRows = (rows: McpKvRow[] | undefined): { key: string; value: string }[] =>
-    (rows ?? [])
-        .filter((r) => r.enabled !== false && (r.key ?? "").trim() !== "")
-        .map((r) => ({ key: (r.key ?? "").trim(), value: r.value ?? "" }))
-
-/** The query string already written into the saved URL, kept as-is. */
-function splitUrl(url: string): { base: string; query: string } {
-    const q = url.indexOf("?")
-    return q === -1 ? { base: url, query: "" } : { base: url.slice(0, q), query: url.slice(q + 1) }
-}
-
 /**
- * Turn a saved request into something sendable: merge the params table into the
- * query string, apply auth, and pick a body for the body type. Pure, so the
- * whole thing is unit-testable.
+ * Tools DevDeck used to advertise and has withdrawn.
  *
- * Deliberately NOT supported: `form` bodies with file uploads (there is no file
- * to read on the agent's behalf) and chain-variable interpolation / extractors,
- * which are a renderer-side run concept. A request relying on those replays with
- * its literal saved text.
+ * This map exists so the withdrawal is not silent. An MCP client reads
+ * `tools/list` once per session and an agent carries those names for the rest
+ * of its run; worse, a CLAUDE.md or a habit can carry `devdeck_db_query` across
+ * sessions. Falling through to `Unknown tool` would tell that agent the server
+ * is broken, when in fact the tool was deliberately removed - so the call is
+ * answered with what actually happened, once, and the agent stops asking.
+ *
+ * No version number is quoted in these messages on purpose: the release that
+ * carries the removal has not been cut, and a version an agent could check and
+ * find wrong is worse than no version. The CHANGELOG entry names it.
+ *
+ * Do not re-use a retired name for a different tool.
  */
-export function buildHttpRequest(r: McpSavedRequest): McpHttpRequest {
-    const method = (r.method || "GET").toUpperCase()
-    const { base, query } = splitUrl(r.url ?? "")
-    const parts = query ? [query] : []
-    for (const p of enabledRows(r.params)) {
-        parts.push(`${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
-    }
-
-    const headers: Record<string, string> = {}
-    for (const h of enabledRows(r.headers)) headers[h.key] = h.value
-
-    const auth = r.auth ?? {}
-    if (auth.type === "bearer" && auth.token) {
-        headers["Authorization"] = `Bearer ${auth.token}`
-    } else if (auth.type === "basic" && (auth.username || auth.password)) {
-        const raw = `${auth.username ?? ""}:${auth.password ?? ""}`
-        headers["Authorization"] = `Basic ${Buffer.from(raw, "utf8").toString("base64")}`
-    } else if (auth.type === "apikey" && auth.apiKeyName) {
-        if (auth.apiKeyIn === "query") {
-            parts.push(
-                `${encodeURIComponent(auth.apiKeyName)}=${encodeURIComponent(auth.apiKeyValue ?? "")}`
-            )
-        } else {
-            headers[auth.apiKeyName] = auth.apiKeyValue ?? ""
-        }
-    }
-
-    let body: string | undefined
-    if (r.bodyType === "json") {
-        body = r.bodyText ?? ""
-        if (body && !Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) {
-            headers["Content-Type"] = "application/json"
-        }
-    } else if (r.bodyType === "form") {
-        body = enabledRows(r.formRows)
-            .map((f) => `${encodeURIComponent(f.key)}=${encodeURIComponent(f.value)}`)
-            .join("&")
-        if (!Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) {
-            headers["Content-Type"] = "application/x-www-form-urlencoded"
-        }
-    }
-
-    const url = parts.length ? `${base}?${parts.join("&")}` : base
-    return { method, url, headers, body }
+export const RETIRED_TOOLS: Record<string, string> = {
+    devdeck_db_connections:
+        "removed along with the Database panel and the bundled pg/mysql2/mssql/sqlite drivers. DevDeck no longer holds database connections.",
+    devdeck_db_tables:
+        "removed along with the Database panel and the bundled pg/mysql2/mssql/sqlite drivers. Read the schema from the repo, or ask the user to run the query themselves.",
+    devdeck_db_query:
+        "removed along with the Database panel and the bundled pg/mysql2/mssql/sqlite drivers. DevDeck cannot run SQL any more; ask the user for the rows you need.",
+    devdeck_http_requests:
+        "removed along with the API panel. DevDeck no longer stores saved requests.",
+    devdeck_http_send:
+        "removed along with the API panel. DevDeck no longer replays saved requests; use your own HTTP tooling."
 }
 
 export const TOOLS: McpToolDef[] = [
     {
         name: "devdeck_projects",
         description:
-            "List the projects open in DevDeck (name and absolute path). Use this to work out which project a path belongs to before looking up its database connections.",
+            "List the projects open in DevDeck (name and absolute path). Use this to work out which project a path belongs to.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false }
-    },
-    {
-        name: "devdeck_db_connections",
-        description:
-            "List the database connections configured in DevDeck: id, name, engine, and database name. Credentials are never returned. Pass a connection id to the other devdeck_db_* tools.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                projectId: {
-                    type: "string",
-                    description: "Optional: only connections belonging to this project id."
-                }
-            },
-            additionalProperties: false
-        }
-    },
-    {
-        name: "devdeck_db_tables",
-        description:
-            "List the table names in a database connection. Call this before writing a query so you use real table names instead of guessing.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                connectionId: {
-                    type: "string",
-                    description: "Connection id from devdeck_db_connections."
-                }
-            },
-            required: ["connectionId"],
-            additionalProperties: false
-        }
-    },
-    {
-        name: "devdeck_db_query",
-        description:
-            `Run a READ-ONLY SQL query against a DevDeck database connection and get the rows back. The query runs in a read-only transaction, so anything that writes fails in the database itself. SQL Server connections are refused entirely (no read-only transaction exists there). At most ${MAX_ROWS} rows are returned. Use this to check real data instead of assuming what the schema or contents look like.`,
-        inputSchema: {
-            type: "object",
-            properties: {
-                connectionId: {
-                    type: "string",
-                    description: "Connection id from devdeck_db_connections."
-                },
-                sql: { type: "string", description: "A single read-only SQL statement." }
-            },
-            required: ["connectionId", "sql"],
-            additionalProperties: false
-        }
-    },
-    {
-        name: "devdeck_http_requests",
-        description:
-            "List the API requests saved in DevDeck's HTTP client: id, name, method, and URL (without its query string, which may hold keys). Pass an id to devdeck_http_send to replay one.",
-        inputSchema: { type: "object", properties: {}, additionalProperties: false }
-    },
-    {
-        name: "devdeck_http_send",
-        description:
-            `Replay one of the API requests saved in DevDeck (see devdeck_http_requests) and get the real status, timing and body back. Use this to check what an endpoint actually returns instead of assuming. You can only send a request the user has already saved — you cannot supply a URL of your own — and the response body is truncated at ${MAX_BODY} characters. This performs a real request, so avoid replaying anything that mutates state unless the user asked you to.`,
-        inputSchema: {
-            type: "object",
-            properties: {
-                requestId: {
-                    type: "string",
-                    description: "Request id from devdeck_http_requests."
-                }
-            },
-            required: ["requestId"],
-            additionalProperties: false
-        }
     },
     {
         name: "devdeck_console_logs",
@@ -315,11 +142,6 @@ const fail = (text: string): McpToolResult => ({
 
 const json = (v: unknown): string => JSON.stringify(v, null, 2)
 
-/** Strip credentials — an agent gets identity and shape, never secrets. */
-function publicConn(c: db.ConnProfile): Record<string, unknown> {
-    return { id: c.id, name: c.name, engine: c.kind, database: c.database, projectId: c.projectId }
-}
-
 export async function callTool(
     name: string,
     args: Record<string, unknown>,
@@ -328,115 +150,6 @@ export async function callTool(
     switch (name) {
         case "devdeck_projects":
             return ok(json(deps.projects()))
-
-        case "devdeck_db_connections": {
-            const projectId = typeof args.projectId === "string" ? args.projectId : ""
-            const conns = projectId ? db.listConnections(projectId) : db.allConnections()
-            if (conns.length === 0) {
-                return ok(
-                    "No database connections are configured in DevDeck" +
-                        (projectId ? " for that project." : ".") +
-                        " Add one in the Database panel first."
-                )
-            }
-            return ok(json(conns.map(publicConn)))
-        }
-
-        case "devdeck_db_tables": {
-            const id = typeof args.connectionId === "string" ? args.connectionId : ""
-            if (!id) return fail("connectionId is required.")
-            try {
-                return ok(json(await db.listTables(id)))
-            } catch (e) {
-                return fail(`Could not list tables: ${e instanceof Error ? e.message : String(e)}`)
-            }
-        }
-
-        case "devdeck_db_query": {
-            const id = typeof args.connectionId === "string" ? args.connectionId : ""
-            const sql = typeof args.sql === "string" ? args.sql : ""
-            if (!id) return fail("connectionId is required.")
-            if (!sql.trim()) return fail("sql is required.")
-            let res: db.QueryResult
-            try {
-                // `readOnly` is not a hint - it selects a path where the
-                // driver itself refuses writes (see runReadOnly in db.ts).
-                // This used to be a regex on the first word, right here, which
-                // a `WITH x AS (DELETE ...) SELECT` walked straight through.
-                res = await db.runQuery(id, sql, { readOnly: true })
-            } catch (e) {
-                return fail(`Query failed: ${e instanceof Error ? e.message : String(e)}`)
-            }
-            if (!res.ok) return fail(`Query failed: ${res.error ?? "unknown error"}`)
-            const rows = res.rows ?? []
-            const capped = rows.slice(0, MAX_ROWS)
-            return ok(
-                json({
-                    columns: res.columns ?? [],
-                    rowCount: rows.length,
-                    truncated: rows.length > capped.length,
-                    timeMs: res.timeMs,
-                    rows: capped
-                })
-            )
-        }
-
-        case "devdeck_http_requests": {
-            const list = deps.savedRequests?.() ?? []
-            if (list.length === 0) {
-                return ok(
-                    "No API requests are saved in DevDeck. Ask the user to save one in the API panel first."
-                )
-            }
-            // The query string is omitted on purpose: it routinely carries API
-            // keys, and the agent doesn't need it to choose a request.
-            return ok(
-                json(
-                    list.map((r) => ({
-                        id: r.id,
-                        name: r.name,
-                        method: (r.method || "GET").toUpperCase(),
-                        url: splitUrl(r.url ?? "").base,
-                        collection: r.collection,
-                        paramCount: enabledRows(r.params).length
-                    }))
-                )
-            )
-        }
-
-        case "devdeck_http_send": {
-            const id = typeof args.requestId === "string" ? args.requestId : ""
-            if (!id) return fail("requestId is required.")
-            if (!deps.httpSend) return fail("HTTP sending is not available.")
-            const saved = (deps.savedRequests?.() ?? []).find((r) => r.id === id)
-            // Only a saved request can be replayed — the agent never supplies a
-            // URL, so this cannot be pointed at an arbitrary host.
-            if (!saved) {
-                return fail(
-                    `No saved request with id "${id}". Call devdeck_http_requests for the current list.`
-                )
-            }
-            const req = buildHttpRequest(saved)
-            let res: McpHttpResponse
-            try {
-                res = await deps.httpSend(req)
-            } catch (e) {
-                return fail(`Request failed: ${e instanceof Error ? e.message : String(e)}`)
-            }
-            if (!res.ok) return fail(`Request failed: ${res.error ?? "unknown error"}`)
-            const body = res.body ?? ""
-            const capped = body.slice(0, MAX_BODY)
-            return ok(
-                json({
-                    request: { name: saved.name, method: req.method, url: req.url },
-                    status: res.status,
-                    statusText: res.statusText,
-                    timeMs: res.timeMs,
-                    truncated: body.length > capped.length,
-                    body: capped
-                })
-            )
-        }
 
         case "devdeck_console_logs": {
             const pages = deps.browserPages?.() ?? []
@@ -473,7 +186,12 @@ export async function callTool(
             )
         }
 
-        default:
+        default: {
+            const retired = RETIRED_TOOLS[name]
+            // An error, not an ok: the agent asked for something it cannot have
+            // and must not treat the explanation as a result.
+            if (retired) return fail(`${name} was ${retired}`)
             return fail(`Unknown tool: ${name}`)
+        }
     }
 }
