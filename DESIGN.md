@@ -230,6 +230,28 @@ is what "lifted" means here.
 theme whose fill separates less from the paper when lifted, which is why the
 border is the token that holds the shape there.
 
+**And the surface the control actually sits on.** The table above is measured
+against `--bg`, which is what it says - but four of the five reachable accent
+fills are not on `--bg`. `button.accent` (the resume card's *Start*) and
+`.ov-approve-yes` (Mission's *Approve*, the frame's one fill) both sit on
+`--bg-2` `#ece5d6`, where Washi's figures are **2.92 at rest and 2.23 lifted**,
+boundary 2.92. Only `-> Agent` sits on `--bg`. So the number to disclose for the
+hover trade is **2.23**, not 2.44.
+
+Verified in the app 2026-09-10: the trade stands. Judged on the real hover
+pairs, the label gets crisper - unlike `:disabled`, which fades opacity - the
+1px rim reads as an ordinary edge, and the shape is better defined lifted than
+at rest. The fill does read washed out. A CTA whose label is hard to read under
+the cursor is worse than one whose surface goes soft, which is the trade that
+was made deliberately.
+
+> **A ratio must name the surface as well as the colour.** The rule below was
+> written after a figure was measured against a token the app never paints. It
+> was then broken again the same day, in the other direction: 2.44 named its
+> value correctly and named the wrong ground, because the control it described
+> does not sit on `--bg`. Both halves are required - the value, and the surface
+> the control is actually painted on.
+
 > **Every contrast figure in this document is measured against
 > `deriveAccentVars()`' output, and must name what it was measured against.**
 > This paragraph used to quote **4.07:1** for Washi's accent hover. The real
