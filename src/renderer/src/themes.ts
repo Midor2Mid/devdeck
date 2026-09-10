@@ -32,6 +32,14 @@ export interface Theme {
     label: string
     mode: "dark" | "light"
     accent: string
+    /**
+     * The theme's literal palette. It deliberately does **not** declare
+     * `--accent-soft`, `--accent-lift` or `--on-accent`: those three are
+     * functions of whichever accent is actually resolved (a user can pick
+     * their own), so `deriveAccentVars` below owns them and nothing here may
+     * state a second value for them. A literal that `applyTheme` overwrites is
+     * a number future work will measure against and the app will never paint.
+     */
     vars: Record<string, string>
     xterm: XtermTheme
     monacoId: string
@@ -64,8 +72,6 @@ const SUMI_VARS = {
     "--muted": "#9d9486",
     "--faint": "#888173",
     "--accent": "#b8895c",
-    "--accent-soft": "#caa07a",
-    "--on-accent": "#14110d",
     "--moss": "#8c9a68",
     "--clay": "#c4855d",
     "--ok": "#8c9a68",
@@ -93,8 +99,6 @@ const WASHI_VARS = {
     "--muted": "#6f6757",
     "--faint": "#756c5c",
     "--accent": "#b07a4a",
-    "--accent-soft": "#9c6a3d",
-    "--on-accent": "#14110d",
     "--moss": "#7f8c54",
     "--clay": "#b06a44",
     "--ok": "#7f8c54",
@@ -117,8 +121,6 @@ const SLATE_VARS = {
     "--muted": "#99a1b2",
     "--faint": "#737b8b",
     "--accent": "#eba65c",
-    "--accent-soft": "#f2bd83",
-    "--on-accent": "#14110d",
     "--moss": "#5fce8f",
     // A desaturated clay for agent badges, distinct from the amber accent so
     // "agent" doesn't read as a second accent instance (matches Sumi/Zen).
@@ -230,9 +232,12 @@ export const THEMES: Record<ThemeId, Theme> = {
     }
 }
 
-/** Shift a hex color toward white (amt>0) or black (amt<0) - derives accent-soft. */
+/** Every colour in this file is a 6-digit hex, with or without the leading `#`. */
+const HEX6 = /^#?([0-9a-f]{6})$/i
+
+/** Shift a hex color toward white (amt>0) or black (amt<0) - the hover step's primitive. */
 export function shade(hex: string, amt: number): string {
-    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+    const m = HEX6.exec(hex.trim())
     if (!m) return hex
     const n = parseInt(m[1], 16)
     const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) =>
@@ -242,6 +247,144 @@ export function shade(hex: string, amt: number): string {
         "#" +
         ch.map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0")).join("")
     )
+}
+
+/** WCAG 2.x relative luminance, 0 (black) to 1 (white). 0 for an unparseable hex. */
+export function relLuminance(hex: string): number {
+    const m = HEX6.exec(hex.trim())
+    if (!m) return 0
+    const n = parseInt(m[1], 16)
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+        const s = c / 255
+        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+    })
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+}
+
+/** WCAG contrast ratio between two hex colors, 1 (identical) to 21 (black on white). */
+export function contrast(a: string, b: string): number {
+    const la = relLuminance(a)
+    const lb = relLuminance(b)
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+/**
+ * The two inks a filled accent block can carry. Both are values the palette
+ * already ships - `--on-accent`'s old literal, and Washi's `--on-danger` - so
+ * deriving the ink introduces no new colour, only a choice between two.
+ */
+const INK_DARK = "#14110d"
+const INK_LIGHT = "#f6f6f4"
+
+/**
+ * The luminance at which INK_DARK and INK_LIGHT contrast *equally* against the
+ * same colour, for THIS ink pair: sqrt((Ld + 0.05) * (Ll + 0.05)) - 0.05,
+ * where Ld = 0.00579 and Ll = 0.92036. At or above it a colour takes dark ink;
+ * below it, light ink. Picking the pair's own crossover rather than pure
+ * black/white's 0.1791 is what maximises the worst case below.
+ *
+ * One constant with one meaning - "which pole is this colour nearer, for
+ * contrast purposes" - and that single question answers both questions below:
+ * which ink does this fill take, and which way is *away* from this ground.
+ *
+ * The worst case is a real limit, not an oversight: an accent sitting exactly
+ * on the crossover gives **4.17:1** whichever ink it takes, under the 4.5 text
+ * floor. No two-ink scheme can do better - clearing 4.5 for every possible
+ * accent needs an ink pair at 20.25:1 or more, which only pure black on pure
+ * white reaches (4.58:1), and spending the palette's warm near-black to buy
+ * 0.4 of a point in a band no shipped accent occupies is not a trade this
+ * system makes. The band is roughly L 0.16-0.21 - a mid-dark accent - and all
+ * three shipped accents are outside it (0.2364 Washi, 0.2885 Sumi, 0.4571
+ * Slate, measuring 5.13 / 6.07 / 9.09).
+ */
+const INK_CROSSOVER = 0.18267
+
+/** One hover step: 18% of the remaining headroom, as it has always been. */
+const HOVER_STEP = 0.18
+
+/**
+ * The smallest contrast ratio that still reads as a change. Calibrated on the
+ * smallest step this system already relies on to be seen - `--bg` to `--bg-2`,
+ * the lifted-surface step, which measures 1.058 Sumi / 1.094 Washi / 1.067
+ * Slate - and rounded down to the nearest hundredth rather than picked. Below
+ * it the hover does not read, and `stepAway` inverts the step instead. In
+ * practice only an accent within a few percent of a pole falls under it: white
+ * cannot get whiter (1.00), `#fafafa` reaches 1.01, `#0a0a0a` 1.008.
+ */
+const MIN_STEP = 1.05
+
+/** WCAG AA for body text - the floor an inverted step may not push a pair below. */
+const TEXT_FLOOR = 4.5
+
+/**
+ * Step `color` one hover-step AWAY from `pole` - the colour it has to stay
+ * legible against.
+ *
+ * This is the whole fix. The old derivation asked the theme's *mode* which way
+ * to go, which is a question about the ground and not about the colour sitting
+ * on it: on Washi it darkened `--accent-soft` unconditionally, which is right
+ * for accent ink on pale paper and wrong for an accent *fill* under near-black
+ * ink - one token was doing both jobs, and only the light theme exposed it.
+ * Asking instead "which way is away from the thing this has to stay legible
+ * against" makes the direction a property of the resolved pair, so it holds for
+ * an arbitrary accent: away is the only direction that cannot cost contrast,
+ * which turns "hover is never harder to read than rest" into a property of the
+ * derivation rather than a fact about the three shipped accents.
+ *
+ * `shade` is multiplicative, so the away direction runs out of headroom once
+ * the colour is already at that pole - a white accent cannot get whiter. When
+ * the away step would be imperceptible the step is inverted, because a hover
+ * that changes nothing is a broken hover. The inversion is refused if it would
+ * put the pair under the text floor: an invisible hover is a smaller failure
+ * than an illegible label.
+ */
+function stepAway(color: string, pole: string): string {
+    const dir = relLuminance(pole) < INK_CROSSOVER ? HOVER_STEP : -HOVER_STEP
+    const away = shade(color, dir)
+    if (contrast(away, color) >= MIN_STEP) return away
+    const inverted = shade(color, -dir)
+    return contrast(inverted, pole) >= TEXT_FLOOR ? inverted : away
+}
+
+/** The three accent values no theme declares, because all three are functions of the accent. */
+export interface AccentVars {
+    /** Accent INK under the cursor - one step away from the page ground. */
+    "--accent-soft": string
+    /** The accent FILL under the cursor - one step away from its own label. */
+    "--accent-lift": string
+    /** The ink a filled accent block carries, at rest and on hover alike. */
+    "--on-accent": string
+}
+
+/**
+ * Derive the accent's dependent values from the accent that will actually
+ * paint, plus the ground it paints on.
+ *
+ * `--accent-soft` and `--accent-lift` are two tokens because they have
+ * opposite requirements. Soft is *ink on the page*, so it must move away from
+ * the ground. Lift is a *fill under a label*, so it must move away from the
+ * label. On a dark theme both point the same way, which is why one token
+ * survived this long; on Washi they point in opposite directions, and one
+ * token cannot be both without lying about one of them.
+ *
+ * `--on-accent` is chosen for the accent's own luminance, and because
+ * `--accent-lift` steps away from that ink, the lift moves *further* from the
+ * crossover - so the one ink chosen here is the right ink at rest and on
+ * hover, for any accent. That is the hole this closes.
+ *
+ * What it cannot do: rescue an accent that is already illegible at rest. A
+ * near-white pick on Washi reads 1.10:1 against the paper and the soft step
+ * only reaches 1.39:1; a near-black pick on Slate reads 1.03:1 and reaches
+ * 1.60:1. The derivation makes the hover honest for any accent; it does not
+ * make any accent usable, and the picker has no floor of its own.
+ */
+export function deriveAccentVars(accent: string, bg: string): AccentVars {
+    const onAccent = relLuminance(accent) >= INK_CROSSOVER ? INK_DARK : INK_LIGHT
+    return {
+        "--accent-soft": stepAway(accent, bg),
+        "--accent-lift": stepAway(accent, onAccent),
+        "--on-accent": onAccent
+    }
 }
 
 /** The skin a fresh install gets. Must match `DEFAULTS.appearance` in settings.ts. */
@@ -262,15 +405,36 @@ export function resolveTheme(id: unknown): Theme {
         : THEMES[DEFAULT_THEME_ID]
 }
 
-/** Apply a theme's CSS variables, then override the accent (user choice). */
+/**
+ * Resolve a persisted accent to a colour the derivations can reason about.
+ *
+ * `appearance.accent` is untyped JSON on disk exactly as the theme id is, and
+ * the colour input is not the only thing that can write it. An unparseable
+ * value used to reach the DOM as a dropped declaration - `--accent` silently
+ * left on the stylesheet's fallback while everything derived beside it was
+ * derived from a luminance of zero. Resolve it once, here, so every value
+ * below is derived from the colour that actually paints.
+ */
+export function resolveAccent(accent: unknown, theme: Theme): string {
+    const m = typeof accent === "string" ? HEX6.exec(accent.trim()) : null
+    // Normalised, not echoed: `aabbcc` parses here but is not a valid CSS
+    // colour, and the whole point of resolving is that what is derived and what
+    // is painted are the same string.
+    return m ? "#" + m[1].toLowerCase() : theme.accent
+}
+
+/** Apply a theme's CSS variables, then the accent (user choice) and all it implies. */
 export function applyTheme(id: ThemeId, accent?: string): void {
     const theme = resolveTheme(id)
     const root = document.documentElement
     for (const [k, v] of Object.entries(theme.vars)) root.style.setProperty(k, v)
-    const ac = accent || theme.accent
+    const ac = resolveAccent(accent, theme)
     root.style.setProperty("--accent", ac)
-    // Light themes read better with a darker accent-soft; dark themes a lighter one.
-    root.style.setProperty("--accent-soft", shade(ac, theme.mode === "light" ? -0.18 : 0.18))
+    // Derived from the resolved accent and the theme's real ground - never from
+    // `mode`, and never from a literal in the palette above, which is what let
+    // a documented contrast figure be measured against a colour nothing painted.
+    for (const [k, v] of Object.entries(deriveAccentVars(ac, theme.vars["--bg"])))
+        root.style.setProperty(k, v)
     // The resolved id, not the requested one - the attribute must never name a
     // theme the palette above did not actually apply.
     root.dataset.theme = theme.id

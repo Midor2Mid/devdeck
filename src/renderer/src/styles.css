@@ -15,7 +15,16 @@
     --muted: #8f8678; /* taupe */
     --faint: #888173; /* AA on --bg (4.50:1), below --muted (4.84:1) */
     --accent: #b8895c; /* clay / amber — the one accent */
-    --accent-soft: #caa07a;
+    /* The accent's three dependents are DERIVED, not declared: applyTheme()
+       computes them from the accent that actually resolves (a user can pick
+       their own) via deriveAccentVars() in themes.ts, which is the only place
+       allowed to state a value for them. These three are Sumi's derived values,
+       repeated here for the frame before applyTheme runs, and for nothing else
+       — any contrast figure must be measured against deriveAccentVars' output,
+       never against a literal here or in a theme's palette. */
+    --accent-soft: #c59e79; /* accent INK under the cursor — away from the ground */
+    --accent-lift: #c59e79; /* the accent FILL under the cursor — away from its label */
+    --on-accent: #14110d; /* the ink a filled accent block carries */
     --moss: #8c9a68; /* shell */
     --clay: #c4855d; /* claude */
     --ok: #8c9a68;
@@ -109,15 +118,24 @@ button:disabled {
     opacity: 0.4;
     cursor: default;
 }
-/* The one filled, high-contrast action: amber fill, near-black text (per DESIGN.md). */
+/* The one filled, high-contrast action: accent fill, derived ink (per DESIGN.md). */
 button.accent {
     background: var(--accent);
     color: var(--on-accent);
     border-color: var(--accent);
 }
+/* Hover LIFTS: --accent-lift is the accent stepped one hover away from
+   --on-accent, so the label can only get crisper — 6.07 -> 7.65 Sumi,
+   5.13 -> 6.73 Washi, 9.09 -> 10.43 Slate. It used to be --accent-soft, which
+   is the accent stepped away from the GROUND: right for accent ink on a page,
+   and on the one light theme the exact opposite of what a fill needs — it
+   darkened the fill under near-black ink to 3.65:1 and the hover read as
+   pressed. The border deliberately stays --accent so the button's boundary
+   against the page is the same figure at rest and on hover (9.32 / 5.61 /
+   3.20); only the surface moves, which is what "lifted" means here. */
 button.accent:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent-soft);
+    background: var(--accent-lift);
+    border-color: var(--accent);
     color: var(--on-accent);
 }
 
@@ -199,10 +217,14 @@ select:focus {
    is something here; --text is the ink for a fact the app can vouch for. The
    accent arrives only under the cursor, where it means "this chip is a door".
    --text on --bg: 16.03 Slate / 12.87 Sumi / 10.73 Washi (it was --accent-soft
-   at 11.38 / 7.30 / 4.03, i.e. the accent's weakest reading was on the one
-   light theme). Hover is --accent-soft, not --accent: 10.70 / 7.07 / 4.49
-   against --accent's 9.32 / 5.61 / 3.20, because a chip must not get HARDER to
-   read when you point at it. */
+   at 10.70 / 7.07 / 4.49, i.e. the accent's weakest reading was on the one
+   light theme). Hover is --accent-soft, not --accent: the same 10.70 / 7.07 /
+   4.49 against --accent's 9.32 / 5.61 / 3.20, because a chip must not get
+   HARDER to read when you point at it — which is what --accent-soft is for,
+   and why the accent FILL hovers to --accent-lift instead.
+   Every figure here is --accent-soft as deriveAccentVars() computes it. The
+   11.38 / 7.30 / 4.03 this comment used to quote was measured against the
+   palette literals applyTheme overwrote, and those literals no longer exist. */
 .sb-changes {
     color: var(--text);
     cursor: pointer;
@@ -2391,8 +2413,9 @@ button .ic,
    --bg-2 in Washi, at 9.5px, i.e. a word too faint to read set in the colour
    that exists to be noticed. As --text it measures 15.03 / 12.17 / 9.82 on
    --bg-2 and 16.03 / 12.87 / 10.73 on --bg (Slate / Sumi / Washi), and
-   `waiting`'s own former --accent-soft (10.03 / 6.69 / 4.11) goes with it,
-   which is what makes the head agree with the dot: one token for one state.
+   `waiting`'s own former --accent-soft (10.03 / 6.69 / 4.11, also on --bg-2,
+   as deriveAccentVars computes it) goes with it, which is what makes the head
+   agree with the dot: one token for one state.
    attention still outranks waiting on this line by the `!` beside it and by the
    words themselves. */
 .ov-flag {
@@ -2459,9 +2482,11 @@ button .ic,
     color: var(--on-accent);
     font-weight: 600;
 }
+/* Same lift as every other accent fill (see button.accent:hover): the surface
+   moves away from its own label, the --accent border holds the boundary. */
 .ov-approve-yes:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent-soft);
+    background: var(--accent-lift);
+    border-color: var(--accent);
     color: var(--on-accent);
 }
 .ov-approve-no {
@@ -4434,14 +4459,24 @@ button .ic,
 .wt-icon { color: var(--accent); flex: none; }
 .wt-info { flex: 1; min-width: 0; }
 .wt-name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+/* `main` beside the ★ is a CLASSIFICATION of the row, so it takes the badge
+   tiers' bare-uppercase micro-label — --faint, letter-spaced, no fill.
+   It was --on-accent ink on a --moss fill, which only worked because
+   --on-accent happened to be a fixed near-black in all three palettes. Now
+   that the ink is derived from the accent's luminance, a dark user-picked
+   accent flips it to near-white on light green (1.81 / 3.36 / 2.80 on
+   Slate / Washi / Sumi's --moss) — so this chip stops borrowing the ink for a
+   fill that was never the accent. --faint on --bg-3 measures
+   4.80 Sumi / 4.84 Washi / 4.60 Slate, and the row loses a fill that only ever
+   stated a fact. The ★ beside it already carries "this is the main worktree";
+   the word is what makes the glyph legible without a legend. */
 .wt-tag {
     font-size: 9.5px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--on-accent);
-    background: var(--moss);
-    padding: 1px 6px;
-    border-radius: 10px;
+    color: var(--faint);
+    background: transparent;
+    padding: 0;
 }
 .wt-path {
     font-family: var(--mono, monospace);

@@ -41,7 +41,7 @@ import "monaco-editor/esm/vs/basic-languages/ini/ini.contribution"
 import "monaco-editor/esm/vs/basic-languages/dockerfile/dockerfile.contribution"
 
 import { loader } from "@monaco-editor/react"
-import { THEMES } from "./themes"
+import { THEMES, deriveAccentVars } from "./themes"
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker"
 import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker"
 import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker"
@@ -77,6 +77,12 @@ const hex = (c: string): string => c.replace("#", "")
 for (const t of Object.values(THEMES)) {
     const v = t.vars
     const x = t.xterm
+    // `--accent-soft` is derived, not declared - the palette used to carry a
+    // literal that applyTheme overwrote, and reading it here painted Monaco a
+    // colour the app itself never showed. Derived from the theme's OWN accent:
+    // Monaco themes are defined once at import, so a user-picked accent does
+    // not reach them (the keyword token has always had the same limitation).
+    const accentSoft = deriveAccentVars(t.accent, v["--bg"])["--accent-soft"]
     monaco.editor.defineTheme(t.monacoId, {
         base: t.mode === "light" ? "vs" : "vs-dark",
         inherit: true,
@@ -91,7 +97,7 @@ for (const t of Object.values(THEMES)) {
             { token: "delimiter", foreground: hex(v["--muted"]) },
             { token: "operator", foreground: hex(v["--accent"]) },
             { token: "variable", foreground: hex(v["--text"]) },
-            { token: "function", foreground: hex(v["--accent-soft"]) },
+            { token: "function", foreground: hex(accentSoft) },
             { token: "tag", foreground: hex(v["--accent"]) },
             { token: "attribute.name", foreground: hex(x.yellow) }
         ],

@@ -1,6 +1,6 @@
 ---
 name: DevDeck
-version: 0.9.5
+version: 0.9.6
 description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
@@ -16,7 +16,12 @@ colors:
   muted: "#99a1b2"
   faint: "#6f7686"
   accent: "#eba65c"
-  accentSoft: "#f2bd83"
+  # Derived from `accent` at runtime by deriveAccentVars() in themes.ts, which
+  # is the only place allowed to state them. Slate's values shown; no theme
+  # declares its own, and no ratio may be measured against anything else.
+  accentSoft: "#efb679"
+  accentLift: "#efb679"
+  onAccent: "#14110d"
   ok: "#5fce8f"
   danger: "#e9786b"
 typography:
@@ -52,7 +57,8 @@ components:
     padding: 12px
   button-accent:
     backgroundColor: "{colors.accent}"
-    textColor: "{colors.bg}"
+    hoverBackgroundColor: "{colors.accentLift}"
+    textColor: "{colors.onAccent}"
     typography: "{typography.body}"
     rounded: "{rounded.sm}"
     padding: 12px
@@ -118,6 +124,11 @@ One accent carries the eye; semantic colors are separate from it.
   (muted/faint are tuned to clear WCAG-AA contrast on the ground).
 - **accent (#eba65c):** the single warm amber that drives interaction — active
   states, focus, the primary CTA. Spent in **three tiers**, below.
+- **accentSoft / accentLift / onAccent:** the accent's three **derived**
+  values — accent ink under the cursor, the accent fill under the cursor, and
+  the ink a fill carries. A user can pick their own accent, so no theme states
+  these; `deriveAccentVars()` computes them from whichever accent resolves.
+  Details and figures under the accent budget.
 - **ok (#5fce8f) / danger (#e9786b):** semantic only — success and destructive.
   They never stand in for the accent.
 
@@ -135,7 +146,7 @@ actually be held to:
 
 | Tier | Means | Ceiling |
 | --- | --- | --- |
-| **1 · Fill** | *the act* — a solid accent block with `--on-accent` ink | one per frame for a frame-level act; one per **blocked session** in a list of sessions |
+| **1 · Fill** | *the act* — a solid accent block with `--on-accent` ink, lifting to `--accent-lift` under the cursor | one per frame for a frame-level act; one per **blocked session** in a list of sessions |
 | **2 · Stripe / underline** | *where you are* | one per surface — a surface being a set of peers among which exactly one is selected |
 | **3 · Ink** | *you can act here, now* | the `attention` dot and its `!`, the wants-you flag, focus rings, hover |
 
@@ -147,12 +158,13 @@ Three things fall out of that, and all three were live defects:
 
 - **Tier 1 is the only tier where the accent still buys a signal.** `qa`
   measured `--accent` against `--clay` at **1.32 : 1 (Slate) · 1.01 : 1 (Sumi) ·
-  1.15 : 1 (Washi)**, and a 100% accent fill against Washi's ground at 2.92:1.
+  1.15 : 1 (Washi)**, and a 100% accent fill against Washi's `--bg-2` at 2.92:1
+  (3.20:1 on `--bg`).
   As *ink*, the accent is barely a colour at all in two of three themes. As a
   filled block it stops being a hue comparison and becomes a shape, and its
   label clears the text floor everywhere (`--on-accent` on `--accent`: 9.09 /
-  6.07 / 5.13). This is why spending the accent widely costs the one place it
-  works.
+  6.07 / 5.13, and on `--accent-lift` under the cursor: 10.43 / 7.65 / 6.73).
+  This is why spending the accent widely costs the one place it works.
 - **A segment never takes the fill.** `--seg-tint` + weight 600, per the
   active-state grammar. `.ov-seg button.on` and `.usage-windows .btn-min.on`
   used a full fill for a time range and an Overview mode; both are now the tint,
@@ -167,7 +179,9 @@ The cuts this rule required, recorded so they are not quietly re-added:
 `.topbar-brand` and the `.empty-state` ensō watermark (brand is not an act) →
 `--muted`; `.sb-changes` and `.sb-pull.behind` (facts about the repo) → `--text`
 with the accent only on hover; `+ Claude` and its split-button caret → ghost;
-and `✓ Approve` **gains** the fill it should always have had. A Terminal frame
+`.wt-tag`'s `main` chip → the bare-uppercase classification tier (it was a
+`--moss` fill borrowing `--on-accent`, which only worked while that ink was a
+fixed near-black); and `✓ Approve` **gains** the fill it should always have had. A Terminal frame
 now spends the accent on the three Tier-2 actives (document tab, deck key, view
 key), the Tier-3 marks that mean an agent is blocked on you, and the terminal's
 own cursor. Nothing else.
@@ -181,13 +195,71 @@ the one to make easiest to hit.
 
 **A user can pick their own accent**, so no rule above may depend on the shipped
 value. None does: every tier is a *form* first (a fill, a stripe, a glyph) and
-the accent is what fills it. One known consequence is recorded rather than
-hidden — `button.accent:hover` swaps in `--accent-soft`, which `applyTheme`
-derives by *darkening* on a light theme, so `--on-accent` on that hover measures
-**4.07:1 in Washi**, a hair under the 4.5:1 text floor. It is app-wide and
-pre-existing on every primary CTA, not something Approve introduced, and the fix
-is to derive `--on-accent` from the resolved accent's luminance rather than
-pinning it near-black per theme. Not done here; named so it is not rediscovered.
+the accent is what fills it. Three values follow the accent rather than being
+declared, and `deriveAccentVars()` in `themes.ts` is the **only** place allowed
+to state any of them:
+
+| Token | What it is | Where it steps |
+| --- | --- | --- |
+| `--accent-soft` | accent **ink** under the cursor (`button:hover`, `.sb-changes:hover`, the pull chip) | one step *away from the page ground* |
+| `--accent-lift` | the accent **fill** under the cursor (`button.accent:hover`, `✓ Approve`) | one step *away from its own label* |
+| `--on-accent` | the ink a filled accent block carries, at rest and on hover alike | whichever of two inks contrasts better with the resolved accent |
+
+**Two hover tokens, because they want opposite things.** Ink on a page has to
+move away from the ground; a fill under a label has to move away from the label.
+On a dark theme those are the same direction, which is how one token did both
+jobs for a year. On Washi they are opposite, and the fill lost: hovering a CTA
+*darkened* it under near-black ink, so the primary action read as pressed or
+disabled at the moment it should have read as clickable. The direction is now a
+property of the resolved pair — away is the only direction that cannot cost
+contrast — so *"the hover is never harder to read than the rest state"* is a
+property of the derivation and not a fact about three shipped accents.
+
+The border stays `--accent` on hover. The button's boundary against the page is
+therefore the same figure at rest and hovered, and only the surface moves, which
+is what "lifted" means here.
+
+| Theme | label, rest | label, hover | fill vs `--bg`, rest | fill vs `--bg`, hover | boundary, both |
+| --- | --- | --- | --- | --- | --- |
+| Slate | 9.09 | **10.43** | 9.32 | 10.70 | 9.32 |
+| Sumi | 6.07 | **7.65** | 5.61 | 7.07 | 5.61 |
+| Washi | 5.13 | **6.73** | 3.20 | 2.44 | 3.20 |
+
+*Label* is `--on-accent` on the fill; *fill* is the fill against `--bg`;
+*boundary* is the 1px border (`--accent`) against `--bg`. Washi is the only
+theme whose fill separates less from the paper when lifted, which is why the
+border is the token that holds the shape there.
+
+> **Every contrast figure in this document is measured against
+> `deriveAccentVars()`' output, and must name what it was measured against.**
+> This paragraph used to quote **4.07:1** for Washi's accent hover. The real
+> figure was **3.65:1**: 4.07 was measured against `--accent-soft: #9c6a3d`, a
+> literal in Washi's palette that `applyTheme` overwrote on every single launch.
+> No theme declares `--accent-soft`, `--accent-lift` or `--on-accent` any more
+> and a test asserts none ever does again. This was the *second* time a
+> documented ratio had been measured against a colour the app does not render,
+> so the rule is stated as a rule: name the value, and make sure it is one that
+> paints.
+
+**What the derivation guarantees, for any accent whatsoever:** the ink is the
+better of the two inks; the hover step is visible (its floor is calibrated on
+`--bg` → `--bg-2`, the smallest step this system already relies on to be seen);
+and the ink chosen for the rest fill is still the right ink on the hover fill,
+because the lift moves *further* from the point where the two inks are equal.
+
+**How it degrades.** Two limits, stated rather than discovered later. First, no
+two-ink scheme can clear the 4.5 text floor for *every* accent: an accent
+sitting exactly where the two inks are equal reads **4.17:1** either way. That
+band is roughly relative luminance 0.16–0.21, all three shipped accents are
+outside it, and buying 0.4 of a point would cost the palette its warm
+near-black for pure black. Second, the derivation cannot rescue an accent that
+is already illegible at rest — a near-white pick on Washi reads 1.10:1 against
+the paper and its hover only reaches 1.39:1; a near-black pick on Slate reads
+1.03:1 and reaches 1.60:1. In both cases the *fill* still works, because the
+label follows the accent's luminance. Colours at a pole have no headroom to step
+into, so the step inverts rather than vanishing, and a fully saturated primary
+(`#00ff00`) spends label contrast to stay visible: 13.72 → 9.07. **The accent
+picker has no floor of its own**, and giving it one is not designed here.
 
 There is deliberately **no warning/attention color token**, and that constraint is
 load-bearing: the default accent *is* amber, so an "attention amber" would be the
