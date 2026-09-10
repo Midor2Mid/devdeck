@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest"
 import { useStore, clearActed } from "../src/renderer/src/store"
 import { useSettings } from "../src/renderer/src/settings"
 import { leaf } from "../src/renderer/src/layout"
-import { forgetTail } from "../src/renderer/src/missionTail"
+import { forgetTail, getLastAt, isStalled, STALL_MS } from "../src/renderer/src/missionTail"
 
 const TERM = "t-replay"
 const BEL = "\x07"
@@ -269,6 +269,66 @@ describe("a replayed chunk is not an event", () => {
         // And the second one still promotes, on the bar that was always there.
         ptyData({ id: TERM, data: "editing store.ts" + CRLF })
         expect(useStore.getState().agentStatus[TERM]).toBe("working")
+        vi.useRealTimers()
+    })
+
+    /**
+     * The silence clock, one field over from the bells above.
+     *
+     * `recordTail` stamps `lastAt` - "when this terminal last produced output" -
+     * and it did so BEFORE the replay guard, so the same second showing of the
+     * same bytes that must not ring a bell was refreshing the stall timer.
+     * Glancing at a tab reset "silent for N" and cleared a STALLED chip, which
+     * is the visibility-changes-classification defect this store is organised
+     * against: whether you were looking may change a count or a form, never
+     * what a session IS.
+     *
+     * A replay is not evidence the agent spoke. It carries no instant of its
+     * own - main replays whatever it kept, which may be hours old - so there is
+     * nothing in it to stamp.
+     */
+    it("does not let a replayed transcript postpone a stall", async () => {
+        seed(false)
+        const turn = "Refactored 4 files." + CRLF + "Ready for review." + CRLF
+        const t0 = Date.now()
+        ptyData({ id: TERM, data: turn })
+        await vi.advanceTimersByTimeAsync(200)
+
+        // Two minutes of silence on a live session a board card is waiting on.
+        // The clock is moved rather than run so no unrelated interval fires;
+        // `alive` and `awaited` are passed straight in - the fact under test is
+        // `lastAt`, not the two gates around it.
+        const later = t0 + STALL_MS + 1000
+        vi.setSystemTime(later)
+        expect(isStalled(getLastAt(TERM), true, true, later)).toBe(true)
+
+        // Glance at the tab: the pane remounts and main replays the buffer.
+        useStore.getState().jumpToTerm(TERM)
+        ptyData({ id: TERM, data: turn, replay: true })
+
+        // Was false - the glance had rewritten `lastAt` to now.
+        expect(isStalled(getLastAt(TERM), true, true, later)).toBe(true)
+        vi.useRealTimers()
+    })
+
+    /**
+     * The direction that must not be traded away, as everywhere else in this
+     * file: real output really does reset the clock, and a stall that has been
+     * answered has to clear.
+     */
+    it("still refreshes the silence clock for a live chunk", async () => {
+        seed(false)
+        const t0 = Date.now()
+        ptyData({ id: TERM, data: "Ready for review." + CRLF })
+        await vi.advanceTimersByTimeAsync(200)
+
+        const later = t0 + STALL_MS + 1000
+        vi.setSystemTime(later)
+        expect(isStalled(getLastAt(TERM), true, true, later)).toBe(true)
+
+        ptyData({ id: TERM, data: "reading store.ts" + CRLF })
+        expect(getLastAt(TERM)).toBe(later)
+        expect(isStalled(getLastAt(TERM), true, true, later)).toBe(false)
         vi.useRealTimers()
     })
 

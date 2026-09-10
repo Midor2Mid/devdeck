@@ -2903,35 +2903,14 @@ button .ic,
 
 /* ---------- auth pane ---------- */
 
-/* ---------- API environment bar + manager ---------- */
-
-.env-body {
-    display: flex;
-    gap: 16px;
-    min-height: 0;
-    flex: 1;
-}
-
-/* ---------- API request tests / assertions ---------- */
-
-.status {
-    font-weight: 600;
-}
-.status.ok {
-    color: var(--ok);
-}
-.status.redirect {
-    color: var(--accent-soft);
-}
-.status.error {
-    color: var(--danger);
-}
+/* ---------- Editor panel ---------- */
+/* Moved here from the deleted "API request tests / assertions" section, which
+   was the response-status pill's home: this rule is the editor's save/read
+   error line (EditorPanel.tsx) and is its only remaining user. */
 .resp-error {
     padding: 14px;
     color: var(--danger);
 }
-
-/* ---------- Editor panel ---------- */
 .editor-panel {
     height: 100%;
     display: flex;
@@ -3223,6 +3202,61 @@ button .ic,
     box-shadow: var(--elev-3);
     /* Clip scrolling children to the rounded corners. */
     overflow: hidden;
+}
+
+/* The scrolling half of a modal. Restored 2026-09-10: `.modal-body` was deleted
+   on 2026-09-04 with the recordings modal, as if it had been that modal's own
+   rule, and FIVE shipping modals use it (Worktrees, AI usage, PR composer,
+   Project env, Saved commands). Without it a long body has no bounded height,
+   so `.modal`'s `overflow: hidden` above simply clipped it and no ancestor
+   scrolled - a 40-row worktree list ran 1,773px past the modal's edge with the
+   rows below the fold unreachable.
+
+   The old rule's `padding: 12px 14px` is deliberately NOT restored: it belonged
+   to a modal that set `padding: 0`, and re-adding it would double `.modal`'s
+   own padding on all five.
+
+   `:has(> .modal-body)` rather than putting the flex column on `.modal`: three
+   of the five modals declare it themselves, `.settings-modal` is a flex ROW,
+   and every other modal in the app is a plain block. Selecting on the body's
+   presence makes the pairing self-maintaining - a new modal that uses
+   `.modal-body` cannot forget the half that bounds it. */
+.modal:has(> .modal-body) {
+    display: flex;
+    flex-direction: column;
+}
+/* Shrink-only, no flex-grow, which is what keeps a SHORT body honest: the modal
+   is content-sized until it hits `max-height`, so there is no free space to
+   grow into and no dead space, and `overflow-y: auto` draws nothing. Past
+   max-height the body shrinks instead of overflowing - `min-height: 0` is what
+   lets it, since a flex item's `auto` floor is its content height, which is
+   exactly the refusal-to-shrink that clipped. Holds at any window size because
+   `.modal`'s cap is `88vh`; the tight case is the 600px window minimum, where
+   the body gets 528px. */
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+}
+/* The affordance, drawn explicitly - see DESIGN.md "Overflow and the scroll
+   affordance" and the `.deck-strips` note further down this file, which is
+   where this idiom and the reason for `--border-strong` come from. Both
+   scrollers get it: `.modal-body` is the fallback for a body with no designated
+   scroller, and `.wt-list` is the one that actually moves in Worktrees, where
+   the create row stays put above it. */
+.modal-body::-webkit-scrollbar,
+.wt-list::-webkit-scrollbar {
+    width: 8px;
+}
+.modal-body::-webkit-scrollbar-thumb,
+.wt-list::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 4px;
+}
+.modal-body::-webkit-scrollbar-thumb:hover,
+.wt-list::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
 }
 .modal-title {
     font-size: var(--fs-title);

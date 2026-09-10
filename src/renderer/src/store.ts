@@ -1206,8 +1206,12 @@ export const useStore = create<AppState>((set, get) => {
             })
         }
         if (!isAgentId(get().agentOf(id))) return
-        // Keep a cleaned tail of this agent's output for the Mission Control peek.
-        recordTail(id, data)
+        // Keep a cleaned tail of this agent's output for the Mission Control
+        // peek. The flag goes in with it: the tail takes a replay (it is the
+        // only copy after a reload), the silence clock must not, because a
+        // replay is not evidence the agent spoke - recordTail's own comment
+        // carries the reasoning.
+        recordTail(id, data, replay)
         const visible = isVisible(id)
         // M4: visibility gates the NOTIFICATION, never the classification. The
         // bell is a fact about the agent, and letting `!visible` decide whether

@@ -1,6 +1,6 @@
 ---
 name: DevDeck
-version: 0.9.3
+version: 0.9.4
 description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
@@ -729,6 +729,32 @@ attention color the accent already owns.
 
 A machine-readable value inside the sentence (a filename, a path) is set in
 `--font-mono` via `<code>`, per the sans-for-names/mono-for-values rule.
+
+### Overflow and the scroll affordance
+
+**A surface that can outgrow its box scrolls, and says so.** The pattern is a
+pair, and both halves have to be present: something caps the height (a
+`max-height`, or a flex parent that has one), and the child holding the growing
+content takes `min-height: 0; overflow-y: auto`. The `min-height` is the
+load-bearing half — a flex item's `auto` minimum is its own content height,
+which is exactly the refusal-to-shrink that turns a long list into a clipped
+one. Two live cases: a modal's `.modal-body` (and the `.wt-list` inside
+Worktrees) and the deck's key row. The Worktrees list was unreachable below the
+fold for six days because its modal had the cap and nothing had the scroll.
+
+The affordance is **drawn explicitly — an 8px bar with a `--border-strong` thumb
+at 4px radius** — not the global quiet scrollbar, and never
+`scrollbar-width: thin`: setting `thin` makes Chromium ignore the
+`::-webkit-scrollbar` rules and draw its own, and what it drew was invisible at
+every theme. `--border-strong` is the token that clears 3:1 against every
+theme's ground where `--border` does not.
+
+A scrollbar is honest by construction: it exists exactly when there is more to
+see, its thumb length says how much of the content is off-screen, and it costs
+the surface those 8px only while it is overflowing. The corollary is that a
+short surface must gain **nothing** — no bar, no fixed height, no dead space.
+Shrink-only (no `flex-grow` on the scrolling child) is what guarantees it: with
+the container sized by its content there is no free space to grow into.
 
 ## Do's and Don'ts
 

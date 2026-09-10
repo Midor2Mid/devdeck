@@ -147,11 +147,39 @@ export function hasBell(id: string, chunk: string): boolean {
  * silence. The number is unchanged.
  */
 export const STALL_MS = 120_000
-/** Record a raw pty chunk for a terminal (cheap; no React state). */
-export function recordTail(id: string, chunk: string): void {
+/**
+ * Record a raw pty chunk for a terminal (cheap; no React state).
+ *
+ * `replay` splits the two things this does. The TAIL is a record of what the
+ * agent said, and a replayed transcript is exactly that - after a renderer
+ * reload it is the only copy left, so the peek keeps taking it (re-appending
+ * bytes already in the tail is a no-op for the display: the last lines of
+ * `transcript + transcript` are the last lines of the transcript).
+ *
+ * `lastAt` is not a record of bytes, it is an INSTANT - "when this terminal
+ * last produced output" - and a replay carries none of its own. Main resends
+ * whatever it kept, which may be an hour old, so stamping `now` for it said the
+ * agent had just spoken. That postponed `isStalled` by however long the user
+ * looked away, i.e. glancing at a tab cleared a STALLED chip: visibility
+ * deciding what a session IS, which is the defect class the replay flag exists
+ * to close one field over (see store.ts's onPtyData, tests/ptyReplay.test.ts).
+ *
+ * Nothing legitimately wants the stamp here. A re-attach does mean the pane was
+ * just looked at, but that is the acknowledgement axis (`seen`), not the
+ * silence clock - and `markLaunched` already covers the only case a replay
+ * could plausibly be asked to seed, a session that has emitted nothing yet.
+ * After a renderer reload `lastAt` is simply absent, and absent is the honest
+ * answer: `isStalled` needs a real instant (`!!lastAt`) and `relTime` renders
+ * "" rather than a made-up duration, so the app says nothing instead of
+ * something untrue.
+ *
+ * Defaults to live, matching the payload's own `replay?: boolean`: a missing
+ * flag reads as live, and the unit tests here stamp by calling with two args.
+ */
+export function recordTail(id: string, chunk: string, replay = false): void {
     // Keep a larger window than the one-line peek so tiles can expand to context.
     tails.set(id, cleanTail(tails.get(id) ?? "", chunk, 4000))
-    lastAt.set(id, Date.now())
+    if (!replay) lastAt.set(id, Date.now())
 }
 
 /** The current display peek (last non-empty line) for a terminal. */
