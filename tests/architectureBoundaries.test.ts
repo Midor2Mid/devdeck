@@ -92,6 +92,10 @@ const ALLOWED_TYPE_EDGES: string[] = [
     "preload/index.ts -> ../main/devices",
     "preload/index.ts -> ../main/server",
     "preload/index.ts -> ../main/notify",
+    // Whether the Windows taskbar overlay badge could be set. Same shape as
+    // notify: `setOverlayIcon` is a BrowserWindow method, so main is the only
+    // process that can answer, and the type is re-exported for the renderer.
+    "preload/index.ts -> ../main/badge",
     // The run ledger's row shapes, read straight from main rather than through
     // `shared/`. Debt, named above.
     "renderer/src/ledgerView.ts -> ../../main/ledger",

@@ -1,332 +1,264 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest"
-import { useStore, clearActed } from "../src/renderer/src/store"
-import { useSettings } from "../src/renderer/src/settings"
-import { leaf } from "../src/renderer/src/layout"
-import { forgetTail } from "../src/renderer/src/missionTail"
-import { wantsYou } from "../src/renderer/src/tileState"
+import { describe, it, expect } from "vitest"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import {
+    declaredFor,
+    saidLine,
+    saidTip,
+    blockedWord,
+    hookHealth
+} from "../src/renderer/src/declaredSignal"
 import type { DeclaredSignal } from "../src/shared/attention"
 
-const TERM = "t-declared"
-const BEL = "\x07"
-
-let ptyData: (e: { id: string; data: string; replay?: boolean }) => void = () => undefined
-let declare: (s: DeclaredSignal) => void = () => undefined
-let ptyWrites: { id: string; data: string }[] = []
-
-/** Only the namespaces this path touches, as in tests/visibilityGate.test.ts. */
-function stubApi(): void {
-    ;(globalThis as unknown as { window: unknown }).window = {
-        api: {
-            pty: {
-                onData: (
-                    fn: (e: { id: string; data: string; replay?: boolean }) => void
-                ): (() => void) => {
-                    ptyData = fn
-                    return (): void => undefined
-                },
-                onExit: (): (() => void) => (): void => undefined,
-                kill: (): void => undefined,
-                input: (id: string, data: string): void => {
-                    ptyWrites.push({ id, data })
-                }
-            },
-            notify: {
-                state: async (): Promise<{ supported: boolean; error: string | null }> => ({
-                    supported: true,
-                    error: null
-                }),
-                attention: async (): Promise<{ supported: boolean; error: string | null }> => ({
-                    supported: true,
-                    error: null
-                }),
-                onActivate: (): (() => void) => (): void => undefined
-            },
-            attention: {
-                onDeclared: (fn: (s: DeclaredSignal) => void): (() => void) => {
-                    declare = fn
-                    return (): void => undefined
-                }
-            },
-            triggers: { onFired: (): (() => void) => (): void => undefined },
-            projects: {
-                list: async (): Promise<{ projects: unknown[]; activeId: string | null }> => ({
-                    projects: [],
-                    activeId: null
-                }),
-                setActive: async (): Promise<void> => undefined
-            },
-            workspace: {
-                load: async () => ({ ok: false as const, reason: "missing" as const }),
-                save: (): void => undefined
-            },
-            settings: { save: (): void => undefined },
-            ledger: { append: (): void => undefined, read: async (): Promise<unknown[]> => [] },
-            git: { changes: async (): Promise<{ path: string }[]> => [] }
-        }
-    }
-}
-
-function seed(watching = false): void {
-    forgetTail(TERM)
-    useStore.setState({
-        view: watching ? "terminal" : "mission",
-        activeId: "p1",
-        projects: [{ id: "p1", name: "P1", path: "/repo", addedAt: Date.now() }],
-        termAgents: { [TERM]: "claude" },
-        termCwd: {},
-        agentStatus: {},
-        declared: {},
-        paneHold: {},
-        tabsByProject: { p1: [{ id: "tab1", name: "claude 1", root: leaf(TERM) }] },
-        activeTabByProject: { p1: "tab1" },
-        activePaneByProject: watching ? { p1: TERM } : {},
-        notifications: [],
-        activity: [],
-        boardTasks: [],
-        seen: {},
-        answered: {}
-    })
-    clearActed(TERM)
-    ptyWrites = []
-}
+/**
+ * PROVENANCE, AS THE INTERFACE STATES IT.
+ *
+ * `b7e2d69` gave DevDeck a fact it did not show: a declaration writes
+ * `agentStatus` like any inference, and the `declared` axis beside it says the
+ * agent stated it rather than DevDeck guessing from pty bytes. The design
+ * ruling is that the distinction is carried in WORDS - a verb on words the app
+ * already has - and not in a mark: the status dot has five forms and DESIGN.md
+ * forbids a sixth, `attention` is the only status that may spend the accent,
+ * and a frame's mark budget was just cut from ~14 to 6.
+ *
+ * What is pinned here is every sentence, plus the two gates that stop a
+ * provenance marker becoming a lie.
+ */
 
 const sig = (over: Partial<DeclaredSignal> = {}): DeclaredSignal => ({
-    termId: TERM,
+    termId: "t1",
     state: "attention",
     matchedBy: "session-env",
-    at: Date.now(),
+    at: 1_700_000_000_000,
     event: "Notification",
     ...over
 })
 
-describe("a declared signal is recorded as declared", () => {
-    beforeAll(async () => {
-        stubApi()
-        await useStore.getState().init()
-        useSettings.setState({
-            agentIdleMs: 50,
-            notifications: { desktop: false, sound: false, waitingSound: false }
-        })
+describe("declaredFor", () => {
+    it("finds the record that is the provenance of the status being painted", () => {
+        const d = { t1: sig() }
+        expect(declaredFor(d, "t1", "attention")).toBe(d.t1)
     })
 
-    beforeEach(() => {
-        seed()
-        vi.useRealTimers()
+    it("reports nothing when there is no record - DevDeck guessed", () => {
+        expect(declaredFor({}, "t1", "attention")).toBeNull()
     })
 
-    it("sets the status the agent stated, with no bell and no waiting for silence", () => {
-        declare(sig({ state: "attention", message: "May I edit store.ts?" }))
-        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+    it("refuses a record whose state is not the status on screen", () => {
+        // setStatus keeps the two together for what it writes, so this is the
+        // defensive half - but a surface that labelled one state with another
+        // state's provenance would be claiming the agent said something it
+        // did not.
+        const d = { t1: sig({ state: "waiting" }) }
+        expect(declaredFor(d, "t1", "attention")).toBeNull()
     })
 
-    it("keeps the provenance beside it, so a surface can tell stated from guessed", () => {
-        declare(sig({ message: "May I edit store.ts?", event: "Notification" }))
-        const d = useStore.getState().declared[TERM]
-        expect(d?.state).toBe("attention")
-        expect(d?.event).toBe("Notification")
-        expect(d?.message).toBe("May I edit store.ts?")
+    it("refuses a dead session, because the DERIVED status has a value the store never writes", () => {
+        // A pty that exits stamps `paneHold` and every surface flips to
+        // `not-running` while the declaration is still sitting in the record.
+        // "The agent said so" over a process that is gone is exactly the class
+        // of claim this app keeps having to remove.
+        const d = { t1: sig() }
+        expect(declaredFor(d, "t1", "not-running")).toBeNull()
     })
 
-    it("leaves no such record for an INFERRED bell - that is the distinction", () => {
-        ptyData({ id: TERM, data: "may I edit store.ts?" + BEL })
-        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
-        expect(useStore.getState().declared[TERM]).toBeUndefined()
+    it("shows nothing for a declared `working`, matching the store's own gate", () => {
+        // `declaredHold` lets a declaration outrank the inference for the two
+        // hand-over states only: a declared `working` says a turn STARTED, not
+        // how it ends, and holds nothing. The visible axis has the same scope,
+        // so a WORKING tile - which has nothing to decide - gains no line.
+        const d = { t1: sig({ state: "working" }) }
+        expect(declaredFor(d, "t1", "working")).toBeNull()
+        expect(declaredFor(d, "t1", "idle")).toBeNull()
     })
 
-    it("feeds the SAME wants-you predicate the deck and Mission already read", () => {
-        declare(sig({ state: "waiting" }))
-        const status = useStore.getState().agentStatus[TERM]
-        expect(
-            wantsYou(
-                {
-                    status,
-                    prompt: null,
-                    exitCode: undefined,
-                    lastAt: Date.now(),
-                    awaited: false,
-                    alive: true,
-                    held: undefined
-                },
-                Date.now()
-            )
-        ).toBe(true)
-    })
-
-    it("writes nothing to any pty", () => {
-        declare(sig({ state: "attention" }))
-        declare(sig({ state: "waiting" }))
-        declare(sig({ state: "working" }))
-        expect(ptyWrites).toEqual([])
+    it("refuses a record that was never attributed to a session", () => {
+        const d = { t1: sig({ matchedBy: "none" }) }
+        expect(declaredFor(d, "t1", "attention")).toBeNull()
     })
 })
 
-// The inference defects qa and two agents found, each aimed at a session whose
-// agent has DECLARED its state. A statement about a session outranks a guess
-// about the same session, and none of these bytes is allowed to speak over it.
-describe("a declared hand-over outranks every inferred signal", () => {
-    beforeEach(() => {
-        seed()
-        vi.useRealTimers()
+describe("saidLine", () => {
+    it("quotes the agent's own words, because DevDeck could not have invented them", () => {
+        // The quotation marks are the form channel: quoted text reads as
+        // someone else's words with no key to learn, and it survives a
+        // colour-vision difference, reduced motion and all six skins.
+        expect(saidLine(sig({ message: "Allow Bash(npm test)?" }))).toBe(
+            "the agent said “Allow Bash(npm test)?”"
+        )
     })
 
-    it("survives the agent's own follow-up output", () => {
-        declare(sig({ state: "attention" }))
-        ptyData({ id: TERM, data: "one more line of thinking\r\n" })
-        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
+    it("states the provenance plainly when the hook carried no words", () => {
+        // A bare `{ state }` post from a hand-written wrapper, or a Stop with
+        // no last message. There is nothing to quote and "so" refers to the
+        // chip immediately above the line.
+        expect(saidLine(sig())).toBe("the agent said so")
     })
 
-    it("survives a remount's replay and its refit repaint", () => {
-        declare(sig({ state: "waiting", event: "Stop" }))
-        ptyData({ id: TERM, data: "the whole scrollback\r\n", replay: true })
-        ptyData({ id: TERM, data: "the whole scrollback\r\n" })
-        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
+    it("hedges the SUBJECT when only the folder matched", () => {
+        // main accepts a cwd match only when exactly one running agent is in
+        // that directory - a sound guess, and still a guess about WHICH pane.
+        // The hedge names the weaker route and explains why DevDeck believed
+        // it, in the same breath, rather than adding a second marker.
+        expect(saidLine(sig({ matchedBy: "cwd", message: "Run tests?" }))).toBe(
+            "the agent in this folder said “Run tests?”"
+        )
+        expect(saidLine(sig({ matchedBy: "cwd" }))).toBe("the agent in this folder said so")
     })
 
-    it("cannot be turned into attention by a BEL in a replayed transcript", () => {
-        declare(sig({ state: "waiting", event: "Stop" }))
-        ptyData({ id: TERM, data: "answered long ago?" + BEL, replay: true })
-        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
-        expect(useStore.getState().notifications).toEqual([])
-    })
-
-    it("is not promoted by CONTINUED output, which is the inference's own bar", () => {
-        // The case the two mechanisms genuinely disagree about, and the reason
-        // the gate in `setStatus` is not redundant with the output gate beside
-        // it. DevDeck's own `waiting` is PROVISIONAL - it is inferred from
-        // silence, so the session's own continued output legitimately refutes
-        // it, and two chunks carrying new characters promote it back to
-        // `working` (see `spokeSinceHandback`). A DECLARED `waiting` is not an
-        // inference and cannot be refuted by the same evidence: the agent
-        // stated the turn ended, and a byte is not a retraction. Only the
-        // user's answer, or the agent's next statement, ends it.
-        declare(sig({ state: "waiting", event: "Stop" }))
-        ptyData({ id: TERM, data: "first new line of a resumed turn\r\n" })
-        ptyData({ id: TERM, data: "second new line, quite different\r\n" })
-        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
-    })
-
-    it("is not escalated to the loud tier by a LIVE bell", () => {
-        // A real BEL, not an OSC terminator - the guard has to be tested with
-        // the thing it guards against. Plenty of agent CLIs ring on finishing a
-        // turn, and DevDeck's BEL heuristic cannot tell that ring from a
-        // question: it reads both as `attention`, the loud tier, which spends
-        // the accent and fires a desktop notification. A session whose agent
-        // STATED it handed back is a hand-back, and the statement is what the
-        // user is shown - so the whole branch is skipped, notification
-        // included, not merely its status write.
-        declare(sig({ state: "waiting", event: "Stop" }))
-        ptyData({ id: TERM, data: "done." + BEL })
-        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
-        expect(useStore.getState().notifications).toEqual([])
-    })
-
-    it("does not desynchronise the bell reader while it suppresses it", () => {
-        // The defect the fix could have re-manufactured. `hasBell` carries
-        // per-session OSC parser state and is only correct if it sees every
-        // live byte in order. Here an OSC title-set is OPENED in a chunk the
-        // declaration suppresses, the declaration is then spent, and the
-        // sequence's BEL terminator arrives in the next chunk. If the
-        // suppressed chunk had skipped the reader, that terminator would be
-        // read as a bell - a false question, manufactured by the code meant to
-        // remove false questions.
-        declare(sig({ state: "waiting", event: "Stop" }))
-        ptyData({ id: TERM, data: "\x1b]0;claude - repo" })
-        useStore.getState().notePaneInput(TERM)
-        ptyData({ id: TERM, data: BEL + "still going\r\n" })
-        expect(useStore.getState().agentStatus[TERM]).not.toBe("attention")
-        expect(useStore.getState().notifications).toEqual([])
-    })
-
-    it("still lets a bell through once the user has answered the declaration", () => {
-        // The other direction of the same gate, and what stops it wedging: an
-        // act spends the declaration, so the session is back on DevDeck's own
-        // reading and a genuine bell after that is a genuine new question.
-        declare(sig({ state: "waiting", event: "Stop" }))
-        useStore.getState().notePaneInput(TERM)
-        ptyData({ id: TERM, data: "one more thing?" + BEL })
-        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
-    })
-
-    it("is not aged into waiting by the silence clock", async () => {
-        vi.useFakeTimers()
-        declare(sig({ state: "attention" }))
-        ptyData({ id: TERM, data: "still printing\r\n" })
-        await vi.advanceTimersByTimeAsync(400)
-        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
-        vi.useRealTimers()
-    })
-
-    it("is not cleared by a glance", () => {
-        declare(sig({ state: "attention" }))
-        useStore.getState().jumpToTerm(TERM)
-        expect(useStore.getState().agentStatus[TERM]).toBe("attention")
-        expect(useStore.getState().declared[TERM]?.state).toBe("attention")
+    it("keeps an exact match unhedged on both of its routes", () => {
+        expect(saidLine(sig({ matchedBy: "cli-session" }))).toBe("the agent said so")
     })
 })
 
-describe("what a declaration is spent by", () => {
-    beforeEach(() => {
-        seed()
-        vi.useRealTimers()
+describe("saidTip", () => {
+    it("says the point first, then how sure DevDeck is that it was this pane", () => {
+        const tip = saidTip(sig({ event: "Notification", matchedBy: "session-env" }))
+        expect(tip).toContain("stated this itself")
+        expect(tip).toContain("did not read it off the terminal")
+        expect(tip).toContain("Notification")
+        expect(tip).toContain("matched by the session id DevDeck gave it")
     })
 
-    it("a newer declaration replaces it", () => {
-        declare(sig({ state: "attention" }))
-        declare(sig({ state: "working", event: "UserPromptSubmit" }))
-        expect(useStore.getState().agentStatus[TERM]).toBe("working")
-        expect(useStore.getState().declared[TERM]?.event).toBe("UserPromptSubmit")
-    })
-
-    it("the user answering it hands the session back to the screen classifier", () => {
-        declare(sig({ state: "attention" }))
-        useStore.getState().replySession(TERM, "yes")
-        ptyData({ id: TERM, data: "ok, editing store.ts\r\n" })
-        expect(useStore.getState().agentStatus[TERM]).toBe("working")
-    })
-
-    it("typing into the pane is the same act", () => {
-        declare(sig({ state: "attention" }))
-        useStore.getState().notePaneInput(TERM)
-        ptyData({ id: TERM, data: "ok, editing store.ts\r\n" })
-        expect(useStore.getState().agentStatus[TERM]).toBe("working")
-    })
-
-    it("a declared WORKING blocks nothing - it is not a hand-over", async () => {
-        // The one new failure mode this feature could introduce: a session that
-        // declares the start of a turn and never declares its end must still
-        // fall back to DevDeck's own reading, not to silence.
-        vi.useFakeTimers()
-        declare(sig({ state: "working", event: "UserPromptSubmit" }))
-        expect(useStore.getState().agentStatus[TERM]).toBe("working")
-        ptyData({ id: TERM, data: "thinking...\r\n" })
-        await vi.advanceTimersByTimeAsync(400)
-        expect(useStore.getState().agentStatus[TERM]).toBe("waiting")
-        vi.useRealTimers()
-    })
-
-    it("closing the session forgets it", () => {
-        declare(sig({ state: "attention" }))
-        useStore.getState().closePaneSilent(TERM)
-        expect(useStore.getState().declared[TERM]).toBeUndefined()
+    it("names the weaker route as the guess it is", () => {
+        expect(saidTip(sig({ matchedBy: "cwd" }))).toContain("only agent running there")
+        expect(saidTip(sig({ matchedBy: "cli-session" }))).toContain("sent earlier in this run")
     })
 })
 
-describe("a hook DevDeck could not attribute", () => {
-    beforeEach(() => {
-        seed()
-        vi.useRealTimers()
+describe("blockedWord", () => {
+    it("keeps DevDeck's own two words for an inference", () => {
+        // The words DESIGN.md fixes for the blocked-on-you line. Unchanged by
+        // this feature, which is the point: provenance adds a verb, it does not
+        // rename a state.
+        expect(blockedWord("attention", null)).toBe("needs you")
+        expect(blockedWord("waiting", null)).toBe("waiting for you")
     })
 
-    it("changes no session's status, and says so in the activity feed", () => {
-        declare(sig({ termId: null, matchedBy: "none", cwd: "C:/repos/web-api" }))
-        expect(useStore.getState().agentStatus[TERM]).toBeUndefined()
-        expect(useStore.getState().declared[TERM]).toBeUndefined()
-        const rows = useStore.getState().activity
-        expect(rows.length).toBe(1)
-        expect(rows[0].termId).toBe("")
-        expect(rows[0].label).toContain("C:/repos/web-api")
-        // …and counts it, which is the fact a Settings diagnostic needs and the
-        // feed cannot give (the feed is capped and clearable).
-        expect(useStore.getState().unmatchedHooks).toBe(1)
+    it("adds the verb, and nothing else, when the agent stated it", () => {
+        expect(blockedWord("attention", sig())).toBe("says it needs you")
+        expect(blockedWord("waiting", sig({ state: "waiting" }))).toBe(
+            "says it is waiting for you"
+        )
+    })
+
+    it("stays absent for every other status - the marker only ever adds", () => {
+        expect(blockedWord("working", null)).toBeNull()
+        expect(blockedWord("idle", null)).toBeNull()
+        expect(blockedWord("not-running", null)).toBeNull()
+        // Even with a record: nothing is listening behind a dead tab, so
+        // "says it needs you" would be the same lie in words the flag was
+        // already corrected for once.
+        expect(blockedWord("not-running", sig())).toBeNull()
+    })
+})
+
+describe("hookHealth", () => {
+    it("says a hook cannot arrive at all while the server is off", () => {
+        const h = hookHealth({ running: false, reporting: 0, unmatched: 0 })
+        expect(h.line).toBe("Hooks arrive on this server, so they need it switched on.")
+        expect(h.hint).toBeUndefined()
+    })
+
+    it("never lets zero read as health, and never claims history", () => {
+        // THE FAILURE THIS BLOCK EXISTS TO KILL: a hook wired wrong and a hook
+        // never wired produce the same nothing. So zero is a sentence, not an
+        // absence - and it is PRESENT TENSE, because a declaration is spent
+        // when you answer it and "no hook has arrived yet" would go false the
+        // moment one did and was answered.
+        const h = hookHealth({ running: true, reporting: 0, unmatched: 0 })
+        expect(h.line).toBe("No session is reporting its own state right now.")
+        expect(h.line).not.toMatch(/\byet\b/)
+        expect(h.hint).toContain("it is not reaching DevDeck")
+    })
+
+    it("counts the sessions that are reporting, with agreeing grammar", () => {
+        expect(hookHealth({ running: true, reporting: 1, unmatched: 0 }).line).toBe(
+            "1 session is reporting its own state."
+        )
+        expect(hookHealth({ running: true, reporting: 3, unmatched: 0 }).line).toBe(
+            "3 sessions are reporting their own state."
+        )
+    })
+
+    it("drops the guidance once something is reporting", () => {
+        expect(hookHealth({ running: true, reporting: 2, unmatched: 0 }).hint).toBeUndefined()
+    })
+
+    it("names an unmatched hook, its window, and the two causes", () => {
+        const h = hookHealth({ running: true, reporting: 0, unmatched: 2 })
+        expect(h.unmatched).toContain("2 hooks arrived since DevDeck started")
+        expect(h.unmatched).toContain("X-DevDeck-Session")
+        expect(h.unmatched).toContain("started outside DevDeck")
+    })
+
+    it("pluralises one unmatched hook", () => {
+        expect(hookHealth({ running: true, reporting: 0, unmatched: 1 }).unmatched).toContain(
+            "1 hook arrived"
+        )
+    })
+
+    it("is additive, not a fourth state", () => {
+        // One agent wired correctly while another was started outside DevDeck
+        // is a real pair of facts. Two independent sentences cannot contradict
+        // each other; one sentence choosing between them could.
+        const h = hookHealth({ running: true, reporting: 1, unmatched: 4 })
+        expect(h.line).toBe("1 session is reporting its own state.")
+        expect(h.unmatched).toContain("4 hooks arrived")
+    })
+
+    it("says nothing about unmatched hooks when there are none", () => {
+        expect(hookHealth({ running: true, reporting: 1, unmatched: 0 }).unmatched).toBeUndefined()
+    })
+})
+
+/**
+ * The grammar, held to the stylesheet.
+ *
+ * Provenance may not spend the accent (that is `attention`'s alone) and may not
+ * become a sixth dot form. Both are one grep away from being re-added by
+ * someone who thinks the line looks weak.
+ */
+describe("the provenance line's tokens", () => {
+    const css = readFileSync(
+        join(__dirname, "..", "src", "renderer", "src", "styles.css"),
+        "utf8"
+    )
+    const rule = (sel: string): string => {
+        const i = css.indexOf("\n" + sel + " {")
+        expect(i).toBeGreaterThan(-1)
+        return css.slice(i, css.indexOf("}", i))
+    }
+
+    it("sets the agent's words in --text on the tile's own ground", () => {
+        // --muted was the first choice, as metadata. It measures 4.46:1 on
+        // Washi's --bg-2 - the Mission tile's own background - which is under
+        // the 4.5 text floor for an 11px line whose words are the whole point.
+        const r = rule(".mtile-said")
+        expect(r).toContain("color: var(--text)")
+        expect(r).not.toContain("--muted")
+        expect(r).not.toContain("--faint")
+    })
+
+    it("spends no accent and adds no mark", () => {
+        const r = rule(".mtile-said")
+        expect(r).not.toContain("--accent")
+        expect(r).not.toContain("border")
+        expect(r).not.toContain("background")
+        expect(r).not.toContain("animation")
+    })
+
+    it("adds no sixth status-dot form", () => {
+        // The five are idle / working / waiting / attention / not-running.
+        const forms = new Set(
+            [...css.matchAll(/\.tab-dot\.status-([a-z-]+)/g)].map((m) => m[1])
+        )
+        expect([...forms].sort()).toEqual([
+            "attention",
+            "idle",
+            "not-running",
+            "waiting",
+            "working"
+        ])
     })
 })

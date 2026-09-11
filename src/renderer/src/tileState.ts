@@ -316,6 +316,108 @@ export function hasProcess(
 }
 
 /**
+ * The facts a want is read off.
+ *
+ * Named, rather than spelled out at both signatures, so `wantKind` and
+ * `wantsYou` cannot drift apart by one field - which is the whole class of bug
+ * they exist to close, one level down.
+ */
+export type WantInput = Pick<
+    TileStateInput,
+    "status" | "prompt" | "exitCode" | "lastAt" | "awaited" | "alive" | "held"
+>
+
+/** The three ways a session can want you, in the order the app follows them. */
+export type WantKind = "attention" | "stalled" | "waiting"
+
+/**
+ * A want's place in the follow order.
+ *
+ * THE STALL RULING. `wantsYou` has always counted a stall and `jumpToPending`
+ * could never find one - it filtered raw `waiting|attention`, and a stall
+ * carries neither - so the deck bar's control offered a door that was not
+ * there. The ruling is that a stalled session IS jumpable, and that a stall
+ * sits between `attention` and `waiting`.
+ *
+ * The order is not invented here. It is read off `resolveTileState`'s own
+ * precedence, where ASKING (rule 4) already precedes STALLED (rule 5) and
+ * STALLED already precedes WAITING (rule 7). A private priority inside one
+ * surface is how two surfaces come to describe the same sessions differently -
+ * see `tabDotStatus`'s note, one module over, for the same argument.
+ *
+ * Why that order is also right on its merits:
+ *
+ *   - `attention` is the agent naming what it needs, and one keystroke answers
+ *     it. A session that is asking AND silent is reported as the question: the
+ *     silence is real, but it is not the useful sentence, and demoting a live
+ *     question to "stalled" would bury the one state the accent is saved for.
+ *   - A stall is silence PLUS an expectation DevDeck itself recorded - a card
+ *     in `doing`, a live pipeline step (`awaitedTermIds`). Work has stopped
+ *     with something waiting on it, which is strictly worse than a hand-back.
+ *   - `waiting` is the resting state of an agent that finished its turn. Real,
+ *     and the quietest of the three.
+ *
+ * WHY NOT `missionTail.RANK`. That ladder ranks the four DERIVED STATUSES and
+ * is keyed on `DeckKeyStatus`. A stall is not one of them: it is `isStalled`'s
+ * reading of wall-clock silence, the status underneath it is whatever the agent
+ * last did (usually `waiting`), and adding it there would mean inventing a
+ * fifth status - exactly what `deck.ts` refuses to do for `not-running`. This
+ * is that ladder restricted to the three states that can want you, with the
+ * stall inserted where the classifier already puts it, and `tests/deck.test.ts`
+ * asserts the two orders stay consistent.
+ */
+const WANT_RANK: Record<WantKind, number> = { attention: 0, stalled: 1, waiting: 2 }
+
+/** Where a want sits in the follow order, as a number. Lower is sooner. */
+export const wantRank = (kind: WantKind): number => WANT_RANK[kind]
+
+/**
+ * WHY this session wants you, or `null` when it does not.
+ *
+ * The one predicate behind the deck bar's count, the Windows taskbar badge and
+ * Ctrl+Shift+J. `wantsYou` is this, read as a boolean; the jump is this, read
+ * as a ladder. That is the point: the count and the click were two filters over
+ * the same word, and they disagreed - the count counted a stall the click could
+ * not find, so the control reported a door and then reported that there wasn't
+ * one. One function cannot disagree with itself.
+ *
+ * ORDER OF THE TESTS, and each one is load-bearing:
+ *
+ *   1. No process behind the tab - nothing in there wants anything. Through
+ *      `hasProcess`, the single derivation the dot, the "N running" header and
+ *      this count all read.
+ *   2. A stall is read BEFORE `seen`, because `seen` may not dim one. `seen` is
+ *      event-scoped for the two hand-over states (granted against a transition,
+ *      cleared by `setStatus` on the next one); a stall arrives with no
+ *      transition at all, so nothing would ever clear the acknowledgement and
+ *      dimming it would mean forgetting a stuck agent silently, for as long as
+ *      it stays stuck.
+ *   3. `attention` (or a prompt, which is the same state with words we can
+ *      answer) outranks the stall reading - see WANT_RANK.
+ *
+ * A DECLARED HAND-OVER CAN STALL, and that is deliberate. A declaration is the
+ * agent's statement about its own turn; `awaited` is DevDeck's own record that
+ * something is still expected of it. Those are two different facts, and letting
+ * a hook silence the second would let an agent mark its own homework - a card
+ * left in `doing` would go quiet forever with nothing ever saying so. Nothing
+ * here is spent by it either, which is the declared axis's own invariant: this
+ * returns "stalled" while `agentStatus` keeps the declared `waiting`, so only
+ * the user acting or a newer declaration still spends the declaration. A
+ * declared `attention` is never demoted - test 3 above takes it first.
+ */
+export function wantKind(i: WantInput, now: number, seen = false): WantKind | null {
+    if (!hasProcess(i, i.held)) return null
+    const stalled = isStalled(i.lastAt, i.alive, i.awaited, now)
+    if (!stalled && seen) return null
+    if (i.status === "attention" || i.prompt) return "attention"
+    if (stalled) return "stalled"
+    if (i.status === "waiting") return "waiting"
+    // Reachable: a stall-free, unacknowledged session that is `idle` or
+    // `working` wants nothing, which is most of them.
+    return null
+}
+
+/**
  * Does this session want something from you?
  *
  * The ONE predicate behind every "who wants you" count in the frame — the deck
@@ -348,39 +450,12 @@ export function hasProcess(
  * `projectSessionCounts` (deck.ts) already honoured the ruling, so the switcher
  * card and the deck flag disagreed about the same word — which is the defect
  * this predicate exists to make impossible.
+ *
+ * Every rule above now lives in `wantKind`, and this is that answer read as a
+ * boolean. The signature and the behaviour are unchanged; what changed is that
+ * the jump reads the same function instead of a second filter over the same
+ * word, so the count can no longer promise a door the click cannot open.
  */
-export function wantsYou(
-    i: Pick<
-        TileStateInput,
-        "status" | "prompt" | "exitCode" | "lastAt" | "awaited" | "alive" | "held"
-    >,
-    now: number,
-    seen = false
-): boolean {
-    // Nothing behind the tab wants anything - through `hasProcess`, the single
-    // derivation the dot and the header's "N running" also read, so the flag
-    // cannot nag about a session the deck is already drawing as not-running.
-    // `exitCode` alone was the old test, and it missed `held`: a restored or
-    // exit-held pane has no pty either. That was harmless only because a
-    // restore does not bring statuses back with it - a latent bug resting on an
-    // accident somewhere else, which is not a guarantee.
-    if (!hasProcess(i, i.held)) return false
-    // A stall is the ONE thing `seen` may not dim, and not because it is
-    // louder. `seen` is event-scoped for the two hand-over states: it is
-    // granted against a transition and `setStatus` clears it on the next one,
-    // so acknowledging `waiting` acknowledges THAT hand-back and no future one.
-    // A stall arrives with no transition at all - that is what a stall IS - so
-    // nothing would ever clear the acknowledgement, and dimming it would be the
-    // opposite failure: forgetting a stuck agent silently, for as long as it
-    // stays stuck.
-    if (isStalled(i.lastAt, i.alive, i.awaited, now)) return true
-    if (seen) return false
-    // Blocked on a bell, blocked on an unanswered permission prompt, or
-    // finished its turn and handed back. Three ways to want you and one count.
-    //
-    // `prompt` was not in this input at all until 2026-09-07, which is how the
-    // tile and the counters came to answer different questions: the tile
-    // promoted to NEEDS YOU and drew live Approve/Deny while the deck flag and
-    // Mission's header both read zero.
-    return i.status === "attention" || !!i.prompt || i.status === "waiting"
+export function wantsYou(i: WantInput, now: number, seen = false): boolean {
+    return wantKind(i, now, seen) !== null
 }

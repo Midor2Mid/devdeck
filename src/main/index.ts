@@ -49,6 +49,7 @@ import * as crashSink from "./crashSink"
 import { redact, sanitizeLine } from "./redact"
 import { closePrompt } from "./closePrompt"
 import * as notify from "./notify"
+import * as badge from "./badge"
 
 let mainWindow: BrowserWindow | null = null
 /** Latched once the user has confirmed a close, or a quit is already running. */
@@ -630,6 +631,14 @@ function registerIpc(): void {
     })
     ipcMain.handle("notify:state", () => notify.notifyState())
     ipcMain.handle("notify:attention", (_e, p) => notify.showAttention(p))
+
+    // --- Taskbar badge (Windows overlay icon) ---
+    // The same wants-you count the deck bar and Mission read, for the moment
+    // the window is not on screen at all. One handler and no state of its own:
+    // the renderer pushes the number it has just rendered, this hands it to the
+    // taskbar, and what comes back is whether that was even possible - see
+    // badge.ts for what this process can and cannot know about the result.
+    ipcMain.handle("badge:set", (_e, p) => badge.setBadge(mainWindow, p))
 
     // --- Projects ---
     ipcMain.handle("projects:list", () => projects.listProjects())

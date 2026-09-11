@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { NotifyState, Project, ChangeFile } from "../../preload/index"
+import type { NotifyState, BadgeState, Project, ChangeFile } from "../../preload/index"
 import { useSettings, aiModeAgents } from "./settings"
 import type { PresetNode, PresetTab, ShellKind } from "./settings"
 import {
@@ -33,7 +33,10 @@ import {
     forgetTail,
     hasBell,
     markLaunched,
-    getFullTail
+    getFullTail,
+    getLastAt,
+    awaitedTermIds,
+    promptFor
 } from "./missionTail"
 import { ECHO_LINES, paintsNewText } from "./paneEcho"
 import { detectApproval } from "./approval"
@@ -50,7 +53,8 @@ import {
 } from "./agentSignals"
 import { holdersOf, holdersSummary, sameDir, type CwdHolder } from "./ownership"
 import { recordExit, exitCodeOf, clearExit } from "./termExit"
-import { hasProcess } from "./tileState"
+import { hasProcess, wantKind, wantRank, type WantKind } from "./tileState"
+import { wantsYouBadgeDescription } from "./deck"
 import { agentInitCommand } from "./launchCommand"
 import { recordMru, previousProjectId, orderByMru } from "./projectMru"
 import { parseChecklist, costWindow, type BoardTask, type BoardColumn } from "./board"
@@ -143,6 +147,23 @@ export interface AnySession {
     badge: string
     isAgent: boolean
     status: AgentStatus
+}
+
+/** One session's want: why it wants you, and when that started. */
+interface Want {
+    kind: WantKind
+    /**
+     * The instant this want began, ms epoch — what "longest" is measured on.
+     *
+     * Two sources because the two kinds of want BEGIN differently, not because
+     * two clocks are kept: a hand-over starts at its status transition
+     * (`pendingSince`), a stall starts at the session's last output
+     * (`getLastAt` — the moment the silence being measured began). Using
+     * `pendingSince` for a stall would be wrong rather than merely imprecise:
+     * `ack` deletes that stamp, so an acknowledged stall would sort to 0 and
+     * win the jump forever while a second, older stall stayed unreachable.
+     */
+    since: number
 }
 
 /** The serializable slice persisted to workspace.json. */
@@ -433,6 +454,34 @@ interface AppState extends Persisted {
     notifyState: NotifyState | null
     /** Ask main whether desktop notifications work here. Safe to call again. */
     refreshNotifyState: () => Promise<void>
+    /**
+     * Whether the Windows taskbar badge could be set, and why the last attempt
+     * could not. `null` until the first push.
+     *
+     * A capability, like `notifyState`, and kept for the same reason: an
+     * ambient signal that silently never appears is the F9 bug, so the one
+     * process that can answer is asked and its answer is kept where a surface
+     * can read it.
+     */
+    badgeState: BadgeState | null
+    /**
+     * How many agent sessions want you right now.
+     *
+     * THE number - the deck bar's control renders it and the taskbar badge is
+     * handed it. One assembly of the facts, in one place, because the count and
+     * the click and the badge each used to build their own and two of them
+     * disagreed (see `wantKinds`).
+     */
+    wantsCount: () => number
+    /**
+     * Push the wants-you count to the Windows taskbar overlay badge.
+     *
+     * Takes no argument and keeps no clock: it reads `wantsCount()`, the same
+     * number the control renders, and it is called from the control's own
+     * render effect - so the badge changes exactly when the deck changes and
+     * cannot drift from it. Zero clears the badge rather than drawing a "0".
+     */
+    syncBadge: () => void
     sessions: () => AnySession[]
     agentSessions: () => AnySession[]
     sendToAgent: (text: string) => boolean
@@ -454,17 +503,20 @@ interface AppState extends Persisted {
     notePaneInput: (termId: string) => void
     setComposerDraft: (projectId: string, text: string) => void
     jumpToTerm: (termId: string) => void
-    /** Jump to the oldest agent session that wants you (waiting or attention). */
     /**
-     * Jump to the agent that has been waiting on you longest.
+     * Jump to the agent that has wanted you longest.
      *
-     * Returns whether it actually moved. The chord could ignore that - it was
-     * fire-and-forget for as long as its only callers were a keystroke and a
-     * palette row, both of which a user aims deliberately. The deck's wants-you
-     * control cannot: it is rendered FROM a count, it invites a click in its own
-     * tooltip, and `wantsYou` counts one thing this filter does not (a stall
-     * carries no `waiting`/`attention` status). A control that offers a door has
-     * to be able to find out there was none behind it.
+     * Reads `wantKinds` - the same answer `wantsCount` is the size of - so the
+     * count and the click can no longer disagree. They did: this filtered raw
+     * `waiting|attention` and skipped anything acknowledged, while the count
+     * includes a stall (which carries neither status) and deliberately refuses
+     * to let `seen` dim one. The control rendered "N wants you", invited a
+     * click, and then said there was nothing to open.
+     *
+     * Returns whether it actually moved, and that stays: a session can stop
+     * wanting you between the paint and the click, which is a race no shared
+     * derivation can close. What it no longer reports is a gap in the
+     * derivation itself.
      */
     jumpToPending: () => boolean
     newTabIn: (projectId: string, agentId: string, initialCommand?: string) => void
@@ -1709,6 +1761,81 @@ export const useStore = create<AppState>((set, get) => {
         return out
     }
 
+    /**
+     * Every session that wants you right now, and WHY.
+     *
+     * THE ONE ASSEMBLY. The deck bar's count, the taskbar badge and
+     * Ctrl+Shift+J all read this; `wantKind` (tileState) decides each answer.
+     * Before this existed the count was assembled in the deck component and the
+     * chord filtered raw `waiting|attention` in this file, and the two
+     * disagreed in two ways at once: `wantsYou` counts a stall, which carries
+     * neither status, and it deliberately refuses to let `seen` dim one, which
+     * the chord's own `seen` skip did. So the control rendered "N wants you",
+     * invited a click in its tooltip, and answered it with "nothing to jump
+     * to". Two filters over one word is how that happens; one function cannot
+     * disagree with itself.
+     *
+     * `hasProcess` is tested HERE as well as inside `wantKind`, and the
+     * duplication is the point: it has to happen before `promptFor`, because
+     * that function needs a DERIVED status and the only status available in a
+     * store action is the raw one. Past this gate the two are the same value by
+     * construction (`deckKeyStatus` returns the raw status whenever there is a
+     * process behind the tab), which is what makes the raw one usable — the
+     * same reasoning `jumpToPending` already carried, now in one place.
+     * `deckKeyStatus` itself is deliberately NOT called: it has exactly one
+     * caller, the `useKeyStatus` hook, and there is no component here to hold
+     * the subscription it needs (tests/signalSites.test.ts pins that).
+     *
+     * Built from `buildSessions`, so every id it returns has a tab behind it —
+     * which is what lets `jumpToPending` report a move honestly. Walking
+     * `agentStatus` instead, as the chord used to, could pick an id whose tab
+     * had closed, and `jumpToTerm` then returns silently while the caller has
+     * already been told it moved.
+     */
+    const wantKinds = (now = Date.now()): Map<string, Want> => {
+        const st = get()
+        const awaited = awaitedTermIds(st.boardTasks, st.pipelineRun)
+        const out = new Map<string, Want>()
+        for (const sess of buildSessions(false)) {
+            const id = sess.termId
+            const exitCode = exitCodeOf(id)
+            const held = st.paneHold[id]
+            if (!hasProcess({ exitCode }, held)) continue
+            const kind = wantKind(
+                {
+                    status: sess.status,
+                    prompt: promptFor(sess, sess.status),
+                    exitCode,
+                    lastAt: getLastAt(id),
+                    awaited: awaited.has(id),
+                    // "This tab is an agent", not "this agent is running" —
+                    // `hasProcess` above is the other half.
+                    alive: !!st.termAgents[id],
+                    held
+                },
+                now,
+                !!st.seen[id]
+            )
+            if (!kind) continue
+            out.set(id, {
+                kind,
+                since: kind === "stalled" ? (getLastAt(id) ?? 0) : (pendingSince.get(id) ?? 0)
+            })
+        }
+        return out
+    }
+
+    /**
+     * The last count handed to the taskbar, or -1 for "never pushed".
+     *
+     * Idempotence, not a debounce - there is no timer here and no window in
+     * which this could disagree with the deck. The count is the only input, so
+     * re-sending the same number is an IPC that changes nothing; -1 means the
+     * first sync pushes even a zero, which is the call that finds out whether
+     * this machine has the overlay API at all.
+     */
+    let lastBadgeCount = -1
+
     // ---- Run ledger -------------------------------------------------------
     // The four write sites live in ./runRecorder — they are a cohesive unit with
     // a narrow interface, and the question they exist to answer ("may this cost
@@ -1787,6 +1914,61 @@ export const useStore = create<AppState>((set, get) => {
         notifyState: null,
         refreshNotifyState: async () => {
             set({ notifyState: await window.api.notify.state() })
+        },
+        badgeState: null,
+        wantsCount: () => wantKinds().size,
+        syncBadge: () => {
+            const count = get().wantsCount()
+            const last = get().badgeState
+            // Idempotence, and the two reasons to push anyway. A count that has
+            // not moved is an IPC that changes nothing - but "no answer yet"
+            // (`null`) is a reason to ask, and a LATCHED FAILURE is a reason to
+            // try again: without that second clause one refusal would suppress
+            // every later push at the same count, so a badge that failed once
+            // would stay wrong until the number happened to change. There is
+            // still no timer here - the retry rides the deck's next repaint.
+            if (count === lastBadgeCount && last !== null && !last.error) return
+            lastBadgeCount = count
+            // The description comes from the builder the CONTROL's own words
+            // come from - see deck.ts. Main refuses a count with no
+            // description rather than shipping a badge a screen reader reads
+            // as nothing, so the `?? ""` here is not a fallback that papers
+            // over a bug: it is what makes that refusal reachable and loud.
+            const description = wantsYouBadgeDescription(count) ?? ""
+            const report = (st: BadgeState): void => {
+                const prev = get().badgeState
+                set({ badgeState: st })
+                // NEVER SILENT, for the reason the F9 bug cost a week: an
+                // ambient signal that never appears is invisible by nature -
+                // nothing changes, exactly as if no agent wanted you. So a
+                // refusal is said once, and again only when it changes.
+                if (st.error && st.error !== prev?.error)
+                    pushActivity("attention", "", `Taskbar badge: ${st.error}`)
+                else if (!st.supported && prev === null)
+                    pushActivity(
+                        "attention",
+                        "",
+                        "This system has no taskbar badge - the wants-you count is in the deck bar only"
+                    )
+            }
+            try {
+                void window.api.badge
+                    .set({ count, description })
+                    .then(report)
+                    .catch(() =>
+                        // The channel itself failed. Not something the OS did,
+                        // so it is reported as what it is - but it IS reported.
+                        report({
+                            supported: false,
+                            error: "DevDeck could not hand the badge to Windows"
+                        })
+                    )
+            } catch {
+                // A synchronous throw means the bridge is not there at all.
+                // Caught because this runs inside the deck's render effect and
+                // an exception there would take the whole bar down with it.
+                report({ supported: false, error: "DevDeck could not reach the taskbar badge" })
+            }
         },
         dismissNotification: (id) =>
             set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
@@ -2970,44 +3152,22 @@ export const useStore = create<AppState>((set, get) => {
         },
 
         jumpToPending: () => {
-            const status = get().agentStatus
-            const seen = get().seen
-            const paneHold = get().paneHold
-            const pending = Object.keys(status).filter((id) => {
-                // TWO independent skips, and they compose - neither is the
-                // other in disguise, and either one alone leaves the chord
-                // broken in a different way.
-                //
-                // 1. No process behind the tab. `agentStatus` is what the agent
-                //    last DID and it outlives the pty, so an exited or restored
-                //    session kept the `attention` it died wearing and the chord
-                //    jumped you into a corpse. Through `hasProcess` (tileState),
-                //    the one derivation the dot, the "N running" header and
-                //    `wantsYou` all read - not a second `exitCode === undefined`
-                //    written out here. `deckKeyStatus` is deliberately NOT
-                //    called: it has exactly one caller, the `useKeyStatus` hook,
-                //    and this is a store action with no component to hold a
-                //    subscription (tests/signalSites.test.ts pins that).
-                if (!hasProcess({ exitCode: exitCodeOf(id) }, paneHold[id])) return false
-                // 2. Already acknowledged, on the same axis the wants-you count
-                //    uses. `ack` no longer rewrites the status it lands on (that
-                //    was visibility deciding a classification), so without this
-                //    the chord would jump to the same pane forever: its
-                //    `pendingSince` stamp is gone, which sorts it oldest-first.
-                if (seen[id]) return false
-                return status[id] === "waiting" || status[id] === "attention"
-            })
-            if (!pending.length) return false
-            // Oldest first; attention outranks waiting at an equal age. Reading
-            // the raw status is safe HERE and only here: every id left after
-            // the filter above has a process behind it, so raw and derived
-            // agree. It is a two-way tie-break, not the follow order.
-            pending.sort((a, b) => {
-                const rank = (id: string): number => (status[id] === "attention" ? 0 : 1)
-                if (rank(a) !== rank(b)) return rank(a) - rank(b)
-                return (pendingSince.get(a) ?? 0) - (pendingSince.get(b) ?? 0)
-            })
-            get().jumpToTerm(pending[0])
+            // The SAME answer the deck bar's count is rendered from, ordered.
+            // Not a second filter over `agentStatus`: that filter read raw
+            // `waiting|attention` and skipped anything acknowledged, so it
+            // could not find a stall the count had already promised - and the
+            // control had to apologise for a door it had just offered. See
+            // `wantKinds`, and `wantRank` for where a stall sits in the ladder.
+            const wants = [...wantKinds().entries()]
+            if (!wants.length) return false
+            // Attention first, then stalls, then hand-backs; oldest first
+            // inside a rank. `since` is the instant each want began, so
+            // "longest" means the same thing for all three even though a
+            // stall's clock and a hand-over's are different facts.
+            wants.sort(([, a], [, b]) => wantRank(a.kind) - wantRank(b.kind) || a.since - b.since)
+            // Every id came from `buildSessions`, so its tab exists and this
+            // really does move - which is what the boolean is claiming.
+            get().jumpToTerm(wants[0][0])
             return true
         },
 

@@ -9,6 +9,7 @@ import {
     shortSessionLabel,
     tabDotStatus,
     wantsYouLabel,
+    wantsYouBadgeDescription,
     COMPRESS_THRESHOLD
 } from "../src/renderer/src/deck"
 import { hasProcess, resolveTileState, type TileStateInput } from "../src/renderer/src/tileState"
@@ -457,5 +458,43 @@ describe("wantsYouLabel", () => {
     it("says nothing rather than printing an impossible count", () => {
         expect(wantsYouLabel(-1)).toBeNull()
         expect(wantsYouLabel(Number.NaN)).toBeNull()
+    })
+})
+
+/**
+ * What the Windows taskbar badge tells a screen reader.
+ *
+ * The badge is a 16px picture of a digit, so this string is the only thing
+ * assistive technology gets — and it has to be the SAME sentence the control
+ * says, not a second phrasing of it. Building it on `wantsYouLabel` is what
+ * makes that structural rather than a promise, and these assert the two halves
+ * that could still drift: the words, and the zero case.
+ */
+describe("wantsYouBadgeDescription", () => {
+    it("has nothing to describe at zero, in step with the label", () => {
+        // The badge is CLEARED at zero rather than drawn as a "0", so there is
+        // no announcement either. Both nulls come from one predicate.
+        expect(wantsYouBadgeDescription(0)).toBeNull()
+        expect(wantsYouLabel(0)).toBeNull()
+    })
+
+    it("carries the control's own words, plus the app they belong to", () => {
+        // The taskbar says nothing about which window an overlay belongs to.
+        expect(wantsYouBadgeDescription(1)).toBe("DevDeck — 1 wants you")
+        expect(wantsYouBadgeDescription(4)).toBe("DevDeck — 4 want you")
+    })
+
+    it("contains the label verbatim for every count it describes", () => {
+        // The anti-drift assertion: a second phrasing here is a second
+        // statement of "who wants you", which is the defect this app spent a
+        // week removing from eleven surfaces.
+        for (const n of [1, 2, 3, 9, 10, 137]) {
+            expect(wantsYouBadgeDescription(n)).toContain(wantsYouLabel(n)!)
+        }
+    })
+
+    it("says nothing rather than describing an impossible count", () => {
+        expect(wantsYouBadgeDescription(-1)).toBeNull()
+        expect(wantsYouBadgeDescription(Number.NaN)).toBeNull()
     })
 })

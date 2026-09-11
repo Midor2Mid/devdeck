@@ -293,3 +293,23 @@ export function wantsYouLabel(count: number): string | null {
     if (!Number.isFinite(count) || count <= 0) return null
     return count === 1 ? "1 wants you" : `${count} want you`
 }
+
+/**
+ * What a screen reader is told about the taskbar overlay badge, or `null` when
+ * there is no badge to describe.
+ *
+ * Built ON `wantsYouLabel` rather than beside it, and that is the requirement
+ * rather than a style: the badge is a picture of a digit, so its description is
+ * the only thing a screen reader gets, and a second phrasing of "who wants you"
+ * is a second statement of the fact — the drift this app spent a week removing
+ * from eleven surfaces. It reads what the control reads, plus the name of the
+ * app, because the announcement arrives on the taskbar where nothing else says
+ * which window it belongs to.
+ *
+ * `null` at zero, in step with `wantsYouLabel`: the badge is cleared rather
+ * than drawn as a "0", so there is nothing to announce.
+ */
+export function wantsYouBadgeDescription(count: number): string | null {
+    const label = wantsYouLabel(count)
+    return label === null ? null : `DevDeck — ${label}`
+}

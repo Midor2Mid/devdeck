@@ -13,6 +13,7 @@ import type { RunExclusionReason, RunKind, RunRecord } from "../main/ledger"
 import type { PublicRemoteDevice } from "../main/devices"
 import type { ServerConfig, ServerStartResult } from "../main/server"
 import type { NotifyState } from "../main/notify"
+import type { BadgeState } from "../main/badge"
 import type { DeclaredSignal } from "../shared/attention"
 import type { Loaded } from "../shared/loaded"
 import type { ProbeReport, ProbeRequest, ProbeResult, ProbeState } from "../shared/probe"
@@ -58,6 +59,11 @@ export type { DecisionView, DecisionSnapshot }
 // drops silently (main/notify.ts). Settings reads this so the toggle cannot
 // claim a delivery nobody made.
 export type { NotifyState }
+// Whether the Windows taskbar overlay badge could be set, and why the last
+// attempt could not. From main for the same reason: `setOverlayIcon` is a
+// BrowserWindow method, so only main can call it or say whether it is there
+// (main/badge.ts). Read so nothing can assume a badge that was never drawn.
+export type { BadgeState }
 // The probe's contract, from `shared/` for the same reason: `main/shellPath.ts`
 // spawns a shell, and a value import along that path would drag child_process
 // wiring into the preload bundle. `unknown` and `blank` are first-class answers
@@ -850,6 +856,24 @@ const api = {
             ipcRenderer.on("notify:activate", h)
             return () => ipcRenderer.removeListener("notify:activate", h)
         }
+    },
+    badge: {
+        /**
+         * Set the Windows taskbar overlay badge to a wants-you count, and get
+         * back whether that was possible.
+         *
+         * `count` is the number the deck bar has just rendered, not a fresh
+         * derivation - the badge is a second CHANNEL for one fact, the way the
+         * desktop toast is, and the moment it counts for itself it becomes
+         * another surface with its own opinion about who needs you.
+         *
+         * `description` is what a screen reader announces: Windows has nothing
+         * else to say about a 16px picture of a digit, so main refuses a count
+         * that arrives without one rather than shipping a signal only some
+         * users can read. Zero clears the badge; see main/badge.ts.
+         */
+        set: (p: { count: number; description: string }): Promise<BadgeState> =>
+            ipcRenderer.invoke("badge:set", p)
     }
 }
 
