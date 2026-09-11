@@ -1,5 +1,167 @@
 # Changelog
 
+## 0.14.0 - 2026-09-12
+
+A private beta build: one maintainer, Windows-only, self-signed. Nobody outside
+this machine has run it. Two commits carry a **breaking change** — the deck
+loses three panels and three keys, permanently, and this section says what that
+costs before it says why. Around it: seven places the interface told a stranger
+something that was not true, three proven security holes, a notifications
+toggle that had delivered nothing for months, and the groundwork — an audit
+gate, a security policy, an architecture boundary test — that the previous two
+releases had been building toward without finishing.
+
+### Breaking: the Database, API and Work panels are gone, and the deck goes from seven keys to four
+
+- **The owner authorised this outright**, on the author's own usage rather than
+  on the conditional beta test it had been pre-registered against: no
+  `connections.json` has ever existed on the only machine that has ever run
+  DevDeck, and `collections`, `gitAccounts`, `sshProfiles`, `routingRules` and
+  `triggers` were all empty. Half the deck's stated justification was refuted
+  by its own author. **This must never be written up as though users decided
+  it — they were never asked.** `DbPanel`, `ApiPanel` and `WorkPanel` are
+  deleted along with their IPC handlers, preload channels, stores and every
+  orphaned module underneath them (`apiChain`, `apiTests`, `httpParams`,
+  `curl`, importers, exporters, chain variables), and Tasks is demoted out of
+  the deck entirely, folding into More. The deck is now **Mission, Terminal,
+  Browser, Editor** — `Ctrl+1..7` is `Ctrl+1..4`. Roughly 6,000 lines removed
+  across the two commits that did this.
+- **Production dependencies go from 9 to 5.** `pg`, `mysql2`, `mssql` and
+  `node-sqlite3-wasm` are gone, with `@types/pg` and `@types/mssql` behind
+  them. They were required eagerly at the top of main's bundle before
+  `whenReady`, and cost 830ms of every cold start — nearly all of it `mssql` —
+  a number nobody had actually attributed to them before this release. Three
+  lines of security debt leave with them rather than being patched:
+  `rejectUnauthorized: false` on the Postgres and MySQL clients and an
+  unconditional `trustServerCertificate` on the MSSQL one, so the SSL
+  checkbox that lied about verifying a certificate is gone, not corrected.
+- **Five MCP tools are retired, and they say so.** An agent's tool list is
+  read once per session, and a project's own `CLAUDE.md` can name
+  `devdeck_db_query` across many sessions — so a call to a retired tool name
+  answers with what actually happened to it rather than "Unknown tool", which
+  would have told the agent the server itself was broken.
+- **Upgrading loses three panels. It does not lose your data.** Settings keys
+  belonging to the removed panels are orphaned, never pruned — an explicit
+  ruling, and a downgrade gets them back. Honouring it required fixing a bug
+  first: `settings.ts` destructured a fixed whitelist of keys and saved
+  exactly that shape, so deleting the panels would have silently dropped a
+  user's orphaned data on its next save — a prune-by-omission invisible to
+  the typecheck and to every existing spec. A failing test caught it before a
+  single store was deleted; the fix keeps and spreads the whole raw settings
+  payload, with modelled keys taking precedence, so there is no whitelist
+  left to drift the next time a panel goes.
+- A stale packaging glob was found on the way: `asarUnpack` still named
+  `node-sqlite3-wasm` after this release drops it, and nothing had ever
+  checked those globs against `dependencies`. Every `asarUnpack` entry must
+  now resolve to a real, installed dependency, proven by re-adding the stale
+  glob and watching the check fail.
+
+### Seven ways the interface lied to a stranger, found and fixed before one exists
+
+Verified across seven separate QA passes in the running app, not read off the
+diff.
+
+- **Conflicts that were not there.** Mission handed every session its
+  project's entire dirty-file list and called any file two sessions shared a
+  conflict — so two sessions in one repo, or two worktrees of the same
+  project, reported conflicts over files neither had touched. Ownership is now
+  attributed only to paths changed since each session's own launch baseline.
+- **Working, waiting and attention were one colour.** A rule painted the
+  waiting and attention dots with the accent, and a later rule of equal
+  specificity painted them straight back to the same clay for every state —
+  measurably identical, `rgb(201,144,106)` all three. The distinction now
+  lives in form as well as colour: waiting is a hollow diamond, because
+  colour alone cannot carry this when accent-on-clay measures 1.01:1 in one
+  theme.
+- **Approve answered with nothing at all.** The keypress reached the terminal
+  and always had, but nothing on screen changed — the click now says what it
+  sent, on both surfaces that offer it.
+- **A dead session read as alive on eleven different surfaces**, each reading
+  the raw process status instead of the one derived state — a corpse listed
+  under "Running now" in the usage panel, offered by an "Idle" preset
+  selector, still answered "needs you" by the command palette. All eleven now
+  call one derivation, and a source scan pins that nothing else may.
+- **Seven view keys took a click and did nothing on first run**, because they
+  started `disabled`, and a disabled control dispatches no click, hover or
+  focus event at all — so the tooltip explaining what they were could never
+  be reached the one time a stranger needed it. They are `aria-disabled` now:
+  focusable, hoverable, and their explanation survives being clicked.
+- **A glance erased attention permanently, not just visually.** Looking at a
+  pane set `seen`, which made the pane repaint, which satisfied the very
+  acknowledgement gate that `seen` was supposed to be judged by — so opening
+  the tab you were being asked about silently cancelled the request forever.
+  Per the owner's ruling that acknowledgement should dim the nag and not
+  destroy the state, a seen session now keeps its place in every attention
+  count while still truthfully showing that the agent wants you.
+- **Five agent sessions all wore the identical `CLAUDE` pill.** The badge is
+  now a short label derived from the session, not a fixed word.
+
+### Desktop notifications, which had never worked
+
+`Notification.permission` read `denied`, the constructor never threw, and
+`requestPermission` resolved `denied` — so the toggle in Settings had
+delivered nothing and reported nothing for months, on the one surface a user
+reaches for after they stop watching the deck. Notifications are now sent
+from the main process over IPC, where the browser permission model that was
+silently blocking them does not apply.
+
+### Three proven security holes
+
+- **The SSRF guard let almost every embedded-IPv4 address through.** It
+  checked only the `::ffff:/96` form and missed NAT64, 6to4, both compatible
+  forms, and Teredo — and one existing test asserted that a Teredo address
+  was reachable, which was a test asserting the bypass rather than catching
+  it. The guard now inspects every IPv4 address a literal carries and blocks
+  if any of them is blocked.
+- **An unauthenticated 488KB synchronous file read, on the thread that relays
+  every terminal byte.** `/xterm.js` was re-read from disk on every request,
+  above the authentication check, on the same event-loop thread the pty
+  relay runs on. It is now read once and served from a memoized buffer with
+  an ETag.
+- **The diagnostics record leaked the user's home directory path.** Only the
+  account-name segment was folded, so the shell, the install location and
+  which package manager was used all still leaked in a stranger's paste — and
+  the leak was not clipboard-only, it was also being written into the on-disk
+  crash log.
+
+### Q1 and Q2
+
+- **An agent CLI can now declare that it is blocked**, instead of DevDeck
+  inferring that from pty bytes. Inference — silence, a bell, a screen-scrape
+  — produced four distinct bugs in a single week; a hook posting to the MCP
+  server DevDeck already runs locally states the fact instead of guessing at
+  it, and Mission now shows the agent's own words rather than DevDeck's
+  inference when one is available.
+- **A Windows taskbar badge carries the same attention count** that Mission
+  and the deck already show, so the count is reachable without the window
+  being focused. It is a hand-encoded 16x16 PNG, because nothing in the main
+  process can render one.
+
+### Also in this release
+
+- **A stalled session is jumpable, and the count now agrees with the click.**
+  The attention count included stalls; the "jump to what needs you" control
+  could not find one, because it filtered a narrower set. Both now read one
+  assembly.
+- **An `npm audit` gate a single maintainer can actually clear**, scoped to
+  production dependencies and to advisories with a fix available — a
+  no-fix advisory or a moderate transitive dev-only finding cannot be cleared
+  by anyone, so gating on either just produces a permanently red build.
+- **`SECURITY.md`**, written after actually enabling GitHub's private
+  vulnerability reporting rather than pointing at a channel that did not
+  exist.
+- **An architecture-boundary test.** The one place a value import crossed
+  from the renderer into main is now a guarded edge rather than a memory;
+  the scan is proven against import type, dynamic import, and re-export
+  forms, not just a plain `import`.
+- **The accent is spent on one thing, not fourteen.** A single Terminal frame
+  had been colouring roughly a dozen unrelated elements with the app's one
+  accent colour, so on the surface that matters most it pointed at nothing in
+  particular.
+- **The Pages deploy mechanism**, which publishes `site/` and only `site/`,
+  scanned to prove it references nothing under `docs/`, over the workflow's
+  own scoped token rather than a long-lived branch or a personal one.
+
 ## 0.13.0 - 2026-09-07
 
 The release that removes things. Six surfaces, 78 of the 84 skins, and one crash

@@ -20,8 +20,8 @@ issue first.
 
 ## Status
 
-No build has been published yet. `v0.13.0` is tagged and built, but on GitHub
-it sits only as a **draft release** — see "Get DevDeck" below for what that
+No build has been published yet. `v0.14.0` is tagged but **not yet built or
+signed**, and nothing is downloadable — see "Get DevDeck" below for what that
 means for you today. Milestone 1 (terminal + project core) closed long ago;
 see `ROADMAP.md` for what shipped since, and its "Next" section for the live
 plan — recruiting 5–10 real users, not a public launch and not revenue.
@@ -45,11 +45,15 @@ minutes" below.
 ## Get DevDeck
 
 There is no published release to download yet. The
-[Releases page](https://github.com/Midor2Mid/devdeck/releases) currently shows
-nothing — the one tag that has been built, `v0.13.0`, exists on GitHub only as
-a **draft**, which is invisible to anyone who isn't the maintainer looking at
-it in the dashboard. A stranger following that link today sees an empty page,
-not a download.
+[Releases page](https://github.com/Midor2Mid/devdeck/releases) shows nothing,
+and following that link today gets you an empty page rather than a download.
+
+`v0.14.0` is tagged, but tagging is not publishing: the installer still has to
+be built and signed on the maintainer's machine, and that has not happened. An
+earlier `v0.13.0` draft will not be published — it predates the panel removal,
+a notification toggle that had never worked, and a diagnostics record that
+leaked the reporter's home path, so shipping it would hand you a worse app
+than this one.
 
 **Today, the only way to run DevDeck is to build it from source** — see
 "Building from source" below. It takes a `git clone` and `npm install`, not a
