@@ -34,23 +34,26 @@ in quotation marks with a date is not evidence.
 Checked against the tree on 2026-09-04. None of these is a code change; all three
 must be true before the first message is sent.
 
-1. **A build cut from current `main`.** The only artifacts on disk are
-   `release/DevDeck-{Setup,Portable}-0.12.0.exe`, built 2026-09-03, which predate
-   roughly thirty commits of first-contact work — including the fix for a
-   confirmed hard-freeze that a missing project folder used to cause. Handing
-   someone the 0.12.0 build would spend a user on defects that are already fixed.
-   Cut a signed build from `main`, run `npm run verify:packaged` against it, and
-   install it once from the installer on this machine before it goes to anyone.
-2. **A delivery path.** `github.com/Midor2Mid/devdeck` is **private**, the newest
-   published release is `v0.10.0`, and the README's install steps point at a
-   Releases page an external user cannot open. Until roadmap step 4 flips the repo
-   public, the build is **hand-delivered as a file** — and the install
-   instructions you send with it must say so instead of linking Releases.
-   Send both installers (Setup and Portable) and the SHA-256 of each.
-3. **A reply address.** The repo is private, so a beta user cannot open an issue,
-   and diagnostics is clipboard-only by design — **nothing is transmitted, so a
-   stranger's failure reaches you only if you ask them to paste it.** Decide the
-   one channel (email or DM) before you invite anyone, and put it in the message.
+1. **A build cut from current `main`.** As of this writing the newest artifacts
+   on disk are the `v0.13.0` build (`docs/beta/07-the-build.md`), which already
+   carries the folder-moved crash fix but predates the D1 deletions that
+   followed it (Database, API and Work panels gone, the deck down to four
+   keys) and the desktop-notification fix. Per `ROADMAP.md`'s 0.14.0 ruling,
+   the version to hand a beta user is **0.14.0**, not 0.13.0. Cut a signed
+   build from `main`, run `npm run verify:packaged` against it, and install it
+   once from the installer on this machine before it goes to anyone.
+2. **A delivery path.** `github.com/Midor2Mid/devdeck` is now **public**, but
+   there is still no *published* release — the one tag that has been built,
+   `v0.13.0`, sits on GitHub only as a draft, invisible to anyone following the
+   README's Releases link. Until a real release is published, the build is
+   **hand-delivered as a file** — and the install instructions you send with it
+   must say so instead of linking Releases. Send both installers (Setup and
+   Portable) and the SHA-256 of each.
+3. **A reply address.** The repo being public means a beta user *can* open an
+   issue, but the diagnostics record is clipboard-only by design regardless —
+   **nothing is transmitted, so a stranger's failure reaches you only if you
+   ask them to paste it.** Decide the one channel (email, DM, or a filed issue)
+   before you invite anyone, and put it in the message.
 
 ## Cadence — one at a time, and it has teeth
 

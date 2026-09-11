@@ -7,8 +7,10 @@ a message with a bracket left in it says the sender did not read it.
 ## Rules for every message here
 
 - **One channel.** Decide it before the first send and put it in the message.
-  The repo is private, so the user cannot open an issue; diagnostics is
-  clipboard-only, so nothing reaches you unless they paste it to you.
+  The repo is public, but there is no published release yet — the build still
+  ships hand-delivered as a file, not a download link, so an issue filed there
+  is not how a beta user reaches you either; diagnostics is clipboard-only, so
+  nothing reaches you unless they paste it to you.
 - **No walkthrough, no video, no click-by-click.** One screenshot is acceptable —
   they are agreeing to install something and deserve to see it. A tour spends the
   first five minutes before the session starts.
@@ -48,10 +50,10 @@ Use verbatim. It is deliberately unexciting.
 > **Looking for 5 Windows developers who use an agent CLI daily**
 >
 > I've been building DevDeck: a Windows desktop app where a project is the unit
-> of context. Terminals, agent sessions (Claude Code / Codex / Gemini), an
-> editor, an API client and a database panel, all snapped to whichever folder
-> you're in, so switching projects doesn't mean re-`cd`-ing four tools. It also
-> shows every running agent across every project and which one is waiting on you.
+> of context. Terminals, agent sessions (Claude Code / Codex / Gemini) and an
+> editor, all snapped to whichever folder you're in, so switching projects
+> doesn't mean re-`cd`-ing three tools. It also shows every running agent
+> across every project and which one is waiting on you.
 >
 > I have used it every day for months. **Nobody else has ever opened it.** That
 > is the problem I'm trying to fix, and it's the only reason I'm posting.
