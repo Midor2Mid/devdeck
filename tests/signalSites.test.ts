@@ -301,7 +301,16 @@ describe("the tile wrapper stays out of the way of its own decision controls (I3
         // Anchored on the aria-label line itself (className="mission-tile-name"
         // is a quoted value and codeLines blanks it) - the two lines above it
         // are the <button> opening tag and that same className attribute.
-        const nameButton = around("aria-label={[s.sessionName", mission, 2, 1)
+        //
+        // The anchor was `aria-label={[s.sessionName` until 2026-09-11, when the
+        // label grew a provenance entry and was wrapped across lines. The button
+        // and the label both survived; only the two tokens stopped sharing a
+        // line, and this pin went red for a reformat. Anchoring on the opening
+        // `aria-label={[` alone keeps what the pin is actually for - a <button>
+        // carrying a label - without asserting how the array is laid out. A
+        // source scan can only pin text, so the narrowest text that still means
+        // the thing is the right amount to pin.
+        const nameButton = around("aria-label={[", mission, 2, 1)
         expect(nameButton).toContain("<button")
         expect(nameButton).toContain("aria-label=")
     })
@@ -504,31 +513,89 @@ describe("no renderer surface paints a raw agent status", () => {
         expect(offenders, offenders.join("\n")).toEqual([])
     })
 
-    it("gives the deck flag's wants-you input both halves of hasProcess", () => {
-        // The deck's flag is the most visible count in the product, and it is
-        // assembled by hand in a component - so `held: undefined` here
-        // type-checks and puts the flag back to counting restored panes, with
-        // the whole suite green. `alive` is NOT the same fact: it means "this
-        // tab is an agent", and a pane whose process died keeps it.
+    it("gives the wants-you input both halves of hasProcess, and every other fact", () => {
+        // The wants-you count is the most visible number in the product, and
+        // every field below type-checks as a constant: `held: undefined` puts
+        // it back to counting restored panes, `awaited: true` makes every quiet
+        // session a stall, `alive` is NOT the same fact as a process (it means
+        // "this tab is an agent", and a pane whose process died keeps it), and
+        // a literal `false` for `seen` is the nag that never stops. Each one
+        // leaves the whole suite green and the number wrong on screen.
         //
-        // The count moved out of `DeckStatus` into `DeckWants` when D1 took it
-        // out of the bar's far corner and put it beside the view keys. It is
-        // still exactly ONE assembly - `callSite` asserts that - and DeckStatus
-        // is checked below to be sure the move was a move and not a copy.
-        const deck = codeLines(src("../src/renderer/src/components/DeckWants.tsx"))
-        const call = callSite("wantsYou(", deck, 22)
-        expect(call).toContain("exitCode: exitCodeOf(s.termId)")
-        expect(call).toContain("held: paneHold[s.termId]")
+        // The assembly moved OUT of the component and into the store on
+        // 2026-09-11, which is why this pin moved with it. That was the fix for
+        // a real divergence rather than tidying: the chord filtered its own set
+        // and could not find the stall this count had already promised. One
+        // assembly now feeds the count, the taskbar badge and the jump, and -
+        // unlike a component - it is reachable by a unit test
+        // (tests/wantsAgree.test.ts).
+        const call = around("wantKind(", lines, 6, 22)
+        expect(call).toContain("exitCodeOf(id)")
+        expect(call).not.toContain("exitCode: undefined")
+        expect(call).toContain("held")
         expect(call).not.toContain("held: undefined")
-        // And `seen` is what dims the nag - a literal `false` here is the nag
-        // that never stops, which is the half of the ruling this pass applied.
-        expect(call).toContain("!!seen[s.termId]")
-        // The status region must not count as well. Two numbers for one
+        expect(call).toContain("lastAt: getLastAt(id)")
+        expect(call).toContain("awaited: awaited.has(id)")
+        expect(call).not.toContain("awaited: true")
+        expect(call).toContain("alive: !!st.termAgents[id]")
+        expect(call).toContain("!!st.seen[id]")
+        // The awaited set is what keeps a stall from marking everything, and it
+        // has to come from the two things that can actually be waiting on a
+        // session rather than from an empty Set.
+        const derive = callSite("awaitedTermIds(", lines, 1)
+        expect(derive).toContain("boardTasks")
+        expect(derive).toContain("pipelineRun")
+    })
+
+    it("leaves no surface deriving the count for itself", () => {
+        // What "one assembly" means, asserted as a count. Two numbers for one
         // question on one bar is the defect this app has already paid to fix
-        // once, and a move that left the old site behind would recreate it.
-        expect(
-            linesWith("wantsYou(", codeLines(src("../src/renderer/src/components/DeckStatus.tsx")))
-        ).toEqual([])
+        // once, and a move that left a copy behind would recreate it.
+        // MissionControl is the one legitimate second caller of the PREDICATE:
+        // it builds a full tile input anyway (`changedCount` and the rest) and
+        // reads `wantsYou` over it for its header - same function, same facts,
+        // and tests/signalSites' tile-input pin above covers that wiring.
+        const callers = files.filter(
+            (path) =>
+                (linesWith("wantsYou(", codeLines(path)).length > 0 ||
+                    linesWith("wantKind(", codeLines(path)).length > 0) &&
+                !path.endsWith("tileState.ts")
+        )
+        expect(callers.map(base).sort()).toEqual(["MissionControl.tsx", "store.ts"])
+    })
+
+    it("hands the taskbar badge the same number, from the same builder", () => {
+        // Q2's rule. The badge is a second CHANNEL for one fact, like the
+        // desktop toast - the moment it counts for itself it is the twelfth
+        // surface with its own opinion about who needs you. So: exactly one
+        // IPC call site, it lives in `syncBadge`, and `syncBadge` reads
+        // `wantsCount()` rather than taking a number from a caller.
+        const sites = linesWith("window.api.badge", lines)
+        expect(sites).toHaveLength(1)
+        const sync = around("window.api.badge", lines, 36, 2)
+        expect(sync).toContain("get().wantsCount()")
+        // The words a screen reader is read come from the control's own
+        // builder, not a second phrasing of the same sentence.
+        expect(sync).toContain("wantsYouBadgeDescription(")
+        // And no other surface pushes one.
+        const pushers = files.filter((path) => linesWith("window.api.badge", codeLines(path)).length > 0)
+        expect(pushers.map(base)).toEqual(["store.ts"])
+    })
+
+    it("pushes the badge from the control's own render, with no clock of its own", () => {
+        // A timer here is the thing Q2 forbids: the badge and the deck would
+        // then be two state machines sampling one fact, and a stall arriving
+        // between their ticks would make them disagree. The effect rides the
+        // component's renders instead, and the count it depends on is the one
+        // it renders.
+        const deck = codeLines(src("../src/renderer/src/components/DeckWants.tsx"))
+        expect(linesWith("setInterval", deck)).toEqual([])
+        expect(linesWith("setTimeout", deck)).toEqual([])
+        const effect = around("syncBadge()", deck, 1, 3)
+        expect(effect).toContain("useEffect")
+        expect(effect).toContain("[count, syncBadge]")
+        // The component reads the number; it must not rebuild it.
+        expect(callSite("const count =", deck, 1)).toContain("wantsCount()")
     })
 
     it("keeps deckKeyStatus to one caller - the shared hook", () => {

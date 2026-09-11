@@ -8,6 +8,8 @@ import { getTail, peekLine, sortForFollow, followRank, promptFor } from "../miss
 import { type DeckKeyStatus } from "../deck"
 import { useKeyStatus } from "../keyStatus"
 import { type ApprovalPrompt } from "../approval"
+import { declaredFor, blockedWord, saidTip } from "../declaredSignal"
+import type { DeclaredSignal } from "../../../shared/attention"
 
 /**
  * Cross-project live-terminal Overview. Two modes:
@@ -61,18 +63,32 @@ function dotClass(s: AnySession, status: DeckKeyStatus): string {
  *
  * Takes the DERIVED status (`useKeyStatus`), because "blocked on you" is a
  * claim about a live process and `s.status` outlives the one that made it.
+ *
+ * PROVENANCE RIDES THE SAME WORDS, as a verb: `needs you` is DevDeck's reading
+ * of the terminal, `says it needs you` is the agent stating it over the hook.
+ * That is the whole marker - no sixth dot form, no accent, no new token, and
+ * nothing a stranger has to look up. `blockedWord` owns both halves so the
+ * three heads cannot come to describe one state differently, which is the
+ * failure this component was extracted to prevent in the first place.
  */
 function StatusFlag({
     status,
+    said,
     block
 }: {
     status: DeckKeyStatus
+    /** The agent's own declaration for this status, or null if DevDeck inferred it. */
+    said?: DeclaredSignal | null
     block?: boolean
 }): JSX.Element | null {
-    if (status !== "attention" && status !== "waiting") return null
+    const word = blockedWord(status, said ?? null)
+    if (!word) return null
     return (
-        <span className={"ov-flag " + status + (block ? " ov-ri-flag" : "")}>
-            {status === "attention" ? "needs you" : "waiting for you"}
+        <span
+            className={"ov-flag " + status + (block ? " ov-ri-flag" : "")}
+            data-tip={said ? saidTip(said) : undefined}
+        >
+            {word}
         </span>
     )
 }
@@ -225,6 +241,9 @@ export function OverviewView(): JSX.Element {
     // Carries the `paneHold` subscription that repaints a card whose process
     // went away - see useKeyStatus.
     const keyStatusOf = useKeyStatus()
+    // The provenance axis. A stable slice - the record is read per session below
+    // through `declaredFor`, never derived in the selector.
+    const declared = useStore((s) => s.declared)
     void tabsByProject
     void termAgents
     void termNames
@@ -363,7 +382,10 @@ export function OverviewView(): JSX.Element {
                             <EditableName termId={focused.termId} name={focused.sessionName} className="ov-main-name" />
                             {focused.isAgent && <span className="agent-badge sm">{focused.badge}</span>}
                             {keyStatusOf(focused) === "attention" && <span className="claude-attn">!</span>}
-                            <StatusFlag status={keyStatusOf(focused)} />
+                            <StatusFlag
+                                status={keyStatusOf(focused)}
+                                said={declaredFor(declared, focused.termId, keyStatusOf(focused))}
+                            />
                             <span className="ov-main-proj">{focused.projectName}</span>
                             <span className="ov-main-actions">
                                 <button
@@ -455,7 +477,11 @@ export function OverviewView(): JSX.Element {
                                         `block` keeps this on its own line, above
                                         the peek — the two heads share the words
                                         but put them inline. */}
-                                    <StatusFlag status={status} block />
+                                    <StatusFlag
+                                        status={status}
+                                        said={declaredFor(declared, s.termId, status)}
+                                        block
+                                    />
                                     {peek && <div className="ov-ri-peek">{peek}</div>}
                                     <ApprovalActions termId={s.termId} prompt={approval} />
                                 </div>
@@ -511,7 +537,10 @@ export function OverviewView(): JSX.Element {
                                             {status === "attention" && (
                                                 <span className="claude-attn">!</span>
                                             )}
-                                            <StatusFlag status={status} />
+                                            <StatusFlag
+                                                status={status}
+                                                said={declaredFor(declared, s.termId, status)}
+                                            />
                                             {g.isGroup && (
                                                 <span className="ov-card-proj">{s.projectName}</span>
                                             )}

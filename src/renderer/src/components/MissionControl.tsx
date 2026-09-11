@@ -16,6 +16,7 @@ import { baselineOf, nextChangedCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
 import { resolveTileState, wantsYou, hasProcess } from "../tileState"
 import { useKeyStatus } from "../keyStatus"
+import { declaredFor, saidLine, saidTip } from "../declaredSignal"
 import { Icon } from "./Icon"
 import type { SystemInfo } from "../../../preload/index"
 
@@ -67,6 +68,10 @@ export function MissionControl(): JSX.Element {
     const agentStatus = useStore((s) => s.agentStatus)
     const termAgents = useStore((s) => s.termAgents)
     const seen = useStore((s) => s.seen)
+    // The PROVENANCE axis, a stable slice (never derived in the selector - see
+    // the zustand trap in keyStatus.ts). Absence means DevDeck worked the status
+    // out from pty bytes; a record means the agent stated it.
+    const declared = useStore((s) => s.declared)
     // Keystroke answers already sent, so a tile can say so instead of offering
     // the same button again. A stable slice, like `seen`.
     const answered = useStore((s) => s.answered)
@@ -424,6 +429,12 @@ export function MissionControl(): JSX.Element {
                             // parsed prompt - would keep rendering a control that
                             // cannot do anything, which is exactly the class of lie
                             // this feature exists to prevent.
+                            // Did the agent STATE this, or did DevDeck work it out?
+                            // Gated to the two hand-over states and to a record
+                            // whose state matches the one being painted - see
+                            // declaredFor, which is what stops "the agent said
+                            // so" appearing over a process that has since died.
+                            const said = declaredFor(declared, s.termId, keyStatus)
                             const hasDraft = !!(drafts[s.termId] ?? "").trim()
                             const canReply =
                                 st.actions.includes("reply") ||
@@ -448,7 +459,18 @@ export function MissionControl(): JSX.Element {
                                             ordinary text rather than being swallowed by a wrapper label. */}
                                         <button
                                             className="mission-tile-name"
-                                            aria-label={[s.sessionName, s.projectName, s.badge, st.chip, st.detail]
+                                            aria-label={[
+                                                s.sessionName,
+                                                s.projectName,
+                                                s.badge,
+                                                st.chip,
+                                                // Provenance is a WORD, so it is
+                                                // already announced - but only if
+                                                // it is in the label that stands in
+                                                // for everything on the tile.
+                                                said && saidLine(said),
+                                                st.detail
+                                            ]
                                                 .filter(Boolean)
                                                 .join(" · ")}
                                             onClick={(e) => {
@@ -486,6 +508,23 @@ export function MissionControl(): JSX.Element {
                                         </span>
                                         {st.chip}
                                     </div>
+                                    {/* PROVENANCE, in words. Above `.mtile-q`
+                                        deliberately: that line is the question
+                                        DevDeck PARSED off the terminal and is what
+                                        Approve/Deny will answer, so it stays
+                                        adjacent to the buttons. This one is the
+                                        agent's own sentence, and the two are
+                                        different evidence about the same turn -
+                                        which is the whole point of the axis, so
+                                        neither replaces the other when both exist.
+                                        No mark, no accent, no new token: the
+                                        quotation marks are the form channel and
+                                        the verb "said" is the signal. */}
+                                    {said && (
+                                        <div className="mtile-said" data-tip={saidTip(said)}>
+                                            {saidLine(said)}
+                                        </div>
+                                    )}
                                     {st.kind === "needs-you" && st.detail && (
                                         <div className="mtile-q" data-tip={st.detail}>
                                             {st.detail}

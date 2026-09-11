@@ -766,6 +766,30 @@ button .ic,
 .mtile-chip.tone-quiet {
     color: var(--faint);
 }
+/* PROVENANCE, in words - the agent's own sentence, above `.mtile-q`.
+   This is the whole marker for "the agent STATED this" as against "DevDeck
+   worked it out from pty bytes", and it is deliberately not a mark: the status
+   dot already has its five forms and DESIGN.md forbids a sixth, `attention` is
+   the only status allowed to spend the accent, and a frame's mark budget was
+   just cut from ~14 to 6. What is worth seeing here is not a badge saying a
+   hook arrived - it is what the agent actually said, which DevDeck could not
+   have invented. The quotation marks in `saidLine` are the form channel and
+   need no legend; the verb "said" is the signal.
+   ONE TOKEN, --text on the tile's own --bg-2 ground: 15.03 (Slate) / 12.17
+   (Sumi) / 9.82 (Washi). --muted was the first choice, as metadata - it
+   measures 6.98 / 5.49 / 4.46 on the same ground, and Washi's 4.46 is UNDER the
+   4.5 text floor for an 11px line whose words are the point. So the lead and
+   the quote share --text and the quote marks carry the structure instead; there
+   is no two-tone version of this line to get wrong. Its role is told from
+   `.mtile-q` by POSITION - the parsed question sits against the buttons that
+   answer it, this sits under the chip. */
+.mtile-said {
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 /* The question, under NEEDS YOU. One line: the tile is already dense, and the
    full text is in the tooltip and the terminal. */
 .mtile-q {
@@ -2003,6 +2027,23 @@ button .ic,
     font-family: var(--mono, monospace);
     font-size: 11px;
     color: var(--accent-soft);
+}
+/* Whether agent hooks are reaching DevDeck. Structure only - no colour of its
+   own, because none of the three states it reports is a failure of DevDeck's:
+   the standing sentence is --muted body copy like every other line in this
+   block, and the one loud case borrows `.notice-bar` wholesale (stripe + glyph
+   + one accent action), which is the grammar for a condition that outlives a
+   toast. A notice bar inside a settings block has to give back the modal's own
+   inset, or its full-bleed stripe floats in the middle of the card. */
+.hook-health {
+    margin-top: var(--sp-lg);
+    padding-top: var(--sp-md);
+    border-top: 1px solid var(--border-soft);
+}
+.hook-health .notice-bar {
+    margin-top: var(--sp-sm);
+    border-bottom: none;
+    border-radius: var(--radius, 7px);
 }
 /* Security posture reads as a caveat, not decoration — quiet, with a soft rule. */
 .mcp-safety {

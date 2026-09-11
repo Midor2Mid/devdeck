@@ -21,6 +21,7 @@ import { shortcutGroups } from "../shortcuts"
 import { DECK_VIEWS } from "./ViewKeys"
 import type { McpServer } from "../../../preload/index"
 import { MCP_CATALOG, addServer } from "../mcpCatalog"
+import { hookHealth } from "../declaredSignal"
 import { type Pipeline, type PipelineStep, type PipelineTrigger, type BranchTarget, isRunnable, moveItem } from "../pipeline"
 import { type RoutingRule, type RuleKind } from "../routing"
 
@@ -41,6 +42,7 @@ import { DEVDECK_TOKEN_ENV } from "../../../shared/mcpEnv"
 import { useProbe } from "../useProbe"
 import { rowMark, pathUnreadable, isBlankCommand } from "../probeView"
 import { Modal } from "./Modal"
+import { Icon } from "./Icon"
 
 const THEME_LIST = Object.values(THEMES)
 const STYLE_LIST = Object.values(STYLES)
@@ -195,6 +197,77 @@ function DevdeckMcpBlock(): JSX.Element {
             </div>
             {err && <p className="small err-text">{err}</p>}
             {note && <p className="small ok-text">{note}</p>}
+            <HookHealth running={status.running} />
+        </div>
+    )
+}
+
+/**
+ * Whether agent hooks are reaching DevDeck - the consumer `unmatchedHooks` did
+ * not have.
+ *
+ * THE FAILURE THIS EXISTS TO KILL. A hook wired wrong and a hook never wired
+ * produce the same nothing: no status changes, no row, no complaint. The user
+ * who edited a settings file and got it subtly wrong cannot tell themselves
+ * apart from the user who never edited one. That is the shape of the
+ * notification toggle that lied for months, and the fix is the same - the
+ * surface must always say which of the three states it is in, and zero must
+ * never read as health.
+ *
+ * Three states, and none of them is silence:
+ *  - the server is off, so no hook can arrive at all;
+ *  - it is on and N sessions are reporting their own state;
+ *  - it is on and none is - stated in the PRESENT TENSE, with the guidance
+ *    beside it, because DevDeck genuinely cannot tell a hook that is wired and
+ *    idle from one that was never wired and must not claim either.
+ *
+ * A non-zero unmatched count is ADDITIVE rather than a fourth state: one agent
+ * can be wired correctly while another was started outside DevDeck, and two
+ * independent sentences cannot contradict each other.
+ *
+ * The unmatched case is a `.notice-bar` because it is a condition that outlives
+ * a toast (DESIGN.md): a left stripe and a glyph carry it in FORM, the accent is
+ * spent only on the action, and there is no warning colour in this system to
+ * reach for. Its action is real - the activity feed already names the folder
+ * every unmatched hook reported, which is the fact that fixes the config.
+ */
+function HookHealth({ running }: { running: boolean }): JSX.Element {
+    const closeSettings = useSettings((s) => s.closeSettings)
+    const setActivityOpen = useStore((s) => s.setActivityOpen)
+    const unmatched = useStore((s) => s.unmatchedHooks)
+    // A stable slice; the count is derived OUTSIDE the selector, or the
+    // component blanks on every render (the zustand trap in keyStatus.ts).
+    const declared = useStore((s) => s.declared)
+    const health = hookHealth({
+        running,
+        reporting: Object.keys(declared).length,
+        unmatched
+    })
+    return (
+        <div className="hook-health">
+            <div className="section-label">AGENT HOOKS</div>
+            <p className="muted small">
+                {health.line} An agent CLI can post to <code>/hook</code> on this server to state
+                that it is blocked on you, instead of DevDeck working it out from the terminal. A
+                session that does say so is marked in words on its Mission tile and in Overview.
+            </p>
+            {health.hint && <p className="muted small">{health.hint}</p>}
+            {health.unmatched && (
+                <div className="notice-bar" role="status">
+                    <Icon name="flag" size={14} />
+                    <span className="notice-bar-text">{health.unmatched}</span>
+                    <button
+                        type="button"
+                        className="notice-bar-action"
+                        onClick={() => {
+                            closeSettings()
+                            setActivityOpen(true)
+                        }}
+                    >
+                        Open activity feed
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
