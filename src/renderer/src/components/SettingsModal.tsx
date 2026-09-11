@@ -246,12 +246,18 @@ function HookHealth({ running }: { running: boolean }): JSX.Element {
     return (
         <div className="hook-health">
             <div className="section-label">AGENT HOOKS</div>
-            <p className="muted small">
-                {health.line} An agent CLI can post to <code>/hook</code> on this server to state
-                that it is blocked on you, instead of DevDeck working it out from the terminal. A
-                session that does say so is marked in words on its Mission tile and in Overview.
-            </p>
-            {health.hint && <p className="muted small">{health.hint}</p>}
+            {/* THE NOTICE COMES FIRST, above the explanation it is an exception
+                to. It sat last, and at a 1256px window the diagnosis was below
+                the fold: three hooks had arrived that DevDeck could not match to
+                a session, and the visible block still read only "No session is
+                reporting its own state right now" (2026-09-12 verification, §4).
+                This block exists to be opened when hooks are NOT working, so the
+                one sentence naming a fault has to be the one a user reaches
+                without scrolling. The ordering rule is general - a condition
+                outranks the prose that explains the feature - and it costs the
+                prose nothing: the two sentences are additive, not alternatives,
+                so neither reads as a correction of the other whichever is on
+                top. */}
             {health.unmatched && (
                 <div className="notice-bar" role="status">
                     <Icon name="flag" size={14} />
@@ -268,6 +274,12 @@ function HookHealth({ running }: { running: boolean }): JSX.Element {
                     </button>
                 </div>
             )}
+            <p className="muted small">
+                {health.line} An agent CLI can post to <code>/hook</code> on this server to state
+                that it is blocked on you, instead of DevDeck working it out from the terminal. A
+                session that does say so is marked in words on its Mission tile and in Overview.
+            </p>
+            {health.hint && <p className="muted small">{health.hint}</p>}
         </div>
     )
 }

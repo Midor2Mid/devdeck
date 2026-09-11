@@ -542,9 +542,20 @@ describe("no renderer surface paints a raw agent status", () => {
         // The awaited set is what keeps a stall from marking everything, and it
         // has to come from the two things that can actually be waiting on a
         // session rather than from an empty Set.
-        const derive = callSite("awaitedTermIds(", lines, 1)
-        expect(derive).toContain("boardTasks")
-        expect(derive).toContain("pipelineRun")
+        // TWO call sites since 2026-09-12, and the pin checks both rather
+        // than being loosened to the first: the assembly reads the awaited set
+        // to ANSWER, and the stall clock beside it reads the same set to know
+        // when that answer could next change by the wall clock alone. An empty
+        // Set at either is the same bug wearing two faces - the first marks
+        // nothing stalled, the second never wakes up to notice that something
+        // is, which is the defect this pass fixed.
+        const derives = linesWith("awaitedTermIds(", lines)
+        expect(derives).toHaveLength(2)
+        for (const at of derives) {
+            const derive = lines[at - 1]
+            expect(derive).toContain("boardTasks")
+            expect(derive).toContain("pipelineRun")
+        }
     })
 
     it("leaves no surface deriving the count for itself", () => {
@@ -596,6 +607,14 @@ describe("no renderer surface paints a raw agent status", () => {
         expect(effect).toContain("[count, syncBadge]")
         // The component reads the number; it must not rebuild it.
         expect(callSite("const count =", deck, 1)).toContain("wantsCount()")
+        // And the subscription that lets the store's stall alarm reach this
+        // component at all. A stall writes none of the other four slices, so
+        // without this line the alarm fires into an empty room and the flag -
+        // and the badge riding its render effect - stays absent for exactly the
+        // state the badge exists for (2026-09-12 verification, §3). Deleting it
+        // leaves tests/stallClock.test.ts green, because that file can only
+        // reach the store.
+        expect(linesWith("s.stallEpoch", deck)).toHaveLength(1)
     })
 
     it("keeps deckKeyStatus to one caller - the shared hook", () => {

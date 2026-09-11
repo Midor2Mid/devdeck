@@ -120,6 +120,27 @@ export function saidTip(d: DeclaredSignal): string {
 }
 
 /**
+ * The line AND its provenance — for a surface that renders the line clipped.
+ *
+ * Mission's tile sets `.mtile-said` to one nowrap line with an ellipsis, which
+ * cut the agent's own sentence at ~44 characters with no way to read the rest:
+ * the tooltip there carried `saidTip` alone, so the explainer was recoverable
+ * and the thing being explained was not (2026-09-12 verification, §4). The
+ * sentence is the whole argument for the declared axis — it is the one piece of
+ * evidence DevDeck could not have invented — so it goes first, above the
+ * provenance, in the same order the tile itself reads.
+ *
+ * Repeating a line that is often fully visible is deliberate and already the
+ * house pattern: `.mtile-q` has carried its own text as its tip since it
+ * existed, because a reader cannot tell a clipped line from a short one without
+ * hovering, and a tooltip that sometimes withholds the text is worse than one
+ * that sometimes repeats it.
+ */
+export function saidFullTip(d: DeclaredSignal): string {
+    return `${saidLine(d)}\n${saidTip(d)}`
+}
+
+/**
  * The blocked-on-you word, with the provenance verb when there is one.
  *
  * DESIGN.md fixes `needs you` / `waiting for you` as the words, on one

@@ -36,6 +36,7 @@ import {
     getFullTail,
     getLastAt,
     awaitedTermIds,
+    stallsAt,
     promptFor
 } from "./missionTail"
 import { ECHO_LINES, paintsNewText } from "./paneEcho"
@@ -464,6 +465,31 @@ interface AppState extends Persisted {
      * can read it.
      */
     badgeState: BadgeState | null
+    /**
+     * The instant of the most recent wall-clock crossing that changed who wants
+     * you — and the ONLY reason this is store state.
+     *
+     * A stall is not something an agent or the user did. It is silence passing a
+     * threshold, so it writes nothing, and a component with no clock never comes
+     * back to look. That is exactly how the taskbar badge came to be absent for
+     * the one state it exists for: `DeckWants` subscribes to `seen`, `paneHold`,
+     * `boardTasks` and `pipelineRun`, a stall touches none of them, and the flag
+     * and the badge appeared only when some unrelated slice happened to move
+     * (2026-09-12 verification, §3).
+     *
+     * The fix is NOT a second interval on the deck. Mission already has one, and
+     * two clocks sampling one fact is the defect class this codebase has spent
+     * two weeks removing - the crossing would then belong to whichever timer
+     * fired first, and the deck and Mission could describe the same session
+     * differently for up to a second. Instead the crossing becomes what every
+     * other state change already is: a store write. `stallClock` below arms one
+     * alarm for the next instant `wantKinds` could answer differently, and this
+     * number moves only when it actually did.
+     *
+     * Nothing reads its VALUE. It is a repaint token, and it carries the instant
+     * rather than a counter only so that a diagnostics dump can say when.
+     */
+    stallEpoch: number
     /**
      * How many agent sessions want you right now.
      *
@@ -1822,7 +1848,106 @@ export const useStore = create<AppState>((set, get) => {
                 since: kind === "stalled" ? (getLastAt(id) ?? 0) : (pendingSince.get(id) ?? 0)
             })
         }
+        // Having just read the facts, say when they could next read differently.
+        // Arming here rather than from a caller is what makes the alarm
+        // impossible to forget: every surface that wants the answer goes
+        // through this function, so every surface that could be stale is also
+        // the one that (re)arms the alarm that unstales it.
+        armStallClock()
         return out
+    }
+
+    // ---- The stall clock --------------------------------------------------
+    //
+    // ONE alarm, in the store, for the one classification that arrives with no
+    // store write: wall-clock silence crossing STALL_MS. See `stallEpoch` in
+    // AppState for why this is not a `setInterval` on `DeckWants`.
+    //
+    // Not a tick. A tick would run forever for a state that is rare; this arms
+    // a single `setTimeout` for the exact instant `wantKinds` could answer
+    // differently, and arms NOTHING when nothing is awaited - which is almost
+    // always, because `awaitedTermIds` is empty unless a board card is in
+    // `doing` or a pipeline step is running. Steady-state cost with no card
+    // dispatched: one `Map` walk over the (empty) awaited set per deck render,
+    // zero timers, zero renders.
+
+    /** The pending alarm, and the instant it is set for (`null` = none armed). */
+    let stallTimer: ReturnType<typeof setTimeout> | null = null
+    let stallArmedFor: number | null = null
+
+    /**
+     * The identity of an answer, for "did it actually change?".
+     *
+     * Ids and kinds only: `since` moves with `getLastAt`, which would make
+     * every reading different from the last and the comparison useless.
+     */
+    const wantsKey = (w: Map<string, Want>): string =>
+        [...w]
+            .map(([id, v]) => `${id}:${v.kind}`)
+            .sort()
+            .join(",")
+
+    /**
+     * The soonest instant a currently-quiet session could become stalled.
+     *
+     * Deliberately OVER-INCLUSIVE, and deliberately not a second copy of the
+     * predicate. It reads the awaited set and `stallsAt` (one input, the only
+     * one that moves silently) and nothing else - no `hasProcess`, no `alive`,
+     * no `seen`. A session that will turn out not to be stalled therefore still
+     * gets us out of bed, and the answer we then read is `wantKinds`' alone.
+     * That asymmetry is the point: waking early costs one comparison, waking
+     * late is the bug this is here to fix, and a scheduler that evaluated the
+     * predicate for itself would be the twelfth surface with its own opinion.
+     *
+     * Crossings already in the past are skipped. They need no alarm - whatever
+     * made that session awaited was itself a store write, so the deck has
+     * already been back to look - and arming for a past instant would fire
+     * immediately, forever.
+     */
+    const nextStallCrossing = (now: number): number | null => {
+        const st = get()
+        let soonest: number | null = null
+        for (const id of awaitedTermIds(st.boardTasks, st.pipelineRun)) {
+            const at = stallsAt(getLastAt(id))
+            if (at === null || at <= now) continue
+            if (soonest === null || at < soonest) soonest = at
+        }
+        return soonest
+    }
+
+    /**
+     * Point the alarm at the next crossing, or disarm it if there is none.
+     *
+     * Idempotent by design: re-arming for the instant already armed is a no-op,
+     * so calling this on every `wantKinds` (i.e. every deck render) does not
+     * churn timers. `lastAt` moving LATER - the agent spoke again - is handled
+     * by the alarm firing early, finding nothing changed, and re-arming from
+     * here on its way out. That costs at most one wake per awaited session per
+     * STALL_MS of activity.
+     */
+    const armStallClock = (): void => {
+        const now = Date.now()
+        const at = nextStallCrossing(now)
+        if (at === stallArmedFor) return
+        if (stallTimer) clearTimeout(stallTimer)
+        stallTimer = null
+        stallArmedFor = at
+        if (at === null) return
+        stallTimer = setTimeout(() => {
+            stallTimer = null
+            stallArmedFor = null
+            // Did the crossing actually change the answer? Asked by evaluating
+            // the SAME assembly at two instants - one millisecond before the
+            // crossing, and now - rather than against a remembered result. No
+            // history to get out of step, and nothing here decides what a stall
+            // is: `wantKinds` does, twice, and this only compares.
+            //
+            // Both calls re-arm on their way out, which is how the clock keeps
+            // running without an interval.
+            const before = wantsKey(wantKinds(at - 1))
+            const after = wantsKey(wantKinds())
+            if (before !== after) set({ stallEpoch: Date.now() })
+        }, at - now)
     }
 
     /**
@@ -1916,6 +2041,7 @@ export const useStore = create<AppState>((set, get) => {
             set({ notifyState: await window.api.notify.state() })
         },
         badgeState: null,
+        stallEpoch: 0,
         wantsCount: () => wantKinds().size,
         syncBadge: () => {
             const count = get().wantsCount()

@@ -16,7 +16,7 @@ import { baselineOf, nextChangedCounts } from "../agentSignals"
 import { exitCodeOf } from "../termExit"
 import { resolveTileState, wantsYou, hasProcess } from "../tileState"
 import { useKeyStatus } from "../keyStatus"
-import { declaredFor, saidLine, saidTip } from "../declaredSignal"
+import { declaredFor, saidLine, saidFullTip } from "../declaredSignal"
 import { Icon } from "./Icon"
 import type { SystemInfo } from "../../../preload/index"
 
@@ -521,7 +521,7 @@ export function MissionControl(): JSX.Element {
                                         quotation marks are the form channel and
                                         the verb "said" is the signal. */}
                                     {said && (
-                                        <div className="mtile-said" data-tip={saidTip(said)}>
+                                        <div className="mtile-said" data-tip={saidFullTip(said)}>
                                             {saidLine(said)}
                                         </div>
                                     )}

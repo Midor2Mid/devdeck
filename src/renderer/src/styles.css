@@ -782,7 +782,12 @@ button .ic,
    the quote share --text and the quote marks carry the structure instead; there
    is no two-tone version of this line to get wrong. Its role is told from
    `.mtile-q` by POSITION - the parsed question sits against the buttons that
-   answer it, this sits under the chip. */
+   answer it, this sits under the chip.
+   ONE LINE, and the full sentence is in the tooltip (`saidFullTip`) and the
+   aria-label. The clip is not free - a tile is 11px and dense, and wrapping the
+   agent's sentence to two lines moves every tile below it in all 84 skins - so
+   it is paid for the same way `.mtile-q` pays for it, by making the whole text
+   recoverable on hover rather than by making the tile taller. */
 .mtile-said {
     font-size: 11px;
     color: var(--text);

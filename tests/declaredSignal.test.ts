@@ -5,6 +5,7 @@ import {
     declaredFor,
     saidLine,
     saidTip,
+    saidFullTip,
     blockedWord,
     hookHealth
 } from "../src/renderer/src/declaredSignal"
@@ -123,6 +124,70 @@ describe("saidTip", () => {
     it("names the weaker route as the guess it is", () => {
         expect(saidTip(sig({ matchedBy: "cwd" }))).toContain("only agent running there")
         expect(saidTip(sig({ matchedBy: "cli-session" }))).toContain("sent earlier in this run")
+    })
+})
+
+describe("saidFullTip — the clipped line, made readable", () => {
+    // The tile renders `.mtile-said` as one nowrap line with an ellipsis, and
+    // its tooltip carried the EXPLAINER only: the agent's own sentence was cut
+    // at ~44 characters with nowhere to read the rest, on the one line the
+    // whole declared axis exists to show (2026-09-12 verification, §4).
+    it("carries the sentence itself, ahead of the provenance", () => {
+        const tip = saidFullTip(
+            sig({ message: "Claude needs your permission to use Bash(git push:*)" })
+        )
+        expect(tip).toContain("Claude needs your permission to use Bash(git push:*)")
+        expect(tip.indexOf("said “")).toBeLessThan(tip.indexOf("stated this itself"))
+    })
+
+    it("is exactly the two builders, so neither sentence can drift from its surface", () => {
+        const d = sig({ message: "running the suite" })
+        expect(saidFullTip(d)).toBe(`${saidLine(d)}
+${saidTip(d)}`)
+    })
+
+    it("still says something when the hook carried no message", () => {
+        // "the agent said so" is the honest line for a declaration with no
+        // words; the tooltip must not become the provenance alone again just
+        // because there is nothing to quote.
+        const tip = saidFullTip(sig({ message: undefined }))
+        expect(tip).toContain("said so")
+        expect(tip).toContain("stated this itself")
+    })
+})
+
+/**
+ * The two component wirings behind the findings above.
+ *
+ * There are no component tests in this repo (`environment: "node"`), and both
+ * fixes live entirely in JSX - a tooltip attribute and the order of two
+ * children. Source scans in the style of tests/signalSites.test.ts are the
+ * cheapest thing that fails when either is undone.
+ */
+describe("the surfaces that carry them", () => {
+    const read = (...seg: string[]): string =>
+        readFileSync(join(__dirname, "..", "src", "renderer", "src", ...seg), "utf8")
+
+    it("gives the Mission tile's clipped line the full tip, not the explainer alone", () => {
+        const tsx = read("components", "MissionControl.tsx")
+        const at = tsx.indexOf('className="mtile-said"')
+        expect(at).toBeGreaterThan(-1)
+        const el = tsx.slice(at, tsx.indexOf(">", at))
+        expect(el).toContain("saidFullTip(said)")
+    })
+
+    it("puts the unmatched-hook notice above the prose it is an exception to", () => {
+        // It sat last, and at a 1256px window height the diagnosis was below the
+        // fold while the visible block still read "No session is reporting its
+        // own state right now". This block is what a user opens when hooks are
+        // NOT working, so the sentence naming a fault has to be reachable
+        // without a scroll.
+        const tsx = read("components", "SettingsModal.tsx")
+        const notice = tsx.indexOf("{health.unmatched && (")
+        const prose = tsx.indexOf("{health.line}")
+        expect(notice).toBeGreaterThan(-1)
+        expect(prose).toBeGreaterThan(-1)
+        expect(notice).toBeLessThan(prose)
     })
 })
 

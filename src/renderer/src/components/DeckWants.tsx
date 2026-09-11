@@ -43,10 +43,20 @@ export function DeckWants(): JSX.Element | null {
     const paneHold = useStore((s) => s.paneHold)
     const boardTasks = useStore((s) => s.boardTasks)
     const pipelineRun = useStore((s) => s.pipelineRun)
+    // The fifth is the wall clock, and it is the one that was missing. A stall
+    // is silence crossing a threshold: it writes none of the four above, so
+    // nothing brought this component back and the flag - and with it the badge
+    // - stayed absent while a session was genuinely stalled and counted
+    // (2026-09-12 verification, §3). The store now makes that crossing a write
+    // like any other (`stallEpoch`), so this stays a subscription list with no
+    // clock in it: Mission's interval and this component cannot disagree about
+    // a stall, because neither of them is what decides one has happened.
+    const stallEpoch = useStore((s) => s.stallEpoch)
     void seen
     void paneHold
     void boardTasks
     void pipelineRun
+    void stallEpoch
 
     const wantsCount = useStore((s) => s.wantsCount)
     const syncBadge = useStore((s) => s.syncBadge)

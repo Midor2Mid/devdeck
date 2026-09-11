@@ -274,6 +274,41 @@ export function isStalled(
 }
 
 /**
+ * The earliest instant at which this silence WOULD read as a stall — the
+ * inverse of the comparison above, solved for `now`.
+ *
+ * Why this exists: a stall is the one classification in the app that arrives
+ * with no store write at all. Every other state change is something an agent or
+ * the user did; this one is the wall clock crossing a line while nothing
+ * happens. A surface therefore cannot notice it by subscribing — it has to be
+ * told — and until 2026-09-12 only Mission was, by a `setInterval` of its own.
+ * The deck bar's wants-you control and the taskbar badge that rides it were not,
+ * so the badge was absent for exactly the state it exists for (2026-09-12
+ * verification, §3).
+ *
+ * The fix is a single alarm in the store set for this instant, not a second
+ * clock per surface. That is why this returns the INSTANT rather than a
+ * boolean: an alarm can be armed from it, and an alarm cannot drift from a
+ * predicate the way two intervals sampling one fact can.
+ *
+ * Deliberately reads ONE of `isStalled`'s four inputs. `alive` and `awaited`
+ * are facts that change by a store write, so a surface already hears about
+ * them; only `lastAt` moves silently. A caller arming an alarm off this is
+ * therefore over-inclusive — it may wake for a session that turns out not to be
+ * stalled — and that is the safe direction: waking early costs one comparison,
+ * waking late is the defect. The ANSWER stays `isStalled`'s alone.
+ *
+ * `+ 1` because the comparison is strictly `>`: at `lastAt + thresholdMs` the
+ * session is not yet stalled, and one millisecond later it is.
+ * `tests/stallClock.test.ts` pins that identity against `isStalled` itself
+ * rather than restating the arithmetic.
+ */
+export function stallsAt(lastAt: number | undefined, thresholdMs = STALL_MS): number | null {
+    if (!lastAt) return null
+    return lastAt + thresholdMs + 1
+}
+
+/**
  * Stamp a launch instant, so "has emitted nothing since it started" is a
  * measurable silence rather than an unknown. Never overwrites a real output
  * time — recordTail always wins.
