@@ -13,6 +13,7 @@ import { declaredFor } from "../declaredSignal"
 import type { DeclaredSignal } from "../../../shared/attention"
 import { sessionDir, worktreeLeaf } from "../worktree"
 import { paletteEmpty } from "../probeView"
+import { pointerStep, type PointerAt } from "../hoverSelect"
 import { contextMenu } from "../contextmenu"
 import { projectContextMenu } from "../projectMenu"
 import { ProjectChip } from "./ProjectChip"
@@ -119,6 +120,18 @@ export function CommandPalette(): JSX.Element {
     const [sel, setSel] = useState(0)
     const inputRef = useRef<HTMLInputElement>(null)
     const listRef = useRef<HTMLDivElement>(null)
+    // Where the pointer last was, so hover-select can tell a mouse that moved
+    // from a list that scrolled underneath one that did not. Starts empty on
+    // every open, which is what makes the palette appearing under a resting
+    // cursor a sighting rather than a selection. See hoverSelect.ts.
+    const pointer = useRef<PointerAt | null>(null)
+
+    /** Hover may take the cursor only when the pointer itself moved. */
+    const hover = (idx: number, e: { clientX: number; clientY: number }): void => {
+        const step = pointerStep(pointer.current, { x: e.clientX, y: e.clientY })
+        pointer.current = step.at
+        if (step.moved) setSel(idx)
+    }
 
     useEffect(() => {
         inputRef.current?.focus()
@@ -466,7 +479,7 @@ export function CommandPalette(): JSX.Element {
                                         role="option"
                                         aria-selected={idx === sel}
                                         className={"palette-item" + (idx === sel ? " sel" : "")}
-                                        onMouseEnter={() => setSel(idx)}
+                                        onMouseMove={(e) => hover(idx, e)}
                                         onClick={() => exec(r)}
                                         onContextMenu={
                                             r.kind === "project"

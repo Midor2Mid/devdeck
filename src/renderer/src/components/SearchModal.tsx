@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useStore } from "../store"
 import { ModalBoundary } from "./Modal"
+import { pointerStep, type PointerAt } from "../hoverSelect"
 import type { SearchHit } from "../../../preload/index"
 
 /**
@@ -29,6 +30,17 @@ function SearchBody(): JSX.Element {
     const [sel, setSel] = useState(0)
     const [loading, setLoading] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
+    // Same rule as the palette: a hit list that scrolls under a still cursor
+    // fires mouse events the user did not cause, and an ungated hover then
+    // fights the arrow keys for the selection. See hoverSelect.ts.
+    const pointer = useRef<PointerAt | null>(null)
+
+    /** Hover may take the cursor only when the pointer itself moved. */
+    const hover = (i: number, e: { clientX: number; clientY: number }): void => {
+        const step = pointerStep(pointer.current, { x: e.clientX, y: e.clientY })
+        pointer.current = step.at
+        if (step.moved) setSel(i)
+    }
 
     useEffect(() => {
         inputRef.current?.focus()
@@ -113,7 +125,7 @@ function SearchBody(): JSX.Element {
                                     {header && <div className="search-group">{header}</div>}
                                     <div
                                         className={"search-hit" + (i === sel ? " sel" : "")}
-                                        onMouseEnter={() => setSel(i)}
+                                        onMouseMove={(e) => hover(i, e)}
                                         onClick={() => open(hit)}
                                     >
                                         <span className="search-loc">

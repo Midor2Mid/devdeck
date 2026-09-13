@@ -49,9 +49,15 @@ function ShortcutsBody({ onClose }: { onClose: () => void }): JSX.Element {
                         </div>
                     ))}
                 </div>
+                {/* Scope, and nothing else. The tip that used to sit here named
+                    a second chord for the surface Ctrl+K already opens, three
+                    rows above - and named it "the command palette", which is
+                    half of what that surface is since the merge. Restating a
+                    binding under the list of bindings is the second source of
+                    truth this module was written to end; the fix is to say
+                    less, not to say it twice correctly. */}
                 <p className="muted small shortcuts-foot">
-                    Terminal shortcuts apply in the Terminal view. Tip: <kbd>Ctrl + Shift + P</kbd>{" "}
-                    opens the command palette for everything else.
+                    Terminal shortcuts apply in the Terminal view.
                 </p>
             </div>
         </div>

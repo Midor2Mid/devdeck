@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { shortcutGroups } from "../src/renderer/src/shortcuts"
 
@@ -213,6 +213,45 @@ describe("the shortcut reference against the handlers", () => {
             expect(bound, `${c} is listed as unpublished but nothing binds it`).toContain(c)
             expect(documentedCodes, `${c} is documented now - drop it`).not.toContain(c)
         }
+    })
+
+    /**
+     * The reverse of the pin above, aimed at PROSE rather than at the list.
+     *
+     * `shortcuts.ts` dropped `Ctrl+Shift+P` and the two tests above proved it
+     * gone from the list - while `ShortcutsModal`'s hand-written footer went on
+     * publishing the chord, and went on calling the surface "the command
+     * palette" three rows under `Ctrl + K - Find anything`. Same window, one
+     * surface, two names, and a pin that passed throughout: the list was never
+     * where the contradiction lived.
+     *
+     * So a chord that left the reference has to leave every rendered word in
+     * the renderer, not just the array.
+     */
+    it("publishes no unpublished chord in any renderer surface's prose", () => {
+        const files = readdirSync(fileURLToPath(new URL("../src/renderer/src", import.meta.url)), {
+            recursive: true,
+            encoding: "utf8"
+        }).filter((f) => f.endsWith(".tsx"))
+        const guilty: string[] = []
+        for (const c of UNPUBLISHED) {
+            const key = c.replace(/^Key/, "")
+            for (const f of files) {
+                const text = code(src("../src/renderer/src/" + f.replace(/\\/g, "/")))
+                if (text.includes(`Ctrl + Shift + ${key}`) || text.includes(`Ctrl+Shift+${key}`))
+                    guilty.push(`${f} still publishes Ctrl+Shift+${key}`)
+            }
+        }
+        expect(guilty).toEqual([])
+    })
+
+    it("calls the merged surface by one name in the F1 overlay", () => {
+        // It finds sessions and projects too, and Ctrl+K's own row already
+        // says so. "The command palette" is the name of the half of it that
+        // was merged away on 2026-09-14.
+        expect(
+            code(src("../src/renderer/src/components/ShortcutsModal.tsx")).toLowerCase()
+        ).not.toContain("command palette")
     })
 
     it("documents every chord in TerminalView's map", () => {

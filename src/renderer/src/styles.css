@@ -1110,7 +1110,12 @@ button .ic,
 }
 .palette-title {
     color: var(--text);
-    /* Shrinks before the path does not - the path has `flex: 1` and goes first.
+    /* The identity, and the LAST run on the row to give up a character. It
+       still carries a shrink, as a last resort: a pathological project name
+       ellipsises here rather than pushing the counts and the flag word off the
+       row. What keeps it whole until then is the PATH's zero basis below - with
+       `flex: 1 1 auto` there both runs shrank together in proportion to their
+       widths, and `qa proj` rendered at 20px beside 446px of path.
        The kbd pill, the flag word and the dot never shrink at all. */
     flex: 0 1 auto;
     min-width: 0;
@@ -1139,12 +1144,15 @@ button .ic,
 }
 /* First to shrink, and the only thing on the row that does: at the 900px window
    minimum the palette is 540px, and a Windows path is the run that can afford to
-   lose characters. */
+   lose characters. `flex: 1 1 0` and not `1 1 auto` is what makes that sentence
+   true rather than aspirational - a shrink share is proportional to the BASIS,
+   so a basis of zero takes every spare pixel while there is room and gives all
+   of them back before the name loses one. */
 .palette-path {
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted);
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1188,6 +1196,7 @@ button .ic,
     padding: 1px 5px;
     color: var(--faint);
     white-space: nowrap;
+    flex: none;
 }
 .palette-item.sel .palette-kbd {
     color: var(--muted);
@@ -1734,9 +1743,17 @@ button .ic,
     padding-bottom: 2px;
 }
 /* Geometry copied from .mtile-chip, which stays where it is: those are
-   tone-coloured and glyphed at 9px, a different axis on a different surface. */
+   tone-coloured and glyphed at 9px, a different axis on a different surface.
+   `nowrap` + `flex: none` for the reason .tab-dot, .claude-attn and
+   .deck-key .agent-badge each got them: a trailing run on a flex row states a
+   FACT, and a fact is not slack. Without them `FOLDER MISSING` wrapped inside
+   its own pill and stood its row at 52px against 37px for every other row -
+   the one row whose project is missing, breaking the rhythm of the list it
+   has to be found in. */
 .probe-tag {
     align-self: center;
+    flex: none;
+    white-space: nowrap;
     font-size: 10.5px;
     font-weight: 600;
     letter-spacing: 0.04em;
