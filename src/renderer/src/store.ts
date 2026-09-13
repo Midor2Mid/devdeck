@@ -355,9 +355,6 @@ interface AppState extends Persisted {
     fireTrigger: (triggerId: string) => void
 
     // Overlays / panels (runtime-only)
-    switcherOpen: boolean
-    openSwitcher: () => void
-    closeSwitcher: () => void
     composerOpen: boolean
     setComposerOpen: (open: boolean) => void
     paletteOpen: boolean
@@ -2016,7 +2013,6 @@ export const useStore = create<AppState>((set, get) => {
         prTarget: null,
         pipelineRun: null,
         pipelineResume: false,
-        switcherOpen: false,
         composerOpen: false,
         paletteOpen: false,
         extendOpen: false,
@@ -2368,8 +2364,6 @@ export const useStore = create<AppState>((set, get) => {
             }))
         },
 
-        openSwitcher: () => set({ switcherOpen: true }),
-        closeSwitcher: () => set({ switcherOpen: false }),
         setComposerOpen: (composerOpen) => set({ composerOpen }),
         setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
         setExtendOpen: (extendOpen) => set({ extendOpen }),

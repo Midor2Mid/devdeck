@@ -9,7 +9,6 @@ import { useFolderStates } from "../folderStates"
 export function Topbar(): JSX.Element {
     const view = useStore((s) => s.view)
     const project = useStore((s) => s.activeProject())
-    const openSwitcher = useStore((s) => s.openSwitcher)
     const setPaletteOpen = useStore((s) => s.setPaletteOpen)
     const runCommandTab = useStore((s) => s.runCommandTab)
     const run = useRunConfig(project?.path)
@@ -57,14 +56,14 @@ export function Topbar(): JSX.Element {
                 </button>
                 <button
                     className="topbar-proj-btn"
-                    onClick={openSwitcher}
+                    onClick={() => setPaletteOpen(true)}
                     // With a project open this used to show only its path, so the
                     // two fast paths were invisible exactly when you wanted them.
                     // One line, ` · `-separated: `.tip` is `white-space: normal`,
                     // so a newline here would collapse to a space anyway.
                     data-tip={
                         project
-                            ? `${project.path} · Ctrl+K switch · Ctrl+Shift+K recent (hold to cycle)`
+                            ? `${project.path} · Ctrl+K find · Ctrl+Shift+K recent (hold to cycle)`
                             : "Choose a project (Ctrl+K)"
                     }
                     data-tip-pos="bottom"
@@ -79,11 +78,11 @@ export function Topbar(): JSX.Element {
             <button
                 className="cmd-pill"
                 onClick={() => setPaletteOpen(true)}
-                data-tip="Command palette (Ctrl+Shift+P)"
+                data-tip="Find anything — a session, a project, a command (Ctrl+K)"
             >
                 <Icon name="search" size={14} />
                 <span>Search or run…</span>
-                <span className="cmd-kbd">Ctrl+Shift+P</span>
+                <span className="cmd-kbd">Ctrl+K</span>
             </button>
         </div>
     )

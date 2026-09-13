@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useStore, SHELL } from "../store"
 import { useSettings } from "../settings"
 import { Modal, ModalBoundary } from "./Modal"
-import type { Worktree } from "../../../preload/index"
+import type { Worktree, WorktreeList } from "../../../preload/index"
 
 /**
  * Manage git worktrees for the active project. Spin up an agent (or shell) in a
@@ -35,14 +35,29 @@ function WorktreesBody(): JSX.Element {
     const openChanges = useStore((s) => s.openChanges)
     const agents = useSettings((s) => s.agents)
 
-    const [list, setList] = useState<Worktree[]>([])
+    // THREE states, and `null` is the fourth: nobody has asked yet.
+    //
+    // This was `Worktree[]` seeded to `[]`, which said "this project has no
+    // worktrees" before the first read had come back and again forever if the
+    // read failed - `listWorktrees` resolved `[]` for a git failure too. Two
+    // different unknowns and one genuine zero, rendered identically as an empty
+    // list. Same defect class as `listChanges` resolving a failed `git status`
+    // as a clean tree, fixed there for the same reason.
+    const [read, setRead] = useState<WorktreeList | null>(null)
     const [branch, setBranch] = useState("")
     const [agentId, setAgentId] = useState(agents[0]?.id ?? "claude")
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState("")
 
     const refresh = (): void => {
-        if (project) window.api.git.worktrees(project.path).then(setList)
+        if (!project) return
+        // The bridge itself going is the same answer as git failing: we asked
+        // and could not find out. Without the catch a rejection left the last
+        // list on screen, presented as current.
+        window.api.git
+            .worktrees(project.path)
+            .then(setRead)
+            .catch(() => setRead({ ok: false, list: [] }))
     }
     useEffect(refresh, [project?.path])
 
@@ -121,8 +136,29 @@ function WorktreesBody(): JSX.Element {
                 </div>
                 {err && <p className="wt-err">{err}</p>}
 
+                {/* Three states, three sentences. `read === null` is the
+                    fourth and renders nothing at all: the first read has not
+                    landed, and a modal that has not asked yet may not answer.
+                    A marker only ever adds. */}
+                {read && !read.ok && (
+                    <div className="wt-unknown">
+                        <p className="muted">Couldn&apos;t read this project&apos;s worktrees.</p>
+                        {/* A ghost, not the accent. Re-reading is not the act
+                            this window exists for - `+ Agent in worktree` is,
+                            and it keeps the fill. */}
+                        <button className="btn-min" onClick={refresh}>
+                            Retry
+                        </button>
+                    </div>
+                )}
+                {read?.ok && read.list.filter((w) => !w.main).length === 0 && (
+                    <p className="muted wt-only-main">
+                        Only the main working tree. Name a branch above to give an agent its
+                        own copy.
+                    </p>
+                )}
                 <div className="wt-list">
-                    {list.map((wt) => (
+                    {(read?.ok && read.list.some((w) => !w.main) ? read.list : []).map((wt) => (
                         <div key={wt.path} className="wt-row">
                             <span className="wt-icon">{wt.main ? "★" : "⑂"}</span>
                             <div className="wt-info">

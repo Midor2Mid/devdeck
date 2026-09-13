@@ -634,7 +634,15 @@ describe("nothing on the hook path can reach the network or the filesystem", () 
      */
     const ALLOWED_IMPORTS: Record<string, string[]> = {
         "shared/attention.ts": ["./mcpEnv"],
-        "main/attention.ts": ["../shared/attention"]
+        // `shared/paths` is the path normaliser this module used to hold a
+        // private copy of (promoted 2026-09-14). It is pure string work -
+        // it imports nothing itself, touches no global, and makes no filesystem
+        // call, which is exactly the property the module's own doc insists on:
+        // comparing two cwds is a comparison between two strings, never a
+        // realpath, because no filesystem call belongs on the hook path. The
+        // import adds no capability; `tests/architectureBoundaries.test.ts`
+        // R4 keeps shared/ free of electron, node builtins and node-pty.
+        "main/attention.ts": ["../shared/attention", "../shared/paths"]
     }
 
     /**

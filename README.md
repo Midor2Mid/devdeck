@@ -101,7 +101,7 @@ actually run — it never guesses.
    `Ctrl+Shift+J`) jumps straight to whichever has been waiting longest. When
    DevDeck isn't the focused window, the same count sits on its Windows
    taskbar icon.
-5. `Ctrl+K` reopens the project list later. `F1` opens the complete, current
+5. `Ctrl+K` finds anything later — a session, a project or a command. `F1` opens the complete, current
    keyboard-shortcut reference at any time — it's the source of truth, ahead
    of anything below.
 
@@ -170,7 +170,7 @@ its own, so nothing else catches a type error.
 
 ## What works today
 
-- **Projects in the deck** — add a folder as a project; the deck along the bottom of the window carries one strip per project with its live sessions, and `Ctrl+K` switches between them. Persisted across restarts.
+- **Projects in the deck** — add a folder as a project; the deck along the bottom of the window carries one strip per project with its live sessions, and `Ctrl+K` finds and switches between them. Persisted across restarts.
 - **Multi-terminal** — real shells via xterm.js + pty, tabbed, each spawned in the active project's directory.
 - **Split panes** — split any terminal right (⇆) or down (⇅) to see multiple terminals at once; close panes and the layout collapses cleanly.
 - **Multi-agent sessions** — configurable agent presets (Claude, Claude Opus, Claude (no permission prompts), Codex, Gemini, or a custom command) launched per project, each with a type badge; `+` for the primary agent, `▾` menu for the rest (with resume). DevDeck checks each command against your shell's PATH and says so on the card, rather than launching into a pane that silently fails. Configure in Settings → Agents.
@@ -179,8 +179,8 @@ its own, so nothing else catches a type error.
 - **Task board + dispatch rules** — cards move through doing/review/done on real evidence (a snapshot of the project's git state, not just a quiet terminal); a Dispatch button routes a card to an agent by rule (title match, glob, or project) instead of always picking the first preset. Reached from the deck's **More** menu, not a view key.
 - **Prompt composer** — `Ctrl+Shift+I` opens a rich prompt box with `@file` and `/snippet` autocomplete (snippets defined in Settings) to compose and send to the focused agent session.
 - **Terminal layouts** — three ways to arrange sessions: **Tabs**, a **Grid** of every terminal in the project, and an **Overview** across every project at once.
-- **Project groups + switcher** — organize projects into collapsible groups; `Ctrl+K` opens a searchable launchpad grid of all projects with live session counts.
-- **Status bar** — active project, git branch + uncommitted-change count, **git identity** (click to switch account), attention flag, remote indicator.
+- **One search surface** — `Ctrl+K` opens a single searchable list of every **session**, every **project** and every **command**, in three fixed sections that a query filters but never re-orders. Session rows carry the same status dot and the same "needs you" word as the deck; project rows carry live session counts and `⚑ n want you`. Projects can also be organized into collapsible groups on the deck.
+- **Status bar** — the **focused session's** git branch and uncommitted-change count (a session started in a git worktree says `WORKTREE` and reports that tree, not the project root's), **git identity** (click to switch account), attention flag, remote indicator.
 - **Git accounts** — define work/personal identities (name, email, custom SSH command) in Settings → Git and apply one per project (writes the repo's local `git config`).
 - **SSH hosts** — define SSH profiles in Settings → SSH and open a connected terminal from the terminal `▾` menu.
 - **MCP servers** — manage the active project's `.mcp.json` (command/args/env) from Settings → MCP, read by Claude Code and other agents. DevDeck's own local MCP server ships **off**; turn it on in Settings → MCP server.
@@ -216,8 +216,7 @@ A quick reference; press **F1** in the app for the complete, current list (globa
 | `Ctrl+Shift+F` | Find in terminal |
 | `Ctrl+Shift+I` | Prompt composer |
 | `Ctrl+Shift+J` | Jump to the agent waiting on you longest |
-| `Ctrl+Shift+P` | Command palette |
-| `Ctrl+K` | Project switcher |
+| `Ctrl+K` | Find anything — a session, a project, a command |
 
 ## Architecture
 

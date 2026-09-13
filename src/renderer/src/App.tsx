@@ -19,7 +19,6 @@ import { NoProjects } from "./components/NoProjects"
 import { paneAtIndex, pickInDirection, type PaneDir, type PaneRect } from "./paneNav"
 import { DECK_VIEWS, viewKeysLive } from "./components/ViewKeys"
 import { SettingsModal } from "./components/SettingsModal"
-import { ProjectSwitcher } from "./components/ProjectSwitcher"
 import { CommandPalette } from "./components/CommandPalette"
 import { ExtendAgentModal } from "./components/ExtendAgentModal"
 import { SearchModal } from "./components/SearchModal"
@@ -75,9 +74,6 @@ export function App(): JSX.Element {
     const view = useStore((s) => s.view)
     const loadSettings = useSettings((s) => s.load)
     const settingsOpen = useSettings((s) => s.settingsOpen)
-    const switcherOpen = useStore((s) => s.switcherOpen)
-    const openSwitcher = useStore((s) => s.openSwitcher)
-    const closeSwitcher = useStore((s) => s.closeSwitcher)
     const paletteOpen = useStore((s) => s.paletteOpen)
     const setPaletteOpen = useStore((s) => s.setPaletteOpen)
     const closeSettings = useSettings((s) => s.closeSettings)
@@ -289,10 +285,11 @@ export function App(): JSX.Element {
         })
     }, [])
 
-    // Global shortcuts: Ctrl+O open folder, Ctrl+K project switcher,
-    // Ctrl+Shift+K previous project, Ctrl+Shift+P command palette, Ctrl+1..N
-    // view switch, Ctrl+Tab session cycle. Every one of them is published in
-    // shortcuts.ts, which is what the F1 overlay and Settings read.
+    // Global shortcuts: Ctrl+O open folder, Ctrl+K find anything,
+    // Ctrl+Shift+K previous project, Ctrl+1..N view switch, Ctrl+Tab session
+    // cycle. Every one of them is published in shortcuts.ts, which is what the
+    // F1 overlay and Settings read — with ONE deliberate exception, the
+    // Ctrl+Shift+P alias below.
     useEffect(() => {
         const handler = (e: KeyboardEvent): void => {
             const mod = e.ctrlKey || e.metaKey
@@ -304,6 +301,12 @@ export function App(): JSX.Element {
                 s.setShortcutsOpen(!s.shortcutsOpen)
                 return
             }
+            // Ctrl+Shift+P - the command palette's old chord, kept as an
+            // UNPUBLISHED alias for the same surface Ctrl+K now opens. It is
+            // gone from shortcuts.ts and the F1 overlay on purpose (two chords
+            // for one surface is a distinction the app no longer has), and it
+            // stays wired for one release so a beta user's muscle memory does
+            // not hit a dead key. Delete both halves together.
             if (mod && e.shiftKey && e.code === "KeyP") {
                 e.preventDefault()
                 e.stopPropagation()
@@ -398,10 +401,15 @@ export function App(): JSX.Element {
                 s.focusPane(s.activeId, target)
                 return
             }
+            // Ctrl+K - find anything. It opened the project switcher until
+            // 2026-09-14; the switcher was merged INTO the palette, so the chord
+            // survives pointing at the one surface that now answers "where is the
+            // thing". Unshifted, already the chord the F1 overlay teaches first,
+            // and Ctrl+Shift+K / Ctrl+Shift+J are a family around it.
             if (mod && !e.shiftKey && e.key.toLowerCase() === "k") {
                 e.preventDefault()
-                if (useStore.getState().switcherOpen) closeSwitcher()
-                else openSwitcher()
+                const s = useStore.getState()
+                s.setPaletteOpen(!s.paletteOpen)
                 return
             }
             // Ctrl+O — the folder dialog, in one keystroke. It is the first
@@ -479,7 +487,7 @@ export function App(): JSX.Element {
             window.removeEventListener("keyup", release, true)
             window.removeEventListener("blur", blur)
         }
-    }, [openSwitcher, closeSwitcher])
+    }, [])
 
     return (
         <div
@@ -618,21 +626,11 @@ export function App(): JSX.Element {
                     <SettingsModal />
                 </RegionBoundary>
             )}
-            {switcherOpen && (
-                <RegionBoundary
-                    overlay
-                    title="The project switcher hit an error"
-                    description="Nothing changed and your sessions are still running. Close this and pick a project from the top bar instead."
-                    actions={<button onClick={closeSwitcher}>Close</button>}
-                >
-                    <ProjectSwitcher />
-                </RegionBoundary>
-            )}
             {paletteOpen && (
                 <RegionBoundary
                     overlay
-                    title="The command palette hit an error"
-                    description="No command ran and your sessions are still running. Close this and use the menus instead."
+                    title="Find anything hit an error"
+                    description="Nothing ran, nothing changed, and your sessions are still running. Close this and use the top bar and the menus instead."
                     actions={<button onClick={() => setPaletteOpen(false)}>Close</button>}
                 >
                     <CommandPalette />

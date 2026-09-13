@@ -17,7 +17,7 @@ import type { Project } from "../../preload/index"
 import type { AnySession } from "./store"
 import type { BoardTask } from "./board"
 import type { PipelineRun } from "./pipeline"
-import { samePath } from "./paths"
+import { sameDir } from "../../shared/paths"
 import { useSettings, type UsageEvent } from "./settings"
 import type { RunExclusionReason, RunRecord } from "../../main/ledger"
 
@@ -156,7 +156,7 @@ export function createRunRecorder(
      * With no directory to reason about there is nothing to be exclusive of, so
      * the answer is no: an unattributable cost must never enter a total.
      *
-     * Paths are compared with `samePath` rather than `!==` for its case-folding,
+     * Paths are compared with `sameDir` rather than `!==` for its case-folding,
      * which is live on Windows: two spellings of one directory that differ only in
      * case are the same directory, and costInWindow cannot tell them apart either.
      * Folding can only find MORE matches, i.e. mark more runs non-exclusive, which
@@ -191,12 +191,12 @@ export function createRunRecorder(
             if (own.has(e.id)) continue
             if (!overlaps(e, startedAt, endedAt)) continue
             if (!e.cwd) unknown = true
-            else if (samePath(e.cwd, cwd)) return "shared"
+            else if (sameDir(e.cwd, cwd)) return "shared"
         }
         const st = get()
         const live = st
             .agentSessions()
-            .some((s) => !own.has(s.termId) && samePath(st.termCwd[s.termId] ?? s.projectPath, cwd))
+            .some((s) => !own.has(s.termId) && sameDir(st.termCwd[s.termId] ?? s.projectPath, cwd))
         // A directory we know was shared outranks one we merely cannot clear.
         if (live) return "shared"
         return unknown ? "unknown" : undefined
@@ -284,7 +284,7 @@ export function createRunRecorder(
 
             const endedAt = Date.now()
             const cwd = run.projectPath ?? ""
-            const project = get().projects.find((p) => samePath(p.path, cwd))
+            const project = get().projects.find((p) => sameDir(p.path, cwd))
             const termIds = run.steps.map((s) => s.termId ?? "")
             const shared = attributionReason(cwd, termIds, startedAt, endedAt)
             // This record claims those sessions' spend. Claimed synchronously,

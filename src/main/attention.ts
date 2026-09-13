@@ -31,6 +31,7 @@ import {
     type ParsedHook,
     SESSION_HEADER
 } from "../shared/attention"
+import { sameDir } from "../shared/paths"
 
 /** One live pty, as the correlator needs to see it. */
 export interface LiveSession {
@@ -103,12 +104,10 @@ function bind(cliSession: string, termId: string): void {
  * DevDeck and a CLI each produced for the same pane, not a decision about
  * whether a path is allowed — no filesystem call belongs on the hook path.
  */
-function sameDir(a: string, b: string): boolean {
-    const norm = (p: string): string =>
-        p.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
-    const x = norm(a)
-    return !!x && x === norm(b)
-}
+// The function itself lives in src/shared/paths.ts (promoted 2026-09-14: this
+// was the third copy of one expression, and the identity it computes decides
+// which pane a hook belongs to). The doc above is why it is a string comparison
+// and not a realpath, which is still true and still load-bearing here.
 
 export interface Attribution {
     termId: string | null
@@ -159,7 +158,13 @@ export function attribute(hook: ParsedHook, headerSession: string): Attribution 
         // for "which agent asked this", and counting it would make an otherwise
         // unique match ambiguous — refusing a hook because a plain terminal
         // happened to be open in the same folder is the wrong failure.
-        const inDir = live.filter((s) => s.agentId && sameDir(s.cwd, hook.cwd as string))
+        // `.trim()` at the call site rather than inside the shared normaliser: a
+        // hook's cwd arrives off the wire and can carry whitespace, which is a
+        // fact about THIS input, not about what makes two directories the same.
+        // Trimming first is exactly what the private copy this replaced did.
+        const inDir = live.filter(
+            (s) => s.agentId && sameDir(s.cwd.trim(), (hook.cwd as string).trim())
+        )
         if (inDir.length === 1) return { termId: inDir[0].id, matchedBy: "cwd" }
     }
 

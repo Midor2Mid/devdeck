@@ -81,7 +81,7 @@ function SearchBody(): JSX.Element {
     return (
         <div className="switcher-backdrop" onMouseDown={() => close(false)}>
             <div
-                className="switcher search-modal"
+                className="search-modal"
                 onMouseDown={(e) => e.stopPropagation()}
                 onKeyDown={onKeyDown}
             >
@@ -126,7 +126,7 @@ function SearchBody(): JSX.Element {
                         })
                     )}
                 </div>
-                <div className="switcher-foot muted small">
+                <div className="overlay-foot muted small">
                     {hits.length >= 300 ? "showing first 300 · " : ""}↑↓ move · Enter open · Esc close
                 </div>
             </div>

@@ -1,6 +1,6 @@
 ---
 name: DevDeck
-version: 0.9.6
+version: 0.9.7
 description: >-
   A terminal-first developer cockpit. Calm over clever — quiet, legible, fast to
   scan. One restrained accent, state shown in form as well as color. These tokens
@@ -317,7 +317,18 @@ browser / network, full width) → a bottom **Console Deck**. The deck is the li
 control surface: agent sessions appear as **keys** grouped into per-project
 strips (state shown as a dot, active key carries the accent stripe), with the
 view switch, a tool cluster, and the git/status region on its lower row. Project
-management (add, group, reorder, presets) lives in the `Ctrl+K` switcher.
+management (add, group, reorder, presets) lives in the project **context menu** —
+on the deck strip's label, and on any project row in the `Ctrl+K` palette. It
+always did: `projectContextMenu` is wired to `ProjectStrip`'s label, which is the
+fact that let the switcher be deleted without losing a capability.
+
+The git/status region reports the **focused session's** directory, not the active
+project's — branch, change count and pull target all follow the pane you are in,
+so a session started in a git worktree says so (a `WORKTREE` classification
+label) and its change count is that tree's. Clicking a deck key is therefore also
+switching branch. A worktree is **not** a navigation object: it is a cwd
+override on a session, visible but never a grouping key, and no persisted key is
+keyed on one.
 
 Spacing is a small, consistent scale — **xs 4 · sm 8 · md 12 · lg 16** — applied
 through tokens, never ad hoc. Density is compact-but-breathable; the terminal gets
@@ -495,9 +506,15 @@ them as precedent:
   Two exceptions that were listed here are gone: `.deck-key.active`'s second
   axis (the 14% accent tint) and the accent *fill* on `.ov-seg button.on` /
   `.usage-windows .btn-min.on`. Both were struck by the accent budget above.
-- `.switcher-card.active` marks the active project with a `--moss` ring, i.e. the
-  semantic success color standing in for an active state. Should be an accent
-  stripe.
+  A third is gone with its element: `.switcher-card.active` marked the active
+  project with a `--moss` ring — the semantic success colour standing in for an
+  active state — and the project switcher was merged into the palette on
+  2026-09-14. Two more accent spends went with it: `.switcher-card-group`'s
+  `--accent-soft` group label (a group name is a fact, not an act) and
+  `.card-attn`'s bare accent `●` (2.92 on Washi's `--bg-2`, and a dot borrowing
+  the status vocabulary's shape for a different meaning). The palette's project
+  row carries the same fact as `⚑ n want you`: accent on the flag glyph, the word
+  in `--text` at 600, nothing at zero — `DeckWants`' own copy table.
 - On/off **toggles** (`.icon-action.on`, `.net-toggle.on`, …) are marked by border
   or text color only. The table has no axis for toggles; that's a gap in both.
 - Menu/keyboard-cursor highlights (`.mention-item.active`) intentionally share
@@ -647,8 +664,10 @@ through one resolver (`useKeyStatus`, whose only job is to carry the `paneHold`
 subscription into `deckKeyStatus`). That is eleven surfaces, not one dot: deck
 key, terminal tab strip and grid card, Mission tile (dot *and* left border),
 Overview card / rail row / collapsed mini-strip, the usage panel's `Running now`
-rows, board cards, the composer's target list, the command palette's session
-rows, and the switcher card's attention marker. A raw `status` in any of them is
+rows, board cards, the composer's target list, and the palette's session rows —
+which since the 2026-09-14 merge render the real `.tab-dot` in all five forms and
+the shared `StatusFlag` word, rather than the prose suffix (`" - needs you"`)
+they used to concatenate into a title. A raw `status` in any of them is
 a claim about a live agent — `status` is what the agent last *did*, and it
 outlives the process that did it.
 
@@ -724,7 +743,7 @@ on a new attention transition.
 The same axis governs **counts**, and a count now excludes two different things
 for two different reasons: a session with no process (nothing is there) and a
 session you have already looked at (acknowledged, still unanswered). Only the
-first changes the dot. The switcher card's per-project attention marker
+first changes the dot. The palette project row's per-project attention marker
 (`projectSessionCounts`, `deck.ts`) applies both; its `terms` / `agents` numbers
 apply neither, because those count what *exists* and claim nothing about it.
 
@@ -828,6 +847,14 @@ identity:
 - **Outlined** micro-pill — **identity**, never urgency (agent/model names, on
   `--clay`). Outline marks it as "this is *what*, not *how urgent*".
 - **Bare uppercase** micro-label — **classification** (`--faint`, letter-spaced).
+  One documented departure: `.sb-worktree` on the deck bar takes the tier's
+  *shape* and `--muted` rather than `--faint`, because `--faint` on `--bg-2`
+  measures **4.25 (Slate) · 4.25 (Sumi) · 4.13 (Washi)** — under the 4.5 text
+  floor for a small label on the row you never look away from. `--muted` on
+  `--bg-2` measures **6.98 · 5.49 · 4.46**; Washi's 4.46 misses the floor by
+  0.04, which is a pre-existing property of `--muted` on that ground and must
+  not be patched with a literal. The departure is one chip, stated here rather
+  than discovered later, and costs no new token.
 - **Tint fill + weight** — **active segment** (see above).
 - **Accent fill** — Tier 1 of the accent budget: the primary CTA
   (`button-accent`), and `✓ Approve` on a Mission tile or an Overview card,

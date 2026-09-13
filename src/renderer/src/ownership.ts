@@ -1,4 +1,12 @@
 import { newPathsSince } from "./agentSignals"
+import { normDir, sameDir } from "../../shared/paths"
+
+// Re-exported rather than made a second import at the call site: `store.ts` asks
+// this module "are these two agents in the same tree", which is part of asking
+// it about ownership. The FUNCTION is the shared one - promoted 2026-09-14
+// because this file and `paths.ts` held byte-identical private copies of it -
+// and only the door is here.
+export { sameDir }
 
 export interface OwnerRef {
     termId: string
@@ -10,20 +18,6 @@ export interface CwdHolder {
     termId: string
     sessionName: string
     files: string[]
-}
-
-/**
- * Compare working directories the way the filesystem does on Windows: slashes
- * either way, case-insensitive, trailing separator optional. A false negative
- * here silently disables the dispatch guard, so be generous about what matches.
- */
-export function sameDir(a: string, b: string): boolean {
-    return !!a && !!b && normDir(a) === normDir(b)
-}
-
-/** One spelling for one directory. Shared with the ownership map's key. */
-function normDir(p: string): string {
-    return p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
 }
 
 /**

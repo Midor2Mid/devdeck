@@ -33,9 +33,10 @@ export function Deck(): JSX.Element {
                 {strips.length === 0 ? (
                     // No strip means no active project, which has two causes and
                     // needs two different controls. The label used to say "Add or
-                    // open a project" and did neither: it opened the switcher,
-                    // putting the folder dialog three hops away, and on a first
-                    // run that switcher is empty. With nothing to choose between,
+                    // open a project" and did neither: it opened the project
+                    // picker (the palette, since the 2026-09-14 merge), putting
+                    // the folder dialog three hops away, and on a first run that
+                    // picker has no projects in it. With nothing to choose between,
                     // this goes straight to the dialog; with projects on file but
                     // none active, choosing is the act and the dialog would be
                     // the wrong one. Dashed, never accent-filled - the accent CTA
@@ -50,7 +51,7 @@ export function Deck(): JSX.Element {
                     ) : (
                         <button
                             className="deck-empty"
-                            onClick={() => useStore.getState().openSwitcher()}
+                            onClick={() => useStore.getState().setPaletteOpen(true)}
                         >
                             Choose a project
                         </button>

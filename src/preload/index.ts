@@ -315,6 +315,19 @@ export interface Worktree {
     main: boolean
 }
 
+/**
+ * Re-declared here rather than imported from `main/worktrees.ts`, like
+ * `Worktree` above and for the same reason: facts cross as IPC payloads, and
+ * the renderer reads the type off `window.api`.
+ *
+ * `ok: false` is "we could not read this project's worktrees", which is a
+ * different thing from `list: []` and must render as a different sentence.
+ */
+export interface WorktreeList {
+    ok: boolean
+    list: Worktree[]
+}
+
 export interface RemoteInfo {
     host: "azure" | "github" | "other"
     branch: string
@@ -730,7 +743,7 @@ const api = {
         /** Fast-forward the current branch from its upstream (`git pull --ff-only`). */
         pull: (cwd: string): Promise<PullResult> => ipcRenderer.invoke("git:pull", cwd),
         // Worktrees
-        worktrees: (repoPath: string): Promise<Worktree[]> =>
+        worktrees: (repoPath: string): Promise<WorktreeList> =>
             ipcRenderer.invoke("git:worktrees", repoPath),
         worktreeAdd: (repoPath: string, branch: string, base?: string): Promise<WorktreeAddResult> =>
             ipcRenderer.invoke("git:worktreeAdd", { repoPath, branch, base }),

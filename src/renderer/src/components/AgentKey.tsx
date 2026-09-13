@@ -6,6 +6,7 @@ import { deckKeyStatusLabel, shortSessionLabel } from "../deck"
 import { useKeyStatus } from "../keyStatus"
 import { getTail } from "../missionTail"
 import { declaredFor, saidTip } from "../declaredSignal"
+import { sessionDir, worktreeLeaf } from "../worktree"
 
 export function AgentKey({
     session,
@@ -23,6 +24,8 @@ export function AgentKey({
     // `declaredFor`. It changes the TOOLTIP and nothing else on this surface;
     // see the tip below for why.
     const declared = useStore((s) => s.declared)
+    // A stable slice; the leaf is derived below, outside the selector.
+    const termCwd = useStore((s) => s.termCwd)
     const dragPayload = useStore((s) => s.dragPayload)
     const setDragPayload = useStore((s) => s.setDragPayload)
     // Carries the `paneHold` subscription that repaints this key when its
@@ -89,9 +92,17 @@ export function AgentKey({
     // Mission's tile and Overview's heads have room for the word; this has room
     // for the answer to a hover.
     const said = declaredFor(declared, session.termId, keyStatus)
+    // WHICH TREE, as a tooltip line and nothing else. The key gains no pixels
+    // for it, by the same argument as the provenance mark above: a DevDeck-made
+    // worktree session is ALREADY labelled with its branch, because
+    // `newAgentInWorktree` passes the branch as the session name - so a visible
+    // line would print the branch twice for the common case. Absent entirely in
+    // the project's own tree.
+    const leaf = worktreeLeaf(sessionDir(termCwd[session.termId], session.projectPath), session.projectPath)
     const tip = dragPayload
         ? "Drop to insert into this session"
         : `${session.sessionName} · ${session.projectName} - ${deckKeyStatusLabel(keyStatus)}` +
+          (leaf ? `\nworktree · ${leaf}` : "") +
           (said ? `\n${saidTip(said)}` : "") +
           (said?.message ? `\n“${said.message}”` : "") +
           (peek ? `\n${peek}` : "")

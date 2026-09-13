@@ -8,7 +8,7 @@ import {
     probeLine,
     pathUnreadable,
     probeRequests,
-    switcherEmpty,
+    paletteEmpty,
     type ProbeSubject
 } from "../src/renderer/src/probeView"
 
@@ -273,14 +273,27 @@ describe("pathUnreadable", () => {
     })
 })
 
-describe("switcherEmpty", () => {
-    it("distinguishes an empty list from zero matches", () => {
+describe("paletteEmpty", () => {
+    it("says nothing while the list has rows and the workspace has projects", () => {
+        // The palette is never truly empty - COMMANDS always has rows - so the
+        // common case is no notice at all.
+        expect(paletteEmpty(4, "", 30)).toBeNull()
+        expect(paletteEmpty(4, "theme", 7)).toBeNull()
+    })
+
+    it("names the QUERY when nothing matched, including its text", () => {
         // "No matching projects." for an empty workspace was absent rendered as
         // zero - the house rule broken in a stranger's first thirty seconds.
-        expect(switcherEmpty(0, "")).toEqual({ kind: "no-projects" })
-        expect(switcherEmpty(0, "api")).toEqual({ kind: "no-projects" })
-        expect(switcherEmpty(4, "api")).toEqual({ kind: "no-match", query: "api" })
-        expect(switcherEmpty(4, "")).toEqual({ kind: "none-to-show" })
+        // The successor has to keep saying WHICH query found nothing.
+        expect(paletteEmpty(4, "zzz", 0)).toEqual({ kind: "no-match", query: "zzz" })
+        expect(paletteEmpty(0, "zzz", 0)).toEqual({ kind: "no-match", query: "zzz" })
+    })
+
+    it("names the empty WORKSPACE even though the list has rows", () => {
+        // First run: SESSIONS and PROJECTS render nothing at all (a zero-row
+        // section has no header to learn to ignore), COMMANDS still lists, and
+        // the thing a stranger needs to be told is that there is no project yet.
+        expect(paletteEmpty(0, "", 30)).toEqual({ kind: "no-projects" })
     })
 })
 

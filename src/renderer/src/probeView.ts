@@ -194,19 +194,34 @@ export function pathUnreadable(report: ProbeReport | null): boolean {
 }
 
 /**
- * The project switcher's empty grid — three different facts that were all one
- * sentence ("No matching projects.") until this shipped. An empty list is not
- * zero results.
+ * What the one search surface says when its list cannot answer.
+ *
+ * Was `switcherEmpty`, which served a grid of ONE kind of thing and shipped to
+ * replace a single sentence ("No matching projects.") that an empty workspace
+ * and a failed search were both getting — absent rendered as zero, in a
+ * stranger's first thirty seconds. The palette lists three kinds, so the two
+ * remaining facts are different facts:
+ *
+ *   - `no-projects` is about the WORKSPACE and is true even while the list has
+ *     rows, because COMMANDS always has rows. It is the first-run hint, and the
+ *     head's `Open folder…` button is the act it names.
+ *   - `no-match` is about the QUERY, and only when nothing at all matched.
+ *
+ * `none-to-show` is gone with the grid. It was documented as unreachable, and a
+ * branch nobody can trigger is a branch nobody can trust — the same reasoning
+ * that deleted the deck's verify-key label rule rather than leave it as a branch
+ * that can never fire.
  */
-export type SwitcherEmpty =
-    | { kind: "no-projects" }
-    | { kind: "none-to-show" }
-    | { kind: "no-match"; query: string }
+export type PaletteNotice = { kind: "no-projects" } | { kind: "no-match"; query: string }
 
-export function switcherEmpty(projectCount: number, query: string): SwitcherEmpty {
+export function paletteEmpty(
+    projectCount: number,
+    query: string,
+    rows: number
+): PaletteNotice | null {
+    // Nothing matched at all: the query is the fact, whatever the workspace
+    // holds. Said first because it is the more specific of the two.
+    if (rows === 0) return { kind: "no-match", query }
     if (projectCount === 0) return { kind: "no-projects" }
-    // Unreachable today: with projects and no query the grid is never empty.
-    // Present so the branch is not a lie if grouping ever filters the list.
-    if (query === "") return { kind: "none-to-show" }
-    return { kind: "no-match", query }
+    return null
 }

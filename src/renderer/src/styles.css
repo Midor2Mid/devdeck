@@ -212,6 +212,31 @@ select:focus {
     gap: 5px;
     white-space: nowrap;
 }
+/* The one chip that says which TREE this row is about.
+   Bare uppercase, letter-spaced, 10px: the Badge tiers' CLASSIFICATION shape,
+   which is what this is - "what kind of directory", never "how urgent". It is
+   not a door and takes no cursor, no border and no fill.
+
+   --muted, and NOT the tier's --faint. --faint on --bg-2 measures 4.25 Slate /
+   4.25 Sumi / 4.13 Washi, under the 4.5 floor for a 10px label on the row you
+   never look away from; --muted measures 6.98 / 5.49 / 4.46 on the same ground.
+   Washi's 4.46 misses the floor by 0.04 - a pre-existing property of --muted on
+   that ground, recorded rather than patched with a literal, because a literal
+   here would read well in one skin and break in the other five.
+
+   It renders only in a worktree (DeckStatus guards it), so its PRESENCE is the
+   signal and the word is the legend. No accent, no dot, no sixth form. */
+.sb-worktree {
+    /* The label TOKENS, not the design note's literal 10px/0.08em: a size
+       written here reads well in one skin and wrong in the other five, and
+       --fs-label / --ls-label are what every other classification label on this
+       bar already answers to. 11px rather than 10 costs ~6px of a ~89px slack
+       at the 900px window minimum. */
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--muted);
+}
 /* TIER 3 (ink) is "you can act here, now" - and a count of files you have
    already changed is a FACT. The leading dot glyph is the form that says there
    is something here; --text is the ink for a fact the app can vouch for. The
@@ -468,7 +493,12 @@ button .ic,
     background: var(--bg-3);
 }
 
-/* ---------- Project switcher ---------- */
+/* ---------- The one search surface (backdrop, head, empty states) ----------
+   What is left of the project switcher after it merged into the command palette
+   on 2026-09-14: the backdrop, the search field, the `Open folder…` button and
+   the empty-state ink. The card grid and the 920px box it needed went with it -
+   this is a row list, and the palette's own 60vw / 600px is the right width for
+   one. */
 .switcher-backdrop {
     position: fixed;
     inset: 0;
@@ -480,7 +510,12 @@ button .ic,
     justify-content: center;
     padding-top: 8vh;
 }
-.switcher {
+/* The cross-project search overlay's box. It was `.switcher` - SearchModal
+   rendered `class="switcher search-modal"` and took its whole shape from the
+   project switcher, against a `.search-modal` rule that never existed. The
+   switcher was merged into the palette on 2026-09-14 and the palette has its own
+   (narrower, row-list) width, so the rule is named for its remaining user. */
+.search-modal {
     width: 80vw;
     max-width: 920px;
     max-height: 78vh;
@@ -525,65 +560,7 @@ button .ic,
     color: var(--accent);
     border-color: var(--accent);
 }
-.switcher-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 10px;
-    padding: 16px;
-    overflow-y: auto;
-}
-.switcher-card {
-    border: 1px solid var(--border-soft);
-    border-radius: 10px;
-    padding: 12px 14px;
-    background: var(--bg-3);
-    cursor: pointer;
-    transition: border-color 0.12s ease, transform 0.12s ease;
-    /* Let the grid columns shrink to 1fr instead of growing to fit the (long,
-       non-wrapping) project path — otherwise the grid overflows horizontally. */
-    min-width: 0;
-}
-.switcher-card.sel {
-    border-color: var(--accent);
-}
-.switcher-card.active {
-    box-shadow: inset 0 0 0 1px var(--moss);
-}
-.switcher-card-name {
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-.card-attn {
-    color: var(--accent);
-    font-size: 9px;
-}
-.switcher-card-group {
-    font-size: var(--fs-label);
-    letter-spacing: var(--ls-label);
-    color: var(--accent-soft);
-    margin-bottom: 4px;
-}
-.switcher-card-path {
-    font-size: 11px;
-    color: var(--faint);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-bottom: 6px;
-}
-.switcher-card-meta {
-    font-size: 11px;
-    color: var(--muted);
-}
 .switcher-empty {
-    grid-column: 1 / -1;
     text-align: center;
     padding: 40px;
 }
@@ -592,11 +569,6 @@ button .ic,
 .switcher-empty-q {
     font-family: var(--font-mono);
     overflow-wrap: anywhere;
-}
-.switcher-foot {
-    padding: 10px 20px;
-    border-top: 1px solid var(--border-soft);
-    text-align: center;
 }
 
 /* ---------- Mission Control (supervision home) ---------- */
@@ -1060,7 +1032,7 @@ button .ic,
     white-space: nowrap;
 }
 
-/* ---------- Command palette ---------- */
+/* ---------- The palette: sessions, projects, commands ---------- */
 .palette {
     width: 60vw;
     max-width: 600px;
@@ -1073,18 +1045,64 @@ button .ic,
     box-shadow: var(--elev-3);
     overflow: hidden;
 }
+/* BOTH halves of the overflow pair. `overflow-y: auto` inside a
+   `max-height: 70vh` column flex was only half of it: a flex item's automatic
+   minimum is its own content height, so with a long list the palette pushed
+   past 70vh instead of scrolling, and inherited the global quiet scrollbar
+   rather than an affordance. Same shape as the `.modal-body` bug fixed
+   2026-09-11, and the same fix. */
 .palette-list {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 6px;
 }
+/* The affordance, drawn explicitly - see DESIGN.md "Overflow and the scroll
+   affordance" and the `.modal-body` / `.deck-strips` note, which is where this
+   idiom and the reason for --border-strong come from. NEVER
+   `scrollbar-width: thin`: it hands the colour back to the platform, and the
+   thumb then disappears into --bg-2 in at least two of the six skins. */
+.palette-list::-webkit-scrollbar {
+    width: 8px;
+}
+.palette-list::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 4px;
+}
+.palette-list::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}
+/* One header per group, replacing the per-row section label the palette used to
+   carry - a net subtraction at any list longer than three rows. The
+   section-label grammar: --muted, small, uppercase, letter-spaced. It is
+   `aria-hidden` and the arrow keys step straight over it, because a header is
+   not a destination. */
+.palette-head {
+    font-size: var(--fs-label);
+    letter-spacing: var(--ls-label);
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 12px 4px;
+}
+.palette-group:first-child .palette-head {
+    padding-top: 4px;
+}
+/* All three kinds are this row: same height, same 2px accent selection stripe
+   (Tier 2, one per surface), same --bg-3 selected fill. `justify-content` is
+   gone - with four or five runs on a row, space-between scattered them; the
+   path's `flex: 1` is what pushes the trailing marks to the end now. */
 .palette-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
     padding: 9px 12px;
     border-radius: 7px;
     cursor: pointer;
+}
+/* The kbd pill is the one thing that still wants the far edge on a command row,
+   which carries nothing between it and the title. */
+.palette-item .palette-kbd {
+    margin-left: auto;
 }
 .palette-item.sel {
     background: var(--bg-3);
@@ -1092,7 +1110,73 @@ button .ic,
 }
 .palette-title {
     color: var(--text);
-    flex: 1;
+    /* Shrinks before the path does not - the path has `flex: 1` and goes first.
+       The kbd pill, the flag word and the dot never shrink at all. */
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Every secondary run on a row: the project a session belongs to, a project's
+   group, the session counts, and the words `not running`. --muted, not --faint:
+   4.25 Slate / 4.25 Sumi / 4.13 Washi on --bg-2 is under the 4.5 text floor,
+   and --muted's 6.98 / 5.49 / 4.46 is what this system uses for a fact it can
+   vouch for but is not asking you to act on. */
+.palette-dim {
+    color: var(--muted);
+    white-space: nowrap;
+    flex: none;
+}
+/* A machine-readable VALUE, so mono - sans for names, mono for values. Present
+   only when the session's directory is not the project root. */
+.palette-branch {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    flex: none;
+}
+/* First to shrink, and the only thing on the row that does: at the 900px window
+   minimum the palette is 540px, and a Windows path is the run that can afford to
+   lose characters. */
+.palette-path {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* `⚑ n want you` - DeckWants' own copy table and its own spend: the accent on
+   the FLAG, the word in --text at 600. A project row aggregates, so it borrows
+   the aggregate word and never the per-session one, and renders nothing at
+   zero. --accent as ink on --bg-2 is 2.92 on Washi, which is why the glyph's
+   SHAPE carries it and the word beside it is --text. */
+.palette-want {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+.palette-want-flag {
+    display: inline-flex;
+    color: var(--accent);
+}
+/* The keyboard-hint line at the base of a search overlay: three gestures,
+   named once, on the surface that teaches them. Adopted from the switcher,
+   which is where it was written and which no longer exists - the palette and
+   the cross-project search share the rule rather than the dead surface's name. */
+.overlay-foot {
+    padding: 10px 20px;
+    border-top: 1px solid var(--border-soft);
+    text-align: center;
+    flex: none;
 }
 /* The palette should teach the chord, not just run the action — quiet enough not
    to compete with the title, which takes the slack. */
@@ -1107,12 +1191,6 @@ button .ic,
 }
 .palette-item.sel .palette-kbd {
     color: var(--muted);
-}
-.palette-section {
-    font-size: 10px;
-    letter-spacing: 1px;
-    color: var(--faint);
-    text-transform: uppercase;
 }
 .sidebar-section-title {
     display: flex;
@@ -1645,10 +1723,13 @@ button .ic,
 .project-chip.folder-missing {
     filter: grayscale(1) opacity(0.6);
 }
-/* The path is already a nowrap/ellipsis block filling the card, so the rule
-   sits under the value and nowhere else - no display change, which would put
-   the pill back on this line. */
-.switcher-card.folder-missing .switcher-card-path {
+/* The third channel of the folder grammar, on the palette's project row: the
+   chip desaturates, the path takes a dashed rule, and the pill says the word -
+   because in Washi a border is nearly invisible against --bg-2, so two channels
+   can both vanish. The path is already a nowrap/ellipsis run, so the rule sits
+   under the value and nowhere else - no display change, which would push the
+   pill onto its own line. */
+.palette-path.folder-missing {
     border-bottom: 1px dashed var(--border);
     padding-bottom: 2px;
 }
@@ -4492,6 +4573,22 @@ button .ic,
 }
 .wt-branch { flex: 1; min-width: 160px; }
 .wt-err { color: var(--danger); font-size: 12px; margin: 0 0 10px; }
+/* The two states the list is NOT. A project with only its main tree and a
+   project whose worktrees could not be read both used to render as an empty
+   list, which is unknown drawn as zero. Both are sentences now, in --muted (the
+   text floor: 6.98 Slate / 5.49 Sumi / 4.46 Washi on --bg-2), and neither
+   borrows the list's row shape - they are not rows. */
+.wt-only-main { font-size: 12px; margin: 0; }
+.wt-unknown {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 10px;
+}
+.wt-unknown p {
+    margin: 0;
+    font-size: 12px;
+}
 .wt-list { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; }
 .wt-row {
     display: flex;
@@ -4704,7 +4801,6 @@ button .ic,
     border-radius: 7px;
     transition-duration: 0.12s;
 }
-[data-style="modern"] .switcher-card,
 [data-style="modern"] .theme-card,
 [data-style="modern"] .style-card,
 [data-style="modern"] .wt-row,
@@ -4719,7 +4815,8 @@ button .ic,
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 16px -10px rgba(0, 0, 0, 0.4);
 }
 [data-style="modern"] .modal,
-[data-style="modern"] .switcher,
+[data-style="modern"] .palette,
+[data-style="modern"] .search-modal,
 [data-style="modern"] .changes-modal,
 [data-style="modern"] .worktrees-modal,
 [data-style="modern"] .settings-modal {
@@ -6206,23 +6303,6 @@ button:not(:disabled):active { transform: translateY(0.3px) scale(0.997); }
 }
 .project-chip-md.is-emoji {
     font-size: 15px;
-}
-.switcher-card-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-/* The digit that picks this row. Same quiet key-hint idiom as the composer's
-   Ctrl+Shift+I badge — a hint, not an action, so it takes no accent. */
-.switcher-card-key {
-    margin-left: auto;
-    flex: none;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--faint);
-    border: 1px solid var(--border-soft);
-    border-radius: 5px;
-    padding: 1px 5px;
 }
 
 /* ---------- Project appearance modal ---------- */

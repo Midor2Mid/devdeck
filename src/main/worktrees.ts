@@ -70,10 +70,32 @@ function git(cwd: string, args: string[]): Promise<{ ok: boolean; stdout: string
     })
 }
 
-export async function listWorktrees(repoPath: string): Promise<Worktree[]> {
+/**
+ * The trees this repo has, and whether we could find out at all.
+ *
+ * `{ ok, list }` rather than a bare array, because a bare array said the same
+ * thing twice: `[]` was BOTH "this project has only its main working tree" -
+ * the common case, since the worktree toggle defaults off - and "git worktree
+ * list failed". The modal rendered both as an empty list, which is unknown
+ * rendered as zero. That is the conflation `listChanges` was fixed for
+ * (tests/changes.test.ts pins that a non-repo directory reads unknown) and the
+ * one `nextChangedCounts` was flagged for.
+ *
+ * Not a throw, which is how `listChanges` says it: that one's callers were
+ * happy to treat a failure as nothing-to-show, and this one's caller has to
+ * render three different sentences. An exception would be collapsed back to two
+ * at the first `.catch(() => [])` a future edit reaches for.
+ */
+export interface WorktreeList {
+    /** False means `git worktree list` did not answer — NOT that there are none. */
+    ok: boolean
+    list: Worktree[]
+}
+
+export async function listWorktrees(repoPath: string): Promise<WorktreeList> {
     const r = await git(repoPath, ["worktree", "list", "--porcelain"])
-    if (!r.ok) return []
-    return parseWorktreeList(r.stdout)
+    if (!r.ok) return { ok: false, list: [] }
+    return { ok: true, list: parseWorktreeList(r.stdout) }
 }
 
 /** Create a worktree on a new branch (or check out an existing branch). */

@@ -163,9 +163,24 @@ describe("the shortcut reference against the handlers", () => {
         expect(missing).toEqual([])
     })
 
+    /**
+     * Chords that are wired and deliberately NOT in the reference.
+     *
+     * Exactly one, and it is a deprecation: `Ctrl+Shift+P` opened the command
+     * palette and `Ctrl+K` opened the project switcher until 2026-09-14, when
+     * the two surfaces merged into one. Two published chords for one surface
+     * would teach a stranger a distinction the app no longer has, so the alias
+     * left shortcuts.ts and the F1 overlay and stays wired for one release -
+     * a beta user's muscle memory is the thing being changed, and two doors into
+     * one room costs nothing while it is being changed.
+     *
+     * A list, with its length pinned, rather than a loosened assertion: the rule
+     * still catches the app growing a keystroke the reference never learned
+     * about, which is how Settings fell ten bindings behind.
+     */
+    const UNPUBLISHED = ["KeyP"]
+
     it("documents every global Ctrl+Shift chord App.tsx binds", () => {
-        // The reverse direction: the app growing a keystroke the reference never
-        // learned about, which is how Settings fell ten bindings behind.
         const bound = [...code(APP).matchAll(/e\.shiftKey && e\.code === "(\w+)"/g)].map(
             (m) => m[1]
         )
@@ -175,7 +190,29 @@ describe("the shortcut reference against the handlers", () => {
         const documentedCodes = new Set(
             documented.map((k) => wiringFor(k)?.needle.match(/"(Key\w+)"/)?.[1]).filter(Boolean)
         )
-        expect(bound.filter((c) => !documentedCodes.has(c))).toEqual([])
+        expect(
+            bound.filter((c) => !documentedCodes.has(c) && !UNPUBLISHED.includes(c)),
+            "An undocumented chord. Add it to shortcuts.ts, or to UNPUBLISHED " +
+                "with the release it is removed in."
+        ).toEqual([])
+    })
+
+    it("keeps the unpublished list to the one deprecation, and keeps it real", () => {
+        // Both directions. An entry that stopped being wired is a rule
+        // protecting nothing; an entry that got itself documented is a chord
+        // that should have left this list. And the length is pinned so the list
+        // cannot quietly become the place undocumented chords go to live.
+        expect(UNPUBLISHED).toHaveLength(1)
+        const bound = [...code(APP).matchAll(/e\.shiftKey && e\.code === "(\w+)"/g)].map(
+            (m) => m[1]
+        )
+        const documentedCodes = new Set(
+            documented.map((k) => wiringFor(k)?.needle.match(/"(Key\w+)"/)?.[1]).filter(Boolean)
+        )
+        for (const c of UNPUBLISHED) {
+            expect(bound, `${c} is listed as unpublished but nothing binds it`).toContain(c)
+            expect(documentedCodes, `${c} is documented now - drop it`).not.toContain(c)
+        }
     })
 
     it("documents every chord in TerminalView's map", () => {

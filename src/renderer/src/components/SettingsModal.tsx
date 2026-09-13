@@ -882,7 +882,7 @@ function PipelinesSection(): JSX.Element {
             <p className="settings-hint" style={{ marginTop: 0 }}>
                 A pipeline sends a sequence of prompts to your agents, waiting for each to
                 finish before sending the next. Same-agent steps reuse one session, so context
-                carries across them. Run from here or the command palette (<code>Ctrl+Shift+P</code>).
+                carries across them. Run from here or the palette (<code>Ctrl+K</code>).
             </p>
             {pipelines.map((p, pi) => (
                 <div key={p.id} className="pipe-edit">

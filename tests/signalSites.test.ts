@@ -670,3 +670,123 @@ describe("both Overview surfaces mount the approval block on the same terms", ()
         expect(linesWith("if (!prompt && !sent) return null", overview)).toHaveLength(1)
     })
 })
+
+// --- One path normaliser, and one caller of the want predicate --------------
+//
+// Both are the same rule wearing different clothes: a fact this product
+// answers on several surfaces gets exactly one function, and the pin is what
+// stops a second one being written by whoever is in the wrong file that day.
+
+const SRC = fileURLToPath(new URL("../src/", import.meta.url)).split(/[\\/]/).join("/")
+
+/** Every .ts/.tsx file under src/, as paths. */
+function srcFiles(): string[] {
+    return readdirSync(SRC, { recursive: true, encoding: "utf8" })
+        .filter((f) => /\.tsx?$/.test(f))
+        .map((f) => SRC + f.split(/[\\/]/).join("/"))
+}
+
+describe("N2 - one path normaliser, in src/shared/paths.ts", () => {
+    // `ownership.ts` and `paths.ts` held BYTE-IDENTICAL private copies, and
+    // `main/attention.ts` a third. One decides whether two agents conflict over
+    // a working tree, one decides which session a run's money is attributed to,
+    // one decides which pane a hook belongs to. `buildOwnership` keying on
+    // project name instead of the normalised tree (fixed a0d925a) is what this
+    // costs when the identity is wrong: invisible to the typecheck, green in the
+    // suite, found by a human in the real app. Three spellings of the identity
+    // is the same bug one level up - when one drifts, two surfaces disagree
+    // about which directory is which and nothing fails.
+    const files = srcFiles()
+    const HOME = SRC + "shared/paths.ts"
+
+    it("finds the source files, and the module itself", () => {
+        // Guards the scan: a moved directory would leave the assertion below
+        // passing over an empty list forever.
+        expect(files.length).toBeGreaterThan(100)
+        expect(files).toContain(HOME)
+        // Non-vacuous: the home really does define it, so a rename cannot make
+        // the needle match nothing and pass.
+        const home = codeLines(HOME)
+        expect(linesWith("export function normDir(", home)).toHaveLength(1)
+        expect(linesWith("export function sameDir(", home)).toHaveLength(1)
+    })
+
+    it("spells the normalising expression nowhere else under src/", () => {
+        // The EXPRESSION, not the name: each copy was spelled with its own
+        // local function name (`normDir`, `norm`, an inline arrow), so a scan
+        // for the name would have found nothing to complain about.
+        //
+        // All three parts are required together, and that narrowness is the
+        // point. Folding backslashes alone is something five unrelated modules
+        // do for display or for a glob, and none of them is an identity - what
+        // makes this one an identity, and therefore dangerous to have twice, is
+        // that it also strips the trailing separator and case-folds. Those three
+        // in one expression is a decision about whether two directories are the
+        // same, and there may be exactly one of those.
+        const FOLD = /\.replace\(\/\\\\\/g/
+        const STRIP = /\.replace\(\/\\\/\+\$\//
+        const CASE = /\.toLowerCase\(\)/
+        const offenders: string[] = []
+        for (const path of files) {
+            if (path === HOME) continue
+            rawLines(path).forEach((line, i) => {
+                if (FOLD.test(line) && STRIP.test(line) && CASE.test(line)) {
+                    offenders.push(`${base(path)}:${i + 1}`)
+                }
+            })
+        }
+        expect(
+            offenders,
+            "A fourth path normaliser. Import normDir/sameDir from " +
+                "src/shared/paths.ts instead:\n" + offenders.join("\n")
+        ).toEqual([])
+    })
+
+    it("is reached by the three callers that used to own a copy", () => {
+        // The other direction of the same gate. Deleting an import here means
+        // someone re-inlined the expression in a shape the scan above does not
+        // recognise, which is how the duplication comes back.
+        // rawLines, not codeLines: the latter blanks every quoted literal,
+        // and a module specifier is nothing but a quoted literal.
+        const imports = (rel: string): number =>
+            linesWith("shared/paths\"", rawLines(SRC + rel)).length
+        expect(imports("renderer/src/ownership.ts")).toBe(1)
+        expect(imports("renderer/src/runRecorder.ts")).toBe(1)
+        expect(imports("main/attention.ts")).toBe(1)
+    })
+})
+
+describe("N1 - wantKind has exactly one caller, and it is store.ts", () => {
+    // The three session-status pins above are directory-scoped, so a merged or
+    // new surface falls under them the day it exists. The WANT was not covered:
+    // the only assertion about it read store.ts alone, and `wantKind` is not
+    // `keyStatusOf(s) === "attention"` - it also weighs `awaited`, `lastAt`,
+    // `held`, `exitCodeOf` and `seen`. A surface re-deriving the want from the
+    // status would disagree with the deck's own row about which sessions want
+    // you, in the surface a user opens BECAUSE the deck bar is ambiguous, and
+    // nothing in this suite would have said a word.
+    //
+    // A surface that needs the want reads `wantKinds()` / `wantsCount` off the
+    // store. It does not compute one.
+    const files = rendererFiles()
+    const TILE = RENDERER + "tileState.ts"
+
+    it("has no caller outside store.ts", () => {
+        const callers = files.filter(
+            (path) => linesWith("wantKind(", codeLines(path)).length > 0 && path !== TILE
+        )
+        expect(
+            callers.map(base).sort(),
+            "A second caller of wantKind. Read wantKinds() / wantsCount off the " +
+                "store instead of re-deriving the want."
+        ).toEqual(["store.ts"])
+    })
+
+    it("is not vacuous - tileState exports it and store.ts really calls it", () => {
+        // A rename that made the needle match nothing would otherwise leave the
+        // assertion above passing forever, which is the failure mode every
+        // source scan in this file is written against.
+        expect(linesWith("export function wantKind(", codeLines(TILE))).toHaveLength(1)
+        expect(linesWith("wantKind(", lines)).toHaveLength(1)
+    })
+})

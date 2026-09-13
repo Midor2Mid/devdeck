@@ -36,9 +36,13 @@ export function shortcutGroups(viewNames: string[]): ShortcutGroup[] {
                 // where a stranger looks first; the menu replays this chord
                 // rather than owning a second path to the same dialog.
                 ["Ctrl + O", "Open a folder as a project"],
-                ["Ctrl + K", "Switch project (then 1-9 to pick)"],
+                ["Ctrl + K", "Find anything - a session, a project, a command"],
                 ["Ctrl + Shift + K", "Recent project - hold and tap to walk back"],
-                ["Ctrl + Shift + P", "Command palette"],
+                // Ctrl+Shift+P is NOT listed any more, and still works. The
+                // project switcher and the command palette merged on 2026-09-14,
+                // so two chords now open one surface; publishing both would teach
+                // a stranger a distinction the app no longer has. It stays wired
+                // for one release so nobody's hand hits a dead key, then goes.
                 ...views,
                 ["Ctrl + Tab", "Next session (shells included)"],
                 ["Ctrl + Shift + Tab", "Previous session"],
