@@ -30,6 +30,7 @@ function SearchBody(): JSX.Element {
     const [sel, setSel] = useState(0)
     const [loading, setLoading] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
+    const listRef = useRef<HTMLDivElement>(null)
     // Same rule as the palette: a hit list that scrolls under a still cursor
     // fires mouse events the user did not cause, and an ungated hover then
     // fights the arrow keys for the selection. See hoverSelect.ts.
@@ -45,6 +46,20 @@ function SearchBody(): JSX.Element {
     useEffect(() => {
         inputRef.current?.focus()
     }, [])
+
+    // Keep the cursor on screen, as the palette does.
+    //
+    // This list never had it, and the ungated hover hid that: selecting from
+    // mouseenter kept yanking `sel` back to a row that was by definition
+    // visible, so the missing scroll could not be seen. Gating the hover
+    // unmasked it - 25 arrow keys left scrollTop at 0 with the selected row
+    // 673px below the end of the list, nothing highlighted on screen, and
+    // Enter opening a file the user never saw chosen.
+    useEffect(() => {
+        listRef.current
+            ?.querySelector<HTMLElement>(".search-hit.sel")
+            ?.scrollIntoView({ block: "nearest" })
+    }, [sel, hits])
 
     // Debounced content search; queries shorter than 2 chars never hit the backend.
     useEffect(() => {
@@ -107,7 +122,7 @@ function SearchBody(): JSX.Element {
                         setSel(0)
                     }}
                 />
-                <div className="search-results">
+                <div className="search-results" ref={listRef}>
                     {q.trim().length < 2 ? (
                         <div className="muted switcher-empty">
                             Type at least 2 characters to search file contents across every project.

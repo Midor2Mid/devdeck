@@ -241,3 +241,218 @@ window, two names for one surface. Shot `22`. Low damage, but it is the exact fa
   may not have a twin there.
 - The fixture is a two-commit repo with untracked files. A large repo, a detached HEAD, a
   submodule, and a worktree whose branch was deleted underneath it are all unexercised.
+
+---
+
+# Re-check — `e6efff7` (the four findings above, plus `SearchModal`)
+
+**Date** 2026-09-14 · **Commit under test** `e6efff7` · tree clean, nothing edited under `src/`
+**Method** `run-app` over CDP against a fresh `npx electron-vite build`, every launch on a
+**scratch `userDataDir`** (`…/scratchpad/rv/ud1`, a copy of the §0 profile so the MRU in Local
+Storage came with it) and a unique `debugPort` (9431–9442). The owner's own DevDeck was never
+touched and never killed. Same fixture as above (`qa proj` + its worktrees, `not a repo`,
+`ghost proj` pointing at a deleted folder), all under a path with a space in it.
+
+Every key and every pointer position below went through `Input.dispatchKeyEvent` /
+`Input.dispatchMouseEvent` — the browser's real input pipeline — not synthetic DOM events. The
+renderer store is still not on `window`, so this drove the DOM throughout.
+
+**Static gates, reproduced from the clean tree:** `npm run typecheck` → 0.
+`npx vitest run` → **152 files, 2068 passed, 1 skipped** (full suite, 15.9s). `electron-vite build`
+clean.
+
+## The instrumentation that makes the rest of this falsifiable
+
+A capture-phase listener on `document` counted every `mousemove`, `mouseenter` and `mouseover`
+that landed on a row, **with its client coordinates**, for the duration of each run. Without it,
+"the selection did not move" is indistinguishable from "no event fired", and only the first of
+those is evidence that a gate works.
+
+## 1. Hover vs keyboard — **fixed, and the mechanism is visible**
+
+### 1a. Pointer parked mid-list, never moved → the bottom is reachable
+
+Pointer dispatched once to `(692, 430)` — the middle of the list — **before** `Ctrl+K`, then
+never again. 60 × `ArrowDown`, zero mouse events:
+
+```
+sel: 6 7 8 9 10 … 38 39 40 40 40 …      snapbacks: 0
+```
+
+`sel` walks from 6 to **40, the last of 41 rows**, and stays. Previously it climbed ~7 and snapped
+back, forever. The selected row ends **fully inside** the list box (row 577–614, list 121–613).
+Shot `30-palette-parked-bottom.png` — the palette scrolled to `Keyboard shortcuts (F1)` with the
+mouse still resting mid-list.
+
+**The old mechanism is still firing** — this is the part worth recording. During those steps the
+list fired **30 `mouseenter` events on rows, every one of them carrying the unchanged coordinate
+`[692,430]`**, and **0 `mousemove`**. So in this Chromium the post-scroll synthetic event is
+`mouseenter`, not `mousemove`. The old `onMouseEnter={() => setSel(idx)}` would have been dragged
+30 times; the new handler is never called at all.
+
+*Precisely what that means:* the load-bearing half of the fix **in this build** is the
+`onMouseEnter` → `onMouseMove` swap. I did not observe a single same-coordinate `mousemove`, so
+the coordinate fold in `hoverSelect.ts` never had to reject one. The fold is what makes the fix
+robust rather than lucky (a Chromium that did emit one would still be gated), and it is
+independently load-bearing for the first-sighting case in 1c — but I am not claiming to have
+watched it reject a synthetic move, because no synthetic move occurred.
+
+Opening the palette under the resting cursor fired **1 `mouseenter`, 0 `mousemove`** — and the
+preselect held.
+
+### 1b. `Ctrl+K, Enter` is now independent of where the mouse rests
+
+Same state, four pointer positions, palette reopened each time. Active project `not a repo`,
+previous project `qa proj`:
+
+| pointer resting on | `.palette-item:hover` | preselect |
+|---|---|---|
+| `(3,3)`, away from the palette — baseline | 0 | row 5 `qa proj` |
+| row 4 — **`not a repo`**, the active project | 1 | row 5 `qa proj` |
+| row 5 — `qa proj` | 1 | row 5 `qa proj` |
+| row 6 — **`ghost proj`**, a different project | 1 | row 5 `qa proj` |
+
+The last line is the case that failed before (it preselected `ghost proj`). `hovering: 1` is the
+proof the pointer genuinely was on that row — CSS `:hover` matched — and the selection ignored it.
+Shot `32-palette-parked-on-row-6.png` shows the hover shading on `ghost proj` and the selection
+stripe on `qa proj`.
+
+Then the gesture itself, pointer still resting on `ghost proj`'s row:
+
+- `Ctrl+K` → preselect `qa proj` → `Enter` → **active becomes `qa proj`** (not `ghost proj`).
+- `Ctrl+K` again → preselect `not a repo` → `Enter` → **active back to `not a repo`**.
+
+Shot `33-ctrlk-enter-from-ghost-row.png`.
+
+### 1c. A real move still selects — no input traded for another
+
+- **One pixel.** From the parked position, the *first* real `mousemove` is the sighting and does
+  not select (sel held at 40) — by design. The *second*, 1px away, selected row 29, the row under
+  the pointer. That is one real gesture: a mouse produces a stream of moves, and the second is a
+  frame away.
+- **A whole row.** A single move onto row 38 selected row 38 immediately.
+- **Not a one-shot.** Arrowing after that real move resumed cleanly (39 → 40, 0 snapbacks); the
+  pointer goes back to losing the moment it stops.
+
+Shot `31-palette-real-move-selects.png`.
+
+*The one cost, stated plainly:* a pointer that has been still since before the palette opened now
+needs **two** mouse events, not one, before hover takes the cursor. A physical mouse cannot
+produce only one. A trackpad tap-then-lift, or a pointer warped by an accessibility tool, could.
+
+## 2. Row shrink — **fixed at both widths**
+
+Measured live on the real rows (viewport set with `Emulation.setDeviceMetricsOverride`, which is
+a layout-viewport override, not a real window resize):
+
+| viewport | palette | name | rendered / needed | clipped | path |
+|---|---|---|---|---|---|
+| 1384px | 600px | `not a repo` | 61 / 61px | **no** | 362px, clipped |
+| 1384px | 600px | `qa proj` | 41 / 41px | **no** | 425px, clipped |
+| 1384px | 600px | `ghost proj` | 60 / 60px | **no** | 341px, clipped |
+| 900px | 540px | `not a repo` | 61 / 61px | **no** | 302px, clipped |
+| 900px | 540px | `qa proj` | 41 / 41px | **no** | 365px, clipped |
+| 900px | 540px | `ghost proj` | 60 / 60px | **no** | 281px, clipped |
+
+`rendered == needed` on every name at both widths: nothing is ellipsised. The path is the run that
+gives way, and it gives way **first** — 60px of it at 1384→900 while every name holds to the
+pixel. Against the previous pass's 20px / 17px names beside 446px / 388px paths. On screen at
+900px the three read `not a repo`, `qa proj`, `ghost proj`. Shots `34-palette-1384.png`,
+`34-palette-900.png`.
+
+## 3. `probe-tag` — **fixed**
+
+`FOLDER MISSING` measured by `Range.getClientRects()` on the tag's own text: **1 line box**, pill
+111×19px, at both widths. Its row is **37px**, and the set of distinct row heights across all 41
+rows is **`[37]`** — one value, at 1384px and at 900px. Against 52px against 37px before.
+
+## 4. F1 — **fixed, and `Ctrl+Shift+P` still works**
+
+- Footer now reads, in full: `Terminal shortcuts apply in the Terminal view.`
+- `Ctrl+Shift+P` appears **nowhere** in the overlay (regex over the whole rendered text: false).
+- `command palette` appears **nowhere** in the overlay (false).
+- The 23 `kbd` pills are unchanged and still include `Ctrl + K` for *Find anything*.
+- **The chord still works:** palette absent → `Ctrl+Shift+P` → palette present. Wired and
+  unpublished, as intended. Shots `35-f1-overlay.png`, `36-ctrl-shift-p-still-works.png`.
+
+## 5. `SearchModal` — **fixed, and here the gate is doing visible work**
+
+Fixture: the devdeck repo itself registered as a scratch project, query `useStore` → **50 hits**,
+list `scrollHeight` 2254 against `clientHeight` 468. (See *What this method could not see* for why
+the Temp-path fixture could not supply the hits.)
+
+- **Results arriving under a resting pointer.** Pointer parked at `(692,420)` before `Ctrl+Shift+F`.
+  When the hits rendered, **1 `mouseenter` fired on a hit row**; selection stayed on **hit 0**, the
+  first hit, not the row under the mouse. Shot `37-search-parked-results.png`.
+- **Arrow to the bottom, pointer parked.** 55 × `ArrowDown` → `sel` 1 → **49 of 50**, **0
+  snapbacks**.
+- **The subtle case, and the strongest single piece of evidence in this pass.** With the pointer
+  *not moving*, six wheel events scrolled the list `scrollTop 0 → 720`. That fired **12
+  `mouseenter` events on hit rows, all at the unchanged coordinate `[692,420]`** — and `sel` held
+  at 49 throughout. Twelve steals, prevented, counted. Shot `38-search-wheel-no-steal.png`.
+- **A real move still selects.** First event = sighting (sel held 49); 1px second event → hit 18;
+  a further move → hit 22. Arrows then resumed 23→30, 0 snapbacks. Shot
+  `39-search-real-move-selects.png`.
+
+### 5b. NEW — confirmed: `SearchModal` never scrolls the selected hit into view
+
+`src/renderer/src/components/SearchModal.tsx` has no `scrollIntoView` effect, while
+`src/renderer/src/styles.css:996` gives `.search-results` `max-height: 56vh; overflow-y: auto`.
+The palette has that effect (`CommandPalette.tsx:376-380`); the search modal does not.
+
+Observed, pointer at `(3,3)` so hover is not involved at all, 25 × `ArrowDown`:
+
+| | `sel` | `scrollTop` | selected row on screen? |
+|---|---|---|---|
+| `.palette-list` | 30 | **743** | yes |
+| `.search-results` | 25 | **0** | **no** — row at y 1261, list ends at y 588 |
+
+The list does not move, no row is highlighted anywhere in the window, and `Enter` opens hit 26
+blind. Shot `40-search-selection-offscreen.png` — 25 presses in, and the frame is identical to the
+first one.
+
+**This is pre-existing, not a regression:** the only change `e6efff7` made to this file was
+`onMouseEnter` → `onMouseMove`. But it is newly *reachable*, and that is the honest framing — with
+the ungated handler, a pointer resting over the list used to yank `sel` back to a visible row on
+every re-render, which accidentally masked the missing scroll for exactly the users whose mouse
+was over the results. Now the keyboard keeps what it takes, and takes it out of sight.
+
+Damage × likelihood for a developer running several agent terminals: **medium**. Cross-project
+search past the tenth hit is keyboard-only and currently unusable without the mouse; the failure
+is silent and the wrong file opens. One `useEffect` mirroring the palette's.
+
+## Regressions looked for and not found
+
+Nothing in §2–§4 of the original pass was re-run (out of scope by instruction), but nothing
+observed incidentally had changed: 41 palette rows in the same three sections, headers still
+un-selectable by arrow, the list still scrolls rather than overflows, `FOLDER MISSING` still
+renders on the ghost project, `Ctrl+Shift+F` still opens search from a non-Terminal view and is
+still find-in-terminal inside it, and `Ctrl+1` still switches view. **Zero** console messages or
+exceptions were seen across the ten launches of this pass.
+
+## What this method could not see — this pass
+
+- **The Temp-path search blackout is environmental, and it cost me the intended fixture.** The
+  app's `git grep` (`src/main/search.ts`) returned **0 hits for every query against every
+  project under `C:\Users\Admin\AppData\Local\Temp\…`**, including a repo created fresh for this
+  run with 40 matching committed lines — while returning 50 hits from `D:\…\devdeck` in the *same
+  call*, in ~50ms (so: not the 5s timeout). The identical `execFile("git", …)` with the identical
+  cwd succeeds from a plain Node process. It is therefore something about a git child spawned by
+  *this* Electron process with a cwd under Temp — Avast is the standing suspect on this machine
+  (see the pty fast-fail and the PowerShell-signing failures). **Suspected, not proven, and not a
+  DevDeck defect on this evidence.** I worked around it by using the devdeck repo as the search
+  fixture. It also means the earlier pass's one-hit search observation and this one were taken
+  under different conditions.
+- **`Emulation.setDeviceMetricsOverride` is not a window resize.** §2's 900px is a layout
+  viewport; a real drag of the window frame was not performed.
+- **A trackpad is not a mouse.** §1c's "two events" claim is about event streams. I did not test a
+  physical trackpad, a touchscreen, or a pointer moved by an accessibility tool, any of which
+  could in principle deliver a single isolated `mousemove`.
+- **One skin, one scale.** This pass ran entirely in the default skin at devicePixelRatio 1. The
+  six-skin sweep of the original pass was not repeated.
+- **HTML5 drag-and-drop** still cannot be simulated over CDP. Nothing here touched it; nothing
+  here verifies it.
+- **The renderer store is not on `window`.** Every assertion above is a DOM assertion.
+- **The fixture was mutated and restored.** `qa proj`'s README was rewritten and restored to its
+  one line (three extra commits remain in its history); a scratch `fresh repo` was created and
+  deleted. `root-only.txt` is still untracked, so `changes: 1` is unchanged.
