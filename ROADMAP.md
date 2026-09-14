@@ -7,6 +7,15 @@ a diff-and-read editor. The build is sequenced into milestones so there is a
 usable daily-driver early. Keep each milestone ruthlessly shippable, and default
 to removing.
 
+**Added 2026-09-15, because the line above no longer distinguishes this product
+from anything.** Herdr, Pane, Maestro, Nimbalyst, Orca and `claude agents` will
+all tell you which agent is waiting. The one thing DevDeck does that none of
+them does is **name the source of the signal and refuse what it cannot source**
+— the agent said it, or DevDeck guessed, and a hook it cannot match to a session
+attributes nothing. That is the whole of the claim, it is untested on anyone,
+and it survives because nobody competes on it, which may also mean nobody buys
+on it.
+
 > *Amended 2026-09-11.* On 2026-09-08 `product-director` ordered this line
 > replaced because it read *"The vision is all-in-one"* — a claim ruled **Not
 > real** on 2026-08-25. That edit was never applied, and it is now obsolete twice
@@ -33,8 +42,8 @@ to removing.
 
 **Everything below the closed-history divider is history.** This section is the
 only live plan; read it first. Ordered by `product-director` on 2026-09-03,
-re-ordered 2026-09-04 and 2026-09-08, and **re-ruled 2026-09-11** — the ruling
-below. Standing decision in the Decisions log: the ambition is **a product with
+re-ordered 2026-09-04 and 2026-09-08, **re-ruled 2026-09-11**, and **re-ruled
+again 2026-09-15** — both rulings below, the later one first in force. Standing decision in the Decisions log: the ambition is **a product with
 users**, and the next milestone is **five recorded first sessions from people who
 are not the author**. Not a public launch and not revenue.
 
@@ -85,6 +94,57 @@ stranger would ever have noticed, and they were ordered inside the fortnight in
 which `K6` fires. The rule failed because it counted *pieces* instead of asking
 what each piece was for. Sharpened below.
 
+> **Overtaken 2026-09-15.** The paragraph above is now history in every clause
+> except one. `0.14.0` is **published** (`be54c6d`, tagged and released
+> 2026-09-14, four signed assets, `latest.yml` verified by hash against the
+> published installer); the `v0.13.0` draft is deleted with its tag and
+> changelog entry intact, exactly as ruled; `README.md` and `site/index.html`
+> have been corrected; step 13 is closed. The clause that survives untouched is
+> **step 7 — the phone card has still never rendered on real hardware**, now
+> eleven days idle with nothing in front of it.
+
+### Where this stands on 2026-09-15 — the blockers are gone, and so is the differentiator
+
+**Two sentences matter in this file today.**
+
+**First: step 9 has no blockers left.** Not one. 10 is all but closed, 11 is
+closed, 13 is closed, and 6 and 7 were ruled non-blocking twice. The only thing
+between this project and its milestone is a person sending one message. `K6`
+fires on **2026-09-22 — seven days.**
+
+**Second: the reason for sending it has changed, and it is a worse reason than
+the one I wrote down four days ago.** On 2026-09-11 I ruled that this milestone
+stops testing *the problem* and starts testing *the residue* — cross-vendor, the
+user's own Windows shell, no account, no relay, a GUI rather than a multiplexer.
+**That ruling is overtaken. The residue is free elsewhere, today, in one
+product.** `github.com/vc1492a/Pane` is AGPL-3.0, free, **Electron**, native
+**Windows**, agent-agnostic across Claude Code / Codex / Cursor Agent / Aider /
+Goose, worktree-per-agent, with a **self-hosted** Remote Pane for desktop or
+phone — every clause of the residue sentence at once, at zero cost. Maestro
+(3.3k stars, Electron, cross-vendor, QR phone access), Nimbalyst (MIT, Windows
+10+, an iOS companion whose stated purpose is *"see which agents need you"*) and
+Munder Difflin (**the same node-pty + xterm.js stack this app is built on**) sit
+in the same space. Herdr raised **$6M on 2026-09-08** and 0.9 puts local and SSH
+machines in one sidebar. Evidence and URLs:
+`docs/superpowers/brainstorm/2026-09-15-trend-scan.md`, which I take as given.
+
+**I got the shape of the error right and the timing wrong.** On 2026-09-11 I
+wrote that the residue was "narrower than the claim this milestone was written
+under, and nobody has ever tested it". What I did not price is that a
+differentiator can expire *faster than the beta that was going to test it*. The
+residue clauses did not lose an argument; they were shipped by someone else
+between two of my own rulings. Every future dated claim in this file inherits
+that: **a differentiator with a four-day half-life is not a differentiator, it
+is a description.**
+
+What survives is narrower and is stated with its own caveat, which `marketing`
+has already published unlaundered in `PRODUCT.md`: **the signal names its source
+and refuses what it cannot source** — hooked versus inferred, a tile that says
+which one fired, and a hook matching no session attributing nothing rather than
+picking between two candidates. Nobody else does this. *And it survives because
+nobody competes on it, which may also mean nobody buys on it.* That sentence is
+not a hedge; it is the thing the beta now exists to decide.
+
 ### The two tests every item passes
 
 1. **Does this get a stranger closer to running DevDeck and saying something
@@ -110,51 +170,56 @@ third test; three tests is a framework, and this seat does not write those.
 | 3 | Rewrite the competitor kill-lists in a register that survives publication | `docs-writer` / `product-director` | The public flip | **closed** 2026-09-02 |
 | **I** | **Interrupt — the UI/UX overhaul.** `product-director` ruled *against* an overhaul and prescribed deletions plus a small number of proven fixes; that is what shipped. Six surfaces deleted, 84 skins → 6, every deck key labelled, the folder-moved crash fixed at three levels, 10 modals behind boundaries, the worktree default off | `pm` → `frontend-dev` / `backend-dev` → `qa` / `design-reviewer` | Roughly every later UI change, and `PRODUCT.md`'s validation rewrite | **closed** 2026-09-04, shipped in the `v0.13.0` tag. Independently re-derived by `po` 2026-09-08: six surfaces absent from the tree, 3 themes × 2 styles = 6, all eight named commits real |
 | 4 | **The public flip** — clean history pushed, repo public, filed with SignPath | `release-eng` | Everything left. The certificate; the release feed; the updater; step 5's deploy; step 6 | **closed 2026-09-11**, by a route the runbook did not anticipate: `delete_repo` never reached the token, so the old repo was **renamed** to a private archive and a fresh repo created under the **same owner and name**, keeping `build.publish`'s update-feed URL byte-identical — the one constraint that could silently stop every installed copy updating. Verified 2026-09-11: **PUBLIC, MIT, issues enabled, 0 stars / 0 forks / 0 issues.** On 2026-09-08 this row was marked done on the strength of *metadata* while the tree it had just published was leaking; it is done now because row 2 is. **Remaining: the SignPath filing**, a web form, which gates nothing on this list |
-| 5 | A one-page homepage carrying SignPath's required attribution and the code-signing policy | `marketing` / `docs-writer` | The SignPath application, which requires a published policy | **survives, and it got worse rather than better.** `site/index.html` is self-contained and content-complete, but `:246` still says the repository "is still private" (public since 2026-09-07); `:158` says SignPath has been "applied for" while `:246` says it has not — a live self-contradiction on the most-skimmed part of the page; and its copy describes the seven-key suite D1 deleted. Pages is **not configured** (`gh api …/pages` → 404). Deploying it as written publishes three falsehoods, so step 10 goes first |
+| 5 | A one-page homepage carrying SignPath's required attribution and the code-signing policy | `marketing` / `docs-writer` | The SignPath application, which requires a published policy | **survives, and it is now two clicks and one paragraph.** Updated 2026-09-15: the **mechanism exists** — `.github/workflows/pages.yml` publishes `site/` and only `site/` (`b7a73f3`), with `tests/pagesDeployScope.test.ts` failing if that artifact path ever widens, which is the guard that matters because everything else in this tree is internal. The hero is corrected: it is provenance-first and it names Herdr and Pane by name. Two things stand. **(a)** Pages is still **not configured** (`gh api …/pages` → 404 on 2026-09-15) — an owner action, two clicks, gating nothing on this list. **(b)** `site/index.html:250-251` still tells a reader the SignPath filing is impossible "because the Foundation requires a public repository and this project's repository is still private." **The repository has been public since 2026-09-07.** That is the *last surviving instance* of the falsehood class step 10 exists to kill, and it sits in the one section the page exists to carry. Fix (b) before (a) |
 | 6 | Move the release build to CI and wire SignPath into it | `release-eng` | An installer a stranger can run without meeting SmartScreen; ends the Avast dependency in the release path | **CI half closed and proven** 2026-09-07 — `release.yml` ran on the `v0.13.0` tag and produced a draft with Setup, Portable, blockmap and `latest.yml`, which `electron-updater` reads and without which auto-update breaks. The SignPath stage is present and inert, gated on a secret that does not exist. Strengthened 2026-09-10 by an `npm audit` gate in `check.yml`, as a separate job so a red audit cannot hide a red build. **The signing half survives and is a third party's approval queue. Reclassified 2026-09-08 and re-affirmed: not a gate on step 9** |
-| 7 | Verify the approve/deny card on a **physical phone** — and in the same sitting the five things CDP cannot observe (the native folder dialog; `addProjectByPath` on a bad path; `F1`/`Ctrl+K` via real keys; the "none found on your PATH" state; the crash card), plus a look at the phone client's own palette | `qa` (a human at the keyboard) | Step 9's first impression | **not started. Seven days idle, blocked on nothing, and it is now the most exposed item in this file.** The competitive review's verification section names the phone card as one of only three things that survive comparison with Herdr — and it **has still never rendered on real hardware.** Every published sentence that leans on it is leaning on an unverified claim. Protocol: `docs/qa/phone-approval-verification.md` |
+| 7 | Verify the approve/deny card on a **physical phone** — and in the same sitting the five things CDP cannot observe (the native folder dialog; `addProjectByPath` on a bad path; `F1`/`Ctrl+K` via real keys; the "none found on your PATH" state; the crash card), plus a look at the phone client's own palette | `qa` (a human at the keyboard) | Step 9's first impression | **not started. Eleven days idle, blocked on nothing, and it is the oldest untouched row in this file.** It **has still never rendered on real hardware**, and no sentence anywhere may present it as proven until it has. Updated 2026-09-15: its *strategic* weight has fallen, and this must be said rather than quietly enjoyed — the 09-10 review named the phone card as one of three things surviving comparison with Herdr, but Pane ships a self-hosted Remote Pane, Maestro ships QR-code phone access and Nimbalyst ships an iOS companion, all free. The card is no longer a differentiator; it is **an unverified feature in the shipped build**, which is a worse thing to carry into a stranger's first session than an unverified differentiator. Protocol: `docs/qa/phone-approval-verification.md` |
 | 8 | First contact: the empty states, the agent-presence surfaces, and the failure a stranger can hand back | `designer` → `frontend-dev`/`backend-dev` → `qa` | Step 9 | **closed** — both halves ruled *met, with conditions* 2026-09-03, shipped in 0.12.0; the outstanding condition (`PRODUCT.md`'s validation rewrite) closed 2026-09-04 (`5feb82d`) |
-| 9 | Recruit five, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent), and for the usage-ledger data-loss bug if anyone opens the Usage view | `field` | The evidence this whole milestone exists to get | **not started. Nobody has been contacted.** Materials drafted 2026-09-04 (`docs/beta/`); destination `NOTES.md` → "Beta — external users (step 9)", deliberately empty. **Blockers as of 2026-09-11: steps 10, 11 and 13. Not step 6, and not step 7** — 7 gates the card being *demoed*, not the invitation being *sent*. This row's blocker list has now been stale twice: on 2026-09-08 it still cited "repo private, newest published release v0.10.0", and my own 2026-09-08 replacement text cited "publish 0.13.0 signed", which step 11 below reverses |
-| **10** | **The documents that still lie to a stranger** — `README.md` (release is 0.12.0; the Releases-page instruction, true only after 11; "terminal, editor, API client, and database panels", two of which are deleted; SignPath "cannot be applied for … this one is still private"); `site/index.html:158` against `:246`; `docs/beta/02-recruiting-message.md:10` ("the repo is private, so the user cannot open an issue"); `.superpowers/HANDOFF.md` §1–2, still "0.11.1 is cut"; `IDEAS.md`'s moat list | `docs-writer` / `marketing` | Steps 5, 9 and 11 | **ordered 2026-09-08. Not done, and its scope has grown** — D1 added a second class of falsehood (documents promising deleted panels) on top of the first (documents describing a private repo). Two of these files are what a stranger reads first. **Nothing else goes out before this** |
-| **11** | **Cut, sign and publish `0.14.0` from current `main`** — and **delete** the draft `v0.13.0` release | `release-eng` + `marketing` | Step 9's delivery path; the README's download link stops being a dead end; the updater gets a real feed | **new, and it replaces the 2026-09-08 order to publish 0.13.0.** See *The 0.14.0 ruling*. Both existing artefacts are the wrong product: the draft's four assets are the **unsigned** CI set built at the `v0.13.0` tag, and `release/`'s **self-signed** `DevDeck-Setup-0.13.0.exe` was built 2026-09-07 — both **22 commits behind HEAD**, before D1, before the three security fixes and before the notification fix. **No build of the four-key product exists anywhere** |
-| **12** | **Lead with the cockpit, demote the suite** — the published claim must match the repo's own description and survive D1 | `marketing` / `product-director` | Step 10 being coherent; the recruiting message being true | **ordered 2026-09-08, partly done.** `README.md:3`, this file's line 3 and GitHub's own repo description are now cockpit-first. Still outstanding: `PRODUCT.md`'s value-proposition paragraph, which promises "terminals, editor, **API client, database client, task board**" snapping to a project, and `site/index.html`'s hero |
-| **13** | **Two sentences in two beta documents, and one adoption** — the fourth **asked, not gating** fact in `docs/beta/01-who-to-approach.md` (which agent CLIs a candidate runs, and whether they already use `claude agents`, Claude Code Desktop, `/remote-control`, the Codex app, Herdr, Orca or Warp for the same job); the **S4 weak-pass amendment** in `docs/beta/05-validation-criteria.md`; and **`K6` adopted into that file** under its own dated amendment rule | `field` / `po` | Step 9 asking the one question whose answer cannot be recovered once a session is spent | **new, and it is a precondition of candidate one rather than a nicety.** See *Ruling on the milestone*. `po` established 2026-09-08 that `K6` exists only as prose in a brainstorm and in this file, never in the criteria document that carries the anti-gaming amendment rule — and a bar that lives only where a later reader can mistake it for policy is how a milestone's bar moves quietly |
+| 9 | Recruit five, one at a time. Every install watched, every first session recorded verbatim. **Watch specifically for the shell-mismatch false negative** (a Git Bash user told `not on PATH` about a working agent), and for the usage-ledger data-loss bug if anyone opens the Usage view | `field` | The evidence this whole milestone exists to get | **not started. Nobody has been contacted.** Materials drafted 2026-09-04 (`docs/beta/`); destination `NOTES.md` → "Beta — external users (step 9)", deliberately empty. **Blockers as of 2026-09-15: none.** 11 is closed, 13 is closed, 10 is down to three documents no candidate reads before installing. This row's blocker list was stale on 2026-09-08 ("repo private, newest release v0.10.0"), stale again on 2026-09-11 ("publish 0.13.0 signed", which step 11 reversed), and correct on 2026-09-11 ("10, 11 and 13"). It is now **empty**, and an empty blocker list is the only state in which `K6` can mean what it says |
+| **10** | **The documents that still lie to a stranger** — `README.md` (release is 0.12.0; the Releases-page instruction, true only after 11; "terminal, editor, API client, and database panels", two of which are deleted; SignPath "cannot be applied for … this one is still private"); `site/index.html:158` against `:246`; `docs/beta/02-recruiting-message.md:10` ("the repo is private, so the user cannot open an issue"); `.superpowers/HANDOFF.md` §1–2, still "0.11.1 is cut"; `IDEAS.md`'s moat list | `docs-writer` / `marketing` | Steps 5, 9 and 11 | **largely closed 2026-09-11 → 2026-09-15.** `README.md` corrected 09-11 (`2f7aaa1`); `02-recruiting-message.md`'s private-repo line and `site/index.html`'s self-contradiction and stale version corrected 09-15. **Precisely what remains, and it is not the whole row: (a)** `site/index.html:250-251` — "this project's repository is still private", carried in row 5; **(b)** `.superpowers/HANDOFF.md` §1–2, still *"0.11.1 is cut"* and still telling the next session the latest release is 0.10.0 — read by every agent and no stranger, so it is cheap and it is last; **(c)** `IDEAS.md` — untouched, and worse than recorded: its moat list still claims the **Jira/Azure Work panel** as shipped (D1 deleted it), its API- and DB-era entries describe a product that no longer exists, and line 7 still says *"DevDeck's moat is being a **personal** tool"*, which contradicts the standing decision of 2026-09-02. **(d) New, and it is the recurrence:** `02-recruiting-message.md:10-12` now says *"there is no published release yet — the build still ships hand-delivered as a file, not a download link"*, which `0.14.0` made false the day after it was written, and which its own DM line ("there's a signed installer now") already contradicts. The class recurs because these documents encode release state in prose. Someone must decide whether hand-delivery is still the channel — it may well be, deliberately — and then say so once, rather than describing the release feed |
+| **11** | **Cut, sign and publish `0.14.0` from current `main`** — and **delete** the draft `v0.13.0` release | `release-eng` + `marketing` | Step 9's delivery path; the README's download link stops being a dead end; the updater gets a real feed | **closed 2026-09-14.** `be54c6d` cut it; `v0.14.0` is published with four assets, signed, and `latest.yml`'s sha512 verified against the published installer rather than against the local build — the one check that decides whether auto-update survives first contact. The `v0.13.0` draft is deleted; its **tag and changelog entry survive**, as ruled. A stranger following `README.md` to Releases now gets a download instead of an empty page, which had been true of this project for its entire existence |
+| **12** | **Lead with the cockpit, demote the suite** — the published claim must match the repo's own description and survive D1 | `marketing` / `product-director` | Step 10 being coherent; the recruiting message being true | **ordered 2026-09-08, and now down to one bullet.** `README.md:3`, this file's line 3, GitHub's repo description and — as of 2026-09-15 — `site/index.html`'s hero are cockpit-first, the hero having gone further than ordered by naming Herdr and Pane in the claim itself. **Outstanding: `PRODUCT.md:14`**, which still promises "terminals, editor, **API client, database client, task board**" snapping to a project, and `:62`, which repeats it. This is the more embarrassing survivor of the two, because the paragraph directly above it (`:9`) was rewritten today to be scrupulously honest about the competition while the paragraph below it still sells three deleted panels |
+| **13** | **Two sentences in two beta documents, and one adoption** — the fourth **asked, not gating** fact in `docs/beta/01-who-to-approach.md` (which agent CLIs a candidate runs, and whether they already use `claude agents`, Claude Code Desktop, `/remote-control`, the Codex app, Herdr, Orca or Warp for the same job); the **S4 weak-pass amendment** in `docs/beta/05-validation-criteria.md`; and **`K6` adopted into that file** under its own dated amendment rule | `field` / `po` | Step 9 asking the one question whose answer cannot be recovered once a session is spent | **closed 2026-09-15**, and wider than ordered. The fourth asked fact is in `01-who-to-approach.md` as question 7 with its never-gating rule stated twice, and its tool list was **widened on the day** to include Pane, Maestro, Nimbalyst and Munder Difflin — the four that matter most, because they are DevDeck's own shape. The S4 weak-pass amendment is in `05-validation-criteria.md:50`; `K6` is in at `:154`, so it is now a criterion and not prose. `03-install-watch-protocol.md` gained the **disagreement instrument** (`:70-93`): every time the row and the pane disagree, which source claimed it, and `0 disagreements` written down rather than left blank. That last one was not in my 09-11 order and is the most valuable thing in the row — see *What the five sessions now test* |
 
 ### The order, in wall-clock terms
 
-Re-ordered **2026-09-11**. `pm` sequences and assigns; it does not re-open the
-ordering. Items marked 🔒 need a person and no agent can move them.
+Re-ordered **2026-09-15**. `pm` sequences and assigns; it does not re-open the
+ordering. Items marked 🔒 need a person and no agent can move them. The 09-11
+order is superseded: items 1–4 of it are done except one bullet each, and the
+list is now short enough that its length is the point.
 
-1. **Step 10 — correct the documents that lie**, including the panels D1
-   deleted. `docs-writer` + `marketing`, one sitting, one `po` pass.
-   *Unblocks 5, 9, 11.*
-2. **Step 12's remainder — `PRODUCT.md`'s value proposition and the homepage
-   hero.** `marketing`. Same sitting as 1, same review.
-3. **Step 13 — the fourth asked fact, the S4 amendment, and `K6` adopted.**
-   `field` drafts, `po` rules. *Unblocks 9.* Half a day, and it must precede the
-   first invitation because the answer is unrecoverable afterwards.
-4. **Step 11 — cut `0.14.0`, sign it, publish it, delete the `v0.13.0` draft.**
-   `release-eng` + `marketing`. Version bump, a `CHANGELOG.md` entry for D1 and
-   the three waves, tag, `npm run package:signed`, then
-   `node scripts/update-manifest.mjs --check` before anything is attached.
-   *Unblocks 9.*
-5. 🔒 **Step 7 — the human sitting.** The phone card on real hardware, the five
+1. 🔒 **Step 9 — invite candidate one. Today or tomorrow.** `field` has the
+   draft; a human sends it. **Preconditions: none.** This is first now, not
+   seventh, and that is the whole substance of this re-ordering. It was seventh
+   on 09-11 because three documents stood in front of it; they no longer do.
+2. **Step 10's three survivors and step 12's one bullet** — `site/index.html`'s
+   private-repo paragraph, `PRODUCT.md:14`/`:62`, `IDEAS.md`'s moat list and
+   philosophy line, `.superpowers/HANDOFF.md` §1–2, and a decision about
+   `02-recruiting-message.md`'s delivery-channel sentence. `docs-writer` +
+   `marketing`, one sitting, one `po` pass. **In parallel with 1, not in front
+   of it** — none of these is read by a candidate before they install, and the
+   one that is (the recruiting message) is contradicted only in a direction that
+   *understates* what exists.
+3. 🔒 **Step 7 — the human sitting.** The phone card on real hardware, the five
    CDP-blind observations, the phone client's palette. `qa`, a human with a
-   phone. **In parallel with 1–4, against the 0.14.0 build once it exists.**
-   Seven days idle with nothing in front of it; it must not now wait behind a
-   document edit.
-6. 🔒 **File with the SignPath Foundation.** The owner. A web form, ten minutes.
-   **In parallel, gating nothing on this list.** *Unblocks users 6–10.*
-7. 🔒 **Step 9 — invite candidate one.** `field` drafts, a human sends.
-   **Preconditions: 10, 11, 13. Not 6, and not 7.**
-8. 🔒 Repeat to five recorded sessions, then write the milestone verdict against
+   phone, against the published 0.14.0 build. **In parallel.** Eleven days idle.
+   If it is still untouched when the first session is recorded, the honest
+   conclusion is that this product ships a feature nobody — including its
+   author — has ever seen work, and `field` must say so in the record.
+4. 🔒 **File with the SignPath Foundation**, and **enable Pages** once item 2's
+   `site/` fix has merged. The owner; two web forms and two clicks between them.
+   **In parallel, gating nothing.** *Unblocks users 6–10.*
+5. 🔒 Repeat to five recorded sessions, then write the milestone verdict against
    S1–S4 / R1–R3 / E1–E5 and record which predictions fired. `field` → `po`.
-   **Deadline 2026-10-06. `K6` fires if item 7 has not happened by 2026-09-22.**
-9. **Step 5 — enable Pages and deploy the homepage**, after 1–2 have merged.
-   `marketing`. Moved *below* the invitation on purpose: the homepage is a
-   requirement of the SignPath filing, not of a hand-delivered build, and it has
-   twice been used as a reason to delay.
-10. Then, and only then: the usage-ledger data-loss bug, then Q1.
+   **Deadline 2026-10-06. `K6` fires if item 1 has not happened by 2026-09-22.**
+6. **One scoring amendment, `po`, any time before the verdict and not before
+   candidate one:** S4's full pass for *"a sentence naming more than one
+   vendor"* was written when cross-vendor was DevDeck's. Pane gives a stranger
+   cross-vendor free, so that sentence is now a **weak pass** too unless it
+   names something Pane does not do. This tightens a bar against the product's
+   own interest, which is the only direction a bar may move once evidence
+   exists — and it must be dated under the criteria file's amendment rule, not
+   slipped in.
+7. Then, and only then: the usage-ledger data-loss bug, then Q1.
 
 **Left off this list on purpose:** every feature; any further UI, motion, colour
 or boundary work; a fifth wave of pre-beta engineering under any name; the
@@ -163,7 +228,72 @@ on by default; a seventh skin (refused in advance three times); a sixth
 competitor study (permanently); and everything in *What this roadmap now
 forbids*.
 
-### Ruling on the milestone: it stands, the deadline stands, its meaning changes
+### Re-ruling the milestone (2026-09-15): what the five sessions now test
+
+**The count stands. The deadline stands. The 09-11 ruling below — that these
+sessions test *the residue* — is overtaken, and I am saying so rather than
+editing it out.** The residue was four feature clauses and they are Pane's,
+free, on Windows, today. A beta cannot test a differentiator that a stranger can
+have for nothing; at best it would measure politeness.
+
+**What five sessions now test, in order of what only they can decide:**
+
+1. **Whether the honesty layer is *right*** — not whether anyone likes it. The
+   disagreement instrument `field` landed today (`03-install-watch-protocol.md`)
+   counts every time the deck's row and the pane disagree, and which source
+   claimed it. This is the one measurement in the whole milestone that **does
+   not depend on the user noticing anything**, which is exactly why it is first.
+   If hooked claims and screen-inferred claims disagree at the same rate, the
+   provenance split is decoration and the last surviving claim is dead — killed
+   by five sessions rather than by a competitor.
+2. **Whether anyone will pay attention to provenance at all.** Unprompted, in
+   their own words, without the watcher pointing at the tile. I expect this to
+   fail. A first session is thirty minutes and provenance is a property of being
+   *wrong* less often, which is invisible until something is wrong. If nobody
+   mentions it across five sessions, that is not noise — it is the answer to
+   *"nobody competes on it, which may also mean nobody buys on it."*
+3. **Whether anyone installs a second cockpit at all.** Question 7 now asks what
+   they already run, including Pane, Maestro, Nimbalyst and Munder Difflin. A
+   candidate who runs one of those and installs this anyway, and says why, is
+   worth the other four put together.
+
+**So the milestone stops being a validation and becomes a decision procedure.**
+It decides between *"a product with users"* (2026-09-02) and *"a personal
+instrument"* (`K6`'s alternative), on evidence, before 2026-10-06. Both are
+legitimate exits. What is not legitimate is reaching the second one by running
+out of days, which is the only outcome this project has actually been trending
+toward.
+
+**Should the milestone itself change? I priced three changes and refused all
+three.**
+
+- **Abandon the beta now, on the grounds that the differentiator expired.**
+  *Refused.* It would save roughly a week of a person's evenings and it would
+  spend the one thing that cannot be recovered: the answer to whether provenance
+  is a product or a preference. The author cannot produce that answer on the one
+  machine that has ever run this app, and `product-reviewer`, `marketing` and I
+  have now all argued it from the same artifacts without moving it an inch.
+- **Cut five to three, because a thinner claim means fewer acceptances.**
+  *Refused, and refused for the second time.* S1's ≥4/5 and R1's ≥3/5 stop
+  meaning anything below five, and lowering a bar in the week its kill criterion
+  fires is the exact move the criteria file's amendment rule exists to catch.
+- **Extend past 2026-10-06 because the ground moved again.** *Refused.* The
+  ground moving twice in four days is an argument for evidence sooner. Note the
+  asymmetry honestly: every previous refusal to extend assumed the blockers were
+  real work. There are none left. An extension now would be buying time to do
+  nothing.
+
+**What committing costs, since a recommendation that costs nothing is not one.**
+Sending the invitation this week means the first five sessions run against a
+build whose phone card has never rendered on hardware, whose `IDEAS.md` still
+sells a deleted panel, and whose only remaining claim is one the market has
+declined to compete for. Those sessions are unrepeatable and they will probably
+produce a negative verdict. **Spend them anyway.** The alternative on offer is
+not better sessions later; it is `K6` firing on 2026-09-22 with nothing learned,
+and DevDeck becoming a personal instrument by default rather than by choice —
+which is the same destination reached in the one way that teaches nothing.
+
+### Ruling on the milestone (2026-09-11): it stands, the deadline stands, its meaning changes
 
 **Five recorded first sessions from five people who are not the author, each on
 their own machine, each carrying at least one verbatim dated quote in
@@ -186,11 +316,14 @@ Code's own `claude agents`**, which sorts needs-input to the top with each
 session's last response; Claude Code Desktop's session sidebar and notifications;
 and the Codex app on Windows.
 
-So this milestone stops being a test of **the problem** and becomes a test of
+~~So this milestone stops being a test of **the problem** and becomes a test of
 **the residue**: cross-vendor, in the user's own Windows shell, no account, no
 relay, no daemon, a GUI rather than a TUI, a phone approve/deny card bound to the
 exact screen that produced the question, and a *project* — not a repo, not a
-worktree — as the unit of context. That residue is narrower than the claim this
+worktree — as the unit of context.~~ **Overtaken 2026-09-15 — four of those
+clauses are Pane's, free, and the phone half is Pane's, Maestro's and
+Nimbalyst's. See the re-ruling above. Left in place because it is the clearest
+record of how fast a differentiator can expire: four days.** That residue is narrower than the claim this
 milestone was written under, and nobody has ever tested it. Note what makes it
 narrower still: D1 deleted most of the panels that made "one window" mean
 anything, and the phone card has never rendered on hardware.
@@ -283,12 +416,98 @@ differentiator thinner than when I last ruled.
   answer to the fourth fact cannot be scored against S4's amended bars, and
   spending one of five on an unscoreable record is unrecoverable.
 
+**Four more, added 2026-09-15 because the category moved and the pressure is
+new.** Everything above stands unchanged; nothing comes off the list.
+
+- **Agents that supervise agents.** *Not us.* A coordinator pane, a dispatcher
+  that plans and delegates, an orchestrator role, an agent that answers "what
+  are the other panes doing" on the human's behalf. This is where the category
+  went in the last five days — Cursor Projects (09-10), Munder Difflin's GOD
+  agent, Codex scheduling its own future work — and it is the one vector that
+  would quietly redefine the user. DevDeck is for the human who is the
+  bottleneck at 2–3 agents; a coordinator is for the human who has given up
+  being it. *Belongs to:* Cursor, Warp, Munder Difflin. The `devdeck_sessions`
+  park trigger stands and has not fired; V1 makes it likelier, not true.
+- **Publishing an expired clause as a differentiator, even with the alternative
+  named.** *A tightening of the 09-08 rule, which is no longer sufficient.*
+  Cross-vendor, the user's own Windows shell, no account or relay, and "a GUI
+  not a multiplexer" are now descriptions, not claims, and attribution does not
+  rescue them — "unlike Pane, we are also cross-vendor" is a false sentence with
+  a citation attached. They may be *stated as facts about the build*; they may
+  not be the reason anyone is asked to install it. The only claim that may carry
+  that weight today is provenance, and it carries its own caveat with it.
+- **Presenting provenance as validated before a recorded session has counted
+  disagreements.** *The phone-card rule, generalised to the claim that replaced
+  it.* Nobody competing on something is not evidence that it works; it is
+  evidence that it is unpriced. Until `03-install-watch-protocol.md`'s tally
+  exists in at least one record, every published provenance sentence is a
+  description of a mechanism, never a demonstrated advantage.
+- **Re-opening any settled default on the grounds that the market settled it the
+  other way.** *Not a product forbid; a forbid on the argument.* Worktree-per-
+  task is now the default everywhere and DevDeck is an explicit minority; the
+  seventh skin, the fifth deck key and the second attention surface will all
+  return wearing the same clothes. "Everyone else does it" is not evidence about
+  this product's users, of whom there are still zero. **Only a recorded session
+  re-opens a default.** `W5` is the correct instrument: two of five asking
+  unprompted why dispatch does not make a worktree re-opens the 0.13.0 default;
+  one does not.
+
+And a kill I adopt from the 09-15 scan rather than re-deriving: **free-text
+"steer" on the phone card** (agentproto's feedback field, 09-06). *Not us.* The
+card's entire safety argument is that the route writes one keypress bound to a
+`tailHash`, or nothing. Free prose from a phone into a live shell, on a surface
+that has never rendered on real hardware, is the most expensive possible place
+to be wrong. Typing already exists — in the pane, at the desk.
+
+### The reviewer's queue — ruled, 2026-09-15
+
+The 09-15 scan's best candidate: order "who needs me" by **how much reading it
+will cost**, and remember what was already judged. It is the one direction with
+a measured bottleneck behind it, nobody holds it, and DevDeck already carries the
+seed — the `seen` axis (`tileState.ts:275-290`) and the three-state
+`changedCount`.
+
+**Verdict: not built, not queued, not now — and it is nearer *not real* than the
+scan allows.** Three reasons, and the third is the one that decides it.
+
+1. The demand is inferred from an industry statistic about review time, not from
+   anyone who has used this product. Nobody has used this product.
+2. The product's own workflow evidence says review happens somewhere else — the
+   target user "alt-tabs to a real IDE to read code"
+   (`2026-09-08-developer-workflow.md`). A queue that orders reading in a window
+   where reading does not happen is a better-argued version of the panels D1
+   deleted, which were also each defensible alone.
+3. **It would be the sixth wave.** Three waves shipped before 0.14.0, a fifth
+   landed after it, and a sixth is in `src/` as I write. This seat's job is not
+   to find the one feature good enough to justify another one.
+
+**It stays exactly what it is: `W3`, a watch, with a threshold rather than a
+feeling.** Two of five, unprompted, either opening Changes or asking which one to
+read first. Below two, it is dead and I will say so in the verdict. If it does
+fire, it returns as a **re-ordering of the one existing row and its existing
+`seen` state** — never a queue, never a panel, never a fifth key. A reviewer's
+queue drawn as its own surface is the second answer to "which agent needs me"
+that this file forbids, wearing the best disguise it has yet been offered.
+
 And one refusal carried forward with its wording repaired: **a fifth wave of
 pre-beta engineering, whatever it is and however good.** The 2026-09-08 version
 failed because it counted pieces. The repaired version is test 2 above — if a
 stranger's first session would not be *wrong* without it, it waits until after
 the fifth recorded session. The 0.14.0 cut is not a wave; it is the act of
 handing over what already exists.
+
+> **And it happened anyway. Naming it, 2026-09-15.** After `0.14.0` was
+> published on 09-14, a nav design pass, the nav merge (`60c0ac0`) and two fixes
+> (`e6efff7`, `58ff133`) landed, with a `qa` pass over them (`a19858d`). That is
+> the fifth wave, refused in advance on 2026-09-11, and `product-reviewer`
+> named it independently today. None of it would have made a stranger's session
+> *wrong*; a resting mouse fighting the arrow keys in the palette is a real
+> defect and it is not one of the five. A sixth is in `src/` as this is written.
+> **The rule has now failed twice — once by counting pieces, once by being
+> ignored — and I am not going to repair it a third time.** A rule that only
+> agents read cannot stop work that agents are asked to do. The only instrument
+> left that can is `K6`, which fires on a person, and that is precisely why it
+> is the most likely of the six to fire.
 
 ### K6 — pre-registered, and not yet adopted where it belongs
 
@@ -305,11 +524,12 @@ It is the only kill criterion that fires on the author rather than on the users,
 and on the evidence of the last seven days it is **the most likely of the six to
 fire.** Written down now rather than discovered in December.
 
-**It is not yet a criterion.** `po` verified on 2026-09-08 that
-`docs/beta/05-validation-criteria.md` contains K1–K5 and nothing else, and that
-is still true today. `K6` lives in a brainstorm document and in this file. That
-is exactly the gap the criteria file's own amendment rule exists to close, and
-step 13 closes it. **D1 needs no such adoption:** it was pre-registered as a
+~~**It is not yet a criterion.**~~ **It is one, as of 2026-09-15.** Step 13
+closed it: `K6` is in `docs/beta/05-validation-criteria.md:154`, under the
+file's dated amendment rule, alongside K1–K5. It is now policy rather than
+prose, it fires in **seven days**, and the blocker list it was written against
+is empty. **Nothing on this roadmap can prevent it firing and no agent can
+discharge it** — it is discharged by one person sending one message. **D1 needs no such adoption:** it was pre-registered as a
 conditional kill and then authorised outright by the owner on 2026-09-08 on the
 author's own empty stores, so its three user-conditions are moot — recorded in
 `NOTES.md` → Decisions, together with the instruction that this deletion must
@@ -323,10 +543,11 @@ never be written up as though users decided it.
    mistake made on one machine's habits. Note that authorising D1 outright
    removed the test that would have caught this *before* the deletion; this is
    now the only place it can surface.
-2. **A candidate already runs Herdr, `claude agents` or Intelligent Terminal and
-   installs DevDeck anyway, and says in their own words why.** Then the residue
-   is the product and this ruling is right for the right reason. Only the fourth
-   asked fact can produce that sentence.
+2. **A candidate already runs Pane, Herdr, Maestro, Nimbalyst, `claude agents`
+   or Intelligent Terminal and installs DevDeck anyway, and says in their own
+   words why.** Widened 2026-09-15; the original named only the first tier, and
+   the free Windows GUIs are the informative ones now. Only question 7 can
+   produce that sentence, and its answer decides whether anything survives.
 3. **Four of five are Claude-only and name `claude agents` or Claude Code
    Desktop.** Then the cross-vendor residue is not the product either, and the
    milestone's honest verdict is negative however well the sessions go.
@@ -337,7 +558,23 @@ never be written up as though users decided it.
    candidate the certificate would have saved, and the 2026-09-04 ordering was
    right. L4 caps that at one.
 
-### The 0.14.0 ruling (2026-09-11)
+Three added **2026-09-15**, against the re-ruling rather than the ordering:
+
+6. **The disagreement tally comes back non-zero and lopsided — screen-inferred
+   claims wrong, hooked claims right.** Then provenance is not a stance, it is a
+   measurable accuracy advantage, this is the product, and the sentence
+   `marketing` published today was too modest. This is the single observation
+   that would most change what DevDeck is, and it costs nothing to collect.
+7. **The tally comes back zero across five sessions on the screen classifier
+   alone.** Then the honest reading is that inference was good enough all along,
+   the hook route is engineering nobody needed, and the last surviving claim is
+   a solution to a problem this product does not have. I would rather find that
+   out from five strangers than defend it for another quarter.
+8. **Two of five ask, unprompted, which agent they should read first.** Then the
+   reviewer's queue is real, my verdict above is wrong, and `W3` becomes the
+   first feature after the beta — as a re-ordering of the existing row.
+
+### The 0.14.0 ruling (2026-09-11) — **executed 2026-09-14, kept for its reasoning**
 
 **Cut `0.14.0` from current `main`, sign it locally, publish it, and delete the
 draft `v0.13.0` release.** This reverses step 11 as I ordered it on 2026-09-08,
@@ -386,7 +623,15 @@ The facts it is ruled on:
    `docs/beta/03-install-watch-protocol.md` beside the shell-mismatch false
    negative. **Trigger: any beta user opens the Usage view in a recorded
    session.**
-2. **Q1 — CLI-declared attention signals**: Claude, Codex and Gemini hooks
+2. ~~**Q1 — CLI-declared attention signals**~~ **— shipped in 0.14.0, and it is
+   now the only claim this product has.** `b7e2d69` landed the hook route and
+   `fb154dd` made Mission show *that the agent said it, rather than that DevDeck
+   guessed*; `src/main/attention.ts` holds the line *"NOTHING LEAVES THE
+   MACHINE"*. Both constraints below were honoured: a hooked session that goes
+   quiet falls back to the classifier, and the tile shows which source it read.
+   **The Codex half is not built and waits for a beta user who runs Codex**
+   (`W1`). Kept in full below because it is the reasoning the surviving claim
+   rests on. Original text: Claude, Codex and Gemini hooks
    posting to the local MCP server DevDeck already runs on `127.0.0.1:8787`.
    *This replaces the item that used to sit here* — `claude --session-id <uuid>`
    per-pane transcripts — because the hook payload carries `transcript_path`
@@ -399,10 +644,15 @@ The facts it is ruled on:
    otherwise a missing hook is a silent false negative, the worst class this
    product has. Do **not** hold a `PermissionRequest` hook open until a human
    taps; that is a daemon in disguise and it dies at the hook timeout.
-3. **Q2 — the Windows taskbar overlay badge**, riding on the notification fix
-   that has now landed: same file, same count, no new surface.
+3. ~~**Q2 — the Windows taskbar overlay badge**~~ **— shipped in 0.14.0**
+   (`c13d135`): same file, same count, no new surface, as ordered.
 
-Neither Q1 nor Q2 is build-now, and neither may precede a recorded session.
+~~Neither Q1 nor Q2 is build-now, and neither may precede a recorded session.~~
+**Both preceded a recorded session, because there are none.** They shipped
+inside the 0.14.0 cut. I do not reverse them — Q1 is the reason there is
+anything left to test — but the record must show that the rule was written and
+then not enforced, twice. **This section is now empty of build items, and it
+must stay empty until a session is recorded.**
 
 ### Explicitly not on this path
 
@@ -411,9 +661,11 @@ templates, the `+Claude` menu. **Trigger: three users installed.** Also off:
 turning `remote.enabled` on (its own trigger stands — and F-1 established the
 server ships off, while being a proven remote SSRF the moment a user ticks the
 box); macOS and Linux (the five are recruited on Windows or not recruited); a
-sixth competitor study — permanently, **including "install Herdr for two
-weeks"**, because that two-week test is now cheaper as step 13's fourth asked
-fact, answered by five strangers instead of by the author; and **any further UI,
+sixth competitor study — permanently, **including "install Herdr for two weeks"**
+and, added 2026-09-15, **"install Pane for two weeks"**, because that two-week
+test is now cheaper as question 7, answered by five strangers instead of by the
+author (the 09-15 scan is a *seventh* study and is the last one; it is allowed
+only because it arrived unasked and changed a ruling); and **any further UI,
 motion, colour or boundary work before step 9.** Not one item on the path to five
 sessions is a UI item that is not already named in this section.
 
@@ -461,8 +713,11 @@ it" becomes an assertion instead of a measurement.
 
 ### Ruled *not yet*, with triggers, so nobody re-opens them
 
-Re-checked 2026-09-11. **No trigger has moved**, because every one of them waits
-on a recorded first session and there are none.
+Re-checked 2026-09-11 and again **2026-09-15**. **No trigger has moved**, on
+either date, because every one of them waits on a recorded first session and
+there are none. Two items joined them today as watches rather than plans: `W3`
+(the reviewer's queue — ruled above, threshold two of five) and `W5`
+(worktree-per-task as a candidate's expectation, same threshold).
 
 - **The seeded preset icons** (`settings.ts`) violate fixed point 7 of the spec
   that shipped on 2026-09-04, by the product's own defaults. It is decoration.
