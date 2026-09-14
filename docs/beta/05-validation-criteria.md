@@ -43,6 +43,18 @@ Judged per session, tallied across the first five. Each has a pass rule set now.
 | **S3** | **No unrecoverable stop.** The session never ends with the app in a state the user cannot get out of themselves. | **5 of 5** | A confirmed hard-freeze of exactly this shape (a missing project folder) was fixed on `main` after the audits. One recurrence spends a user and blocks the next invitation. |
 | **S4** | **They can say what DevDeck is for, in their own words, unprompted at the close**, and the answer is recognisably about a project as the unit of context or about supervising agents across projects. | **≥ 3 of 5** | Tests whether the product explains itself. An answer like "a terminal with tabs" is a fail, recorded verbatim, and it means the identity claim is not legible. |
 
+**S4 amendment — 2026-09-15, `ROADMAP.md` step 13.** A pass sentence that names
+**more than one vendor** (for example: "it shows me every agent, Claude and
+Codex, in one place") or that names the candidate's **own terminals/shells** as
+what it replaces is a **full pass**. A pass sentence that amounts only to "a
+terminal with tabs that shows Claude waiting" is recorded as a **weak pass** —
+`claude agents` already hands a Claude-only user that exact sentence with no
+install, so praising it is not evidence for DevDeck specifically; five other
+products now ship it for free (`docs/superpowers/brainstorm/2026-09-15-trend-scan.md`).
+Weak passes are recorded and reported in the milestone verdict, but only full
+passes count toward S4's ≥3/5 bar; if the bar is reached only by counting weak
+passes, the verdict says so explicitly rather than reporting a plain pass.
+
 ### Retention criteria — the only signal that is not about the first five minutes
 
 | id | Criterion | Bar |
@@ -139,6 +151,17 @@ entirely respectable thing.
   data loss or an unrecoverable stop whose fix requires DevDeck to stop being
   what it is (for example: it cannot drive a real Windows pty safely on a normal
   corporate machine). **Then:** stop.
+- **K6 — the owner does not send the first invitation.** If **no candidate has
+  been contacted by 2026-09-22**, with every engineering blocker gone since
+  2026-09-07 and steps 10, 11 and 13 costing under two days between them, the
+  finding is that the standing decision of 2026-09-02 — "a product with users"
+  — is not held by the person who must act on it. **Then:** revert `PRODUCT.md`
+  to "for me, first", close the distribution programme (no SignPath follow-up,
+  no Pages, no recruiting), un-publish nothing, and keep DevDeck as a personal
+  instrument — which is a respectable outcome and a cheaper one. Unlike K1–K5,
+  this one fires on the author, not on the users. *Pre-registered 2026-09-08
+  (`ROADMAP.md`); adopted into this criteria file 2026-09-15, per the amendment
+  rule above — this is the amendment, not a K1–K5 rewrite.*
 
 **Nothing else is a kill.** Not a bad session, not a rude message, not one user
 who hated the interface, not a feature request nobody built. The kill criteria

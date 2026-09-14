@@ -1,6 +1,6 @@
 # DevDeck
 
-> A Windows desktop cockpit for driving Claude Code, Codex, or Gemini across more than one project at once — one deck that shows every terminal and agent session you have running, and which of them is waiting on you.
+> A Windows desktop cockpit for driving Claude Code, Codex, or Gemini across more than one project at once — one deck that shows every terminal and agent session you have running. Herdr and Pane will already tell you which one needs you; this one also tells you whether that came from a hook the CLI sent or a guess from watching the terminal, and says nothing when it can't tell, rather than picking one.
 
 See `PRODUCT.md` for the problem and target user, and `ROADMAP.md` for the milestone history and the live plan.
 
@@ -20,11 +20,16 @@ issue first.
 
 ## Status
 
-No build has been published yet. `v0.14.0` is tagged but **not yet built or
-signed**, and nothing is downloadable — see "Get DevDeck" below for what that
-means for you today. Milestone 1 (terminal + project core) closed long ago;
-see `ROADMAP.md` for what shipped since, and its "Next" section for the live
-plan — recruiting 5–10 real users, not a public launch and not revenue.
+`v0.14.0` is built, signed, and published as a
+[GitHub release](https://github.com/Midor2Mid/devdeck/releases/tag/v0.14.0) —
+the first downloadable build this project has ever had. Downloadable is not
+launched: nobody outside the machine that built it has installed it yet, and
+this release exists to hand a candidate an installer instead of a `git clone`
+when they're individually invited — see "Get DevDeck" below for what that
+means today. Milestone 1 (terminal + project core) closed long ago; see
+`ROADMAP.md` for what shipped since, and its "Next" section for the live plan
+— recruiting 5–10 real users, one at a time, not a public launch and not
+revenue.
 
 ## Before you install: what DevDeck needs from you
 
@@ -44,30 +49,29 @@ minutes" below.
 
 ## Get DevDeck
 
-There is no published release to download yet. The
-[Releases page](https://github.com/Midor2Mid/devdeck/releases) shows nothing,
-and following that link today gets you an empty page rather than a download.
+The [v0.14.0 release](https://github.com/Midor2Mid/devdeck/releases/tag/v0.14.0)
+has a signed `DevDeck-Setup-0.14.0.exe` installer and a portable
+`DevDeck-Portable-0.14.0.exe`, both built and signed on 2026-09-14. An earlier
+`v0.13.0` draft was deleted rather than published — it predated the panel
+removal, a notification toggle that had never worked, and a diagnostics record
+that leaked the reporter's home path, so shipping it would have handed you a
+worse app than this one.
 
-`v0.14.0` is tagged, but tagging is not publishing: the installer still has to
-be built and signed on the maintainer's machine, and that has not happened. An
-earlier `v0.13.0` draft will not be published — it predates the panel removal,
-a notification toggle that had never worked, and a diagnostics record that
-leaked the reporter's home path, so shipping it would hand you a worse app
-than this one.
+This isn't a public launch — see "Status" above. The release exists so a
+candidate who's been individually invited into the beta has something to
+download; it is not an announcement, and there's nowhere on this page or the
+project site asking a stranger to install it. If you found this repo on your
+own and want to run DevDeck anyway, building from source (below) works the
+same as it always did.
 
-**Today, the only way to run DevDeck is to build it from source** — see
-"Building from source" below. It takes a `git clone` and `npm install`, not a
-compiler; the native pieces ship prebuilt.
-
-When a signed installer is published, expect Windows to show **"Windows
-protected your PC."** on first run. That's Microsoft Defender SmartScreen, not
-a warning about the installer's contents — the fix is **More info**, then
-**Run anyway**. The certificate that will sign it is self-signed, trusted
-today only on the machine that made it; a free certificate for open-source
-projects from the SignPath Foundation would clear that warning for everyone,
-but hasn't been filed for yet. (The repository itself is public now, which is
-what the Foundation requires — filing it is separate work that hasn't
-happened.)
+Expect Windows to show **"Windows protected your PC."** on first run. That's
+Microsoft Defender SmartScreen, not a warning about the installer's contents —
+the fix is **More info**, then **Run anyway**. The certificate that signs it
+is self-signed, trusted today only on the machine that made it; a free
+certificate for open-source projects from the SignPath Foundation would clear
+that warning for everyone, but hasn't been filed for yet. (The repository
+itself is public now, which is what the Foundation requires — filing it is
+separate work that hasn't happened.)
 
 ## The first five minutes
 

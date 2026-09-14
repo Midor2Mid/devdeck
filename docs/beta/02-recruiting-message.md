@@ -7,16 +7,16 @@ a message with a bracket left in it says the sender did not read it.
 ## Rules for every message here
 
 - **One channel.** Decide it before the first send and put it in the message.
-  The repo is public, but there is no published release yet — the build still
-  ships hand-delivered as a file, not a download link, so an issue filed there
-  is not how a beta user reaches you either; diagnostics is clipboard-only, so
-  nothing reaches you unless they paste it to you.
+  The repo is public and v0.14.0 is a signed, downloadable release, so an issue
+  filed there IS reachable - but a stranger will not think to file one, and
+  diagnostics is clipboard-only by design, so nothing reaches you unless you ask
+  them to paste it to the channel that recruited them.
 - **No walkthrough, no video, no click-by-click.** One screenshot is acceptable —
   they are agreeing to install something and deserve to see it. A tour spends the
   first five minutes before the session starts.
 - **Every honest disclosure stays in.** Windows-only, self-signed, SmartScreen
-  will warn, one maintainer, the session is watched and recorded, the build
-  arrives as a file rather than a download link. If a sentence feels like it
+  will warn, one maintainer, the session is watched and recorded, the build is
+  signed by a certificate only this machine trusts. If a sentence feels like it
   costs a candidate, that is the sentence that makes the next twenty minutes
   worth anything.
 - **No claim about other users.** There are none. Never "a few people are already
@@ -32,14 +32,15 @@ For a person, in a thread, where the context is already about Windows and agent
 CLIs. One line, one ask.
 
 > I built a Windows app for driving claude/codex/gemini across several projects
-> in one window, and nobody outside my machine has ever run it. Would you be up
-> for installing it while I watch and say nothing for half an hour?
+> in one window — there's a signed installer now, and nobody outside my machine
+> has ever run it. Would you be up for a 30-minute call where you install it and
+> I watch and say nothing?
 
 Variant when the thread was a specific complaint:
 
-> You mentioned [their exact problem]. I built a Windows thing for that and have
-> never watched anyone else install it — would you be up for being the first, on
-> a call, while I keep quiet and take notes?
+> You mentioned [their exact problem]. I built a Windows thing for that — it's a
+> signed installer now, and I've never watched anyone else install it. Would you
+> be up for being the first, on a call, while I keep quiet and take notes?
 
 ---
 
@@ -71,10 +72,11 @@ Use verbatim. It is deliberately unexciting.
 >   DevDeck doesn't install them; it runs the one you already have.
 > - **The installer is signed with my own certificate**, so Windows will show
 >   "Windows protected your PC" and you'll have to click More info → Run anyway.
->   A certificate that clears that warning has been applied for and not granted.
+>   The certificate that would clear that warning is free for open-source
+>   projects and I have not filed for it yet, so the warning is what you get.
 >   If that's a no for you, it's a fair no — tell me and that's useful too.
-> - **It isn't public yet**, so I'd send you the installer as a file, with its
->   SHA-256, rather than a download link.
+> - **It's a public download**, from the repo's Releases page, signed. I'll send
+>   you the link and its SHA-256 so you can check the file is the one I built.
 > - **One maintainer. Early.** Expect rough edges; the point of this is to find
 >   out which ones matter.
 > - **Nothing is transmitted.** No account, no telemetry, no endpoint. If
@@ -92,7 +94,7 @@ Use verbatim. It is deliberately unexciting.
 Sent before anything is delivered. Carries the intake questions and the consent
 line.
 
-> Thanks — genuinely. Before I send you anything, six questions, because I want
+> Thanks — genuinely. Before I send you anything, seven questions, because I want
 > to know your setup before you see the app rather than after:
 >
 > 1. What are you building at the moment, and how many repos does it involve?
@@ -101,6 +103,10 @@ line.
 > 4. Windows 10 or 11, and is it your own machine or a work-managed one?
 > 5. Can you install software on it yourself?
 > 6. When you switch from one project to another, what do you actually do?
+> 7. If you run more than one agent session at once, what — if anything — do you
+>    use to keep track of them: `claude agents`, Claude Code Desktop,
+>    `/remote-control`, the Codex app, Herdr, Orca, Warp, Pane, Maestro,
+>    Nimbalyst, Munder Difflin, a homegrown script, or nothing at all?
 >
 > **How the session runs.** You share your screen, download the installer, and go.
 > I'll be quiet — that's not rudeness, it's the method. Think out loud if you can:
@@ -111,7 +117,7 @@ line.
 >
 > **What I record and what I do with it.** I write down what you clicked and what
 > you said, in your words, into the project's notes file — which is in the repo
-> and will be public when the repo goes public. Tell me now which you'd prefer:
+> is public. Tell me now which you'd prefer:
 > your name, your first name only, initials, or "a Windows developer". You can
 > change your mind at any point, including after the session, and I'll delete
 > anything you ask me to delete. Nothing goes anywhere else, and I won't quote

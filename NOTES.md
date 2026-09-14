@@ -73,10 +73,14 @@ The maker shared shipped features + reasoning (Vietnamese). Highlights for DevDe
 
 ## Beta — external users (step 9)
 
-**State on 2026-09-04: nobody has been contacted. This section is empty on
-purpose, and its emptiness is the honest state of external validation.** Every
-quote above this line is the author's own, which makes it a design note rather
-than evidence (`PRODUCT.md` → Validation).
+**State on 2026-09-15 (was 2026-09-04): nobody has been contacted. This section
+is still empty on purpose, and its emptiness is still the honest state of
+external validation.** What has changed since 2026-09-04: a signed, published
+installer now exists (`v0.14.0`, 2026-09-14) — recruiting is no longer blocked
+on having a build to send. `K6` (`docs/beta/05-validation-criteria.md`) fires
+**2026-09-22**, seven days from today, if the first invitation still has not
+gone out. Every quote above this line is still the author's own, which makes it
+a design note rather than evidence (`PRODUCT.md` → Validation).
 
 This is where the evidence goes. Materials for running it — who to approach, the
 message, the install-watching protocol, the session template, and the success /

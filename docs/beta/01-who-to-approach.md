@@ -143,7 +143,7 @@ beta for a shell DevDeck does not target.
   anyone the author has talked DevDeck through in detail.
 - **The author.** Not a user. Never counted.
 
-## Intake — six questions, asked before the build is sent
+## Intake — seven questions, asked before the build is sent
 
 Ask these in the invitation thread, not during the session. They pre-screen, and
 three of them are variables the session record needs. **None of them mentions a
@@ -155,12 +155,25 @@ DevDeck feature**, so none of them primes an answer.
 4. Windows 10 or 11, and is it your own machine or a work-managed one?
 5. Can you install software on it yourself?
 6. When you switch from one project to another, what do you actually do?
+7. If you run more than one agent session at once, what — if anything — do you
+   use to keep track of them: `claude agents`, Claude Code Desktop,
+   `/remote-control`, the Codex app, Herdr, Orca, Warp, Pane, Maestro,
+   Nimbalyst, Munder Difflin, a homegrown script, or nothing at all?
 
-Record all six answers in the session record **before** the install, verbatim
+Record all seven answers in the session record **before** the install, verbatim
 where they are interesting. Question 3 decides whether this user is a
 shell-mismatch case. Question 6 is the only question that tests the premise in
 `PRODUCT.md`, and it is asked before they have any idea what the app does — after
 which it can never be asked honestly again.
+
+**Question 7 is asked, never gating.** "I use Claude Code" and "I use Pane to
+run four of them" are different answers, and only the second one says anything
+about whether DevDeck's residue is wanted rather than merely unopposed
+(`ROADMAP.md`, step 13). A candidate who already runs Pane, Herdr, Maestro,
+Nimbalyst or Munder Difflin is not disqualified by that answer — they are the
+most informative candidate available, because they are the one person who can
+tell "the residue is wanted" apart from "these five had no alternative." Record
+the answer whether or not it names anything.
 
 ## The install-policy datum
 

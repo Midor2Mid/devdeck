@@ -148,15 +148,17 @@
         DevDeck is a terminal-first workspace for developers who spend the day driving
         Claude Code (or Codex, or Gemini) across more than one project. Pick a project
         and every terminal and agent session snaps to it, side by side, labeled, running
-        even when you switch away. One deck shows every project's agents at once, and
-        which one is waiting on you.
+        even when you switch away. Herdr and Pane will already tell you which agent
+        needs you; this one also tells you whether that came from a hook the CLI sent
+        or a guess from watching the terminal, and says nothing when it can't tell,
+        rather than picking one.
       </p>
 
       <div class="tags">
         <span class="tag">Windows only</span>
         <span class="tag">MIT licensed</span>
         <span class="tag">Self-signed today · SignPath not yet filed</span>
-        <span class="tag">v0.14.0 — not yet built</span>
+        <span class="tag">v0.14.0 — signed &amp; published</span>
       </div>
 
       <div class="cta-row">
@@ -176,9 +178,11 @@
       <p>
         This page exists mainly to carry the code-signing policy below — it's a
         requirement of applying for a trusted certificate, not a sign that DevDeck is
-        finished being tried. Nobody outside the machine that built it has run this app
-        yet. If that changes, it'll be a handful of people at a time, not an install
-        count. If you want to be one of them, say so on
+        finished being tried. A signed installer exists as of v0.14.0, but nobody
+        outside the machine that built it has run this app yet — the installer is for
+        handing to someone who's already been individually invited, not for a
+        stranger reading this page. If that changes, it'll be a handful of people at
+        a time, not an install count. If you want to be one of them, say so on
         <a href="https://github.com/Midor2Mid/devdeck/issues">Issues</a>.
       </p>
     </section>
@@ -187,7 +191,7 @@
       <h2>What it does</h2>
       <ul class="feats">
         <li><b>Terminals.</b> <span>Multiple tabbed, split real shells — PowerShell, cmd, Git Bash, WSL — via a real pty, each rooted in a project's folder. Sessions survive a project switch; killing one is explicit.</span></li>
-        <li><b>Agent sessions.</b> <span>Launch Claude, Codex, Gemini or a custom CLI per project. Status (working / idle / needs attention) comes from output activity and the terminal bell, not from parsing what the agent prints.</span></li>
+        <li><b>Agent sessions.</b> <span>Launch Claude, Codex, Gemini or a custom CLI per project. Status (working / idle / needs attention) comes from output activity and the terminal bell by default, or directly from a hook when the CLI supports one — and the tile says which, rather than presenting a guess as certain.</span></li>
         <li><b>Editor.</b> <span>Monaco: file tree, tabbed files, syntax highlighting, save. Not a replacement for a full IDE — no language servers, no debugger.</span></li>
         <li><b>Browser.</b> <span>An embedded browser with a comment mode that hands an agent the element you clicked, the console errors, and the failed requests around it.</span></li>
         <li><b>Remote.</b> <span>An optional, token-gated web client so you can watch and drive a session from a phone. Off by default; nothing binds to the network until you turn it on.</span></li>
@@ -211,14 +215,16 @@
         <h3>Source and releases</h3>
         <p>
           Both live on <a href="https://github.com/Midor2Mid/devdeck">GitHub</a>. The
-          current version is <strong>0.14.0</strong>, tagged but not yet built or published — see the
+          current version is <strong>0.14.0</strong>, built, signed, and published as a
+          <a href="https://github.com/Midor2Mid/devdeck/releases/tag/v0.14.0">GitHub
+          release</a> — see the
           <a href="https://github.com/Midor2Mid/devdeck/blob/main/CHANGELOG.md">changelog</a>
           for what actually shipped in it and every release before it.
         </p>
       </div>
 
       <div class="note">
-        <b>About the installer:</b> builds today are signed with a personal, self-signed
+        <b>About the installer:</b> it's signed with a personal, self-signed
         certificate — enough to satisfy this one machine, and nothing more. Run one
         anywhere else and Windows SmartScreen will warn you before you can open it,
         because it has no reason yet to trust the signer. That's expected, not a bug.
@@ -242,7 +248,8 @@
         Foundation</a>, via <a href="https://about.signpath.io">SignPath.io</a>.
         To be exact about where that stands: it has
         <strong>not been applied for yet</strong>, because the Foundation requires
-        a public repository and this project's repository is still private. So
+        a public repository - which this one now is, since 2026-09-07 - and it simply
+        has not been filed. So
         there is no pending application and no granted certificate — only an
         intention, and a release pipeline with the signing step already built and
         waiting. This section is where the Foundation's required attribution will

@@ -67,6 +67,33 @@ the easiest thing to forget:
 
 ---
 
+## The disagreement count
+
+Tally this live, through the whole session, not only at the checkpoints. It is
+the one instrument nobody else in this category runs
+(`docs/superpowers/brainstorm/2026-09-15-trend-scan.md`): every other cockpit
+badges a session's state from a pattern match or a hook and never says how often
+it was wrong.
+
+Every time the deck's row claims a state for a session — waiting, running, idle
+— that disagrees with what that session's own pane is actually showing, log it.
+Do not fix it, do not mention it; just log it:
+
+- the timestamp
+- what the row said
+- what the pane showed
+- **which source made the row's claim**, if it is visible which one fired:
+  **hooked** (the agent told DevDeck) or **screen** (DevDeck inferred it from
+  the pane)
+- which of the two — row or pane — was actually right
+
+Report the tally at the end of the record as `N disagreements / M checkpoints
+where state was checked`, and note separately whether the hooked claims and the
+screen-inferred claims disagreed at different rates. **Zero disagreements is a
+finding, not an absence** — write `0 disagreements`, not nothing.
+
+---
+
 ## The 90-second rule
 
 When they stall — no clicks, or repeated clicks on the wrong thing:
