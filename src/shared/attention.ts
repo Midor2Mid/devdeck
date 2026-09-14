@@ -140,13 +140,74 @@ export const NOTIFICATION_STATES: Record<string, DeclaredState | null> = {
     agent_needs_input: "attention",
     elicitation_dialog: "attention",
     elicitation_url_dialog: "attention",
+    // A SUBAGENT'S permission prompt: "<worker> needs permission for <tool>",
+    // or "<worker> needs network access to <host>". Same question, asked on
+    // behalf of a worker, and answering it is still the user's move. It reached
+    // the user before this line existed only by falling through to the event
+    // default, which is luck rather than a decision — see the block below.
+    worker_permission_prompt: "attention",
     agent_completed: "waiting",
     auth_success: null,
     elicitation_complete: null,
     elicitation_response: null,
     quota_auto_resume_fired: null,
     quota_auto_resume_stale: null,
-    quota_auto_resume_disabled: null
+    quota_auto_resume_disabled: null,
+    // THE THREE THAT WERE PAINTING A PHANTOM ATTENTION. Every member of the
+    // CLI's union that is absent from this map falls through to
+    // `HOOK_EVENT_STATES.Notification` — which is `attention`. That fallback is
+    // deliberate and stays (a vendor adding a new "needs input" type must reach
+    // the user), but it means an ANNOUNCEMENT was being painted as a question,
+    // on the one axis this product asks to be trusted on. None of these three
+    // is the user's move:
+    //
+    //  - `push_notification` is the delivery transport, not a state. The CLI
+    //    emits it around sending a push elsewhere (it is skipped outright with
+    //    `disabledReason:"user_present"`), carrying whatever message prompted
+    //    the push. The semantically-typed notification covers the real case.
+    //  - `computer_use_enter` announces the agent taking the screen. It is
+    //    declared in the union and has no emission site in this build, so there
+    //    is no message to read; either way it says the agent is acting, never
+    //    that it is asking.
+    //  - `computer_use_exit` is "Claude is done using your computer", emitted
+    //    in the computer-use turn cleanup. Tempting to call a hand-back, and
+    //    wrong: it ends a PHASE, not the turn, and a declared `waiting` HOLDS
+    //    against the screen classifier until the user acts — so guessing here
+    //    would freeze a still-working tile at "waiting". `Stop` already carries
+    //    the real hand-back, exactly, and is already wired.
+    //
+    // Read off the shipped binary's own enumeration (claude.exe 1.2.3, the
+    // `Efr=[...]` literal) rather than from the docs, which do not list them.
+    // That enumeration is the reason this can be called complete rather than
+    // merely longer: it is the whole union, not the members someone recalled.
+    push_notification: null,
+    computer_use_enter: null,
+    computer_use_exit: null
+}
+
+/**
+ * `SessionStart.source` — why this session is starting.
+ *
+ * The CLI's own union. `clear` and `compact` are the two that mean the
+ * conversation's context was just thrown away and rebuilt, which is the fact
+ * DevDeck was receiving and discarding: `/clear` is what a user runs by hand to
+ * hold token cost down, and `compact` is the automatic version of the same
+ * pressure. `startup`, `resume` and `fork` are ordinary starts.
+ *
+ * An unrecognised value is dropped rather than carried. `source` is an inbound
+ * field like any other, and a string an attacker picked must not reach anything
+ * downstream that branches on it.
+ */
+export const SESSION_START_SOURCES = ["startup", "resume", "clear", "compact", "fork"] as const
+export type SessionStartSource = (typeof SESSION_START_SOURCES)[number]
+
+/** The sources that mean the context was just discarded. */
+export const CONTEXT_RESET_SOURCES: readonly SessionStartSource[] = ["clear", "compact"]
+
+function cleanSource(v: unknown): SessionStartSource | undefined {
+    return typeof v === "string" && (SESSION_START_SOURCES as readonly string[]).includes(v)
+        ? (v as SessionStartSource)
+        : undefined
 }
 
 /** Caps. A hook payload is metadata; anything larger is a mistake or abuse. */
@@ -220,7 +281,20 @@ export type ParseResult =
      * activity row per ignored event would be noise, and a chatty vendor could
      * fill the feed with it.
      */
-    | { kind: "ignored"; event: string; sessionId?: string; cwd?: string }
+    | {
+          kind: "ignored"
+          event: string
+          sessionId?: string
+          cwd?: string
+          /**
+           * `SessionStart.source`, when the CLI sent a recognised one. Carried
+           * on the IGNORED branch on purpose: a context reset declares no state
+           * — `DeclaredState` has three members and none of them is true of a
+           * cleared session — so it must not become a signal. It is a fact
+           * about the run, and the run's facts live here.
+           */
+          source?: SessionStartSource
+      }
     /** Not a hook payload at all. */
     | { kind: "invalid"; reason: string }
 
@@ -248,6 +322,9 @@ export function parseHook(raw: unknown): ParseResult {
 
     const sessionId = cleanId(b.session_id)
     const cwd = clean(b.cwd, MAX_PATH)
+    // Only `SessionStart` carries a source. Reading it off any event would let
+    // a payload attach "clear" to something that never resets anything.
+    const source = event === "SessionStart" ? cleanSource(b.source) : undefined
     const common = { event, sessionId, cwd }
 
     let state: DeclaredState | null | undefined
@@ -271,7 +348,7 @@ export function parseHook(raw: unknown): ParseResult {
         state = event in HOOK_EVENT_STATES ? HOOK_EVENT_STATES[event] : undefined
     }
 
-    if (state === undefined || state === null) return { kind: "ignored", ...common }
+    if (state === undefined || state === null) return { kind: "ignored", ...common, source }
 
     return {
         kind: "signal",

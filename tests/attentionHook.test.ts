@@ -323,6 +323,101 @@ describe("what each event declares", () => {
         }
     })
 
+    /**
+     * THE PHANTOM ATTENTION. An unmapped `notification_type` falls back to the
+     * event default, and `Notification`'s default is `attention` - so every
+     * member of the CLI's union that DevDeck had not heard of was painted as a
+     * session asking for you. That fallback is deliberate and stays (a vendor
+     * adding a new "needs input" type must reach the user), which is exactly
+     * why the union has to be tracked: the cost of the wrong direction is the
+     * one claim this product makes about itself.
+     *
+     * The three below were read off the shipped binary's own enumeration
+     * (claude.exe 1.2.3, `Efr=[...]`), not guessed, and none of them is a
+     * question. See NOTIFICATION_STATES for what each one actually says.
+     */
+    it("does not invent attention for a notification that announces, rather than asks", async () => {
+        for (const nt of ["push_notification", "computer_use_enter", "computer_use_exit"]) {
+            expect(await declaredBy(claudeHook({ notification_type: nt }))).toBeUndefined()
+        }
+    })
+
+    /**
+     * The one member of that same gap that IS a question, and it reaches the
+     * user today only by the accident of the fallback. Pinned so a later tidy
+     * of the map cannot silently drop it to null along with its neighbours.
+     */
+    it("maps a worker's permission prompt to attention, deliberately and not by fallback", async () => {
+        expect(
+            await declaredBy(claudeHook({ notification_type: "worker_permission_prompt" }))
+        ).toBe("attention")
+    })
+
+    /**
+     * O1. `/clear` has always arrived here — `SessionStart` is wired, the CLI
+     * posts `source:"clear"`, and the route correlated it to the right pane —
+     * and `parseHook` dropped the field on the floor. This reads it.
+     *
+     * It deliberately does NOT become a want, a status or a surface. A cleared
+     * session is not asking for anything, and `DeclaredState` has exactly three
+     * members, none of which is true of a context reset; forcing one would be
+     * the phantom-attention bug with a different name. So the fact lands where
+     * the route's other facts land - the outcome header - and nothing paints.
+     */
+    it("names a /clear and a /compact as a context reset, not as a plain ignore", async () => {
+        for (const source of ["clear", "compact"]) {
+            const res = await post(
+                { hook_event_name: "SessionStart", source, session_id: "cc-sess-1" },
+                { session: "term-a" }
+            )
+            expect(res.headers.get("x-devdeck-hook")).toBe("context-reset")
+            // Still nothing to paint: a reset is not a state a session is in.
+            expect(emitted).toEqual([])
+            // And still no keystroke, on the branch that now does more work.
+            expect(ptyWrites).toEqual([])
+        }
+    })
+
+    it("leaves every other SessionStart source a plain ignore", async () => {
+        for (const source of ["startup", "resume", "fork"]) {
+            const res = await post(
+                { hook_event_name: "SessionStart", source, session_id: "cc-sess-1" },
+                { session: "term-a" }
+            )
+            expect(res.headers.get("x-devdeck-hook")).toBe("ignored")
+        }
+    })
+
+    /**
+     * `source` is caller-supplied like every other inbound field. A value
+     * outside the CLI's own union is dropped rather than echoed, so nothing
+     * downstream can be steered by a string an attacker picked.
+     */
+    it("refuses a source it does not recognise, rather than carrying it", async () => {
+        for (const source of ["clear ", "CLEAR", "../../clear", 42, null, "x".repeat(300)]) {
+            const res = await post(
+                { hook_event_name: "SessionStart", source, session_id: "cc-sess-1" },
+                { session: "term-a" }
+            )
+            expect(res.headers.get("x-devdeck-hook")).toBe("ignored")
+        }
+    })
+
+    it("still binds the session on a context reset, which is why it is parsed at all", async () => {
+        // The binding is the reason `ignored` runs through `attribute` at all.
+        // A reset must not cost the run its correlation: the NEXT event of this
+        // session arrives with no header and must still find the pane.
+        __resetBindingsForTest()
+        await post(
+            { hook_event_name: "SessionStart", source: "clear", session_id: "cc-bind-clear" },
+            { session: "term-a" }
+        )
+        emitted = []
+        await post({ hook_event_name: "Stop", session_id: "cc-bind-clear" })
+        expect(emitted[0]?.termId).toBe("term-a")
+        expect(emitted[0]?.matchedBy).toBe("cli-session")
+    })
+
     it("declares nothing for SessionStart, and for an event it does not know", async () => {
         expect(await declaredBy({ hook_event_name: "SessionStart" })).toBeUndefined()
         expect(await declaredBy({ hook_event_name: "PostToolUse" })).toBeUndefined()

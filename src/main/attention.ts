@@ -25,6 +25,7 @@
  * egress scan in `tests/attentionHook.test.ts`.
  */
 import {
+    CONTEXT_RESET_SOURCES,
     parseHook,
     type DeclaredSignal,
     type MatchedBy,
@@ -171,8 +172,22 @@ export function attribute(hook: ParsedHook, headerSession: string): Attribution 
     return { termId: null, matchedBy: "none" }
 }
 
-/** What the route tells the client, in a header. Never in a body — see below. */
-export type HookOutcome = "accepted" | "unmatched" | "ignored" | "invalid"
+/**
+ * What the route tells the client, in a header. Never in a body — see below.
+ *
+ * `context-reset` is `ignored` with a reason: nothing was painted and nothing
+ * was declared, but the event was understood as a `/clear` or a compaction
+ * rather than merely unmapped. It is a separate word because "DevDeck did not
+ * know what this was" and "DevDeck knew exactly what this was and it declares
+ * no state" are different facts, and collapsing them is how the next reader
+ * concludes the wiring is broken.
+ */
+export type HookOutcome =
+    | "accepted"
+    | "unmatched"
+    | "ignored"
+    | "context-reset"
+    | "invalid"
 
 /**
  * Take one hook body. Returns the outcome for the response header only.
@@ -203,7 +218,27 @@ export function ingest(raw: unknown, headerSession: string): HookOutcome {
             { state: "working", event: parsed.event, sessionId: parsed.sessionId, cwd: parsed.cwd },
             headerSession
         )
-        return "ignored"
+        // O1. A `/clear` (and its automatic cousin, a compaction) has always
+        // arrived here correlated to the right pane and been thrown away with
+        // the rest of `SessionStart`. It is now named.
+        //
+        // It stops at the outcome, and that is the decision rather than an
+        // unfinished half of one. A cleared session is not asking for anything,
+        // so it must not reach `wantKind` — the count means "these are asking",
+        // and a fourth kind would make the deck bar, the taskbar badge and
+        // Ctrl+Shift+J all start answering with sessions that want nothing.
+        // Nor can it ride the declared axis: `DeclaredState` is
+        // attention|waiting|working and a context reset is none of the three,
+        // so emitting one would have to invent a state — the phantom-attention
+        // bug this same change is fixing, rebuilt on a different field.
+        //
+        // What a reset should LOOK like, if anything, is a design decision that
+        // wants a recorded session behind it. This records the fact honestly
+        // and paints nothing, which is the only half that can be gotten right
+        // without one.
+        return parsed.source && CONTEXT_RESET_SOURCES.includes(parsed.source)
+            ? "context-reset"
+            : "ignored"
     }
 
     const { termId, matchedBy } = attribute(parsed.hook, headerSession)
