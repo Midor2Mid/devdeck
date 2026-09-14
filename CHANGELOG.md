@@ -29,9 +29,14 @@ releases had been building toward without finishing.
 - **Production dependencies go from 9 to 5.** `pg`, `mysql2`, `mssql` and
   `node-sqlite3-wasm` are gone, with `@types/pg` and `@types/mssql` behind
   them. They were required eagerly at the top of main's bundle before
-  `whenReady`, and cost 830ms of every cold start — nearly all of it `mssql` —
-  a number nobody had actually attributed to them before this release. Three
-  lines of security debt leave with them rather than being patched:
+  `whenReady`, and requiring the four in isolation cost 830ms — nearly all of
+  it `mssql`. **Measured after the fact, the cold start actually got ~320ms
+  faster** (1743ms → 1423ms restored, n=3), with the phase those requires
+  blocked dropping ~356ms: about 43% of the isolated figure, because that phase
+  overlaps Chromium work that does not shrink with it. The 830ms was a true
+  measurement of a require and a false prediction of a cold start, and it was
+  repeated in two commit messages before anyone checked. Three lines of
+  security debt leave with the drivers rather than being patched:
   `rejectUnauthorized: false` on the Postgres and MySQL clients and an
   unconditional `trustServerCertificate` on the MSSQL one, so the SSL
   checkbox that lied about verifying a certificate is gone, not corrected.
