@@ -58,13 +58,13 @@ whole of this section until 2026-09-04, which was the defect.
 ## Scope
 
 - **Platform(s):** Windows desktop, only. Electron, but macOS and Linux are not planned — see the value proposition.
-- **Tech stack:** Electron + electron-vite + React + TypeScript. Terminals: xterm.js + `@lydell/node-pty` (prebuilt binaries — no native compiler needed). Editor: Monaco. Layout: `allotment` resizable split panes. HTTP client and database drivers run in the main process (`mssql`, `mysql2`, `pg`, `node-sqlite3-wasm`).
+- **Tech stack:** Electron + electron-vite + React + TypeScript. Terminals: xterm.js + `@lydell/node-pty` (prebuilt binaries — no native compiler needed). Editor: Monaco. Layout: `allotment` resizable split panes. Five production dependencies; the four database drivers that used to run in the main process went with the panels they served in 0.14.0.
 - **MVP = the smallest thing that delivers value:** Multi-terminal + project switcher (see `ROADMAP.md`). Everything else - editor, browser, agent supervision - layers onto the same workspace shell.
 
 ## Open questions / risks
 
 - **n=1 design.** The largest risk in this document, and the reason the current milestone is recruitment rather than features. Six surfaces and 78 of 84 skins have been built and then deleted; each was defensible to its only user at the time. There is no way to tell a real requirement from the author's habit without somebody else's first five minutes.
 - **Native module (pty) on Windows** — mitigated by using `@lydell/node-pty` (ships prebuilt binaries). If it ever fails, fallback is `node-pty-prebuilt-multiarch` or ConPTY directly.
-- **Scope creep** — "all-in-one" is the vision, but the terminal/project core must be excellent first or the rest is lipstick. The post-0.12.0 deletions are what enforcing this costs once it has been deferred.
+- **Scope creep** — "all-in-one" was the vision and is no longer: it was ruled Not real on 2026-08-25 and D1 deleted three of the panels that made the phrase mean anything. The terminal and project core must be excellent or the rest is lipstick, and the post-0.12.0 deletions are what enforcing that costs once it has been deferred for a year.
 - **Agent-CLI integration is fragile** — reading CLI output couples us to its format, and the approval prompt DevDeck parses is the most valuable and most brittle thing it does. Prefer UI affordances over a plain pty; only parse output where it is clearly stable, and never let a parse failure render as a confident answer.
 - **Performance** — many live terminals plus Monaco in one Electron window. Watch memory; lazy-mount panels.
