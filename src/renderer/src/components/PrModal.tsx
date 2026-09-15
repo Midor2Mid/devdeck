@@ -6,9 +6,14 @@ import type { RemoteInfo } from "../../../preload/index"
 
 /**
  * Pull-request composer - pushes the current branch and opens a PR. On Azure
- * DevOps it creates the PR via the API (using the stored Work PAT) and opens it;
- * on GitHub/other it pushes, then opens the host's "create PR" page. Completes
- * the ticket → branch → review → PR loop.
+ * DevOps it creates the PR via the API and opens it; on GitHub/other it pushes,
+ * then opens the host's "create PR" page. Completes the ticket → branch →
+ * review → PR loop.
+ *
+ * The Azure path needs a PAT, and 0.14.0 deleted the panel that saved one, so
+ * only a token stored before then can be used and a fresh install cannot add
+ * one. That is the one live caller the Work deletion had to keep - the module
+ * was believed dead and was not.
  */
 export function PrModal(): JSX.Element | null {
     const close = useStore((s) => s.closePr)
@@ -141,9 +146,11 @@ function PrBody(): JSX.Element | null {
                     </button>
                 </div>
                 <p className="settings-hint">
-                    Azure DevOps PRs are created via the API using your Work PAT (needs
-                    <code> Code: read &amp; write</code>). Other hosts: DevDeck pushes the branch
-                    and opens the create-PR page.
+                    Azure DevOps PRs are created via the API, using a personal access token
+                    saved before 0.14.0 — the Work panel that saved one was removed, so a
+                    fresh install cannot add one and will open the PR in Azure DevOps
+                    instead. Other hosts: DevDeck pushes the branch and opens the create-PR
+                    page.
                 </p>
             </div>
         </Modal>

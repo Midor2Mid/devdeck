@@ -2,7 +2,7 @@ import { execFile } from "child_process"
 
 /**
  * Pull-request helpers - push the current branch and either create the PR via
- * the Azure DevOps API (using the stored Work PAT) or hand back a web "create
+ * the Azure DevOps API (using a PAT saved before 0.14.0, if one exists) or hand back a web "create
  * PR" URL for GitHub/other hosts. Completes the ticket → branch → review → PR
  * loop without leaving DevDeck.
  */
