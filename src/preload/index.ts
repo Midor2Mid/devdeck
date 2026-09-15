@@ -282,32 +282,6 @@ export interface PipelineTrigger {
     debounceMs: number
 }
 
-export type WorkProvider = "jira" | "azure"
-export interface WorkItem {
-    provider: WorkProvider
-    key: string
-    title: string
-    type: string
-    status: string
-    url: string
-    description: string
-}
-export interface WorkConfigPublic {
-    jira: { enabled: boolean; baseUrl: string; email: string; jql: string; insecureTLS: boolean; hasToken: boolean }
-    azure: { enabled: boolean; orgUrl: string; project: string; wiql: string; insecureTLS: boolean; hasToken: boolean }
-    proxy: string
-    effectiveProxy: string
-}
-export interface WorkConfigInput {
-    jira: { enabled: boolean; baseUrl: string; email: string; jql: string; insecureTLS: boolean; token?: string }
-    azure: { enabled: boolean; orgUrl: string; project: string; wiql: string; insecureTLS: boolean; pat?: string }
-    proxy: string
-}
-export interface WorkFetchResult {
-    items: WorkItem[]
-    errors: { provider: WorkProvider; message: string }[]
-}
-
 export interface Worktree {
     path: string
     branch: string
@@ -830,14 +804,6 @@ const api = {
     },
     shell: {
         open: (url: string): Promise<void> => ipcRenderer.invoke("shell:open", url)
-    },
-    work: {
-        getConfig: (): Promise<WorkConfigPublic> => ipcRenderer.invoke("work:getConfig"),
-        saveConfig: (input: WorkConfigInput): Promise<WorkConfigPublic> =>
-            ipcRenderer.invoke("work:saveConfig", input),
-        test: (provider: WorkProvider): Promise<{ ok: boolean; count?: number; error?: string }> =>
-            ipcRenderer.invoke("work:test", provider),
-        items: (): Promise<WorkFetchResult> => ipcRenderer.invoke("work:items")
     },
     triggers: {
         apply: (list: PipelineTrigger[]): Promise<void> => ipcRenderer.invoke("triggers:apply", list),

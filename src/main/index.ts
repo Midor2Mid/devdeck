@@ -40,7 +40,7 @@ import * as triggers from "./triggers"
 import type { PipelineTrigger } from "./triggers"
 import * as worktrees from "./worktrees"
 import * as changes from "./changes"
-import * as work from "./work"
+import { createAzurePr } from "./azurepr"
 import * as pr from "./pr"
 import { loadWindowState, saveWindowState } from "./windowState"
 import * as updater from "./updater"
@@ -1137,18 +1137,12 @@ function registerIpc(): void {
         guardRepo(cwd)
         return pr.pushBranch(cwd, branch)
     })
-    ipcMain.handle("pr:createAzure", (_e, opts) => work.createAzurePr(opts))
+    ipcMain.handle("pr:createAzure", (_e, opts) => createAzurePr(opts))
 
     // --- Open a URL in the system browser ---
     ipcMain.handle("shell:open", (_e, url: string) => {
         if (/^https?:\/\//i.test(url)) shell.openExternal(url)
     })
-
-    // --- Work items (Jira / Azure DevOps) ---
-    ipcMain.handle("work:getConfig", () => work.getConfig())
-    ipcMain.handle("work:saveConfig", (_e, input: work.WorkConfigInput) => work.saveConfig(input))
-    ipcMain.handle("work:test", (_e, provider: work.Provider) => work.testProvider(provider))
-    ipcMain.handle("work:items", () => work.fetchItems())
 
     // --- MCP (per-project .mcp.json) ---
     ipcMain.handle("mcp:list", (_e, projectPath: string) => {

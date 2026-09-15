@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### The Work backend finally goes, minus the one part of it that was still running
+
+- 0.14.0's audit of its own claims found the Work panel's backend still
+  shipping: `src/main/work.ts`, `work:getConfig`, `work:saveConfig`,
+  `work:test`, `work:items` and the `window.api.work` bridge, with no renderer
+  caller since the panel was deleted. All of that is gone. Nothing else reached
+  `work:*` — not the phone server, not the MCP tools, not the MCP server — so
+  no route or tool leaves with it, and no production dependency or packaging
+  glob changes (the module used only Node built-ins), which means the 0.14.0
+  artefact is unaffected.
+- **`createAzurePr` was not dead.** It is registered as `pr:createAzure` and
+  the PR modal calls it on every Azure DevOps remote, so deleting `work.ts`
+  wholesale would have broken pull-request creation. It survives as
+  `src/main/azurepr.ts` with the Jira and work-item halves stripped out.
+- **Your saved credentials are orphaned, not pruned** — the same ruling the
+  panels got. `work.json` in userData still holds whatever was saved, and
+  nothing writes it any more, so a downgrade finds it intact. The honest
+  consequence: an Azure PAT saved before 0.14.0 still creates pull requests,
+  and an install that never saved one now has no way to, because the screen
+  that saved it is gone. The "no PAT" message says that instead of pointing at
+  a settings screen that no longer exists.
+- A new check, `tests/bridgeReach.test.ts`, asserts every group on the preload
+  bridge is reached by the renderer. It is the narrowest rule that would have
+  caught this one, and it was proven by re-adding `window.api.work` and
+  watching it fail.
+
 ## 0.14.0 - 2026-09-12
 
 A private beta build: one maintainer, Windows-only, self-signed. Nobody outside
@@ -20,10 +48,11 @@ releases had been building toward without finishing.
   `triggers` were all empty. Half the deck's stated justification was refuted
   by its own author. **This must never be written up as though users decided
   it — they were never asked.** `DbPanel`, `ApiPanel` and `WorkPanel` are
-  deleted along with their IPC handlers, preload channels, stores and every
-  orphaned module underneath them (`apiChain`, `apiTests`, `httpParams`,
-  `curl`, importers, exporters, chain variables), and Tasks is demoted out of
-  the deck entirely, folding into More. The deck is now **Mission, Terminal,
+  deleted, and Database's and API's IPC handlers, preload channels, stores and
+  every orphaned module underneath them go with them (`apiChain`, `apiTests`,
+  `httpParams`, `curl`, importers, exporters, chain variables) — but **not
+  Work's; see the correction below.** Tasks is demoted out of the deck
+  entirely, folding into More. The deck is now **Mission, Terminal,
   Browser, Editor** — `Ctrl+1..7` is `Ctrl+1..4`. Roughly 6,000 lines removed
   across the two commits that did this.
 - **Production dependencies go from 9 to 5.** `pg`, `mysql2`, `mssql` and
@@ -55,6 +84,16 @@ releases had been building toward without finishing.
   single store was deleted; the fix keeps and spreads the whole raw settings
   payload, with modelled keys taking precedence, so there is no whitelist
   left to drift the next time a panel goes.
+- **Correction, 2026-09-15: the Work backend was not deleted.** This entry
+  originally read "deleted along with their IPC handlers, preload channels".
+  That was true of Database and API and false of Work. `src/main/work.ts`, the
+  four `work:*` IPC handlers and the `window.api.work` bridge all shipped in
+  0.14.0 with no renderer caller anywhere — dead code holding an encrypted Jira
+  API token, an Azure DevOps PAT and a per-provider insecure-TLS toggle. The
+  sentence is corrected in place rather than quietly reworded, because the
+  release it describes is published. The surface is removed in the next
+  version; one function in that file was never dead and stays (below).
+
 - A stale packaging glob was found on the way: `asarUnpack` still named
   `node-sqlite3-wasm` after this release drops it, and nothing had ever
   checked those globs against `dependencies`. Every `asarUnpack` entry must
